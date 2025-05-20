@@ -53,3 +53,6 @@ node_modules/
 # Web build (if applicable)
 dist/
 build/ 
+
+# Claude
+.claude/
