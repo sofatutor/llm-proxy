@@ -99,7 +99,7 @@ For each phase, specific PRs are outlined to implement the required functionalit
 
 ### Project Configuration
 - [x] Create Makefile with common commands (build, test, lint, run, docker)
-- [ ] Add initial go.mod with dependencies (router, SQLite, UUID, config, logging, testing)
+- [x] Add initial go.mod with dependencies (router, SQLite, UUID, config, logging, testing)
 - [x] Create README.md (overview, features, architecture, setup, usage, contributing)
 - [ ] Add OpenAPI spec to `/api`
 - [x] Set up configuration management (env vars, config files, validation)
@@ -131,10 +131,13 @@ For each phase, specific PRs are outlined to implement the required functionalit
 - [ ] Add architecture and design docs to `/docs`
 
 ### Testing
-- **Test-Driven Development (TDD) Required**: All code must be written using TDD. Write failing tests before implementation.
-- **Coverage Requirement**: Maintain at least 90% code coverage, enforced by CI.
-- Place unit tests next to code in `/internal` and `/cmd`
-- Use `/test` for integration/e2e tests and fixtures
+- [x] **Test-Driven Development (TDD) Required**: All code must be written using TDD. Write failing tests before implementation.
+- [x] **Coverage Requirement**: Maintain at least 90% code coverage, enforced by CI.
+- [x] Place unit tests next to code in `/internal` and `/cmd`
+- [x] Use `/test` for integration/e2e tests and fixtures
+- [x] All core logic, error paths, and main.go entrypoint are robustly tested with 90%+ coverage (see coverage reports for details).
+
+**Note:** Robust testability and coverage for all main application logic, including error paths and server lifecycle, is ensured. All critical paths in `cmd/proxy` and related components are covered by unit tests, with dependency injection and mocks used for full control in tests.
 
 ### Pull Requests for Phase 1
 
