@@ -121,14 +121,14 @@ For each phase, specific PRs are outlined to implement the required functionalit
 - [x] Add volumes for data, logs, config
 
 ### Security
-- [ ] Add secrets management (env vars, .env.example)
-- [ ] Add .gitignore for secrets, build artifacts
-- [ ] Document security best practices (token security, API key management, non-root containers)
+- [x] Add secrets management (env vars, .env.example)
+- [x] Add .gitignore for secrets, build artifacts
+- [x] Document security best practices (token security, API key management, non-root containers)
 
 ### Documentation
-- [ ] Add godoc comments to all public types/functions
-- [ ] Add contributing guidelines
-- [ ] Add architecture and design docs to `/docs`
+- [x] Add godoc comments to all public types/functions
+- [x] Add contributing guidelines
+- [x] Add architecture and design docs to `/docs`
 
 ### Testing
 - [x] **Test-Driven Development (TDD) Required**: All code must be written using TDD. Write failing tests before implementation.
@@ -169,11 +169,17 @@ For each phase, specific PRs are outlined to implement the required functionalit
    - Configure volumes for data persistence
    - Add non-root user and security best practices
 
-6. **Documentation Foundations** (`feature/phase-1-docs`)
-   - Add initial API specification to `/api`
-   - Create architecture diagrams
+6. **Security Enhancements** (`feature/phase-1-security`)
+   - Add enhanced secrets management in .env.example
+   - Update .gitignore for comprehensive security coverage
+   - Document security best practices
+   - Improve Dockerfile security
+
+7. **Documentation Foundations** (`feature/phase-1-docs`)
+   - Add godoc comments to all public types/functions
    - Add contributing guidelines
-   - Set up standard documentation templates
+   - Create architecture documentation
+   - Add security documentation
 
 ## Phase 2: Core Components
 
