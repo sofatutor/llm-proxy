@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"testing"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -104,8 +103,13 @@ func runWithHooks(doneCh chan os.Signal, srv serverInterface, forceNoTest bool) 
 	}
 	signalNotifyFunc(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	if !forceNoTest && testing.Testing() {
-		return
+	// The forceNoTest parameter allows tests to skip early exit
+	if !forceNoTest {
+		// Check if we're in a testing environment using the "GO_RUNNING_TESTS" environment variable
+		// This is set in the test files
+		if _, isTest := os.LookupEnv("GO_RUNNING_TESTS"); isTest {
+			return
+		}
 	}
 
 	// Create and start the server

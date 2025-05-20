@@ -93,51 +93,32 @@ func TestServerLifecycle(t *testing.T) {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
 	}
 
-	// For Start method, we'll test a custom implementation
+	// For the Shutdown test, we can use a simple httptest server
+	shutdownServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer shutdownServer.Close()
+
 	cfg := &config.Config{
 		ListenAddr:     ":0", // Random port
 		RequestTimeout: 1 * time.Second,
 	}
 
-	// Create a server for testing the Start method
-	startServer := New(cfg)
-	
-	// Create a custom mock server to verify Start method is called correctly
-	// Instead of trying to monkey patch the ListenAndServe method, we'll use a custom
-	// implementation to ensure our test passes
-	mockHttpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer mockHttpServer.Close()
-	
-	// Simply testing that Start() returns a nil error is sufficient, as the real
-	// implementation just forwards to ListenAndServe, which always blocks or returns error
-	dummyErr := startServer.Start()
-	if dummyErr != nil {
-		t.Errorf("Start() should not return an error in a test environment: %v", dummyErr)
-	}
-	
-	// For the Shutdown test, we can use a simple httptest server
-	shutdownServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	
-	// Create a server with the test server
+	// Create a server with the test server's config
 	shutdownTestServer := New(cfg)
 	// Replace the internal http.Server with the test server's
 	shutdownTestServer.server = shutdownServer.Config
-	
+
 	// Shutdown the server
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	
+
 	// Test the Shutdown method
 	if err := shutdownTestServer.Shutdown(ctx); err != nil {
 		t.Fatalf("Failed to shutdown server: %v", err)
 	}
-	
+
 	// The httptest server will be shut down when we call Close
-	shutdownServer.Close()
 }
 
 // TestHandleHealthJSONError tests error handling in the health endpoint when JSON encoding fails
@@ -157,7 +138,7 @@ func TestHandleHealthJSONError(t *testing.T) {
 	// Mock the json.NewEncoder to return an error
 	// We'll use a special hook in our test to simulate the error condition
 	// by temporarily intercepting the ResponseWriter's Write method
-	
+
 	// Create a request to the health endpoint
 	req, err := http.NewRequest("GET", "/health", nil)
 	if err != nil {
@@ -166,17 +147,17 @@ func TestHandleHealthJSONError(t *testing.T) {
 
 	// Use a recorder wrapper that fails on first Write
 	failingRW := &mockFailingResponseWriter{
-		ResponseWriter: rr,
+		ResponseWriter:   rr,
 		failOnFirstWrite: true,
 	}
 
 	// Call the health endpoint directly
 	server.handleHealth(failingRW, req)
 
-	// Since we expect an error in the encoding process, check that 
+	// Since we expect an error in the encoding process, check that
 	// we got an appropriate status code (500) in our error case
 	if failingRW.statusCode != http.StatusInternalServerError {
-		t.Errorf("Expected error status code %d, got %d", 
+		t.Errorf("Expected error status code %d, got %d",
 			http.StatusInternalServerError, failingRW.statusCode)
 	}
 }
@@ -185,8 +166,8 @@ func TestHandleHealthJSONError(t *testing.T) {
 type mockFailingResponseWriter struct {
 	http.ResponseWriter
 	failOnFirstWrite bool
-	statusCode int
-	headers http.Header
+	statusCode       int
+	headers          http.Header
 }
 
 func (m *mockFailingResponseWriter) Header() http.Header {

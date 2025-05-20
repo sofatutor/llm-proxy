@@ -13,7 +13,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /llm-proxy ./cmd/proxy
 
 # Use a small alpine image for the final container
-FROM alpine:latest
+FROM alpine:3.18
 
 # Install CA certificates for HTTPS
 RUN apk --no-cache add ca-certificates

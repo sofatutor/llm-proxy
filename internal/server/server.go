@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"testing"
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/config"
@@ -60,12 +59,6 @@ func (s *Server) Start() error {
 
 	log.Printf("Server starting on %s\n", s.config.ListenAddr)
 	
-	// For testing purposes, we'll check if this is a test environment
-	// In tests, we don't want to actually block on ListenAndServe
-	if testing.Testing() {
-		return nil
-	}
-	
 	return s.server.ListenAndServe()
 }
 
@@ -83,9 +76,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
 		log.Printf("Error encoding health response: %v\n", err)
+		return
 	}
+	// Status code 200 OK is set implicitly when the response is written successfully
 }

@@ -13,8 +13,8 @@
 This document provides a detailed sequential implementation checklist for the Transparent LLM Proxy for OpenAI. Tasks are organized into phases with dependencies clearly marked. Each task has a status indicator:
 
 - [ ] TODO: Task not yet started
-- [>] IN PROGRESS: Task currently being implemented
-- [~] SKIPPED: Task temporarily skipped
+- [ ] IN PROGRESS: Task currently being implemented
+- [ ] SKIPPED: Task temporarily skipped
 - [x] DONE: Task completed
 
 ## Pull Request Strategy
