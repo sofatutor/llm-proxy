@@ -32,13 +32,13 @@ func TestGetEnvFunctions(t *testing.T) {
 	// Test getEnvInt with different values
 	t.Run("getEnvInt", func(t *testing.T) {
 		os.Clearenv()
-		
+
 		// Test with no env var set
 		result := getEnvInt("TEST_INT", 42)
 		if result != 42 {
 			t.Errorf("Expected default value 42, got %d", result)
 		}
-		
+
 		// Test with valid int env var
 		if err := os.Setenv("TEST_INT", "123"); err != nil {
 			t.Fatalf("Failed to set environment variable: %v", err)
@@ -47,7 +47,7 @@ func TestGetEnvFunctions(t *testing.T) {
 		if result != 123 {
 			t.Errorf("Expected value 123, got %d", result)
 		}
-		
+
 		// Test with invalid int env var
 		if err := os.Setenv("TEST_INT", "not-an-int"); err != nil {
 			t.Fatalf("Failed to set environment variable: %v", err)
@@ -57,18 +57,18 @@ func TestGetEnvFunctions(t *testing.T) {
 			t.Errorf("Expected default value 42 for invalid input, got %d", result)
 		}
 	})
-	
+
 	// Test getEnvStringSlice with different values
 	t.Run("getEnvStringSlice", func(t *testing.T) {
 		os.Clearenv()
-		
+
 		// Test with no env var set
 		defaultSlice := []string{"a", "b", "c"}
 		result := getEnvStringSlice("TEST_SLICE", defaultSlice)
 		if len(result) != len(defaultSlice) {
 			t.Errorf("Expected default slice of length %d, got %d", len(defaultSlice), len(result))
 		}
-		
+
 		// Test with empty env var
 		if err := os.Setenv("TEST_SLICE", ""); err != nil {
 			t.Fatalf("Failed to set environment variable: %v", err)
@@ -77,7 +77,7 @@ func TestGetEnvFunctions(t *testing.T) {
 		if len(result) != len(defaultSlice) {
 			t.Errorf("Expected default slice for empty input, got %v", result)
 		}
-		
+
 		// Test with single value
 		if err := os.Setenv("TEST_SLICE", "single"); err != nil {
 			t.Fatalf("Failed to set environment variable: %v", err)
@@ -86,7 +86,7 @@ func TestGetEnvFunctions(t *testing.T) {
 		if len(result) != 1 || result[0] != "single" {
 			t.Errorf("Expected slice with single value 'single', got %v", result)
 		}
-		
+
 		// Test with multiple values and spacing
 		if err := os.Setenv("TEST_SLICE", "one, two,three , four"); err != nil {
 			t.Fatalf("Failed to set environment variable: %v", err)
@@ -126,17 +126,17 @@ func TestNew(t *testing.T) {
 	t.Run("DefaultValues", func(t *testing.T) {
 		// Clear environment
 		os.Clearenv()
-		
+
 		// Set required fields
 		if err := os.Setenv("MANAGEMENT_TOKEN", "test-token"); err != nil {
 			t.Fatalf("Failed to set environment variable: %v", err)
 		}
-		
+
 		config, err := New()
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
 		}
-		
+
 		// Check default values
 		if config.ListenAddr != ":8080" {
 			t.Errorf("Expected ListenAddr to be :8080, got %s", config.ListenAddr)
@@ -158,7 +158,7 @@ func TestNew(t *testing.T) {
 	t.Run("CustomValues", func(t *testing.T) {
 		// Clear environment
 		os.Clearenv()
-		
+
 		// Set custom values
 		if err := os.Setenv("LISTEN_ADDR", ":9090"); err != nil {
 			t.Fatalf("Failed to set environment variable: %v", err)
@@ -181,12 +181,12 @@ func TestNew(t *testing.T) {
 		if err := os.Setenv("ENABLE_METRICS", "false"); err != nil {
 			t.Fatalf("Failed to set environment variable: %v", err)
 		}
-		
+
 		config, err := New()
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
 		}
-		
+
 		// Check custom values
 		if config.ListenAddr != ":9090" {
 			t.Errorf("Expected ListenAddr to be :9090, got %s", config.ListenAddr)
@@ -214,7 +214,7 @@ func TestNew(t *testing.T) {
 	t.Run("MissingRequiredValues", func(t *testing.T) {
 		// Clear environment
 		os.Clearenv()
-		
+
 		// Don't set required fields
 		config, err := New()
 		if err == nil {
@@ -228,12 +228,12 @@ func TestNew(t *testing.T) {
 	t.Run("InvalidValues", func(t *testing.T) {
 		// Clear environment
 		os.Clearenv()
-		
+
 		// Set required fields
 		if err := os.Setenv("MANAGEMENT_TOKEN", "test-token"); err != nil {
 			t.Fatalf("Failed to set environment variable: %v", err)
 		}
-		
+
 		// Set invalid values that should be replaced with defaults
 		if err := os.Setenv("REQUEST_TIMEOUT", "invalid"); err != nil {
 			t.Fatalf("Failed to set environment variable: %v", err)
@@ -244,12 +244,12 @@ func TestNew(t *testing.T) {
 		if err := os.Setenv("ENABLE_METRICS", "invalid"); err != nil {
 			t.Fatalf("Failed to set environment variable: %v", err)
 		}
-		
+
 		config, err := New()
 		if err != nil {
 			t.Fatalf("Expected no error despite invalid values, got %v", err)
 		}
-		
+
 		// Should use defaults for invalid values
 		if config.RequestTimeout != 30*time.Second {
 			t.Errorf("Expected default RequestTimeout (30s) for invalid input, got %s", config.RequestTimeout)
