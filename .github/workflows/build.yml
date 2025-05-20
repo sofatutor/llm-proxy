@@ -1,0 +1,32 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: true
+      
+      - name: Install dependencies
+        run: go mod download
+      
+      - name: Build
+        run: go build -v ./...
+      
+      - name: Build proxy binary
+        run: go build -v -o llm-proxy ./cmd/proxy
+      
+      - name: Build benchmark binary
+        run: go build -v -o llm-benchmark ./cmd/benchmark 
