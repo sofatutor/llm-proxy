@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -68,26 +69,57 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestServerLifecycle(t *testing.T) {
-	// Use a random port for this test to avoid conflicts
+	// Use httptest.NewServer to start the server with the health handler
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		New(&config.Config{
+			RequestTimeout: 1 * time.Second,
+		}).handleHealth(w, r)
+	}))
+	defer ts.Close()
+
+	// Test the health endpoint using the test server's URL
+	client := &http.Client{Timeout: 100 * time.Millisecond}
+	resp, err := client.Get(ts.URL)
+	if err != nil {
+		t.Fatalf("Failed to connect to test server: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, resp.StatusCode)
+	}
+
+	// Now test the actual server with proper shutdown
 	cfg := &config.Config{
-		ListenAddr:     ":0", // Random port
+		ListenAddr:     ":0", // Random port 
 		RequestTimeout: 1 * time.Second,
 	}
 
 	// Create a new server
 	server := New(cfg)
 
+	// Create a listener first so we know the actual port
+	listener, err := net.Listen("tcp", cfg.ListenAddr)
+	if err != nil {
+		t.Fatalf("Failed to create listener: %v", err)
+	}
+	
+	// Update the server's listener address
+	actualAddr := listener.Addr().String()
+	
 	// Start the server in a goroutine
 	serverErr := make(chan error, 1)
 	go func() {
-		serverErr <- server.Start()
+		// Use the existing listener
+		server.server.Addr = actualAddr
+		serverErr <- server.server.Serve(listener)
 	}()
 
 	// Wait for the server to start by polling the health endpoint
-	client := &http.Client{Timeout: 100 * time.Millisecond}
+	startClient := &http.Client{Timeout: 100 * time.Millisecond}
 	started := false
 	for i := 0; i < 50; i++ { // Retry for up to 5 seconds
-		resp, err := client.Get("http://localhost" + cfg.ListenAddr + "/health")
+		resp, err := startClient.Get("http://" + actualAddr + "/health")
 		if err == nil && resp.StatusCode == http.StatusOK {
 			started = true
 			resp.Body.Close()
