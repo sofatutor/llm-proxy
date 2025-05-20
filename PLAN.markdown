@@ -236,3 +236,6 @@ docker run --rm llm-proxy llm-benchmark \
 - Logging configuration
 - Benchmark tool
 - Documentation
+
+- Docker builds are now only triggered on main branch and tags (not on PRs)
+- CI linting is now fully aligned with local linting and Go best practices

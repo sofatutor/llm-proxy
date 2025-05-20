@@ -881,3 +881,7 @@ For each phase, specific PRs are outlined to implement the required functionalit
 - Phase 3-4: Days 3-4
 - Phase 5-6: Days 5-6
 - Phase 7: Days 7-8
+
+- [x] Fix unchecked error returns in tests flagged by golangci-lint
+- [x] Update GitHub Actions workflow to use correct golangci-lint version and options
+- [x] Restrict Docker builds to main branch and tags only
