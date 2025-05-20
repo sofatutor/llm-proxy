@@ -1,0 +1,55 @@
+# Go build artifacts
+/bin/
+/build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go modules
+vendor/
+
+# Dependency directories (remove the comment below if you use Go modules)
+Gopkg.lock
+Gopkg.toml
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and temp files
+*.log
+*.tmp
+*.bak
+
+# Environment and secrets
+.env
+.env.*
+*.key
+*.pem
+
+# SQLite database
+*.db
+*.sqlite
+*.sqlite3
+
+# Coverage reports
+coverage.out
+
+# Node (for admin UI, if applicable)
+node_modules/
+
+# Web build (if applicable)
+dist/
+build/ 
