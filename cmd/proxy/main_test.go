@@ -66,8 +66,8 @@ func TestRunFunction(t *testing.T) {
 
 	// Create a mock for log.Fatal
 	var fatalMsg string
-	logFatalFunc = func(v ...interface{}) {
-		fatalMsg = fmt.Sprint(v...)
+	logFatalFunc = func(format string, v ...interface{}) {
+		fatalMsg = fmt.Sprintf(format, v...)
 		osExit(1)
 	}
 
@@ -372,7 +372,7 @@ func TestRunWithHooks_ServerStartError(t *testing.T) {
 
 	logFatalCalled := make(chan bool, 1)
 	origLogFatal := logFatalFunc
-	logFatalFunc = func(v ...interface{}) {
+	logFatalFunc = func(format string, v ...interface{}) {
 		logFatalCalled <- true
 	}
 	defer func() { logFatalFunc = origLogFatal }()
@@ -404,7 +404,7 @@ func TestRunWithHooks_ServerShutdownError(t *testing.T) {
 
 	logFatalCalled := make(chan bool, 1)
 	origLogFatal := logFatalFunc
-	logFatalFunc = func(v ...interface{}) {
+	logFatalFunc = func(format string, v ...interface{}) {
 		logFatalCalled <- true
 	}
 	defer func() { logFatalFunc = origLogFatal }()

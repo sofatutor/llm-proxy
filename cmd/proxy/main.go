@@ -26,7 +26,7 @@ var (
 // For testing
 var (
 	osExit           = os.Exit
-	logFatalFunc     = log.Fatal
+	logFatalFunc     = log.Fatalf
 	signalNotifyFunc = signal.Notify
 	flagParseFunc    = flag.Parse // Allow overriding flag parsing for tests
 	osSetenvFunc     = os.Setenv  // Allow overriding os.Setenv for tests
