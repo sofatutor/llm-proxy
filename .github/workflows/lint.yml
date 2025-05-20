@@ -19,8 +19,24 @@ jobs:
           go-version: '1.23'
           cache: true
       
+      - name: Install dependencies
+        run: go mod download
+      
+      - name: Check dependency consistency
+        run: go mod tidy && git diff --exit-code -- go.mod go.sum
+      
+      - name: Check code formatting
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "The following files are not formatted with gofmt:"
+            gofmt -l .
+            exit 1
+          fi
+      
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.1.6
           args: --timeout=5m
+          skip-cache: true
+          only-new-issues: false

@@ -58,7 +58,7 @@ func (s *Server) Start() error {
 	// - Metrics
 
 	log.Printf("Server starting on %s\n", s.config.ListenAddr)
-	
+
 	return s.server.ListenAndServe()
 }
 

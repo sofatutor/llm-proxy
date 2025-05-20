@@ -18,7 +18,7 @@ type Config struct {
 	MaxConcurrentReqs int           // Maximum number of concurrent requests
 
 	// Database configuration
-	DatabasePath    string // Path to the SQLite database file
+	DatabasePath     string // Path to the SQLite database file
 	DatabasePoolSize int    // Number of connections in the database pool
 
 	// Authentication
@@ -65,7 +65,7 @@ func New() (*Config, error) {
 		MaxConcurrentReqs: getEnvInt("MAX_CONCURRENT_REQUESTS", 100),
 
 		// Database defaults
-		DatabasePath:    getEnvString("DATABASE_PATH", "./data/llm-proxy.db"),
+		DatabasePath:     getEnvString("DATABASE_PATH", "./data/llm-proxy.db"),
 		DatabasePoolSize: getEnvInt("DATABASE_POOL_SIZE", 10),
 
 		// Authentication
