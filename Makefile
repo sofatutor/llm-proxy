@@ -1,4 +1,4 @@
-.PHONY: all build test lint clean tools dev-setup db-setup run docker
+.PHONY: all build test test-coverage lint clean tools dev-setup db-setup run docker swag
 
 # Go parameters
 GOCMD=go
@@ -26,6 +26,13 @@ $(BINDIR):
 test:
 	$(GOTEST) -v -race ./...
 
+test-coverage:
+	$(GOTEST) -v -race -coverprofile=coverage.out -covermode=atomic ./...
+	go tool cover -func=coverage.out
+
+test-coverage-html: test-coverage
+	go tool cover -html=coverage.out
+
 lint:
 	$(GOLINT) run ./...
 
@@ -40,6 +47,10 @@ run: build
 docker:
 	docker build -t llm-proxy .
 
+# API documentation
+swag:
+	swag init -g cmd/proxy/main.go -o api/swagger
+
 # Development setup
 tools:
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.54.2
@@ -50,6 +61,10 @@ tools:
 dev-setup: tools
 	$(GOMOD) download
 	$(GOMOD) tidy
+
+# Format code
+fmt:
+	gofmt -s -w .
 
 # Set up SQLite database
 db-setup:

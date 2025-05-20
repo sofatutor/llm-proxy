@@ -98,12 +98,12 @@ For each phase, specific PRs are outlined to implement the required functionalit
 - [✅] Create `/test` (integration/e2e tests, fixtures)
 
 ### Project Configuration
-- [ ] Create Makefile with common commands (build, test, lint, run, docker)
+- [✅] Create Makefile with common commands (build, test, lint, run, docker)
 - [ ] Add initial go.mod with dependencies (router, SQLite, UUID, config, logging, testing)
-- [ ] Create README.md (overview, features, architecture, setup, usage, contributing)
+- [✅] Create README.md (overview, features, architecture, setup, usage, contributing)
 - [ ] Add OpenAPI spec to `/api`
 - [ ] Set up configuration management (env vars, config files, validation)
-- [ ] Add .env.example for environment variables
+- [✅] Add .env.example for environment variables
 - [ ] Set up basic application entry point at `/cmd/proxy/main.go`
 - [ ] Implement command-line flag parsing
 - [ ] Set up basic HTTP server with health check endpoint
