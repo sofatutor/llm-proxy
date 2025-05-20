@@ -102,11 +102,11 @@ For each phase, specific PRs are outlined to implement the required functionalit
 - [ ] Add initial go.mod with dependencies (router, SQLite, UUID, config, logging, testing)
 - [✅] Create README.md (overview, features, architecture, setup, usage, contributing)
 - [ ] Add OpenAPI spec to `/api`
-- [ ] Set up configuration management (env vars, config files, validation)
+- [✅] Set up configuration management (env vars, config files, validation)
 - [✅] Add .env.example for environment variables
-- [ ] Set up basic application entry point at `/cmd/proxy/main.go`
-- [ ] Implement command-line flag parsing
-- [ ] Set up basic HTTP server with health check endpoint
+- [✅] Set up basic application entry point at `/cmd/proxy/main.go`
+- [✅] Implement command-line flag parsing
+- [✅] Set up basic HTTP server with health check endpoint
 
 ### CI/CD & Tooling
 - [ ] Set up GitHub Actions for linting, testing, build, Docker
