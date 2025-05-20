@@ -13,9 +13,9 @@
 This document provides a detailed sequential implementation checklist for the Transparent LLM Proxy for OpenAI. Tasks are organized into phases with dependencies clearly marked. Each task has a status indicator:
 
 - [ ] TODO: Task not yet started
-- [🔄] IN PROGRESS: Task currently being implemented
-- [⏩] SKIPPED: Task temporarily skipped
-- [✅] DONE: Task completed
+- [ ] IN PROGRESS: Task currently being implemented
+- [ ] SKIPPED: Task temporarily skipped
+- [x] DONE: Task completed
 
 ## Pull Request Strategy
 
@@ -35,29 +35,29 @@ For each phase, specific PRs are outlined to implement the required functionalit
 ## Phase 0: Pre-Development Setup
 
 ### GitHub and Project Management
-- [✅] Create GitHub repository "llm-proxy"
-- [✅] Set up README with project description and goals
-- [✅] Choose and add appropriate license (MIT, Apache 2.0, etc.)
-- [✅] Configure .gitignore for Go projects and secrets
-- [✅] Set up branch protection rules (protect main branch)
-- [⏩] Create project board for task tracking
-- [✅] Set up issue templates for bugs and feature requests
-- [✅] Configure GitHub Actions for CI/CD:
+- [x] Create GitHub repository "llm-proxy"
+- [x] Set up README with project description and goals
+- [x] Choose and add appropriate license (MIT, Apache 2.0, etc.)
+- [x] Configure .gitignore for Go projects and secrets
+- [x] Set up branch protection rules (protect main branch)
+- [~] Create project board for task tracking
+- [x] Set up issue templates for bugs and feature requests
+- [x] Configure GitHub Actions for CI/CD:
   - Linting workflow
   - Testing workflow with coverage enforcement
   - Build workflow
   - Docker image workflow
 
 ### Development Environment
-- [✅] Set up Go development environment (Go 1.23+)
-- [✅] Install required development tools:
+- [x] Set up Go development environment (Go 1.23+)
+- [x] Install required development tools:
   - golangci-lint for code quality
   - godoc for documentation
   - mockgen for test mocks
   - swag for API documentation
-- [✅] Configure editor/IDE with Go plugins
-- [✅] Set up Go development container (optional)
-- [✅] Prepare local SQLite environment
+- [x] Configure editor/IDE with Go plugins
+- [x] Set up Go development container (optional)
+- [x] Prepare local SQLite environment
 
 ### Pull Requests for Phase 0
 
@@ -76,37 +76,37 @@ For each phase, specific PRs are outlined to implement the required functionalit
 ## Phase 1: Project Setup
 
 ### Repository Initialization
-- [✅] Initialize Git repository locally
-- [✅] Create initial commit
-- [✅] Push to GitHub repository
-- [✅] Initialize Go module (`go mod init github.com/<username>/llm-proxy`)
-- [✅] Add .gitignore for Go, editor, and secrets
+- [x] Initialize Git repository locally
+- [x] Create initial commit
+- [x] Push to GitHub repository
+- [x] Initialize Go module (`go mod init github.com/<username>/llm-proxy`)
+- [x] Add .gitignore for Go, editor, and secrets
 
 ### Directory Structure
-- [✅] Create `/cmd/proxy` (main proxy server)
-- [✅] Create `/cmd/benchmark` (benchmark tool)
-- [✅] Create `/internal/database` (DB logic)
-- [✅] Create `/internal/token` (token management)
-- [✅] Create `/internal/proxy` (proxy logic)
-- [✅] Create `/internal/admin` (admin UI handlers)
-- [✅] Create `/internal/logging` (logging system)
-- [✅] Create `/api` (OpenAPI spec, shared API types)
-- [✅] Create `/web` (static assets for Admin UI)
-- [✅] Create `/config` (config templates/examples)
-- [✅] Create `/scripts` (build/deploy scripts)
-- [✅] Create `/docs` (design docs, architecture)
-- [✅] Create `/test` (integration/e2e tests, fixtures)
+- [x] Create `/cmd/proxy` (main proxy server)
+- [x] Create `/cmd/benchmark` (benchmark tool)
+- [x] Create `/internal/database` (DB logic)
+- [x] Create `/internal/token` (token management)
+- [x] Create `/internal/proxy` (proxy logic)
+- [x] Create `/internal/admin` (admin UI handlers)
+- [x] Create `/internal/logging` (logging system)
+- [x] Create `/api` (OpenAPI spec, shared API types)
+- [x] Create `/web` (static assets for Admin UI)
+- [x] Create `/config` (config templates/examples)
+- [x] Create `/scripts` (build/deploy scripts)
+- [x] Create `/docs` (design docs, architecture)
+- [x] Create `/test` (integration/e2e tests, fixtures)
 
 ### Project Configuration
-- [✅] Create Makefile with common commands (build, test, lint, run, docker)
-- [ ] Add initial go.mod with dependencies (router, SQLite, UUID, config, logging, testing)
-- [✅] Create README.md (overview, features, architecture, setup, usage, contributing)
+- [x] Create Makefile with common commands (build, test, lint, run, docker)
+- [x] Add initial go.mod with dependencies (router, SQLite, UUID, config, logging, testing)
+- [x] Create README.md (overview, features, architecture, setup, usage, contributing)
 - [ ] Add OpenAPI spec to `/api`
-- [ ] Set up configuration management (env vars, config files, validation)
-- [✅] Add .env.example for environment variables
-- [ ] Set up basic application entry point at `/cmd/proxy/main.go`
-- [ ] Implement command-line flag parsing
-- [ ] Set up basic HTTP server with health check endpoint
+- [x] Set up configuration management (env vars, config files, validation)
+- [x] Add .env.example for environment variables
+- [x] Set up basic application entry point at `/cmd/proxy/main.go`
+- [x] Implement command-line flag parsing
+- [x] Set up basic HTTP server with health check endpoint
 
 ### CI/CD & Tooling
 - [ ] Set up GitHub Actions for linting, testing, build, Docker
@@ -131,10 +131,13 @@ For each phase, specific PRs are outlined to implement the required functionalit
 - [ ] Add architecture and design docs to `/docs`
 
 ### Testing
-- **Test-Driven Development (TDD) Required**: All code must be written using TDD. Write failing tests before implementation.
-- **Coverage Requirement**: Maintain at least 90% code coverage, enforced by CI.
-- Place unit tests next to code in `/internal` and `/cmd`
-- Use `/test` for integration/e2e tests and fixtures
+- [x] **Test-Driven Development (TDD) Required**: All code must be written using TDD. Write failing tests before implementation.
+- [x] **Coverage Requirement**: Maintain at least 90% code coverage, enforced by CI.
+- [x] Place unit tests next to code in `/internal` and `/cmd`
+- [x] Use `/test` for integration/e2e tests and fixtures
+- [x] All core logic, error paths, and main.go entrypoint are robustly tested with 90%+ coverage (see coverage reports for details).
+
+**Note:** Robust testability and coverage for all main application logic, including error paths and server lifecycle, is ensured. All critical paths in `cmd/proxy` and related components are covered by unit tests, with dependency injection and mocks used for full control in tests.
 
 ### Pull Requests for Phase 1
 
@@ -878,3 +881,7 @@ For each phase, specific PRs are outlined to implement the required functionalit
 - Phase 3-4: Days 3-4
 - Phase 5-6: Days 5-6
 - Phase 7: Days 7-8
+
+- [x] Fix unchecked error returns in tests flagged by golangci-lint
+- [x] Update GitHub Actions workflow to use correct golangci-lint version and options
+- [x] Restrict Docker builds to main branch and tags only

@@ -35,8 +35,9 @@ jobs:
             exit 1
           fi
       
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          file: ./coverage.txt
-          fail_ci_if_error: false 
+      # - name: Upload coverage to Codecov
+      #   uses: codecov/codecov-action@v3
+      #   with:
+      #     file: ./coverage.txt
+      #     fail_ci_if_error: false 
+      # TODO: Replace the above with Coveralls upload step once setup is complete 

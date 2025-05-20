@@ -46,6 +46,7 @@ Thumbs.db
 
 # Coverage reports
 coverage.out
+coverage.txt
 
 # Node (for admin UI, if applicable)
 node_modules/
