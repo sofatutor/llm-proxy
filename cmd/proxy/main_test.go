@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -288,6 +289,7 @@ func TestMainFunction(t *testing.T) {
 
 // mockServer implements serverInterface for testing runWithHooks
 type mockServer struct {
+	mu             sync.Mutex
 	startCalled    bool
 	shutdownCalled bool
 	startErr       error
@@ -295,11 +297,15 @@ type mockServer struct {
 }
 
 func (m *mockServer) Start() error {
+	m.mu.Lock()
 	m.startCalled = true
+	m.mu.Unlock()
 	return m.startErr
 }
 func (m *mockServer) Shutdown(ctx context.Context) error {
+	m.mu.Lock()
 	m.shutdownCalled = true
+	m.mu.Unlock()
 	return m.shutdownErr
 }
 
@@ -319,19 +325,17 @@ func TestRunWithHooks_ServerLifecycle(t *testing.T) {
 	os.Clearenv()
 	osSetenvFunc("MANAGEMENT_TOKEN", "test-token")
 
-	// Capture log output (optional)
-	// var buf bytes.Buffer
-	// log.SetOutput(&buf)
-
 	// Call runWithHooks with forceNoTest=true to skip the testing.Testing() check
 	runWithHooks(done, ms, true)
 
+	ms.mu.Lock()
 	if !ms.startCalled {
 		t.Error("mockServer.Start was not called")
 	}
 	if !ms.shutdownCalled {
 		t.Error("mockServer.Shutdown was not called")
 	}
+	ms.mu.Unlock()
 }
 
 // TestRunWithHooks_ServerStartError covers the error path when server.Start returns a non-ErrServerClosed error
