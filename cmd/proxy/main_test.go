@@ -13,8 +13,10 @@ import (
 // mockedRun replaces the real run function during tests to avoid hanging
 func mockedRun() {
 	// Set GO_RUNNING_TESTS environment variable
-	os.Setenv("GO_RUNNING_TESTS", "1")
-	
+	if err := os.Setenv("GO_RUNNING_TESTS", "1"); err != nil {
+		panic(fmt.Sprintf("failed to set GO_RUNNING_TESTS: %v", err))
+	}
+
 	// Call the real run function, which should exit early with the test env var set
 	realRun()
 }
@@ -71,7 +73,7 @@ func TestRunFunction(t *testing.T) {
 
 	// Replace flag.Parse with a no-op function
 	flagParseFunc = func() {} // Do nothing
-	
+
 	// Replace the run function with our mock to avoid test hanging
 	run = mockedRun
 
