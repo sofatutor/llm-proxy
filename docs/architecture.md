@@ -219,3 +219,5 @@ To ensure security and maintain transparency, the proxy uses a whitelist (allowl
 - **Implementation:** Hardcoded for MVP, but designed to be easily extended or made configurable for other APIs in the future.
 - **Transparency:** The proxy only intervenes where necessary (e.g., replacing Authorization header); all other request and response data is passed through unchanged.
 - **Extensibility:** The architecture supports future enhancements such as dynamic/config-driven whitelists and custom request/response transformations via middleware.
+
+> **Note:** In the long term, the whitelist approach is intended to be scalable and maintainable. Future plans include supporting dynamic or configuration-driven whitelists (e.g., loading allowed endpoints and methods from environment variables, config files, or an admin UI), enabling easier adaptation to new APIs and evolving requirements without code changes.
