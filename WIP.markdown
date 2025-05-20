@@ -101,7 +101,7 @@ For each phase, specific PRs are outlined to implement the required functionalit
 - [x] Create Makefile with common commands (build, test, lint, run, docker)
 - [x] Add initial go.mod with dependencies (router, SQLite, UUID, config, logging, testing)
 - [x] Create README.md (overview, features, architecture, setup, usage, contributing)
-- [ ] Add OpenAPI spec to `/api`
+- [x] Add OpenAPI spec to `/api`
 - [x] Set up configuration management (env vars, config files, validation)
 - [x] Add .env.example for environment variables
 - [x] Set up basic application entry point at `/cmd/proxy/main.go`
@@ -109,16 +109,16 @@ For each phase, specific PRs are outlined to implement the required functionalit
 - [x] Set up basic HTTP server with health check endpoint
 
 ### CI/CD & Tooling
-- [ ] Set up GitHub Actions for linting, testing, build, Docker
-- [ ] Add golangci-lint config
-- [ ] Add code formatting (gofmt) checks
-- [ ] Add dependency management steps (go mod tidy)
+- [x] Set up GitHub Actions for linting, testing, build, Docker
+- [x] Add golangci-lint config
+- [x] Add code formatting (gofmt) checks
+- [x] Add dependency management steps (go mod tidy)
 
 ### Docker & Deployment
-- [ ] Create multi-stage Dockerfile
-- [ ] Create docker-compose.yml
-- [ ] Add non-root user to Dockerfile
-- [ ] Add volumes for data, logs, config
+- [x] Create multi-stage Dockerfile
+- [x] Create docker-compose.yml
+- [x] Add non-root user to Dockerfile
+- [x] Add volumes for data, logs, config
 
 ### Security
 - [ ] Add secrets management (env vars, .env.example)
