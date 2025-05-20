@@ -58,3 +58,4 @@ build/
 .claude/
 
 tmp/
+bin/

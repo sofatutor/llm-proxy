@@ -10,14 +10,18 @@ GOMOD=$(GOCMD) mod
 GOLINT=golangci-lint
 
 # Binary names
-PROXY_BINARY=llm-proxy
-BENCHMARK_BINARY=llm-benchmark
+BINDIR=bin
+PROXY_BINARY=$(BINDIR)/llm-proxy
+BENCHMARK_BINARY=$(BINDIR)/llm-benchmark
 
 all: test build
 
-build:
+build: | $(BINDIR)
 	$(GOBUILD) -o $(PROXY_BINARY) ./cmd/proxy
 	$(GOBUILD) -o $(BENCHMARK_BINARY) ./cmd/benchmark
+
+$(BINDIR):
+	@mkdir -p $(BINDIR)
 
 test:
 	$(GOTEST) -v -race ./...
@@ -30,8 +34,7 @@ clean:
 	rm -f $(PROXY_BINARY)
 	rm -f $(BENCHMARK_BINARY)
 
-run:
-	$(GOBUILD) -o $(PROXY_BINARY) ./cmd/proxy
+run: build
 	./$(PROXY_BINARY)
 
 docker:

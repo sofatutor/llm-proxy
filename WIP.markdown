@@ -71,8 +71,8 @@ For each phase, specific PRs are outlined to implement the required functionalit
 - [✅] Add .gitignore for Go, editor, and secrets
 
 ### Directory Structure
-- [ ] Create `/cmd/proxy` (main proxy server)
-- [ ] Create `/cmd/benchmark` (benchmark tool)
+- [✅] Create `/cmd/proxy` (main proxy server)
+- [✅] Create `/cmd/benchmark` (benchmark tool)
 - [ ] Create `/internal/database` (DB logic)
 - [ ] Create `/internal/token` (token management)
 - [ ] Create `/internal/proxy` (proxy logic)
