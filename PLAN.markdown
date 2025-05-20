@@ -1,5 +1,15 @@
 # Implementation Plan for Transparent LLM Proxy for OpenAI
 
+> **Agent-Driven Test-Driven Development (TDD) Mandate**
+>
+> This project is implemented entirely by autonomous agents. All development MUST strictly follow test-driven development (TDD):
+> - Every feature or change must first be implemented as a failing unit test.
+> - Only after the test is written may the implementation be created or modified to make the test pass.
+> - No code may be merged unless it is covered by tests.
+> - A minimum of 90% code coverage is required at all times, enforced by GitHub Actions.
+> - Pull requests must demonstrate that new/changed code is covered by tests and that overall coverage remains above 90%.
+> - Coverage checks are mandatory in CI and must block merges if not met.
+
 ## Overview
 This document outlines the implementation plan for a transparent proxy for OpenAI's API. The proxy is designed to handle **withering tokens** (tokens with limited validity, revocation, and rate-limiting), log API calls with metadata (e.g., token counts), support streaming responses, and provide administrative capabilities. Built using Go for performance and concurrency, with SQLite for storage, the system includes a web-based admin UI, Docker deployment, and a CLI benchmark tool.
 
@@ -70,7 +80,7 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 ## Implementation Steps
 
 ### 1. Project Setup
-- Initialize Go module with dependencies
+- Initialize Go module with dependencies (Go 1.23)
 - Create directory structure
 - Document project in README
 
@@ -101,9 +111,11 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 - Add JavaScript for form submissions and actions
 
 ### 7. Unit Testing
+- **Test-Driven Development (TDD) Required**: All code must be written using TDD. Write failing tests before implementation.
+- **Coverage Requirement**: Maintain at least 90% code coverage, enforced by CI.
 - Write tests for all components
 - Create mocks for external services
-- Verify test coverage
+- Verify test coverage in every PR
 
 ### 8. Benchmark Tool
 - Implement CLI with flag parsing
@@ -204,6 +216,8 @@ docker run --rm llm-proxy llm-benchmark \
 - Store secrets in a secure manager
 
 ## Testing Strategy
+- **Test-Driven Development (TDD) is mandatory for all code.**
+- **90%+ code coverage is required and enforced by CI.**
 - Unit tests for all components
 - Integration tests for end-to-end flows
 - Docker tests for container validation

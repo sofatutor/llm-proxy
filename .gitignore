@@ -56,3 +56,6 @@ build/
 
 # Claude
 .claude/
+
+tmp/
+bin/

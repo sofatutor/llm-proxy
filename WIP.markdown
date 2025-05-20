@@ -1,50 +1,63 @@
 # LLM Proxy Implementation Checklist
 
+> **Agent-Driven Test-Driven Development (TDD) Mandate**
+>
+> This project is implemented entirely by autonomous agents. All development MUST strictly follow test-driven development (TDD):
+> - Every feature or change must first be implemented as a failing unit test.
+> - Only after the test is written may the implementation be created or modified to make the test pass.
+> - No code may be merged unless it is covered by tests.
+> - A minimum of 90% code coverage is required at all times, enforced by GitHub Actions.
+> - Pull requests must demonstrate that new/changed code is covered by tests and that overall coverage remains above 90%.
+> - Coverage checks are mandatory in CI and must block merges if not met.
+
 This document provides a detailed sequential implementation checklist for the Transparent LLM Proxy for OpenAI. Tasks are organized into phases with dependencies clearly marked. Each task has a status indicator:
 
 - [ ] TODO: Task not yet started
 - [🔄] IN PROGRESS: Task currently being implemented
+- [⏩] SKIPPED: Task temporarily skipped
 - [✅] DONE: Task completed
 
 ## Pull Request Strategy
 
 This project uses a structured PR strategy to maintain code quality and keep implementation manageable:
 
-1. **Small, Focused PRs**: Each PR should address a specific logical component or feature
-2. **Feature Branches**: Use feature branches named according to the phase and component (e.g., `feature/phase-1-directory-structure`)
-3. **Phase Integration Branches**: Optional integration branches (e.g., `phase-1`) can be used to integrate multiple PRs before merging to main
-4. **WIP Updates**: Each PR should update WIP.markdown to mark completed tasks
-5. **Review Friendly**: Keep PRs small enough for effective code review
-6. **Dependencies**: Consider task dependencies when planning PRs
+1. **Test-Driven Development (TDD) Required**: Every PR must begin with failing unit tests for the feature or fix, followed by implementation to make the tests pass.
+2. **Coverage Enforcement**: PRs must not be merged unless 90%+ code coverage is maintained, as verified by CI.
+3. **Small, Focused PRs**: Each PR should address a specific logical component or feature
+4. **Feature Branches**: Use feature branches named according to the phase and component (e.g., `feature/phase-1-directory-structure`)
+5. **Phase Integration Branches**: Optional integration branches (e.g., `phase-1`) can be used to integrate multiple PRs before merging to main
+6. **WIP Updates**: Each PR should update WIP.markdown to mark completed tasks
+7. **Review Friendly**: Keep PRs small enough for effective code review
+8. **Dependencies**: Consider task dependencies when planning PRs
 
 For each phase, specific PRs are outlined to implement the required functionality in manageable chunks.
 
 ## Phase 0: Pre-Development Setup
 
 ### GitHub and Project Management
-- [ ] Create GitHub repository "llm-proxy"
-- [ ] Set up README with project description and goals
-- [ ] Choose and add appropriate license (MIT, Apache 2.0, etc.)
-- [ ] Configure .gitignore for Go projects and secrets
-- [ ] Set up branch protection rules (protect main branch)
-- [ ] Create project board for task tracking
-- [ ] Set up issue templates for bugs and feature requests
-- [ ] Configure GitHub Actions for CI/CD:
+- [✅] Create GitHub repository "llm-proxy"
+- [✅] Set up README with project description and goals
+- [✅] Choose and add appropriate license (MIT, Apache 2.0, etc.)
+- [✅] Configure .gitignore for Go projects and secrets
+- [✅] Set up branch protection rules (protect main branch)
+- [⏩] Create project board for task tracking
+- [✅] Set up issue templates for bugs and feature requests
+- [✅] Configure GitHub Actions for CI/CD:
   - Linting workflow
-  - Testing workflow
+  - Testing workflow with coverage enforcement
   - Build workflow
   - Docker image workflow
 
 ### Development Environment
-- [ ] Set up Go development environment (Go 1.21+)
-- [ ] Install required development tools:
+- [✅] Set up Go development environment (Go 1.23+)
+- [✅] Install required development tools:
   - golangci-lint for code quality
   - godoc for documentation
   - mockgen for test mocks
   - swag for API documentation
-- [ ] Configure editor/IDE with Go plugins
-- [ ] Set up Go development container (optional)
-- [ ] Prepare local SQLite environment
+- [✅] Configure editor/IDE with Go plugins
+- [✅] Set up Go development container (optional)
+- [✅] Prepare local SQLite environment
 
 ### Pull Requests for Phase 0
 
@@ -70,8 +83,8 @@ For each phase, specific PRs are outlined to implement the required functionalit
 - [✅] Add .gitignore for Go, editor, and secrets
 
 ### Directory Structure
-- [ ] Create `/cmd/proxy` (main proxy server)
-- [ ] Create `/cmd/benchmark` (benchmark tool)
+- [✅] Create `/cmd/proxy` (main proxy server)
+- [✅] Create `/cmd/benchmark` (benchmark tool)
 - [ ] Create `/internal/database` (DB logic)
 - [ ] Create `/internal/token` (token management)
 - [ ] Create `/internal/proxy` (proxy logic)
@@ -118,8 +131,10 @@ For each phase, specific PRs are outlined to implement the required functionalit
 - [ ] Add architecture and design docs to `/docs`
 
 ### Testing
-- [ ] Place unit tests next to code in `/internal` and `/cmd`
-- [ ] Use `/test` for integration/e2e tests and fixtures
+- **Test-Driven Development (TDD) Required**: All code must be written using TDD. Write failing tests before implementation.
+- **Coverage Requirement**: Maintain at least 90% code coverage, enforced by CI.
+- Place unit tests next to code in `/internal` and `/cmd`
+- Use `/test` for integration/e2e tests and fixtures
 
 ### Pull Requests for Phase 1
 

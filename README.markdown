@@ -17,7 +17,7 @@ This project implements a transparent proxy for OpenAI's API, enabling secure an
 - **Benchmark Tool**: CLI for measuring latency, throughput, and errors.
 
 ## Prerequisites
-- Go 1.21+ (for development).
+- Go 1.23+ (for development).
 - Docker (for deployment and testing).
 - OpenAI API key (for testing/benchmarking).
 - Optional: AWS CloudWatch Logs for async logging.
