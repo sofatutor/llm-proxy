@@ -54,7 +54,10 @@ The LLM Proxy is a transparent proxy server for OpenAI API requests, providing t
   - Projects table: Stores project metadata and API keys
   - Tokens table: Stores tokens with expiration and usage limits
 - **Implementation**: `internal/database/*`
-- **Technology**: SQLite for simplicity and zero-dependency deployment
+- **Technology**: 
+  - **SQLite** is used for MVP, local development, and small-scale/self-hosted deployments for its simplicity and zero-dependency deployment.
+  - **PostgreSQL** is recommended for production deployments requiring high concurrency, advanced features, or distributed/cloud-native scaling.
+  - The codebase and schema/migrations are designed to support both SQLite and PostgreSQL, enabling a smooth migration path as needed.
 
 ### Token Management
 
@@ -153,6 +156,9 @@ Web interface for system administration:
 ## Deployment Architecture
 
 The application is designed for flexible deployment:
+
+- For MVP, local, and small-scale deployments, a single container with SQLite is recommended for simplicity.
+- For production or scaling needs, PostgreSQL can be used as the backing database, either in a container or as a managed service. The application should be configured to connect to PostgreSQL as needed.
 
 ### Single Container Deployment
 

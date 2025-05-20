@@ -891,3 +891,5 @@ For each phase, specific PRs are outlined to implement the required functionalit
 - [x] Fix unchecked error returns in tests flagged by golangci-lint
 - [x] Update GitHub Actions workflow to use correct golangci-lint version and options
 - [x] Restrict Docker builds to main branch and tags only
+
+**Note:** SQLite is used for MVP, local, and development deployments. PostgreSQL will be evaluated and tested for production use before launch. The codebase and schema should remain portable between both database engines.
