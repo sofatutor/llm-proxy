@@ -43,6 +43,9 @@ RUN chmod 550 /app/llm-proxy && \
 # Create default config
 COPY --chown=appuser:appgroup .env.example /app/config/.env.example
 
+# Define volumes for data persistence
+VOLUME ["/data", "/logs", "/config"]
+
 # Expose the server port
 EXPOSE 8080
 

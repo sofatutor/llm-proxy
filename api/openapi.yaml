@@ -1,0 +1,540 @@
+openapi: 3.0.3
+info:
+  title: LLM Proxy API
+  description: |
+    API specification for the LLM Proxy service, which provides transparent proxying 
+    for OpenAI LLM API calls with token-based authentication, rate limiting, and 
+    usage tracking.
+  version: 1.0.0
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: 'http://localhost:8080'
+    description: Development server
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Checks if the service is up and running
+      operationId: healthCheck
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /manage/projects:
+    get:
+      summary: List all projects
+      description: Returns a list of all projects in the system
+      operationId: listProjects
+      tags:
+        - Projects
+      security:
+        - ManagementToken: []
+      responses:
+        '200':
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      summary: Create a new project
+      description: Creates a new project with the provided details
+      operationId: createProject
+      tags:
+        - Projects
+      security:
+        - ManagementToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+      responses:
+        '201':
+          description: Project created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /manage/projects/{projectId}:
+    parameters:
+      - name: projectId
+        in: path
+        description: Project ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get project details
+      description: Returns details for a specific project
+      operationId: getProject
+      tags:
+        - Projects
+      security:
+        - ManagementToken: []
+      responses:
+        '200':
+          description: Project details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      summary: Update project
+      description: Updates an existing project
+      operationId: updateProject
+      tags:
+        - Projects
+      security:
+        - ManagementToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+      responses:
+        '200':
+          description: Project updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      summary: Delete project
+      description: Deletes a project and all associated tokens
+      operationId: deleteProject
+      tags:
+        - Projects
+      security:
+        - ManagementToken: []
+      responses:
+        '204':
+          description: Project deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /manage/tokens:
+    get:
+      summary: List all tokens
+      description: Returns a list of all tokens in the system
+      operationId: listTokens
+      tags:
+        - Tokens
+      security:
+        - ManagementToken: []
+      parameters:
+        - name: projectId
+          in: query
+          description: Filter tokens by project ID
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: activeOnly
+          in: query
+          description: Filter to only return active tokens
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: List of tokens
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Token'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      summary: Create a new token
+      description: Creates a new token for a specified project
+      operationId: createToken
+      tags:
+        - Tokens
+      security:
+        - ManagementToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRequest'
+      responses:
+        '201':
+          description: Token created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /manage/tokens/{tokenId}:
+    parameters:
+      - name: tokenId
+        in: path
+        description: Token ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get token details
+      description: Returns details for a specific token
+      operationId: getToken
+      tags:
+        - Tokens
+      security:
+        - ManagementToken: []
+      responses:
+        '200':
+          description: Token details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      summary: Revoke token
+      description: Revokes (deactivates) a token
+      operationId: revokeToken
+      tags:
+        - Tokens
+      security:
+        - ManagementToken: []
+      responses:
+        '204':
+          description: Token revoked successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /v1/{path}:
+    parameters:
+      - name: path
+        in: path
+        description: OpenAI API path
+        required: true
+        schema:
+          type: string
+    get:
+      summary: Proxy GET requests to OpenAI API
+      description: Forwards GET requests to OpenAI API with token authentication
+      operationId: proxyOpenAIGet
+      tags:
+        - Proxy
+      security:
+        - TokenAuth: []
+      responses:
+        '200':
+          description: Successful response from OpenAI API
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      summary: Proxy POST requests to OpenAI API
+      description: Forwards POST requests to OpenAI API with token authentication
+      operationId: proxyOpenAIPost
+      tags:
+        - Proxy
+      security:
+        - TokenAuth: []
+      requestBody:
+        description: Body to forward to OpenAI API
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Successful response from OpenAI API
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Health status of the service
+          example: "ok"
+        version:
+          type: string
+          description: Version of the service
+          example: "1.0.0"
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of the health check
+          example: "2023-09-15T14:30:45Z"
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the project
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        name:
+          type: string
+          description: Name of the project
+          example: "My AI Project"
+        created_at:
+          type: string
+          format: date-time
+          description: When the project was created
+          example: "2023-09-15T14:30:45Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: When the project was last updated
+          example: "2023-09-15T14:30:45Z"
+      required:
+        - id
+        - name
+        - created_at
+        - updated_at
+
+    ProjectRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Name of the project
+          example: "My AI Project"
+        openai_api_key:
+          type: string
+          description: OpenAI API key (will be encrypted at rest)
+          example: "sk-abcdefghijklmnopqrstuvwxyz1234567890ABCDEFG"
+      required:
+        - name
+        - openai_api_key
+
+    Token:
+      type: object
+      properties:
+        token:
+          type: string
+          format: uuid
+          description: The token value
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        project_id:
+          type: string
+          format: uuid
+          description: ID of the project this token belongs to
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        expires_at:
+          type: string
+          format: date-time
+          description: When the token expires
+          example: "2023-12-31T23:59:59Z"
+        is_active:
+          type: boolean
+          description: Whether the token is active
+          example: true
+        request_count:
+          type: integer
+          description: Number of requests made with this token
+          example: 42
+        max_requests:
+          type: integer
+          description: Maximum number of requests allowed for this token (0 = unlimited)
+          example: 1000
+        created_at:
+          type: string
+          format: date-time
+          description: When the token was created
+          example: "2023-09-15T14:30:45Z"
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the token was last used
+          example: "2023-09-15T14:30:45Z"
+      required:
+        - token
+        - project_id
+        - expires_at
+        - is_active
+        - request_count
+        - max_requests
+        - created_at
+
+    TokenRequest:
+      type: object
+      properties:
+        project_id:
+          type: string
+          format: uuid
+          description: ID of the project for which to create a token
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        expires_in_days:
+          type: integer
+          description: Number of days until the token expires (default 30, 0 = never expires)
+          example: 30
+        max_requests:
+          type: integer
+          description: Maximum number of requests allowed (default 0 = unlimited)
+          example: 1000
+      required:
+        - project_id
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Error code
+          example: "invalid_request"
+        message:
+          type: string
+          description: Error message
+          example: "Invalid request parameters"
+      required:
+        - code
+        - message
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TooManyRequests:
+      description: Too many requests
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  securitySchemes:
+    ManagementToken:
+      type: http
+      scheme: bearer
+      description: Management token for admin operations
+    TokenAuth:
+      type: http
+      scheme: bearer
+      description: Token for authenticating proxy requests
