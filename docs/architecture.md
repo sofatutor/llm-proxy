@@ -1,4 +1,6 @@
-# LLM Proxy Architecture
+# LLM Proxy Architecture (Generic API Proxy)
+
+> **Note:** While this document describes the proxy in the context of OpenAI, the architecture is generic and can be adapted to any API requiring secure, short-lived tokens and transparent proxying. OpenAI serves as a case study for this implementation.
 
 This document describes the architecture of the LLM Proxy, explaining the main components, their interactions, and design decisions.
 
@@ -208,3 +210,14 @@ The application is designed for flexible deployment:
 - **Custom Rate Limiting Policies**: Per-project and per-endpoint rate limiting
 - **Caching**: Response caching for frequently used queries
 - **Load Balancing**: Support for multiple OpenAI API keys with load balancing
+
+## Whitelist (Allowlist) for URIs and Methods
+
+To ensure security and maintain transparency, the proxy uses a whitelist (allowlist) for valid API URIs and HTTP methods. For the MVP, this list is hardcoded for OpenAI endpoints (such as `/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`, `/v1/models`) and methods (`POST`, `GET`).
+
+- **Purpose:** Restricts access to only approved endpoints and methods, reducing risk of abuse or accidental misuse.
+- **Implementation:** Hardcoded for MVP, but designed to be easily extended or made configurable for other APIs in the future.
+- **Transparency:** The proxy only intervenes where necessary (e.g., replacing Authorization header); all other request and response data is passed through unchanged.
+- **Extensibility:** The architecture supports future enhancements such as dynamic/config-driven whitelists and custom request/response transformations via middleware.
+
+> **Note:** In the long term, the whitelist approach is intended to be scalable and maintainable. Future plans include supporting dynamic or configuration-driven whitelists (e.g., loading allowed endpoints and methods from environment variables, config files, or an admin UI), enabling easier adaptation to new APIs and evolving requirements without code changes.

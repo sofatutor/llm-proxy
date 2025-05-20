@@ -1,4 +1,4 @@
-# Implementation Plan for Transparent LLM Proxy for OpenAI
+# Implementation Plan for Transparent API Proxy (Case Study: OpenAI)
 
 > **Agent-Driven Test-Driven Development (TDD) Mandate**
 >
@@ -9,6 +9,8 @@
 > - A minimum of 90% code coverage is required at all times, enforced by GitHub Actions.
 > - Pull requests must demonstrate that new/changed code is covered by tests and that overall coverage remains above 90%.
 > - Coverage checks are mandatory in CI and must block merges if not met.
+
+> **Note:** While this project uses OpenAI as a case study, the architecture is intentionally generic and can be adapted to any API requiring secure, short-lived (withering) tokens and transparent proxying. The only required intervention is minimal (e.g., Authorization header replacement), ensuring maximum transparency. Future extensions may include custom request/response transformations.
 
 ## Overview
 This document outlines the implementation plan for a transparent proxy for OpenAI's API. The proxy is designed to handle **withering tokens** (tokens with limited validity, revocation, and rate-limiting), log API calls with metadata (e.g., token counts), support streaming responses, and provide administrative capabilities. Built using Go for performance and concurrency, with SQLite for storage, the system includes a web-based admin UI, Docker deployment, and a CLI benchmark tool.
@@ -245,3 +247,12 @@ docker run --rm llm-proxy llm-benchmark \
 
 - Docker builds are now only triggered on main branch and tags (not on PRs)
 - CI linting is now fully aligned with local linting and Go best practices
+
+## Whitelist Approach for URIs and Methods
+
+To maximize security and minimize attack surface, the proxy implements a whitelist (allowlist) for valid API URIs and HTTP methods. For the MVP, this list is hardcoded for OpenAI endpoints (e.g., `/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`, `/v1/models`) and methods (`POST`, `GET`).
+
+- **Purpose:** Prevents abuse and accidental exposure by restricting access to only known, safe endpoints and methods.
+- **Design:** The whitelist logic is implemented so it can be easily extended or made configurable for other APIs in the future.
+- **Transparency:** All other request/response data is passed through unchanged, except for necessary header replacements (e.g., Authorization).
+- **Extensibility:** Future versions may support dynamic or config-driven whitelists, and on-the-fly request/response transformations via middleware.
