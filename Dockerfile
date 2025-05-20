@@ -18,13 +18,24 @@ FROM alpine:3.18
 # Install CA certificates for HTTPS
 RUN apk --no-cache add ca-certificates
 
-WORKDIR /root/
+# Create non-root user and directories for data, logs, and config
+RUN addgroup -S appgroup && \
+    adduser -S -G appgroup appuser && \
+    mkdir -p /data /logs /config && \
+    chown -R appuser:appgroup /data /logs /config
+
+# Set working directory and switch to non-root user
+WORKDIR /app
+USER appuser
 
 # Copy the binary from the builder stage
 COPY --from=builder /llm-proxy .
+
+# Define volumes for data persistence
+VOLUME ["/data", "/logs", "/config"]
 
 # Expose the server port
 EXPOSE 8080
 
 # Run the application
-CMD ["./llm-proxy"]
+CMD ["./llm-proxy", "--config-dir", "/config", "--data-dir", "/data", "--log-dir", "/logs"]

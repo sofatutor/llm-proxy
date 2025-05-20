@@ -1,0 +1,67 @@
+linters-settings:
+  golint:
+    min-confidence: 0
+  funlen:
+    lines: 100
+    statements: 50
+  gocyclo:
+    min-complexity: 15
+  gofmt:
+    simplify: true
+  govet:
+    check-shadowing: true
+  gosec:
+    excludes:
+      - G204  # Subprocess launching should be audited (exclude as we control the commands)
+  depguard:
+    rules:
+      main:
+        deny:
+          - pkg: "github.com/sirupsen/logrus"
+            desc: "Use 'internal/logging' instead"
+
+run:
+  timeout: 5m
+  tests: true
+  skip-dirs:
+    - test/data
+    - vendor
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - bodyclose
+    - depguard
+    - dogsled
+    - dupl
+    - exportloopref
+    - funlen
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - gocyclo
+    - gofmt
+    - goimports
+    - gosec
+    - misspell
+    - nolintlint
+    - rowserrcheck
+    - stylecheck
+    - unconvert
+    - unparam
+    - whitespace
+
+issues:
+  exclude-rules:
+    # Exclude some linters from test files
+    - path: _test\.go
+      linters:
+        - funlen
+        - gosec
+  max-same-issues: 5
