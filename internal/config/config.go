@@ -160,7 +160,11 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 
 func getEnvStringSlice(key string, defaultValue []string) []string {
 	if value, exists := os.LookupEnv(key); exists && value != "" {
-		return strings.Split(value, ",")
+		parts := strings.Split(value, ",")
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		return parts
 	}
 	return defaultValue
 }

@@ -83,8 +83,21 @@ func TestServerLifecycle(t *testing.T) {
 		serverErr <- server.Start()
 	}()
 
-	// Wait a moment for server to start
-	time.Sleep(100 * time.Millisecond)
+	// Wait for the server to start by polling the health endpoint
+	client := &http.Client{Timeout: 100 * time.Millisecond}
+	started := false
+	for i := 0; i < 50; i++ { // Retry for up to 5 seconds
+		resp, err := client.Get("http://localhost" + cfg.ListenAddr + "/health")
+		if err == nil && resp.StatusCode == http.StatusOK {
+			started = true
+			resp.Body.Close()
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if !started {
+		t.Fatal("Server did not start within timeout")
+	}
 
 	// Shutdown the server
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

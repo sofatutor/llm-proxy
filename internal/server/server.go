@@ -4,7 +4,7 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -57,7 +57,7 @@ func (s *Server) Start() error {
 	// - Admin routes
 	// - Metrics
 
-	fmt.Printf("Server starting on %s\n", s.config.ListenAddr)
+	log.Printf("Server starting on %s\n", s.config.ListenAddr)
 	return s.server.ListenAndServe()
 }
 
@@ -76,5 +76,8 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+		log.Printf("Error encoding health response: %v\n", err)
+	}
 }
