@@ -44,7 +44,7 @@ RUN chmod 550 /app/llm-proxy && \
 COPY --chown=appuser:appgroup .env.example /app/config/.env.example
 
 # Define volumes for data persistence
-VOLUME ["/data", "/logs", "/config"]
+VOLUME ["/app/data", "/app/logs", "/app/config", "/app/certs"]
 
 # Expose the server port
 EXPOSE 8080
@@ -60,9 +60,6 @@ LABEL org.opencontainers.image.title="LLM Proxy" \
       org.opencontainers.image.documentation="https://github.com/sofatutor/llm-proxy/tree/main/docs" \
       org.opencontainers.image.licenses="MIT" \
       com.docker.security.policy="AppArmor=restricted seccomp=restricted NoNewPrivileges=true"
-
-# Create volumes for persistent data
-VOLUME ["/app/data", "/app/logs", "/app/config", "/app/certs"]
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
