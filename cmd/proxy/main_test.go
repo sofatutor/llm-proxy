@@ -323,7 +323,9 @@ func TestRunWithHooks_ServerLifecycle(t *testing.T) {
 
 	// Set up required env for config.New()
 	os.Clearenv()
-	osSetenvFunc("MANAGEMENT_TOKEN", "test-token")
+	if err := osSetenvFunc("MANAGEMENT_TOKEN", "test-token"); err != nil {
+		t.Fatalf("Failed to set test environment: %v", err)
+	}
 
 	// Call runWithHooks with forceNoTest=true to skip the testing.Testing() check
 	runWithHooks(done, ms, true)
@@ -350,7 +352,9 @@ func TestRunWithHooks_ServerStartError(t *testing.T) {
 	}()
 
 	os.Clearenv()
-	osSetenvFunc("MANAGEMENT_TOKEN", "test-token")
+	if err := osSetenvFunc("MANAGEMENT_TOKEN", "test-token"); err != nil {
+		t.Fatalf("Failed to set test environment: %v", err)
+	}
 
 	logFatalCalled := make(chan bool, 1)
 	origLogFatal := logFatalFunc
@@ -380,7 +384,9 @@ func TestRunWithHooks_ServerShutdownError(t *testing.T) {
 	}()
 
 	os.Clearenv()
-	osSetenvFunc("MANAGEMENT_TOKEN", "test-token")
+	if err := osSetenvFunc("MANAGEMENT_TOKEN", "test-token"); err != nil {
+		t.Fatalf("Failed to set test environment: %v", err)
+	}
 
 	logFatalCalled := make(chan bool, 1)
 	origLogFatal := logFatalFunc
