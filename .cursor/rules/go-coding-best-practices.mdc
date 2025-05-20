@@ -1,5 +1,31 @@
 ---
-description:
-globs:
+description: 
+globs: *.go
 alwaysApply: false
 ---
+# General Coding Best Practices (Go-Focused)
+
+1. **DRY (Don't Repeat Yourself):** Avoid code duplication. Extract reusable logic into functions or packages.
+2. **SRP (Single Responsibility Principle):** Each function, method, or type should have a single, well-defined responsibility.
+3. **KISS (Keep It Simple, Stupid):** Prefer simple, clear solutions over complex or clever ones. Readability and maintainability are priorities.
+4. **Idiomatic Go Style:**
+   - Use standard Go formatting (`gofmt`).
+   - Name variables, functions, and types clearly and consistently.
+   - Prefer composition over inheritance.
+   - Use slices, maps, and channels idiomatically.
+5. **Error Handling:**
+   - Always check and handle errors explicitly.
+   - Return errors with context when appropriate.
+   - Avoid panics except in truly exceptional cases.
+6. **Code Documentation:**
+   - Add comments to exported types, functions, and packages.
+   - Use Go doc conventions for documentation.
+7. **Test Coverage:**
+   - Write unit tests for all critical logic.
+   - Use table-driven tests where appropriate.
+   - Cover edge cases and error conditions.
+8. **Code Reviews:**
+   - Seek and provide constructive feedback.
+   - Ensure code adheres to these best practices before merging.
+
+These principles apply to all code, but are especially important for Go projects in this repository.
