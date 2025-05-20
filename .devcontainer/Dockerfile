@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/vscode/devcontainers/go:1-1.21-bullseye
+FROM mcr.microsoft.com/vscode/devcontainers/go:1-1.23-bullseye
 
 # Install additional tools
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \

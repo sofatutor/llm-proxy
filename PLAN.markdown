@@ -70,7 +70,7 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 ## Implementation Steps
 
 ### 1. Project Setup
-- Initialize Go module with dependencies
+- Initialize Go module with dependencies (Go 1.23)
 - Create directory structure
 - Document project in README
 

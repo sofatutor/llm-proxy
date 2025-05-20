@@ -37,7 +37,7 @@ For each phase, specific PRs are outlined to implement the required functionalit
   - Docker image workflow
 
 ### Development Environment
-- [✅] Set up Go development environment (Go 1.21+)
+- [✅] Set up Go development environment (Go 1.23+)
 - [✅] Install required development tools:
   - golangci-lint for code quality
   - godoc for documentation

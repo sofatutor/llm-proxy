@@ -23,7 +23,7 @@ What actually happened instead.
 
 ## Environment
 - OS: [e.g. Ubuntu 22.04, macOS 13.0]
-- Go version: [e.g. 1.21.3]
+- Go version: [e.g. 1.23.3]
 - LLM Proxy version: [e.g. v0.1.0, commit hash]
 - Deployment method: [e.g. Docker, binary, from source]
 

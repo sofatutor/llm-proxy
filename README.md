@@ -14,7 +14,7 @@ A transparent proxy for OpenAI's API that enables secure token management and us
 
 ### Prerequisites
 
-- Go 1.21 or later
+- Go 1.23 or later
 - SQLite 3
 - Git
 
