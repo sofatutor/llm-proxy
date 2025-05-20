@@ -6,6 +6,101 @@ import (
 	"time"
 )
 
+// TestGetEnvFunctions tests the various getEnv helper functions directly
+func TestGetEnvFunctions(t *testing.T) {
+	// Save original environment
+	originalEnv := make(map[string]string)
+	for _, env := range os.Environ() {
+		for i := 0; i < len(env); i++ {
+			if env[i] == '=' {
+				originalEnv[env[:i]] = env[i+1:]
+				break
+			}
+		}
+	}
+
+	// Restore environment after test
+	defer func() {
+		os.Clearenv()
+		for k, v := range originalEnv {
+			if err := os.Setenv(k, v); err != nil {
+				t.Fatalf("Failed to restore environment variable %s: %v", k, err)
+			}
+		}
+	}()
+
+	// Test getEnvInt with different values
+	t.Run("getEnvInt", func(t *testing.T) {
+		os.Clearenv()
+		
+		// Test with no env var set
+		result := getEnvInt("TEST_INT", 42)
+		if result != 42 {
+			t.Errorf("Expected default value 42, got %d", result)
+		}
+		
+		// Test with valid int env var
+		if err := os.Setenv("TEST_INT", "123"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		result = getEnvInt("TEST_INT", 42)
+		if result != 123 {
+			t.Errorf("Expected value 123, got %d", result)
+		}
+		
+		// Test with invalid int env var
+		if err := os.Setenv("TEST_INT", "not-an-int"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		result = getEnvInt("TEST_INT", 42)
+		if result != 42 {
+			t.Errorf("Expected default value 42 for invalid input, got %d", result)
+		}
+	})
+	
+	// Test getEnvStringSlice with different values
+	t.Run("getEnvStringSlice", func(t *testing.T) {
+		os.Clearenv()
+		
+		// Test with no env var set
+		defaultSlice := []string{"a", "b", "c"}
+		result := getEnvStringSlice("TEST_SLICE", defaultSlice)
+		if len(result) != len(defaultSlice) {
+			t.Errorf("Expected default slice of length %d, got %d", len(defaultSlice), len(result))
+		}
+		
+		// Test with empty env var
+		if err := os.Setenv("TEST_SLICE", ""); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		result = getEnvStringSlice("TEST_SLICE", defaultSlice)
+		if len(result) != len(defaultSlice) {
+			t.Errorf("Expected default slice for empty input, got %v", result)
+		}
+		
+		// Test with single value
+		if err := os.Setenv("TEST_SLICE", "single"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		result = getEnvStringSlice("TEST_SLICE", defaultSlice)
+		if len(result) != 1 || result[0] != "single" {
+			t.Errorf("Expected slice with single value 'single', got %v", result)
+		}
+		
+		// Test with multiple values and spacing
+		if err := os.Setenv("TEST_SLICE", "one, two,three , four"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		result = getEnvStringSlice("TEST_SLICE", defaultSlice)
+		if len(result) != 4 {
+			t.Errorf("Expected slice with 4 values, got %v", result)
+		}
+		if result[0] != "one" || result[1] != "two" || result[2] != "three" || result[3] != "four" {
+			t.Errorf("Expected slice with proper trimming, got %v", result)
+		}
+	})
+}
+
 func TestNew(t *testing.T) {
 	// Save original environment
 	originalEnv := make(map[string]string)
@@ -22,7 +117,9 @@ func TestNew(t *testing.T) {
 	defer func() {
 		os.Clearenv()
 		for k, v := range originalEnv {
-			os.Setenv(k, v)
+			if err := os.Setenv(k, v); err != nil {
+				t.Fatalf("Failed to restore environment variable %s: %v", k, err)
+			}
 		}
 	}()
 
@@ -31,7 +128,9 @@ func TestNew(t *testing.T) {
 		os.Clearenv()
 		
 		// Set required fields
-		os.Setenv("MANAGEMENT_TOKEN", "test-token")
+		if err := os.Setenv("MANAGEMENT_TOKEN", "test-token"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
 		
 		config, err := New()
 		if err != nil {
@@ -61,13 +160,27 @@ func TestNew(t *testing.T) {
 		os.Clearenv()
 		
 		// Set custom values
-		os.Setenv("LISTEN_ADDR", ":9090")
-		os.Setenv("REQUEST_TIMEOUT", "45s")
-		os.Setenv("MAX_REQUEST_SIZE", "5242880") // 5MB
-		os.Setenv("DATABASE_PATH", "./test.db")
-		os.Setenv("MANAGEMENT_TOKEN", "custom-token")
-		os.Setenv("LOG_LEVEL", "debug")
-		os.Setenv("ENABLE_METRICS", "false")
+		if err := os.Setenv("LISTEN_ADDR", ":9090"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		if err := os.Setenv("REQUEST_TIMEOUT", "45s"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		if err := os.Setenv("MAX_REQUEST_SIZE", "5242880"); err != nil { // 5MB
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		if err := os.Setenv("DATABASE_PATH", "./test.db"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		if err := os.Setenv("MANAGEMENT_TOKEN", "custom-token"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		if err := os.Setenv("LOG_LEVEL", "debug"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		if err := os.Setenv("ENABLE_METRICS", "false"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
 		
 		config, err := New()
 		if err != nil {
@@ -117,12 +230,20 @@ func TestNew(t *testing.T) {
 		os.Clearenv()
 		
 		// Set required fields
-		os.Setenv("MANAGEMENT_TOKEN", "test-token")
+		if err := os.Setenv("MANAGEMENT_TOKEN", "test-token"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
 		
 		// Set invalid values that should be replaced with defaults
-		os.Setenv("REQUEST_TIMEOUT", "invalid")
-		os.Setenv("MAX_REQUEST_SIZE", "invalid")
-		os.Setenv("ENABLE_METRICS", "invalid")
+		if err := os.Setenv("REQUEST_TIMEOUT", "invalid"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		if err := os.Setenv("MAX_REQUEST_SIZE", "invalid"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		if err := os.Setenv("ENABLE_METRICS", "invalid"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
 		
 		config, err := New()
 		if err != nil {

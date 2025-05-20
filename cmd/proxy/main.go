@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"testing"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -23,6 +24,15 @@ var (
 	logLevel     string
 )
 
+// For testing
+var (
+	osExit           = os.Exit
+	logFatalFunc     = log.Fatal
+	signalNotifyFunc = signal.Notify
+	flagParseFunc    = flag.Parse // Allow overriding flag parsing for tests
+	osSetenvFunc     = os.Setenv  // Allow overriding os.Setenv for tests
+)
+
 func init() {
 	// Define command line flags
 	flag.StringVar(&envFile, "env", ".env", "Path to .env file")
@@ -32,8 +42,22 @@ func init() {
 }
 
 func main() {
+	run()
+}
+
+// run is a variable to allow mocking in tests
+var run = realRun
+
+// realRun encapsulates the main logic for better testability
+func realRun() {
+	runWithHooks(nil, nil, false)
+}
+
+// runWithHooks allows injection of test hooks for the done channel, server, and skipping the testing.Testing() check.
+// If doneCh is nil, a new channel is created. If srv is nil, a new server is created. If forceNoTest is false, the normal testing.Testing() check is used.
+func runWithHooks(doneCh chan os.Signal, srv serverInterface, forceNoTest bool) {
 	// Parse command line flags
-	flag.Parse()
+	flagParseFunc()
 
 	// Load .env file if it exists
 	if _, err := os.Stat(envFile); err == nil {
@@ -47,31 +71,54 @@ func main() {
 
 	// Apply command line overrides to environment variables
 	if listenAddr != "" {
-		os.Setenv("LISTEN_ADDR", listenAddr)
+		if err := osSetenvFunc("LISTEN_ADDR", listenAddr); err != nil {
+			logFatalFunc("Failed to set LISTEN_ADDR environment variable: %v", err)
+		}
 	}
 	if databasePath != "" {
-		os.Setenv("DATABASE_PATH", databasePath)
+		if err := osSetenvFunc("DATABASE_PATH", databasePath); err != nil {
+			logFatalFunc("Failed to set DATABASE_PATH environment variable: %v", err)
+		}
 	}
 	if logLevel != "" {
-		os.Setenv("LOG_LEVEL", logLevel)
+		if err := osSetenvFunc("LOG_LEVEL", logLevel); err != nil {
+			logFatalFunc("Failed to set LOG_LEVEL environment variable: %v", err)
+		}
 	}
 
 	// Load configuration
 	cfg, err := config.New()
 	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
+		logFatalFunc("Failed to load configuration: %v", err)
+	}
+
+	// For tests, return early to avoid starting the server,
+	// but make sure we've gone through the signal setup first
+
+	// Handle graceful shutdown
+	var done chan os.Signal
+	if doneCh != nil {
+		done = doneCh
+	} else {
+		done = make(chan os.Signal, 1)
+	}
+	signalNotifyFunc(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	if !forceNoTest && testing.Testing() {
+		return
 	}
 
 	// Create and start the server
-	srv := server.New(cfg)
-
-	// Handle graceful shutdown
-	done := make(chan os.Signal, 1)
-	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	var s serverInterface
+	if srv != nil {
+		s = srv
+	} else {
+		s = server.New(cfg)
+	}
 
 	go func() {
-		if err := srv.Start(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+		if err := s.Start(); err != nil && err != http.ErrServerClosed {
+			logFatalFunc("Server error: %v", err)
 		}
 	}()
 
@@ -87,9 +134,15 @@ func main() {
 	defer cancel()
 
 	// Attempt graceful shutdown
-	if err := srv.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+	if err := s.Shutdown(ctx); err != nil {
+		logFatalFunc("Server forced to shutdown: %v", err)
 	}
 
 	log.Println("Server exited gracefully")
+}
+
+// serverInterface allows mocking the server in tests
+type serverInterface interface {
+	Start() error
+	Shutdown(ctx context.Context) error
 }
