@@ -1,4 +1,5 @@
-// Package config handles application configuration
+// Package config handles application configuration loading and validation
+// from environment variables, providing a type-safe configuration structure.
 package config
 
 import (
@@ -9,12 +10,13 @@ import (
 	"time"
 )
 
-// Config holds all application configuration values
+// Config holds all application configuration values loaded from environment variables.
+// It provides a centralized, type-safe way to access configuration throughout the application.
 type Config struct {
 	// Server configuration
 	ListenAddr        string        // Address to listen on (e.g., ":8080")
 	RequestTimeout    time.Duration // Timeout for upstream API requests
-	MaxRequestSize    int64         // Maximum size of incoming requests
+	MaxRequestSize    int64         // Maximum size of incoming requests in bytes
 	MaxConcurrentReqs int           // Maximum number of concurrent requests
 
 	// Database configuration
@@ -22,14 +24,14 @@ type Config struct {
 	DatabasePoolSize int    // Number of connections in the database pool
 
 	// Authentication
-	ManagementToken string // Token for admin operations
+	ManagementToken string // Token for admin operations, used to access the management API
 
 	// OpenAI API settings
 	OpenAIAPIURL    string // Base URL for OpenAI API
-	EnableStreaming bool   // Enable streaming responses
+	EnableStreaming bool   // Whether to enable streaming responses from OpenAI
 
 	// Admin UI settings
-	AdminUIEnabled bool   // Enable the admin UI
+	AdminUIEnabled bool   // Whether the admin UI is enabled
 	AdminUIPath    string // Base path for the admin UI
 
 	// Logging
@@ -48,14 +50,19 @@ type Config struct {
 	IPRateLimit     int // Maximum requests per minute per IP
 
 	// Monitoring
-	EnableMetrics bool   // Enable Prometheus metrics endpoint
+	EnableMetrics bool   // Whether to enable Prometheus metrics endpoint
 	MetricsPath   string // Path for metrics endpoint
 
 	// Cleanup
 	TokenCleanupInterval time.Duration // Interval for cleaning up expired tokens
 }
 
-// New creates a new configuration with values from environment variables
+// New creates a new configuration with values from environment variables.
+// It applies default values where environment variables are not set,
+// and validates required configuration settings.
+//
+// Returns a populated Config struct and nil error on success,
+// or nil and an error if validation fails.
 func New() (*Config, error) {
 	config := &Config{
 		// Server defaults
@@ -110,7 +117,8 @@ func New() (*Config, error) {
 	return config, nil
 }
 
-// Helper functions for reading environment variables with defaults
+// getEnvString retrieves a string value from an environment variable,
+// falling back to the provided default value if the variable is not set.
 func getEnvString(key, defaultValue string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value
@@ -118,6 +126,9 @@ func getEnvString(key, defaultValue string) string {
 	return defaultValue
 }
 
+// getEnvBool retrieves a boolean value from an environment variable,
+// falling back to the provided default value if the variable is not set
+// or cannot be parsed as a boolean.
 func getEnvBool(key string, defaultValue bool) bool {
 	if value, exists := os.LookupEnv(key); exists {
 		parsedValue, err := strconv.ParseBool(value)
@@ -128,6 +139,9 @@ func getEnvBool(key string, defaultValue bool) bool {
 	return defaultValue
 }
 
+// getEnvInt retrieves an integer value from an environment variable,
+// falling back to the provided default value if the variable is not set
+// or cannot be parsed as an integer.
 func getEnvInt(key string, defaultValue int) int {
 	if value, exists := os.LookupEnv(key); exists {
 		parsedValue, err := strconv.Atoi(value)
@@ -138,6 +152,9 @@ func getEnvInt(key string, defaultValue int) int {
 	return defaultValue
 }
 
+// getEnvInt64 retrieves a 64-bit integer value from an environment variable,
+// falling back to the provided default value if the variable is not set
+// or cannot be parsed as a 64-bit integer.
 func getEnvInt64(key string, defaultValue int64) int64 {
 	if value, exists := os.LookupEnv(key); exists {
 		parsedValue, err := strconv.ParseInt(value, 10, 64)
@@ -148,6 +165,9 @@ func getEnvInt64(key string, defaultValue int64) int64 {
 	return defaultValue
 }
 
+// getEnvDuration retrieves a duration value from an environment variable,
+// falling back to the provided default value if the variable is not set
+// or cannot be parsed as a duration.
 func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 	if value, exists := os.LookupEnv(key); exists {
 		parsedValue, err := time.ParseDuration(value)
@@ -158,6 +178,9 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 	return defaultValue
 }
 
+// getEnvStringSlice retrieves a comma-separated string value from an environment variable
+// and splits it into a slice of strings, falling back to the provided default value
+// if the variable is not set or is empty.
 func getEnvStringSlice(key string, defaultValue []string) []string {
 	if value, exists := os.LookupEnv(key); exists && value != "" {
 		parts := strings.Split(value, ",")

@@ -77,6 +77,12 @@ This document outlines the implementation plan for a transparent proxy for OpenA
   - `is_active`: BOOLEAN (true/false, default true)
   - `request_count`: INTEGER (rate-limiting counter, default 0)
 
+## Database Architecture
+
+- **SQLite** is the default database for MVP, local development, and small-scale/self-hosted deployments. It offers simplicity, zero-config, and fast prototyping.
+- **PostgreSQL** is recommended for production deployments requiring high concurrency, advanced features, or distributed/cloud-native scaling. 
+- The codebase and schema/migrations should be designed to support both SQLite and PostgreSQL, enabling a smooth migration path as needed.
+
 ## Implementation Steps
 
 ### 1. Project Setup
