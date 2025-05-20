@@ -56,3 +56,5 @@ build/
 
 # Claude
 .claude/
+
+tmp/
