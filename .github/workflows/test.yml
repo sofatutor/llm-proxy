@@ -25,6 +25,16 @@ jobs:
       - name: Run tests
         run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
       
+      - name: Enforce 90%+ code coverage
+        run: |
+          total=$(go tool cover -func=coverage.txt | grep total: | awk '{print substr($3, 1, length($3)-1)}')
+          echo "Total coverage: $total%"
+          cov=${total%.*}
+          if (( cov < 90 )); then
+            echo "::error::Test coverage $total% is below the required 90%."
+            exit 1
+          fi
+      
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
