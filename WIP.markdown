@@ -893,3 +893,9 @@ For each phase, specific PRs are outlined to implement the required functionalit
 - [x] Restrict Docker builds to main branch and tags only
 
 **Note:** SQLite is used for MVP, local, and development deployments. PostgreSQL will be evaluated and tested for production use before launch. The codebase and schema should remain portable between both database engines.
+
+## Current Focus
+- The proxy architecture is now explicitly generic, designed to support any API requiring secure, short-lived (withering) tokens and transparent proxying. OpenAI is used as a case study for the MVP.
+- Implementation of a whitelist (allowlist) for valid API URIs and HTTP methods. For the MVP, this is hardcoded for OpenAI endpoints and methods, but the design allows for future configurability to support other APIs.
+- The proxy performs only minimal, necessary request/response transformations (e.g., Authorization header replacement) to maximize transparency.
+- Future extensibility is planned for dynamic/config-driven whitelists and custom request/response transformations via middleware.
