@@ -3,13 +3,16 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/token"
 )
 
 func TestHealthEndpoint(t *testing.T) {
@@ -20,7 +23,7 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 
 	// Create a new server
-	server := New(cfg)
+	server := New(cfg, &mockTokenStore{}, &mockProjectStore{})
 
 	// Create a request to the health endpoint
 	req, err := http.NewRequest("GET", "/health", nil)
@@ -73,7 +76,7 @@ func TestServerLifecycle(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		New(&config.Config{
 			RequestTimeout: 1 * time.Second,
-		}).handleHealth(w, r)
+		}, &mockTokenStore{}, &mockProjectStore{}).handleHealth(w, r)
 	}))
 	defer ts.Close()
 
@@ -105,7 +108,7 @@ func TestServerLifecycle(t *testing.T) {
 	}
 
 	// Create a server with the test server's config
-	shutdownTestServer := New(cfg)
+	shutdownTestServer := New(cfg, &mockTokenStore{}, &mockProjectStore{})
 	// Replace the internal http.Server with the test server's
 	shutdownTestServer.server = shutdownServer.Config
 
@@ -130,7 +133,7 @@ func TestHandleHealthJSONError(t *testing.T) {
 	}
 
 	// Create a new server
-	server := New(cfg)
+	server := New(cfg, &mockTokenStore{}, &mockProjectStore{})
 
 	// Create a response recorder that allows us to examine the response
 	rr := httptest.NewRecorder()
@@ -190,4 +193,123 @@ func (m *mockFailingResponseWriter) WriteHeader(statusCode int) {
 	m.ResponseWriter.WriteHeader(statusCode)
 }
 
-// Remove duplicate definition
+func TestInitializeComponents_DatabaseInitializationPending(t *testing.T) {
+	t.Skip("Database connection initialization is not yet implemented in initializeComponents (see TODO in server.go)")
+}
+
+func TestInitializeComponents_LoggingInitializationPending(t *testing.T) {
+	t.Skip("Logging initialization is not yet implemented in initializeComponents (see TODO in server.go)")
+}
+
+func TestInitializeComponents_AdminRoutesInitializationPending(t *testing.T) {
+	t.Skip("Admin routes initialization is not yet implemented in initializeComponents (see TODO in server.go)")
+}
+
+func TestInitializeComponents_MetricsInitializationPending(t *testing.T) {
+	t.Skip("Metrics initialization is not yet implemented in initializeComponents (see TODO in server.go)")
+}
+
+// --- Dependency injection coverage for production code ---
+
+type mockTokenStore struct{}
+
+func (m *mockTokenStore) GetTokenByID(ctx context.Context, tokenID string) (token.TokenData, error) {
+	return token.TokenData{}, errors.New("not implemented")
+}
+func (m *mockTokenStore) IncrementTokenUsage(ctx context.Context, tokenID string) error {
+	return errors.New("not implemented")
+}
+
+type mockProjectStore struct{}
+
+func (m *mockProjectStore) GetAPIKeyForProject(ctx context.Context, projectID string) (string, error) {
+	return "mock-key", nil
+}
+
+func TestServer_New_WithDependencyInjection_ConfigAndFallback(t *testing.T) {
+	cfg := &config.Config{
+		ListenAddr:         ":8080",
+		RequestTimeout:     30 * time.Second,
+		APIConfigPath:      "/non/existent/path.yaml", // triggers fallback branch
+		DefaultAPIProvider: "openai",
+		OpenAIAPIURL:       "https://api.openai.com",
+	}
+
+	ts := &mockTokenStore{}
+	ps := &mockProjectStore{}
+
+	srv := New(cfg, ts, ps)
+	if srv.tokenStore != ts {
+		t.Errorf("tokenStore not injected correctly")
+	}
+	if srv.projectStore != ps {
+		t.Errorf("projectStore not injected correctly")
+	}
+
+	err := srv.initializeAPIRoutes()
+	if err != nil {
+		t.Fatalf("initializeAPIRoutes failed: %v", err)
+	}
+
+	// Test that a /v1/ route is registered (OpenAI fallback branch)
+	req := httptest.NewRequest("GET", "/v1/models", nil)
+	rr := httptest.NewRecorder()
+	srv.server.Handler.ServeHTTP(rr, req)
+	// Should not be 404 (route exists, even if auth fails)
+	if rr.Code == http.StatusNotFound {
+		t.Errorf("Expected /v1/models to be registered, got 404")
+	}
+
+	// Now test with a valid config file (config branch)
+	tmpFile, err := os.CreateTemp("", "api_config_*.yaml")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer func() {
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			t.Fatalf("failed to remove temp file: %v", err)
+		}
+	}()
+	configYAML := `
+default_api: test_api
+apis:
+  test_api:
+    base_url: https://api.example.com
+    allowed_endpoints:
+      - /v1/test
+    allowed_methods:
+      - GET
+      - POST
+    timeouts:
+      request: 30s
+      response_header: 15s
+      idle_connection: 60s
+      flush_interval: 100ms
+    connection:
+      max_idle_conns: 100
+      max_idle_conns_per_host: 10
+`
+	if _, err := tmpFile.Write([]byte(configYAML)); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		t.Fatalf("Failed to close temp file: %v", err)
+	}
+	cfg2 := &config.Config{
+		ListenAddr:         ":8080",
+		RequestTimeout:     30 * time.Second,
+		APIConfigPath:      tmpFile.Name(),
+		DefaultAPIProvider: "test_api",
+	}
+	srv2 := New(cfg2, ts, ps)
+	err = srv2.initializeAPIRoutes()
+	if err != nil {
+		t.Fatalf("initializeAPIRoutes (config branch) failed: %v", err)
+	}
+	req2 := httptest.NewRequest("GET", "/v1/test", nil)
+	rr2 := httptest.NewRecorder()
+	srv2.server.Handler.ServeHTTP(rr2, req2)
+	if rr2.Code == http.StatusNotFound {
+		t.Errorf("Expected /v1/test to be registered, got 404")
+	}
+}

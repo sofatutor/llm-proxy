@@ -62,6 +62,9 @@ type ProxyConfig struct {
 
 	// LogLevel controls the verbosity of logging
 	LogLevel string
+
+	// SetXForwardedFor determines whether to set the X-Forwarded-For header
+	SetXForwardedFor bool
 }
 
 // Validate checks that the ProxyConfig is valid and returns an error if not.
@@ -99,6 +102,9 @@ func Chain(h http.Handler, middleware ...Middleware) http.Handler {
 // contextKey is a type for context keys
 type contextKey string
 
+// version is the current version of the proxy
+const version = "0.1.0"
+
 const (
 	// ctxKeyValidationError is the context key for validation errors
 	ctxKeyValidationError contextKey = "validation_error"
@@ -108,4 +114,7 @@ const (
 
 	// ctxKeyOriginalPath is the context key for the original request path
 	ctxKeyOriginalPath contextKey = "original_path"
+
+	// ctxKeyProjectID is the context key for the project ID
+	ctxKeyProjectID contextKey = "project_id"
 )

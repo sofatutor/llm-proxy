@@ -35,6 +35,12 @@ test-coverage-html: test-coverage
 
 lint:
 	$(GOLINT) run ./...
+	@unformatted=$$(gofmt -l .); \
+	if [ -n "$$unformatted" ]; then \
+		echo "The following files are not formatted with gofmt:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
 
 clean:
 	$(GOCLEAN)

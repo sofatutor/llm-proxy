@@ -576,7 +576,7 @@ func TestValidateRequestMiddleware_EndpointNotAllowed(t *testing.T) {
 }
 
 func TestModifyResponse_NonStreamingErrorIncrementsErrorCount(t *testing.T) {
-	p := &TransparentProxy{metrics: &ProxyMetrics{}}
+	p := &TransparentProxy{metrics: &ProxyMetrics{}, logger: zap.NewNop()}
 	res := &http.Response{
 		StatusCode: 500,
 		Header:     make(http.Header),
@@ -584,6 +584,7 @@ func TestModifyResponse_NonStreamingErrorIncrementsErrorCount(t *testing.T) {
 	}
 	// Not streaming
 	res.Header.Set("Content-Type", "application/json")
+	res.Request = httptest.NewRequest("POST", "/v1/completions", nil)
 	err := p.modifyResponse(res)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), p.metrics.RequestCount)
@@ -591,7 +592,7 @@ func TestModifyResponse_NonStreamingErrorIncrementsErrorCount(t *testing.T) {
 }
 
 func TestModifyResponse_StreamingReturnsEarly(t *testing.T) {
-	p := &TransparentProxy{metrics: &ProxyMetrics{}}
+	p := &TransparentProxy{metrics: &ProxyMetrics{}, logger: zap.NewNop()}
 	res := &http.Response{
 		StatusCode: 200,
 		Header:     make(http.Header),
@@ -703,4 +704,43 @@ func TestDirector_ErrorBranches(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "store fail")
 	})
+}
+
+func TestParseOpenAIResponseMetadata(t *testing.T) {
+	p := &TransparentProxy{}
+
+	// Case: full metadata
+	body := []byte(`{
+		"usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
+		"model": "gpt-4",
+		"id": "abc123",
+		"created": 1234567890
+	}`)
+	meta, err := p.parseOpenAIResponseMetadata(body)
+	assert.NoError(t, err)
+	assert.Equal(t, "10", meta["Prompt-Tokens"])
+	assert.Equal(t, "20", meta["Completion-Tokens"])
+	assert.Equal(t, "30", meta["Total-Tokens"])
+	assert.Equal(t, "gpt-4", meta["Model"])
+	assert.Equal(t, "abc123", meta["ID"])
+	assert.Equal(t, "1234567890", meta["Created"])
+
+	// Case: missing usage
+	body = []byte(`{"model": "gpt-3.5"}`)
+	meta, err = p.parseOpenAIResponseMetadata(body)
+	assert.NoError(t, err)
+	assert.Equal(t, "gpt-3.5", meta["Model"])
+	assert.NotContains(t, meta, "Prompt-Tokens")
+
+	// Case: invalid JSON
+	body = []byte("not json")
+	meta, err = p.parseOpenAIResponseMetadata(body)
+	assert.Error(t, err)
+	assert.Empty(t, meta)
+
+	// Case: usage present but wrong types
+	body = []byte(`{"usage": {"prompt_tokens": "foo"}}`)
+	meta, err = p.parseOpenAIResponseMetadata(body)
+	assert.NoError(t, err)
+	assert.NotContains(t, meta, "Prompt-Tokens")
 }

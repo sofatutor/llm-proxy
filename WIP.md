@@ -115,25 +115,25 @@ Repository structure, configuration, Docker, security, documentation, and founda
   - [ ] Rate-limiting middleware *(only per-token rate limiting is implemented; generic/global middleware is planned for a future phase—see PLAN.md for details. Expected in Phase 3 or later, after core proxy and per-token logic are stable.)*
   - [x] Request validation middleware
   - [x] Timeout middleware
-- [ ] Define and document allowed API routes and methods in configuration
-- [ ] Ensure middleware enforces this allowlist for all proxied requests
-- [ ] Create OpenAI API endpoint handlers:
+- [x] Define and document allowed API routes and methods in configuration
+- [x] Ensure middleware enforces this allowlist for all proxied requests
+- [x] Create OpenAI API endpoint handlers:
   - /v1/chat/completions
   - /v1/completions
   - /v1/embeddings
   - /v1/models
   - Other OpenAI endpoints as needed
-- [ ] Implement token validation logic
-- [ ] Create header manipulation for forwarding:
+- [x] Implement token validation logic
+- [x] Create header manipulation for forwarding:
   - Replace Authorization header
   - Preserve relevant headers
   - Add proxy identification headers
-- [ ] Develop metadata extraction from responses:
+- [x] Develop metadata extraction from responses:
   - Model name
   - Token counts
   - Processing time
   - Other relevant metadata
-- [ ] Implement streaming support:
+- [x] Implement streaming support:
   - Server-Sent Events handling
   - Chunked transfer encoding
   - Streaming metadata aggregation
@@ -147,19 +147,19 @@ Repository structure, configuration, Docker, security, documentation, and founda
 
 ### Pull Requests for Phase 2
 
-1. **Database Schema** (`feature/phase-2-db-schema`)
+1. **Database Schema** (`feature/phase-2-db-schema`) ✅
    - Research SQLite best practices
    - Define projects and tokens table schemas
    - Create database initialization script
    - Design migration system
 
-2. **Project CRUD Operations** (`feature/phase-2-project-crud`)
+2. **Project CRUD Operations** (`feature/phase-2-project-crud`) ✅
    - Implement Project model
    - Create CRUD operations for projects
    - Add transaction support
    - Implement error handling
 
-3. **Token CRUD Operations** (`feature/phase-2-token-crud`)
+3. **Token CRUD Operations** (`feature/phase-2-token-crud`) ✅
    - Implement Token model
    - Create CRUD operations for tokens
    - Implement database indexes
@@ -171,36 +171,36 @@ Repository structure, configuration, Docker, security, documentation, and founda
    - Add expiration logic
    - Implement token revocation
 
-5. **Rate Limiting** (`feature/phase-2-rate-limiting`)
+5. **Rate Limiting** (`feature/phase-2-rate-limiting`) ✅
    - Track request counts
    - Create in-memory rate-limiting logic
    - Implement last_used_at updates
    - Add max_requests enforcement
    - Create extension points for future distributed rate limiting
 
-6. **Proxy Architecture** (`feature/phase-2-proxy-arch`)
-   - Research HTTP proxying ✅
-   - Design transparent proxy architecture using httputil.ReverseProxy ✅
-   - Set up basic proxy structure ✅
-   - Implement tests for proxy functionality ✅
+6. **Proxy Architecture** (`feature/phase-2-proxy-arch`) ✅
+   - Research HTTP proxying
+   - Design transparent proxy architecture using httputil.ReverseProxy
+   - Set up basic proxy structure
+   - Implement tests for proxy functionality
 
-7. **Proxy Middleware** (`feature/phase-2-proxy-middleware`)
+7. **Proxy Middleware** (`feature/phase-2-proxy-middleware`) ✅
    - Implement request logging middleware
    - Create authentication middleware
-   - Add rate-limiting middleware
+   - Add rate-limiting middleware (token-level only)
    - Implement timeout middleware
 
-8. **OpenAI API Endpoints** (`feature/phase-2-openai-endpoints`)
+8. **OpenAI API Endpoints** (`feature/phase-2-openai-endpoints`) ✅
    - Create handlers for core OpenAI endpoints
    - Implement header manipulation
    - Add metadata extraction
    - Create error handling
 
-9. **Streaming Support** (`feature/phase-2-streaming`)
-   - Implement SSE handling
-   - Add chunked transfer support
-   - Create streaming metadata aggregation
-   - Test streaming with all endpoints
+9. **API Configuration and Validation** (`feature/api-config-and-validation`) ✅
+   - Define YAML configuration for API providers
+   - Implement allowlist-based approach for APIs
+   - Create header manipulation and metadata extraction
+   - Support streaming with transparent pass-through
 
 ### CLI Tool (Setup & OpenAI Chat)
 - [ ] Implement CLI tool (`llm-proxy setup` and `llm-proxy openai chat`) **in a separate PR** (`feature/llm-proxy-cli`)
@@ -235,17 +235,17 @@ Repository structure, configuration, Docker, security, documentation, and founda
 - [ ] Create API documentation with examples
 
 ### Proxy API Endpoints
-- [ ] Implement /v1/* forwarding to OpenAI
-- [ ] Create token validation middleware
-- [ ] Set up proper error responses:
+- [x] Implement /v1/* forwarding to OpenAI
+- [x] Create token validation middleware
+- [x] Set up proper error responses:
   - Invalid token errors
   - Expired token errors
   - Rate limit errors
   - Upstream API errors
-- [ ] Implement request validation
+- [x] Implement request validation
 - [ ] Add response caching (optional)
-- [ ] Create usage tracking
-- [ ] Implement proper handling for all OpenAI endpoints:
+- [x] Create usage tracking
+- [x] Implement proper handling for all OpenAI endpoints:
   - Different content types
   - Binary responses
   - Large payload handling
@@ -770,6 +770,11 @@ Repository structure, configuration, Docker, security, documentation, and founda
 
 ## Current Focus
 - The proxy architecture is now explicitly generic, designed to support any API requiring secure, short-lived (withering) tokens and transparent proxying. OpenAI is used as a case study for the MVP.
-- Implementation of a whitelist (allowlist) for valid API URIs and HTTP methods. For the MVP, this is hardcoded for OpenAI endpoints and methods, but the design allows for future configurability to support other APIs.
-- The proxy performs only minimal, necessary request/response transformations (e.g., Authorization header replacement) to maximize transparency.
-- Future extensibility is planned for dynamic/config-driven whitelists and custom request/response transformations via middleware.
+- ✅ Implementation of a YAML-based configuration system for API provider endpoints and methods. Configuration supports multiple providers and is extensible.
+- ✅ The proxy performs minimal, necessary request/response transformations (e.g., Authorization header replacement) while extracting useful metadata (token counts, model information).
+- ✅ Streaming responses are properly handled with transparent pass-through, maintaining the streaming nature of the API.
+- The next focus areas are:
+  - Implementing error handling and response standardization
+  - Adding request/response logging
+  - Implementing retry logic for transient failures
+  - Developing Management API endpoints for token/project management

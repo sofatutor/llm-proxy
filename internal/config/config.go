@@ -26,9 +26,11 @@ type Config struct {
 	// Authentication
 	ManagementToken string // Token for admin operations, used to access the management API
 
-	// OpenAI API settings
-	OpenAIAPIURL    string // Base URL for OpenAI API
-	EnableStreaming bool   // Whether to enable streaming responses from OpenAI
+	// API Provider configuration
+	APIConfigPath      string // Path to the API providers configuration file
+	DefaultAPIProvider string // Default API provider to use
+	OpenAIAPIURL       string // Base URL for OpenAI API (legacy support)
+	EnableStreaming    bool   // Whether to enable streaming responses from APIs
 
 	// Admin UI settings
 	AdminUIEnabled bool   // Whether the admin UI is enabled
@@ -78,9 +80,11 @@ func New() (*Config, error) {
 		// Authentication
 		ManagementToken: getEnvString("MANAGEMENT_TOKEN", ""),
 
-		// OpenAI API settings
-		OpenAIAPIURL:    getEnvString("OPENAI_API_URL", "https://api.openai.com"),
-		EnableStreaming: getEnvBool("ENABLE_STREAMING", true),
+		// API Provider settings
+		APIConfigPath:      getEnvString("API_CONFIG_PATH", "./config/api_providers.yaml"),
+		DefaultAPIProvider: getEnvString("DEFAULT_API_PROVIDER", "openai"),
+		OpenAIAPIURL:       getEnvString("OPENAI_API_URL", "https://api.openai.com"),
+		EnableStreaming:    getEnvBool("ENABLE_STREAMING", true),
 
 		// Admin UI settings
 		AdminUIEnabled: getEnvBool("ADMIN_UI_ENABLED", true),

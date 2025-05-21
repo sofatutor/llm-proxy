@@ -1,0 +1,155 @@
+# Example API Providers Configuration
+# This file demonstrates how to configure multiple API providers for the LLM Proxy
+
+# Default API provider to use if not specified
+default_api: openai
+
+# Configuration for each API provider
+apis:
+  # OpenAI API configuration
+  openai:
+    base_url: https://api.openai.com
+    allowed_endpoints:
+      # Chat completions
+      - /v1/chat/completions
+      
+      # Completions
+      - /v1/completions
+      
+      # Embeddings
+      - /v1/embeddings
+      
+      # Models
+      - /v1/models
+      
+      # Edits
+      - /v1/edits
+      
+      # Fine-tuning
+      - /v1/fine-tunes
+      - /v1/fine_tuning
+      
+      # Files
+      - /v1/files
+      
+      # Images
+      - /v1/images/generations
+      - /v1/images/edits
+      - /v1/images/variations
+      
+      # Audio
+      - /v1/audio/transcriptions
+      - /v1/audio/translations
+      
+      # Moderations
+      - /v1/moderations
+    
+    allowed_methods:
+      - GET
+      - POST
+      - DELETE
+    
+    # Timeout settings in seconds
+    timeouts:
+      request: 120s         # Overall request timeout
+      response_header: 30s  # Timeout for receiving headers
+      idle_connection: 90s  # How long to keep idle connections alive
+      flush_interval: 100ms # How often to flush streaming responses
+    
+    # Connection settings
+    connection:
+      max_idle_conns: 100        # Maximum idle connections
+      max_idle_conns_per_host: 20 # Maximum idle connections per host
+
+  # Anthropic API configuration
+  anthropic:
+    base_url: https://api.anthropic.com
+    allowed_endpoints:
+      - /v1/messages
+      - /v1/complete
+    allowed_methods:
+      - POST
+    timeouts:
+      request: 120s
+      response_header: 30s
+      idle_connection: 90s
+      flush_interval: 100ms
+    connection:
+      max_idle_conns: 100
+      max_idle_conns_per_host: 20
+
+  # Google AI (Gemini) API configuration
+  google:
+    base_url: https://generativelanguage.googleapis.com
+    allowed_endpoints:
+      - /v1/models
+      - /v1/models/gemini-pro:generateContent
+      - /v1/models/gemini-pro-vision:generateContent
+      - /v1/models/embedding-001:embedContent
+    allowed_methods:
+      - GET
+      - POST
+    timeouts:
+      request: 60s
+      response_header: 30s
+      idle_connection: 90s
+      flush_interval: 100ms
+    connection:
+      max_idle_conns: 100
+      max_idle_conns_per_host: 20
+
+  # Mistral AI API configuration
+  mistral:
+    base_url: https://api.mistral.ai
+    allowed_endpoints:
+      - /v1/chat/completions
+      - /v1/embeddings
+      - /v1/models
+    allowed_methods:
+      - GET
+      - POST
+    timeouts:
+      request: 90s
+      response_header: 30s
+      idle_connection: 90s
+      flush_interval: 100ms
+    connection:
+      max_idle_conns: 100
+      max_idle_conns_per_host: 20
+
+  # Cohere API configuration
+  cohere:
+    base_url: https://api.cohere.ai
+    allowed_endpoints:
+      - /v1/generate
+      - /v1/embed
+      - /v1/chat
+      - /v1/classify
+    allowed_methods:
+      - POST
+    timeouts:
+      request: 60s
+      response_header: 30s
+      idle_connection: 60s
+      flush_interval: 100ms
+    connection:
+      max_idle_conns: 100
+      max_idle_conns_per_host: 20
+
+  # Example for a custom self-hosted LLM API provider
+  # local_llm:
+  #   base_url: http://localhost:8000
+  #   allowed_endpoints:
+  #     - /api/completions
+  #     - /api/embeddings
+  #   allowed_methods:
+  #     - GET
+  #     - POST
+  #   timeouts:
+  #     request: 30s
+  #     response_header: 10s
+  #     idle_connection: 60s
+  #     flush_interval: 200ms
+  #   connection:
+  #     max_idle_conns: 50
+  #     max_idle_conns_per_host: 10

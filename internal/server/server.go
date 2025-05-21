@@ -6,19 +6,24 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/proxy"
+	"github.com/sofatutor/llm-proxy/internal/token"
 )
 
 // Server represents the HTTP server for the LLM Proxy.
 // It encapsulates the underlying http.Server along with application configuration
 // and handles request routing and server lifecycle management.
 type Server struct {
-	server *http.Server
-	config *config.Config
+	server       *http.Server
+	config       *config.Config
+	tokenStore   token.TokenStore
+	projectStore proxy.ProjectStore
 }
 
 // HealthResponse is the response body for the health check endpoint.
@@ -32,16 +37,16 @@ type HealthResponse struct {
 // Version is the application version, following semantic versioning.
 const Version = "0.1.0"
 
-// New creates a new HTTP server with the provided configuration.
-// It initializes the server with appropriate timeouts and registers
-// all necessary route handlers.
-//
+// New creates a new HTTP server with the provided configuration and store implementations.
+// It initializes the server with appropriate timeouts and registers all necessary route handlers.
 // The server is not started until the Start method is called.
-func New(cfg *config.Config) *Server {
+func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.ProjectStore) *Server {
 	mux := http.NewServeMux()
 
 	s := &Server{
-		config: cfg,
+		config:       cfg,
+		tokenStore:   tokenStore,
+		projectStore: projectStore,
 		server: &http.Server{
 			Addr:         cfg.ListenAddr,
 			Handler:      mux,
@@ -63,16 +68,96 @@ func New(cfg *config.Config) *Server {
 // It returns an error if the server fails to start or encounters an
 // unrecoverable error during operation.
 func (s *Server) Start() error {
-	// TODO: Initialize required components
-	// - Database connection
-	// - Logging
-	// - Proxy routes
-	// - Admin routes
-	// - Metrics
+	// Initialize required components
+	if err := s.initializeComponents(); err != nil {
+		return fmt.Errorf("failed to initialize components: %w", err)
+	}
 
 	log.Printf("Server starting on %s\n", s.config.ListenAddr)
 
 	return s.server.ListenAndServe()
+}
+
+// initializeComponents sets up all the required components for the server
+func (s *Server) initializeComponents() error {
+	// Initialize API routes from configuration
+	if err := s.initializeAPIRoutes(); err != nil {
+		return fmt.Errorf("failed to initialize API routes: %w", err)
+	}
+
+	// Pending: database, logging, admin, and metrics initialization.
+	// See server_test.go for test stubs covering these responsibilities.
+
+	return nil
+}
+
+// initializeAPIRoutes sets up the API proxy routes based on configuration
+func (s *Server) initializeAPIRoutes() error {
+	// Load API providers configuration
+	apiConfig, err := proxy.LoadAPIConfigFromFile(s.config.APIConfigPath)
+	if err != nil {
+		// If the config file doesn't exist or has errors, fall back to a default OpenAI configuration
+		log.Printf("Warning: Failed to load API config from %s: %v", s.config.APIConfigPath, err)
+		log.Printf("Using default OpenAI configuration")
+
+		// Create a default API configuration
+		apiConfig = &proxy.APIConfig{
+			DefaultAPI: "openai",
+			APIs: map[string]*proxy.APIProviderConfig{
+				"openai": {
+					BaseURL: s.config.OpenAIAPIURL,
+					AllowedEndpoints: []string{
+						"/v1/chat/completions",
+						"/v1/completions",
+						"/v1/embeddings",
+						"/v1/models",
+						"/v1/edits",
+						"/v1/fine-tunes",
+						"/v1/files",
+						"/v1/images/generations",
+						"/v1/audio/transcriptions",
+						"/v1/moderations",
+					},
+					AllowedMethods: []string{"GET", "POST", "DELETE"},
+					Timeouts: proxy.TimeoutConfig{
+						Request:        s.config.RequestTimeout,
+						ResponseHeader: 30 * time.Second,
+						IdleConnection: 90 * time.Second,
+						FlushInterval:  100 * time.Millisecond,
+					},
+					Connection: proxy.ConnectionConfig{
+						MaxIdleConns:        100,
+						MaxIdleConnsPerHost: 20,
+					},
+				},
+			},
+		}
+	}
+
+	// Get proxy configuration for the default API provider
+	proxyConfig, err := apiConfig.GetProxyConfigForAPI(s.config.DefaultAPIProvider)
+	if err != nil {
+		// If specified provider doesn't exist, use the default one
+		log.Printf("Warning: %v", err)
+		proxyConfig, err = apiConfig.GetProxyConfigForAPI(apiConfig.DefaultAPI)
+		if err != nil {
+			return fmt.Errorf("failed to get proxy configuration: %w", err)
+		}
+	}
+
+	// Use the injected tokenStore and projectStore
+	// (No more creation of mock stores or test data here)
+	tokenValidator := token.NewValidator(s.tokenStore)
+	cachedValidator := token.NewCachedValidator(tokenValidator)
+	proxyHandler := proxy.NewTransparentProxy(*proxyConfig, cachedValidator, s.projectStore)
+
+	// Register proxy routes
+	s.server.Handler.(*http.ServeMux).Handle("/v1/", proxyHandler.Handler())
+
+	log.Printf("Initialized proxy for %s with %d allowed endpoints",
+		proxyConfig.TargetBaseURL, len(proxyConfig.AllowedEndpoints))
+
+	return nil
 }
 
 // Shutdown gracefully shuts down the server without interrupting
