@@ -45,7 +45,7 @@ func NewLogger(level, format, filePath string) (*zap.Logger, error) {
 		encoder = zapcore.NewJSONEncoder(encCfg)
 	}
 
-	var ws zapcore.WriteSyncer = zapcore.AddSync(os.Stdout)
+	var ws = zapcore.AddSync(os.Stdout)
 	if filePath != "" {
 		f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
