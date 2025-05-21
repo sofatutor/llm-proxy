@@ -6,24 +6,116 @@ This document describes the architecture of the LLM Proxy, explaining the main c
 
 ## Overview
 
-The LLM Proxy is a transparent proxy server for OpenAI API requests, providing token management, authentication, and usage tracking. It acts as an intermediary between client applications and the OpenAI API.
+The LLM Proxy is a transparent proxy server for API requests, providing token management, authentication, and usage tracking. It acts as an intermediary between client applications and API providers with minimal overhead and maximum transparency.
+
+## Key Design Principles
+
+1. **Minimal Request/Response Transformation**
+   - Authorization header replacement only
+   - All other request/response data passed through unchanged
+   - No SDK or API-specific client dependencies
+
+2. **Performance Optimization**
+   - Minimal latency overhead
+   - Efficient streaming response handling
+   - Connection pooling for HTTP clients
+   - Memory efficiency for large payloads
+
+3. **Robust Request Handling**
+   - Support for all HTTP methods (GET, POST, PUT, DELETE, etc.)
+   - Handling of various content types (JSON, form data, binary)
+   - Support for streaming responses (SSE)
+   - Proper header preservation and propagation
+
+4. **Flexible Configuration**
+   - Configurable target API (not hardcoded to OpenAI)
+   - Allowlist/whitelist for endpoints and methods
+   - Configurable authentication transformation
+   - Support for different target APIs
 
 ## System Architecture
 
+```mermaid
+flowchart LR
+    Clients["Clients"] --> Proxy
+    Admin["Admin"] --> Proxy
+    
+    subgraph Proxy["LLM Proxy"]
+        AuthSystem["Auth System"] --> TokenManager["Token Manager"]
+        TokenManager --> ReverseProxy["Reverse Proxy"]
+        ReverseProxy <--> LoggingSystem["Logging System"]
+        AdminUI["Admin UI"] --> TokenManager
+        DB[("Database")] <--> TokenManager
+    end
+    
+    Proxy --> API["Target API"]
 ```
-┌─────────────┐     ┌─────────────────────────────────────┐     ┌──────────┐
-│             │     │             LLM Proxy               │     │          │
-│   Clients   │────▶│                                     │────▶│  OpenAI  │
-│             │     │ ┌─────────┐ ┌─────────┐ ┌────────┐  │     │   API    │
-└─────────────┘     │ │  Auth   │ │ Token   │ │ OpenAI │  │     │          │
-                    │ │ System  │ │ Manager │ │ Client │  │     └──────────┘
-                    │ └─────────┘ └─────────┘ └────────┘  │
-┌─────────────┐     │ ┌─────────┐ ┌─────────┐ ┌────────┐  │
-│             │     │ │ Admin UI │ │ Logging │ │   DB   │  │
-│    Admin    │────▶│ │         │ │ System  │ │        │  │
-│             │     │ └─────────┘ └─────────┘ └────────┘  │
-└─────────────┘     └─────────────────────────────────────┘
+
+### Proxy Component Architecture
+
+```mermaid
+flowchart TD
+    Request["Client Request"] --> Middleware
+    
+    subgraph Middleware["Middleware Chain"]
+        Logging["Logging Middleware"] --> Validation["Validation Middleware"] 
+        Validation --> Timeout["Timeout Middleware"]
+        Timeout --> Metrics["Metrics Middleware"]
+    end
+    
+    Middleware --> Director["Director Function"] --> Transport["HTTP Transport"] --> TargetAPI["Target API"]
+    TargetAPI --> Response["API Response"] --> ModifyResponse["ModifyResponse Function"] --> Client["Client"]
+    
+    ErrorHandler["Error Handler"] --> Client
+    Director -.-> |"Error"| ErrorHandler
+    Transport -.-> |"Error"| ErrorHandler
 ```
+
+## Core Implementation: ReverseProxy
+
+```mermaid
+classDiagram
+    class TransparentProxy {
+        -httputil.ReverseProxy proxy
+        -ProxyConfig config
+        -TokenValidator tokenValidator
+        -ProxyMetrics metrics
+        -Logger logger
+        +Handler() http.Handler
+        +Shutdown(ctx) error
+        -director(req) void
+        -modifyResponse(res) error
+        -errorHandler(w, r, err) void
+    }
+    
+    class ProxyConfig {
+        +String TargetBaseURL
+        +String[] AllowedEndpoints
+        +String[] AllowedMethods
+        +Duration RequestTimeout
+        +Duration ResponseHeaderTimeout
+        +Duration FlushInterval
+        +int MaxIdleConns
+        +int MaxIdleConnsPerHost
+        +Duration IdleConnTimeout
+    }
+    
+    class Middleware {
+        <<function>>
+        +Handler(next) http.Handler
+    }
+    
+    TransparentProxy -- ProxyConfig : uses
+    TransparentProxy -- Middleware : applies
+```
+
+The proxy implementation is based on Go's `httputil.ReverseProxy` with customizations for:
+
+1. **Director Function**: Validates tokens and replaces authorization headers
+2. **ModifyResponse Function**: Extracts metadata from responses
+3. **Error Handler**: Provides consistent error responses
+4. **Transport**: Optimized for performance and streaming
+5. **Middleware Chain**: Applies cross-cutting concerns
 
 ## Core Components
 
@@ -36,9 +128,12 @@ The LLM Proxy is a transparent proxy server for OpenAI API requests, providing t
   - Authentication
   - Header management
   - Response handling
-  - Streaming support
+  - Streaming support (SSE)
   - Error handling
-- **Implementation**: `internal/server/server.go`
+  - Generic API support
+  - Connection pooling
+- **Implementation**: `internal/proxy/proxy.go`
+- **Design Pattern**: Transparent reverse proxy with minimal request/response transformation
 
 ### Configuration System
 
@@ -119,6 +214,45 @@ Web interface for system administration:
 
 ## Data Flow
 
+```mermaid
+sequenceDiagram
+    Client->>+Proxy: Request with Proxy Token
+    Proxy->>+TokenManager: Validate Token
+    TokenManager->>+Database: Get Token Data
+    Database-->>-TokenManager: Token Data
+    TokenManager->>TokenManager: Check Expiration & Rate Limits
+    TokenManager->>TokenManager: Update Usage Statistics
+    TokenManager-->>-Proxy: Project ID or Error
+    
+    alt Token Valid
+        Proxy->>+Database: Get API Key for Project
+        Database-->>-Proxy: API Key
+        Proxy->>Proxy: Replace Authorization Header
+        Proxy->>+TargetAPI: Forward Request
+        TargetAPI-->>-Proxy: Response
+        
+        alt Normal Response
+            Proxy->>Proxy: Extract Metadata
+            Proxy->>+Logger: Log API Call with Metadata
+            Logger-->>-Proxy: Log Confirmation
+        else Streaming Response
+            Proxy->>Proxy: Setup Streaming Pipeline
+            loop For Each Chunk
+                TargetAPI-->>Proxy: Response Chunk
+                Proxy-->>Client: Forward Chunk
+            end
+            Proxy->>+Logger: Log Aggregated Metadata
+            Logger-->>-Proxy: Log Confirmation
+        end
+        
+        Proxy-->>-Client: Response
+    else Token Invalid
+        Proxy-->>Client: Error Response
+    end
+```
+
+### Request Flow
+
 1. **Client Request**:
    - Client sends API request with proxy token
    - Proxy receives and authenticates the request
@@ -129,14 +263,14 @@ Web interface for system administration:
    - Updates usage statistics
 
 3. **Request Forwarding**:
-   - Proxy retrieves the OpenAI API key associated with the token
+   - Proxy retrieves the API key associated with the token's project
    - Transforms the request (replaces authorization header)
-   - Forwards the request to OpenAI
+   - Forwards the request to target API
 
 4. **Response Handling**:
-   - Proxy receives response from OpenAI
-   - Collects metadata (tokens used, model, etc.)
-   - Returns response to client
+   - Proxy receives response from target API
+   - Collects metadata (when available)
+   - Returns response to client with minimal modification
 
 ## Security Considerations
 
@@ -164,44 +298,101 @@ The application is designed for flexible deployment:
 
 ### Single Container Deployment
 
-```
-┌─────────────────────────────┐
-│ Docker Container            │
-│                             │
-│ ┌─────────┐     ┌─────────┐ │
-│ │ LLM     │     │         │ │
-│ │ Proxy   │━━━━━│ SQLite  │ │
-│ │         │     │         │ │
-│ └─────────┘     └─────────┘ │
-│                             │
-└─────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Container["Docker Container"]
+        Proxy["LLM Proxy"] <--> SQLite[("SQLite")]
+    end
 ```
 
 ### Docker Compose Deployment
 
+```mermaid
+flowchart TD
+    subgraph Containers["Docker Compose Environment"]
+        ProxyContainer["LLM Proxy Container"] 
+        MonitoringContainer["Monitoring Container"]
+        
+        subgraph ProxyContainer
+            Proxy["Proxy Application"]
+        end
+        
+        subgraph MonitoringContainer
+            Prometheus["Prometheus"]
+        end
+    end
+    
+    ProxyContainer --> DataVolume[("Data Volume")]
+    MonitoringContainer --> MetricsVolume[("Metrics Volume")]
 ```
-┌─────────────────┐  ┌─────────────────┐
-│ LLM Proxy       │  │ Monitoring      │
-│ Container       │  │ Container       │
-│                 │  │                 │
-│ ┌─────────────┐ │  │ ┌─────────────┐ │
-│ │ Application │ │  │ │ Prometheus  │ │
-│ └─────────────┘ │  │ └─────────────┘ │
-└─────────────────┘  └─────────────────┘
-        │                    │
-        ▼                    ▼
-┌─────────────────┐  ┌─────────────────┐
-│ Volume:         │  │ Volume:         │
-│ Data            │  │ Metrics         │
-└─────────────────┘  └─────────────────┘
+
+### Production Deployment
+
+```mermaid
+flowchart TD
+    Client["Client"] --> LoadBalancer["Load Balancer"]
+    LoadBalancer --> Proxy1["Proxy Instance 1"]
+    LoadBalancer --> Proxy2["Proxy Instance 2"]
+    LoadBalancer --> Proxy3["Proxy Instance 3"]
+    
+    Proxy1 --> Redis[("Redis Cache/Rate Limit")]
+    Proxy2 --> Redis
+    Proxy3 --> Redis
+    
+    Proxy1 --> Postgres[("PostgreSQL")]
+    Proxy2 --> Postgres
+    Proxy3 --> Postgres
+    
+    Proxy1 --> API["Target API"]
+    Proxy2 --> API
+    Proxy3 --> API
+    
+    subgraph Monitoring
+        Prometheus["Prometheus"] --> Grafana["Grafana Dashboard"]
+    end
+    
+    Proxy1 -.-> Prometheus
+    Proxy2 -.-> Prometheus
+    Proxy3 -.-> Prometheus
 ```
 
 ## Performance Considerations
 
-- **Connection Pooling**: Database connections are pooled for performance
+```mermaid
+graph TD
+    subgraph Key Performance Optimizations
+        CP[Connection Pooling]:::performance
+        CH[Concurrent Handling]:::performance
+        SS[Streaming Support]:::performance
+        RL[Rate Limiting]:::performance
+        ME[Minimal Transformation]:::performance
+        IO[Asynchronous I/O]:::performance
+    end
+    
+    subgraph Techniques
+        TP[HTTP Transport Tuning]:::technique
+        HP[Heap Management]:::technique
+        BF[Buffer Management]:::technique
+        TO[Timeout Configuration]:::technique
+        CT[Caching Tokens]:::technique
+    end
+    
+    CP --> TP
+    CH --> HP
+    SS --> BF
+    RL --> CT
+    ME --> IO
+    
+    classDef performance fill:#f9f,stroke:#333,stroke-width:2px
+    classDef technique fill:#bbf,stroke:#333,stroke-width:1px
+```
+
+- **Connection Pooling**: Database and HTTP connections are pooled for optimal performance
 - **Concurrent Request Handling**: Go's goroutines enable efficient concurrent processing
-- **Streaming Support**: Efficient handling of streaming responses
+- **Streaming Support**: Efficient handling of streaming responses with minimal buffering
 - **Rate Limiting**: Protects both the proxy and upstream API from overload
+- **Minimal Transformation**: Only essential request/response modifications to maintain transparency
+- **Fine-tuned Timeouts**: Carefully configured timeouts for different operation types
 
 ## Future Extensions
 
@@ -210,6 +401,8 @@ The application is designed for flexible deployment:
 - **Custom Rate Limiting Policies**: Per-project and per-endpoint rate limiting
 - **Caching**: Response caching for frequently used queries
 - **Load Balancing**: Support for multiple OpenAI API keys with load balancing
+- **Distributed Rate Limiting**: Redis-backed rate limiting for clustered deployments
+- **Real-time Usage Metrics**: Streaming metrics via WebSockets for monitoring dashboards
 
 ## Whitelist (Allowlist) for URIs and Methods
 

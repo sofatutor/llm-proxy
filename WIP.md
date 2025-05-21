@@ -105,9 +105,10 @@ Repository structure, configuration, Docker, security, documentation, and founda
 - [x] Implement token caching for performance
 
 ### Proxy Logic
-- [ ] Research HTTP proxying best practices in Go
-- [ ] Design proxy architecture (reverse proxy, forwarding proxy)
-- [ ] Create OpenAI API client wrapper
+- [x] Research HTTP proxying best practices in Go
+- [x] Design transparent proxy architecture using httputil.ReverseProxy
+- [x] Implement middleware chain for request processing
+- [x] Add support for streaming responses (SSE)
 - [ ] Implement proxy middleware chain:
   - Request logging middleware
   - Authentication middleware
@@ -170,15 +171,16 @@ Repository structure, configuration, Docker, security, documentation, and founda
 
 5. **Rate Limiting** (`feature/phase-2-rate-limiting`)
    - Track request counts
-   - Create rate-limiting logic
+   - Create in-memory rate-limiting logic
    - Implement last_used_at updates
    - Add max_requests enforcement
+   - Create extension points for future distributed rate limiting
 
 6. **Proxy Architecture** (`feature/phase-2-proxy-arch`)
-   - Research HTTP proxying
-   - Design proxy architecture
-   - Create OpenAI API client wrapper
-   - Set up basic proxy structure
+   - Research HTTP proxying ✅
+   - Design transparent proxy architecture using httputil.ReverseProxy ✅
+   - Set up basic proxy structure ✅
+   - Implement tests for proxy functionality ✅
 
 7. **Proxy Middleware** (`feature/phase-2-proxy-middleware`)
    - Implement request logging middleware
@@ -662,6 +664,17 @@ Repository structure, configuration, Docker, security, documentation, and founda
   - Custom metrics
   - Alert configurations
   - Dashboard templates
+- [ ] Implement distributed rate limiting:
+  - Redis-backed rate limiting
+  - Consistent behavior across multiple instances
+  - Failover mechanisms
+  - Performance optimization
+- [ ] Implement request caching system:
+  - Redis-backed response cache
+  - Configurable TTL for different endpoints
+  - Cache invalidation strategies
+  - Cache hit/miss metrics
+  - Support for cache control headers
 - [ ] Document scaling considerations:
   - Horizontal scaling
   - Vertical scaling

@@ -57,7 +57,10 @@ This document outlines the implementation plan for a transparent proxy for OpenA
    - Token validation
    - Request forwarding with header manipulation
    - Response parsing for metadata
-   - Streaming support
+   - Streaming support (SSE)
+   - Generic design for multiple API providers
+   - Minimal request/response transformation
+   - High performance with connection pooling
 
 6. **Admin UI**
    - HTML-based interface with basic auth
@@ -225,6 +228,10 @@ docker run --rm llm-proxy llm-benchmark \
 - Monitor with Prometheus/Grafana
 - Clean up expired tokens periodically
 - Store secrets in a secure manager
+- Implement Redis-backed distributed rate limiting
+- Set up horizontal scaling with load balancing
+- Add Redis-backed request caching for improved performance
+- Implement cache invalidation and consistency mechanisms
 
 ## Testing Strategy
 - **Test-Driven Development (TDD) is mandatory for all code.**
