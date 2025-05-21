@@ -21,6 +21,7 @@ const (
 	ThirtyDays   = 30 * 24 * time.Hour
 	NinetyDays   = 90 * 24 * time.Hour
 	NoExpiration = time.Duration(0)
+	MaxDuration  = time.Duration(1<<63 - 1)
 )
 
 // CalculateExpiration returns an expiration time based on the current time and the provided duration.
@@ -71,7 +72,7 @@ func IsExpired(expiresAt *time.Time) bool {
 // If expiresAt is nil, it returns the max possible duration (effectively "never").
 func TimeUntilExpiration(expiresAt *time.Time) time.Duration {
 	if expiresAt == nil {
-		return 1<<63 - 1 // Max duration, practically "never"
+		return MaxDuration // Max duration, practically "never"
 	}
 
 	until := time.Until(*expiresAt)

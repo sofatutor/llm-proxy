@@ -79,7 +79,7 @@ func (m *MockValidator) AddToken(tokenID string, data TokenData) {
 func TestCachedValidator_ValidateToken(t *testing.T) {
 	ctx := context.Background()
 	store := NewMockTokenStore()
-	validator := NewValidator(store)
+	validator := &StandardValidator{store: store}
 
 	// Create cache with small TTL for testing
 	cachedValidator := NewCachedValidator(validator, CacheOptions{
@@ -280,7 +280,7 @@ func TestCachedValidator_CacheEviction(t *testing.T) {
 
 func TestCachedValidator_Cleanup(t *testing.T) {
 	store := NewMockTokenStore()
-	validator := NewValidator(store)
+	validator := &StandardValidator{store: store}
 
 	// Create cache with short TTL and cleanup
 	cachedValidator := NewCachedValidator(validator, CacheOptions{
@@ -332,7 +332,7 @@ func TestCachedValidator_Cleanup(t *testing.T) {
 func TestCachedValidator_EvictOldest(t *testing.T) {
 	ctx := context.Background()
 	store := NewMockTokenStore()
-	validator := NewValidator(store)
+	validator := &StandardValidator{store: store}
 
 	cachedValidator := NewCachedValidator(validator, CacheOptions{
 		TTL:           1 * time.Minute,
@@ -381,5 +381,54 @@ func TestCachedValidator_EvictOldest(t *testing.T) {
 	}
 	if evictions == 0 {
 		t.Errorf("Evictions = %v, want > 0", evictions)
+	}
+}
+
+func TestCachedValidator_EvictOldest_CorrectnessAndEfficiency(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	store := NewMockTokenStore()
+	validator := &StandardValidator{store: store}
+	maxSize := 100
+	cv := NewCachedValidator(validator, CacheOptions{
+		TTL:           10 * time.Minute,
+		MaxSize:       maxSize,
+		EnableCleanup: false,
+	})
+
+	tokenIDs := make([]string, 0, 200)
+	for i := 0; i < 200; i++ {
+		tokenID, _ := GenerateToken() // use project token generator
+		tokenIDs = append(tokenIDs, tokenID)
+		expiresAt := time.Now().Add(1 * time.Hour)
+		store.AddToken(tokenID, TokenData{
+			Token:     tokenID,
+			ProjectID: "proj",
+			ExpiresAt: &expiresAt,
+			IsActive:  true,
+		})
+		_, _ = cv.ValidateToken(ctx, tokenID)
+	}
+
+	// After all insertions, only the newest 100 tokens should remain
+	expected := tokenIDs[100:]
+	cacheKeys := make(map[string]struct{})
+	cv.cacheMutex.Lock()
+	for k := range cv.cache {
+		cacheKeys[k] = struct{}{}
+	}
+	cv.cacheMutex.Unlock()
+
+	missing := []string{}
+	for _, k := range expected {
+		if _, ok := cacheKeys[k]; !ok {
+			missing = append(missing, k)
+		}
+	}
+	if len(missing) > 0 {
+		t.Errorf("Missing expected tokens in cache: %v", missing)
+	}
+	if len(cv.cache) != maxSize {
+		t.Errorf("Cache size = %d, want %d", len(cv.cache), maxSize)
 	}
 }

@@ -2,10 +2,20 @@ package token
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 )
+
+// ManagerStore is a composite interface for all required store operations
+// ManagerStore embeds all store interfaces required by Manager
+// (TokenStore, RevocationStore, RateLimitStore)
+//
+//go:generate mockgen -destination=mock_managerstore.go -package=token . ManagerStore
+type ManagerStore interface {
+	TokenStore
+	RevocationStore
+	RateLimitStore
+}
 
 // Manager provides a unified interface for all token operations
 type Manager struct {
@@ -13,30 +23,23 @@ type Manager struct {
 	revoker    *Revoker
 	limiter    *StandardRateLimiter
 	generator  *TokenGenerator
-	store      interface{} // Underlying store (should implement multiple store interfaces)
+	store      ManagerStore // Underlying store (must implement all store interfaces)
 	useCaching bool
 }
 
 // NewManager creates a new token manager with the given store
-func NewManager(store interface{}, useCaching bool) (*Manager, error) {
-	// Verify store implements all required interfaces
-	tokenStore, ok1 := store.(TokenStore)
-	revStore, ok2 := store.(RevocationStore)
-	rateStore, ok3 := store.(RateLimitStore)
-
-	if !ok1 || !ok2 || !ok3 {
-		return nil, errors.New("store must implement TokenStore, RevocationStore, and RateLimitStore interfaces")
-	}
+func NewManager(store ManagerStore, useCaching bool) (*Manager, error) {
+	// No need to check interfaces, type system enforces it now
 
 	// Create components
-	baseValidator := NewValidator(tokenStore)
+	baseValidator := NewValidator(store)
 	var validator TokenValidator = baseValidator
 	if useCaching {
 		validator = NewCachedValidator(baseValidator)
 	}
 
-	revoker := NewRevoker(revStore)
-	limiter := NewRateLimiter(rateStore)
+	revoker := NewRevoker(store)
+	limiter := NewRateLimiter(store)
 	generator := NewTokenGenerator()
 
 	return &Manager{
@@ -69,13 +72,8 @@ func (m *Manager) CreateToken(ctx context.Context, projectID string, options Tok
 		CreatedAt:    now,
 	}
 
-	// For now, we'll add the token directly to the mock store in tests
-	// In real implementation, this would call a store method
-
-	// Example implementation for testing only:
-	if mockStore, ok := m.store.(interface {
-		AddToken(tokenID string, data TokenData)
-	}); ok {
+	// For tests only: if the store is a mock with AddToken, call it
+	if mockStore, ok := any(m.store).(interface{ AddToken(string, TokenData) }); ok {
 		mockStore.AddToken(token.Token, token)
 	}
 
@@ -114,12 +112,7 @@ func (m *Manager) RevokeProjectTokens(ctx context.Context, projectID string) (in
 
 // GetTokenInfo gets detailed information about a token
 func (m *Manager) GetTokenInfo(ctx context.Context, tokenID string) (*TokenInfo, error) {
-	store, ok := m.store.(TokenStore)
-	if !ok {
-		return nil, errors.New("store does not implement TokenStore interface")
-	}
-
-	tokenData, err := store.GetTokenByID(ctx, tokenID)
+	tokenData, err := m.store.GetTokenByID(ctx, tokenID)
 	if err != nil {
 		return nil, err
 	}
@@ -134,12 +127,7 @@ func (m *Manager) GetTokenInfo(ctx context.Context, tokenID string) (*TokenInfo,
 
 // GetTokenStats gets statistics about token usage
 func (m *Manager) GetTokenStats(ctx context.Context, tokenID string) (*TokenStats, error) {
-	store, ok := m.store.(TokenStore)
-	if !ok {
-		return nil, errors.New("store does not implement TokenStore interface")
-	}
-
-	tokenData, err := store.GetTokenByID(ctx, tokenID)
+	tokenData, err := m.store.GetTokenByID(ctx, tokenID)
 	if err != nil {
 		return nil, err
 	}

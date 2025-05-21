@@ -1,8 +1,10 @@
 package token
 
 import (
+	"container/heap"
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 )
@@ -13,6 +15,40 @@ type CacheEntry struct {
 	ValidUntil time.Time
 }
 
+// cacheEntry is a heap entry for eviction, with index for fast updates
+// and tokenID for lookup.
+type cacheEntry struct {
+	tokenID    string
+	validUntil time.Time
+	insertedAt int64 // strictly increasing for FIFO eviction
+	index      int   // index in the heap
+}
+
+type cacheEntryHeap []*cacheEntry
+
+func (h cacheEntryHeap) Len() int           { return len(h) }
+func (h cacheEntryHeap) Less(i, j int) bool { return h[i].insertedAt < h[j].insertedAt } // FIFO eviction
+func (h cacheEntryHeap) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+	h[i].index = i
+	h[j].index = j
+}
+
+func (h *cacheEntryHeap) Push(x interface{}) {
+	entry := x.(*cacheEntry)
+	entry.index = len(*h)
+	*h = append(*h, entry)
+}
+
+func (h *cacheEntryHeap) Pop() interface{} {
+	old := *h
+	n := len(old)
+	item := old[n-1]
+	item.index = -1 // for safety
+	*h = old[0 : n-1]
+	return item
+}
+
 // CachedValidator wraps a TokenValidator with caching
 type CachedValidator struct {
 	validator    TokenValidator
@@ -20,6 +56,12 @@ type CachedValidator struct {
 	cacheMutex   sync.RWMutex
 	cacheTTL     time.Duration
 	maxCacheSize int
+
+	// Min-heap for eviction
+	heap      cacheEntryHeap
+	heapIndex map[string]*cacheEntry // tokenID -> *cacheEntry
+
+	insertCounter int64 // strictly increasing counter for insertedAt
 
 	// For cache stats
 	hits       int
@@ -65,6 +107,8 @@ func NewCachedValidator(validator TokenValidator, options ...CacheOptions) *Cach
 		cache:        make(map[string]CacheEntry),
 		cacheTTL:     opts.TTL,
 		maxCacheSize: opts.MaxSize,
+		heap:         make(cacheEntryHeap, 0, opts.MaxSize),
+		heapIndex:    make(map[string]*cacheEntry, opts.MaxSize),
 	}
 
 	// Start cache cleanup if enabled
@@ -148,36 +192,45 @@ func (cv *CachedValidator) checkCache(tokenID string) (string, bool) {
 
 // cacheToken retrieves and caches a token
 func (cv *CachedValidator) cacheToken(ctx context.Context, tokenID string) {
-	// Type cast to get access to the TokenStore
+	cv.cacheMutex.Lock()
+	defer cv.cacheMutex.Unlock()
+
 	standardValidator, ok := cv.validator.(*StandardValidator)
 	if !ok {
-		// Cannot cache if we don't have access to the store
 		return
 	}
-
-	// Get token data from the store
 	tokenData, err := standardValidator.store.GetTokenByID(ctx, tokenID)
 	if err != nil {
 		return
 	}
-
-	// Don't cache invalid tokens
 	if !tokenData.IsValid() {
 		return
 	}
 
-	cv.cacheMutex.Lock()
-	defer cv.cacheMutex.Unlock()
-
-	// Check if we need to evict entries due to size limit
-	if cv.maxCacheSize > 0 && len(cv.cache) >= cv.maxCacheSize {
-		cv.evictOldest()
-	}
-
-	// Add to cache with TTL
+	validUntil := time.Now().Add(cv.cacheTTL)
+	insertedAt := cv.insertCounter
+	cv.insertCounter++
 	cv.cache[tokenID] = CacheEntry{
 		Data:       tokenData,
-		ValidUntil: time.Now().Add(cv.cacheTTL),
+		ValidUntil: validUntil,
+	}
+	// Remove old heap entry if present
+	if oldEntry, ok := cv.heapIndex[tokenID]; ok {
+		idx := oldEntry.index
+		heap.Remove(&cv.heap, idx)
+		delete(cv.heapIndex, tokenID)
+	}
+	entry := &cacheEntry{
+		tokenID:    tokenID,
+		validUntil: validUntil,
+		insertedAt: insertedAt,
+	}
+	heap.Push(&cv.heap, entry)
+	cv.heapIndex[tokenID] = entry
+
+	// Evict if over capacity
+	if cv.maxCacheSize > 0 && len(cv.cache) > cv.maxCacheSize {
+		cv.evictOldest()
 	}
 }
 
@@ -185,48 +238,35 @@ func (cv *CachedValidator) cacheToken(ctx context.Context, tokenID string) {
 func (cv *CachedValidator) invalidateCache(tokenID string) {
 	cv.cacheMutex.Lock()
 	delete(cv.cache, tokenID)
+	// Remove from heap if present
+	if entry, ok := cv.heapIndex[tokenID]; ok {
+		idx := entry.index
+		heap.Remove(&cv.heap, idx)
+		delete(cv.heapIndex, tokenID)
+	}
 	cv.cacheMutex.Unlock()
+	// Debug: assert heap and cache sizes are consistent
+	if len(cv.cache) != cv.heap.Len() {
+		log.Printf("[DEBUG] cache size %d != heap size %d after invalidateCache", len(cv.cache), cv.heap.Len())
+	}
 }
 
-// evictOldest removes the oldest entries from the cache to make room
+// evictOldest removes the single oldest entry from the cache
 func (cv *CachedValidator) evictOldest() {
-	// Simple strategy: remove approximately 10% of entries
-	toRemove := cv.maxCacheSize / 10
-	if toRemove < 1 {
-		toRemove = 1
+	cacheSizeBefore := len(cv.cache)
+	if cv.heap.Len() == 0 {
+		log.Printf("[DEBUG] Heap is empty, cannot evict more.")
+		return
 	}
-
-	// Find the oldest entries
-	type cacheAge struct {
-		key        string
-		validUntil time.Time
-	}
-
-	oldest := make([]cacheAge, 0, len(cv.cache))
-	for k, v := range cv.cache {
-		oldest = append(oldest, cacheAge{k, v.ValidUntil})
-	}
-
-	for i := 0; i < toRemove && i < len(oldest); i++ {
-		var oldestKey string
-		var oldestTime time.Time
-
-		first := true
-		for k, v := range cv.cache {
-			if first || v.ValidUntil.Before(oldestTime) {
-				oldestKey = k
-				oldestTime = v.ValidUntil
-				first = false
-			}
-		}
-
-		if oldestKey != "" {
-			delete(cv.cache, oldestKey)
-			cv.statsMutex.Lock()
-			cv.evictions++
-			cv.statsMutex.Unlock()
-		}
-	}
+	entry := heap.Pop(&cv.heap).(*cacheEntry)
+	log.Printf("[DEBUG] Evicting tokenID=%s (insertedAt=%d)", entry.tokenID, entry.insertedAt)
+	delete(cv.cache, entry.tokenID)
+	delete(cv.heapIndex, entry.tokenID)
+	cv.statsMutex.Lock()
+	cv.evictions++
+	cv.statsMutex.Unlock()
+	cacheSizeAfter := len(cv.cache)
+	log.Printf("[DEBUG] Cache size after eviction: %d (before: %d)", cacheSizeAfter, cacheSizeBefore)
 }
 
 // startCleanup periodically cleans up expired entries from the cache
