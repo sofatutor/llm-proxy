@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/sofatutor/llm-proxy/internal/token"
+	"go.uber.org/zap"
 )
 
 // Server represents the HTTP server for the LLM Proxy.
@@ -24,6 +26,7 @@ type Server struct {
 	config       *config.Config
 	tokenStore   token.TokenStore
 	projectStore proxy.ProjectStore
+	logger       *zap.Logger
 }
 
 // HealthResponse is the response body for the health check endpoint.
@@ -43,10 +46,13 @@ const Version = "0.1.0"
 func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.ProjectStore) *Server {
 	mux := http.NewServeMux()
 
+	logger, _ := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile)
+
 	s := &Server{
 		config:       cfg,
 		tokenStore:   tokenStore,
 		projectStore: projectStore,
+		logger:       logger,
 		server: &http.Server{
 			Addr:         cfg.ListenAddr,
 			Handler:      mux,
@@ -149,7 +155,7 @@ func (s *Server) initializeAPIRoutes() error {
 	// (No more creation of mock stores or test data here)
 	tokenValidator := token.NewValidator(s.tokenStore)
 	cachedValidator := token.NewCachedValidator(tokenValidator)
-	proxyHandler := proxy.NewTransparentProxy(*proxyConfig, cachedValidator, s.projectStore)
+	proxyHandler := proxy.NewTransparentProxyWithLogger(*proxyConfig, cachedValidator, s.projectStore, s.logger)
 
 	// Register proxy routes
 	s.server.Handler.(*http.ServeMux).Handle("/v1/", proxyHandler.Handler())

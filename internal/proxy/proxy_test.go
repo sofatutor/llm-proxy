@@ -126,7 +126,7 @@ func TestTransparentProxy_BasicProxying(t *testing.T) {
 	}
 
 	// Create proxy
-	proxy := NewTransparentProxy(config, mockValidator, mockStore)
+	proxy := NewTransparentProxyWithLogger(config, mockValidator, mockStore, zap.NewNop())
 
 	// Create request to test
 	reqBody := strings.NewReader(`{"prompt": "Hello, world!"}`)
@@ -188,7 +188,7 @@ func TestTransparentProxy_StreamingResponses(t *testing.T) {
 	}
 
 	// Create proxy
-	proxy := NewTransparentProxy(config, mockValidator, mockStore)
+	proxy := NewTransparentProxyWithLogger(config, mockValidator, mockStore, zap.NewNop())
 
 	// Create request to test
 	req := httptest.NewRequest("GET", "/v1/streaming", nil)
@@ -249,7 +249,7 @@ func TestTransparentProxy_InvalidToken(t *testing.T) {
 	}
 
 	// Create proxy
-	proxy := NewTransparentProxy(config, mockValidator, mockStore)
+	proxy := NewTransparentProxyWithLogger(config, mockValidator, mockStore, zap.NewNop())
 
 	// Create request with invalid token
 	req := httptest.NewRequest("POST", "/v1/completions", nil)
@@ -301,7 +301,7 @@ func TestTransparentProxy_DisallowedEndpoint(t *testing.T) {
 	}
 
 	// Create proxy
-	proxy := NewTransparentProxy(config, mockValidator, mockStore)
+	proxy := NewTransparentProxyWithLogger(config, mockValidator, mockStore, zap.NewNop())
 
 	// Create request to a disallowed endpoint
 	req := httptest.NewRequest("POST", "/v1/disallowed_endpoint", nil)
@@ -341,7 +341,7 @@ func TestTransparentProxy_DisallowedMethod(t *testing.T) {
 	}
 
 	// Create proxy
-	proxy := NewTransparentProxy(config, mockValidator, mockStore)
+	proxy := NewTransparentProxyWithLogger(config, mockValidator, mockStore, zap.NewNop())
 
 	// Create request with disallowed method
 	req := httptest.NewRequest("DELETE", "/v1/completions", nil)
@@ -385,7 +385,7 @@ func TestTransparentProxy_LargeRequestBody(t *testing.T) {
 	}
 
 	// Create proxy
-	proxy := NewTransparentProxy(config, mockValidator, mockStore)
+	proxy := NewTransparentProxyWithLogger(config, mockValidator, mockStore, zap.NewNop())
 
 	// Create large request body (100KB)
 	largeBody := bytes.Repeat([]byte("a"), 100*1024)
@@ -413,7 +413,7 @@ func TestTransparentProxy_LargeRequestBody(t *testing.T) {
 }
 
 func TestTransparentProxy_ErrorHandler(t *testing.T) {
-	proxy := NewTransparentProxy(ProxyConfig{}, nil, nil)
+	proxy := NewTransparentProxyWithLogger(ProxyConfig{}, nil, nil, zap.NewNop())
 	testCases := []struct {
 		name        string
 		ctxErr      error
@@ -446,7 +446,7 @@ func TestTransparentProxy_ErrorHandler(t *testing.T) {
 }
 
 func TestTransparentProxy_HandleValidationError(t *testing.T) {
-	proxy := NewTransparentProxy(ProxyConfig{}, nil, nil)
+	proxy := NewTransparentProxyWithLogger(ProxyConfig{}, nil, nil, zap.NewNop())
 	testCases := []struct {
 		name       string
 		err        error
@@ -479,7 +479,7 @@ func TestTransparentProxy_HandleValidationError(t *testing.T) {
 // Minimal mock http.Server for Shutdown test
 
 func TestTransparentProxy_Shutdown(t *testing.T) {
-	proxy := NewTransparentProxy(ProxyConfig{}, nil, nil)
+	proxy := NewTransparentProxyWithLogger(ProxyConfig{}, nil, nil, zap.NewNop())
 	// Case: no httpServer
 	err := proxy.Shutdown(context.Background())
 	assert.NoError(t, err)

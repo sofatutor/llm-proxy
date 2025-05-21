@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"go.uber.org/zap"
 )
@@ -40,12 +41,18 @@ type ProxyMetrics struct {
 	mu                sync.Mutex
 }
 
-// NewTransparentProxy creates a new proxy instance
+// NewTransparentProxy creates a new proxy instance with an internally
+// configured logger based on the provided ProxyConfig.
 func NewTransparentProxy(config ProxyConfig, validator TokenValidator, store ProjectStore) *TransparentProxy {
-	// Initialize logger
-	logger, _ := zap.NewProduction()
-	if config.LogLevel == "debug" {
-		logger, _ = zap.NewDevelopment()
+	logger, _ := logging.NewLogger(config.LogLevel, config.LogFormat, config.LogFile)
+	return NewTransparentProxyWithLogger(config, validator, store, logger)
+}
+
+// NewTransparentProxyWithLogger allows providing a custom logger. If logger is nil
+// a new one is created based on the ProxyConfig.
+func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator, store ProjectStore, logger *zap.Logger) *TransparentProxy {
+	if logger == nil {
+		logger, _ = logging.NewLogger(config.LogLevel, config.LogFormat, config.LogFile)
 	}
 
 	proxy := &TransparentProxy{
