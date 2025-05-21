@@ -84,10 +84,14 @@ func (d *DB) Close() error {
 
 // ensureDirExists creates the directory if it doesn't exist.
 func ensureDirExists(dir string) error {
-	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
+	info, err := os.Stat(dir)
+	if errors.Is(err, fs.ErrNotExist) {
 		return os.MkdirAll(dir, 0755)
 	} else if err != nil {
 		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("path %s exists and is not a directory", dir)
 	}
 	return nil
 }

@@ -106,3 +106,87 @@ func TestTransaction(t *testing.T) {
 		t.Fatalf("Expected 0 projects, got %d", count)
 	}
 }
+
+func TestDefaultConfig(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.Path == "" || cfg.MaxOpenConns <= 0 || cfg.MaxIdleConns <= 0 || cfg.ConnMaxLifetime <= 0 {
+		t.Errorf("DefaultConfig returned invalid config: %+v", cfg)
+	}
+}
+
+func TestDB_DB(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	if db.DB() == nil {
+		t.Error("DB() returned nil")
+	}
+}
+
+func TestEnsureDirExists(t *testing.T) {
+	dir := os.TempDir() + "/llm-proxy-test-dir"
+	_ = os.RemoveAll(dir)
+	err := ensureDirExists(dir)
+	if err != nil {
+		t.Fatalf("ensureDirExists failed: %v", err)
+	}
+	// Should succeed if called again (already exists)
+	if err := ensureDirExists(dir); err != nil {
+		t.Fatalf("ensureDirExists failed on existing dir: %v", err)
+	}
+	_ = os.RemoveAll(dir)
+}
+
+func TestEnsureDirExists_Error(t *testing.T) {
+	// Try to create a dir where parent doesn't exist and can't be created (simulate with a file)
+	file := os.TempDir() + "/llm-proxy-test-file"
+	f, err := os.Create(file)
+	if err != nil {
+		t.Fatalf("Failed to create file: %v", err)
+	}
+	f.Close()
+	defer os.Remove(file)
+	// Now try to create a dir with the same name as the file
+	err = ensureDirExists(file)
+	if err == nil {
+		t.Error("expected error when ensureDirExists called on file path")
+	}
+}
+
+func TestNew_Error(t *testing.T) {
+	// Invalid path (directory as file)
+	dir := os.TempDir() + "/llm-proxy-test-baddir"
+	_ = os.MkdirAll(dir, 0755)
+	_, err := New(Config{Path: dir, MaxOpenConns: 1, MaxIdleConns: 1, ConnMaxLifetime: time.Second})
+	if err == nil {
+		t.Error("expected error for directory as DB file")
+	}
+	_ = os.RemoveAll(dir)
+}
+
+func TestTransaction_Panic(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic in transaction")
+		}
+	}()
+	_ = db.Transaction(ctx, func(tx *sql.Tx) error {
+		panic("test panic")
+	})
+}
+
+func TestTransaction_CommitError(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	// Close DB to force commit error
+	_ = db.Close()
+	err := db.Transaction(ctx, func(tx *sql.Tx) error {
+		return nil
+	})
+	if err == nil {
+		t.Error("expected error on commit after DB closed")
+	}
+}

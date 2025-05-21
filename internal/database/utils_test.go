@@ -97,3 +97,64 @@ func TestDatabaseUtils(t *testing.T) {
 		t.Fatalf("Backup file was not created: %v", err)
 	}
 }
+
+func TestBackupDatabase_Error(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	// Use an invalid path
+	err := db.BackupDatabase(ctx, "/invalid/path/backup.db")
+	if err == nil {
+		t.Error("expected error for invalid backup path")
+	}
+}
+
+func TestMaintainDatabase_Error(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	// Close DB to force error
+	_ = db.Close()
+	err := db.MaintainDatabase(ctx)
+	if err == nil {
+		t.Error("expected error for closed DB in MaintainDatabase")
+	}
+}
+
+func TestGetStats_Error(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	// Close DB to force error
+	_ = db.Close()
+	_, err := db.GetStats(ctx)
+	if err == nil {
+		t.Error("expected error for closed DB in GetStats")
+	}
+}
+
+func TestIsTokenValid_EdgeCases(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	// Create a project and token
+	project := Project{ID: "p", Name: "P", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	_ = db.CreateProject(ctx, project)
+	max := 1
+	expired := time.Now().Add(-time.Hour)
+	tokens := []Token{
+		{Token: "inactive", ProjectID: project.ID, IsActive: false, CreatedAt: time.Now()},
+		{Token: "expired", ProjectID: project.ID, IsActive: true, ExpiresAt: &expired, CreatedAt: time.Now()},
+		{Token: "limited", ProjectID: project.ID, IsActive: true, MaxRequests: &max, RequestCount: 1, CreatedAt: time.Now()},
+	}
+	for _, tk := range tokens {
+		_ = db.CreateToken(ctx, tk)
+		valid, err := db.IsTokenValid(ctx, tk.Token)
+		if err != nil {
+			t.Errorf("IsTokenValid error: %v", err)
+		}
+		if valid {
+			t.Errorf("Expected token %s to be invalid", tk.Token)
+		}
+	}
+}
