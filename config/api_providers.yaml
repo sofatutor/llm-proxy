@@ -1,0 +1,97 @@
+# API Provider Configuration
+# This file defines the configuration for different API providers that can be proxied.
+
+# Default API provider to use if not specified
+default_api: openai
+
+# Configuration for each API provider
+apis:
+  # OpenAI API configuration
+  openai:
+    base_url: https://api.openai.com
+    allowed_endpoints:
+      # Chat completions
+      - /v1/chat/completions
+      
+      # Completions
+      - /v1/completions
+      
+      # Embeddings
+      - /v1/embeddings
+      
+      # Models
+      - /v1/models
+      
+      # Edits
+      - /v1/edits
+      
+      # Fine-tuning
+      - /v1/fine-tunes
+      - /v1/fine_tuning
+      
+      # Files
+      - /v1/files
+      
+      # Images
+      - /v1/images/generations
+      - /v1/images/edits
+      - /v1/images/variations
+      
+      # Audio
+      - /v1/audio/transcriptions
+      - /v1/audio/translations
+      
+      # Moderations
+      - /v1/moderations
+    
+    allowed_methods:
+      - GET
+      - POST
+      - DELETE
+    
+    # Timeout settings in seconds
+    timeouts:
+      request: 120s
+      response_header: 30s
+      idle_connection: 90s
+      flush_interval: 100ms
+    
+    # Connection settings
+    connection:
+      max_idle_conns: 100
+      max_idle_conns_per_host: 20
+
+  # Anthropic API configuration
+  anthropic:
+    base_url: https://api.anthropic.com
+    allowed_endpoints:
+      - /v1/messages
+      - /v1/complete
+    allowed_methods:
+      - POST
+    timeouts:
+      request: 120s
+      response_header: 30s
+      idle_connection: 90s
+      flush_interval: 100ms
+    connection:
+      max_idle_conns: 100
+      max_idle_conns_per_host: 20
+
+  # Example for a custom API provider
+  # custom_api:
+  #   base_url: https://custom-api-provider.example.com
+  #   allowed_endpoints:
+  #     - /api/endpoint1
+  #     - /api/endpoint2
+  #   allowed_methods:
+  #     - GET
+  #     - POST
+  #   timeouts:
+  #     request: 60s
+  #     response_header: 20s
+  #     idle_connection: 60s
+  #     flush_interval: 200ms
+  #   connection:
+  #     max_idle_conns: 50
+  #     max_idle_conns_per_host: 10
