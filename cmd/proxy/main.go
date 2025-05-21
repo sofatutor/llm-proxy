@@ -12,6 +12,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/database"
 	"github.com/sofatutor/llm-proxy/internal/server"
 )
 
@@ -117,7 +118,10 @@ func runWithHooks(doneCh chan os.Signal, srv serverInterface, forceNoTest bool) 
 	if srv != nil {
 		s = srv
 	} else {
-		s = server.New(cfg)
+		ts := database.NewMockTokenStore()
+		ps := database.NewMockProjectStore()
+		tokenStoreAdapter := database.NewTokenStoreAdapter(ts)
+		s = server.New(cfg, tokenStoreAdapter, ps)
 	}
 
 	go func() {
