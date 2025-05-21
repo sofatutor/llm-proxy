@@ -62,7 +62,7 @@ type ProxyConfig struct {
 
 	// LogLevel controls the verbosity of logging
 	LogLevel string
-	
+
 	// SetXForwardedFor determines whether to set the X-Forwarded-For header
 	SetXForwardedFor bool
 }
@@ -114,7 +114,7 @@ const (
 
 	// ctxKeyOriginalPath is the context key for the original request path
 	ctxKeyOriginalPath contextKey = "original_path"
-	
+
 	// ctxKeyProjectID is the context key for the project ID
 	ctxKeyProjectID contextKey = "project_id"
 )

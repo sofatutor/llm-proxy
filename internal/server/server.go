@@ -101,7 +101,7 @@ func (s *Server) initializeAPIRoutes() error {
 		// If the config file doesn't exist or has errors, fall back to a default OpenAI configuration
 		log.Printf("Warning: Failed to load API config from %s: %v", s.config.APIConfigPath, err)
 		log.Printf("Using default OpenAI configuration")
-		
+
 		// Create a default API configuration
 		apiConfig = &proxy.APIConfig{
 			DefaultAPI: "openai",
@@ -150,7 +150,7 @@ func (s *Server) initializeAPIRoutes() error {
 	// Initialize token store and project store
 	tokenStore := database.NewMockTokenStore()
 	projectStore := database.NewMockProjectStore()
-	
+
 	// Create a sample project and token for testing
 	projectID := "project_123"
 	apiKey := "sk-1234567890"
@@ -158,7 +158,7 @@ func (s *Server) initializeAPIRoutes() error {
 	if err != nil {
 		log.Printf("Warning: Failed to create mock project: %v", err)
 	}
-	
+
 	// Create test token
 	tokenID := "tkn_abcdefghijklmnopqrstuv"
 	// Token expires in 1 day, is active, and has no request limit
@@ -166,23 +166,23 @@ func (s *Server) initializeAPIRoutes() error {
 	if err != nil {
 		log.Printf("Warning: Failed to create mock token: %v", err)
 	}
-	
+
 	// Create token validator
 	tokenStoreAdapter := database.NewTokenStoreAdapter(tokenStore)
 	tokenValidator := token.NewValidator(tokenStoreAdapter)
-	
+
 	// Add caching for better performance
 	cachedValidator := token.NewCachedValidator(tokenValidator)
-	
+
 	// Create the proxy handler
 	proxyHandler := proxy.NewTransparentProxy(*proxyConfig, cachedValidator, projectStore)
-	
+
 	// Register proxy routes
 	s.server.Handler.(*http.ServeMux).Handle("/v1/", proxyHandler.Handler())
-	
-	log.Printf("Initialized proxy for %s with %d allowed endpoints", 
+
+	log.Printf("Initialized proxy for %s with %d allowed endpoints",
 		proxyConfig.TargetBaseURL, len(proxyConfig.AllowedEndpoints))
-		
+
 	return nil
 }
 

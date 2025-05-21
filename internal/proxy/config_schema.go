@@ -87,11 +87,11 @@ func validateAPIConfig(config *APIConfig) error {
 		if api.BaseURL == "" {
 			return fmt.Errorf("API '%s' has empty base_url", name)
 		}
-		
+
 		if len(api.AllowedEndpoints) == 0 {
 			return fmt.Errorf("API '%s' has no allowed_endpoints", name)
 		}
-		
+
 		if len(api.AllowedMethods) == 0 {
 			return fmt.Errorf("API '%s' has no allowed_methods", name)
 		}
@@ -115,15 +115,15 @@ func (c *APIConfig) GetProxyConfigForAPI(apiName string) (*ProxyConfig, error) {
 
 	// Create the proxy configuration
 	proxyConfig := ProxyConfig{
-		TargetBaseURL:       apiConfig.BaseURL,
-		AllowedEndpoints:    apiConfig.AllowedEndpoints,
-		AllowedMethods:      apiConfig.AllowedMethods,
-		RequestTimeout:      apiConfig.Timeouts.Request,
+		TargetBaseURL:         apiConfig.BaseURL,
+		AllowedEndpoints:      apiConfig.AllowedEndpoints,
+		AllowedMethods:        apiConfig.AllowedMethods,
+		RequestTimeout:        apiConfig.Timeouts.Request,
 		ResponseHeaderTimeout: apiConfig.Timeouts.ResponseHeader,
-		FlushInterval:       apiConfig.Timeouts.FlushInterval,
-		IdleConnTimeout:     apiConfig.Timeouts.IdleConnection,
-		MaxIdleConns:        apiConfig.Connection.MaxIdleConns,
-		MaxIdleConnsPerHost: apiConfig.Connection.MaxIdleConnsPerHost,
+		FlushInterval:         apiConfig.Timeouts.FlushInterval,
+		IdleConnTimeout:       apiConfig.Timeouts.IdleConnection,
+		MaxIdleConns:          apiConfig.Connection.MaxIdleConns,
+		MaxIdleConnsPerHost:   apiConfig.Connection.MaxIdleConnsPerHost,
 	}
 
 	return &proxyConfig, nil
