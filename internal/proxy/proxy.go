@@ -55,11 +55,6 @@ func NewTransparentProxy(config ProxyConfig, validator TokenValidator, store Pro
 	}
 
 	// Initialize the reverse proxy
-	targetURL, err := url.Parse(config.TargetBaseURL)
-	if err != nil {
-		logger.Fatal("Invalid target URL", zap.Error(err))
-	}
-
 	reverseProxy := &httputil.ReverseProxy{
 		Director:       proxy.director,
 		ModifyResponse: proxy.modifyResponse,
@@ -95,7 +90,7 @@ func (p *TransparentProxy) director(req *http.Request) {
 	authHeader := req.Header.Get("Authorization")
 	token := extractTokenFromHeader(authHeader)
 	if token == "" {
-		*req = *req.WithContext(context.WithValue(req.Context(), 
+		*req = *req.WithContext(context.WithValue(req.Context(),
 			ctxKeyValidationError, errors.New("missing or invalid authorization header")))
 		return
 	}
@@ -103,7 +98,7 @@ func (p *TransparentProxy) director(req *http.Request) {
 	// Validate token with tracking (increments usage)
 	projectID, err := p.tokenValidator.ValidateTokenWithTracking(req.Context(), token)
 	if err != nil {
-		*req = *req.WithContext(context.WithValue(req.Context(), 
+		*req = *req.WithContext(context.WithValue(req.Context(),
 			ctxKeyValidationError, err))
 		return
 	}
@@ -111,7 +106,7 @@ func (p *TransparentProxy) director(req *http.Request) {
 	// Get API key for project
 	apiKey, err := p.projectStore.GetAPIKeyForProject(req.Context(), projectID)
 	if err != nil {
-		*req = *req.WithContext(context.WithValue(req.Context(), 
+		*req = *req.WithContext(context.WithValue(req.Context(),
 			ctxKeyValidationError, fmt.Errorf("failed to get API key: %w", err)))
 		return
 	}
@@ -146,13 +141,6 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 	}
 	p.metrics.mu.Unlock()
 
-	// For regular responses, try to extract metadata if possible
-	if strings.Contains(res.Header.Get("Content-Type"), "application/json") {
-		// For metadata extraction in a real implementation, we would
-		// read the body, extract metadata, then restore it for the client
-		// This would be API-specific, so we don't implement it in this generic proxy
-	}
-
 	return nil
 }
 
@@ -165,7 +153,7 @@ func (p *TransparentProxy) errorHandler(w http.ResponseWriter, r *http.Request, 
 	}
 
 	// Handle different error types
-	p.logger.Error("Proxy error", 
+	p.logger.Error("Proxy error",
 		zap.Error(err),
 		zap.String("method", r.Method),
 		zap.String("path", r.URL.Path))
@@ -192,7 +180,9 @@ func (p *TransparentProxy) errorHandler(w http.ResponseWriter, r *http.Request, 
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(errorResponse)
+	if err := json.NewEncoder(w).Encode(errorResponse); err != nil {
+		p.logger.Error("Failed to encode error response", zap.Error(err))
+	}
 }
 
 // handleValidationError handles errors specific to token validation
@@ -229,7 +219,9 @@ func (p *TransparentProxy) handleValidationError(w http.ResponseWriter, err erro
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(errorResponse)
+	if err := json.NewEncoder(w).Encode(errorResponse); err != nil {
+		p.logger.Error("Failed to encode error response", zap.Error(err))
+	}
 }
 
 // createTransport creates an HTTP transport with appropriate settings
@@ -302,10 +294,12 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 					zap.String("path", r.URL.Path))
 				w.WriteHeader(http.StatusMethodNotAllowed)
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(ErrorResponse{
+				if err := json.NewEncoder(w).Encode(ErrorResponse{
 					Error: "Method not allowed",
 					Code:  "method_not_allowed",
-				})
+				}); err != nil {
+					p.logger.Error("Failed to encode error response", zap.Error(err))
+				}
 				return
 			}
 
@@ -316,10 +310,12 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 					zap.String("path", r.URL.Path))
 				w.WriteHeader(http.StatusNotFound)
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(ErrorResponse{
+				if err := json.NewEncoder(w).Encode(ErrorResponse{
 					Error: "Endpoint not found",
 					Code:  "endpoint_not_found",
-				})
+				}); err != nil {
+					p.logger.Error("Failed to encode error response", zap.Error(err))
+				}
 				return
 			}
 
@@ -345,19 +341,19 @@ func (p *TransparentProxy) MetricsMiddleware() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			
+
 			// Store start time in context
 			ctx := context.WithValue(r.Context(), ctxKeyRequestStart, start)
-			
+
 			// Create response recorder to capture status code
 			rec := &responseRecorder{
 				ResponseWriter: w,
 				statusCode:     http.StatusOK,
 			}
-			
+
 			// Process request
 			next.ServeHTTP(rec, r.WithContext(ctx))
-			
+
 			// Record metrics
 			duration := time.Since(start)
 			p.metrics.mu.Lock()
@@ -374,12 +370,12 @@ func (p *TransparentProxy) Shutdown(ctx context.Context) error {
 	p.mu.Unlock()
 
 	p.logger.Info("Shutting down proxy")
-	
+
 	// If we have an HTTP server, shut it down
 	if p.httpServer != nil {
 		return p.httpServer.Shutdown(ctx)
 	}
-	
+
 	return nil
 }
 
@@ -451,7 +447,7 @@ func isStreaming(res *http.Response) bool {
 
 	// Check for chunked transfer encoding
 	return strings.Contains(
-		strings.ToLower(res.Header.Get("Transfer-Encoding")), 
+		strings.ToLower(res.Header.Get("Transfer-Encoding")),
 		"chunked",
 	)
 }
