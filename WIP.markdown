@@ -184,15 +184,15 @@ For each phase, specific PRs are outlined to implement the required functionalit
 ## Phase 2: Core Components
 
 ### Database Implementation
-- [ ] Research SQLite best practices for Go applications
-- [ ] Define detailed schema for projects table:
+- [x] Research SQLite best practices for Go applications
+- [x] Define detailed schema for projects table:
   - `id`: TEXT (UUID, primary key)
   - `name`: TEXT (project name, with uniqueness constraint)
   - `openai_api_key`: TEXT (encrypted OpenAI API key)
   - `created_at`: DATETIME
   - `updated_at`: DATETIME
   - Additional fields as needed
-- [ ] Define detailed schema for tokens table:
+- [x] Define detailed schema for tokens table:
   - `token`: TEXT (UUID, primary key)
   - `project_id`: TEXT (foreign key to projects)
   - `expires_at`: DATETIME (expiration timestamp)
@@ -201,30 +201,30 @@ For each phase, specific PRs are outlined to implement the required functionalit
   - `max_requests`: INTEGER (maximum allowed requests)
   - `created_at`: DATETIME
   - `last_used_at`: DATETIME (nullable)
-- [ ] Create database migration system (for future schema changes)
-- [ ] Implement database connection pool management
-- [ ] Write database initialization script
-- [ ] Implement projects CRUD operations:
+- [x] Create database migration system (for future schema changes)
+- [x] Implement database connection pool management
+- [x] Write database initialization script
+- [x] Implement projects CRUD operations:
   - CreateProject
   - GetProjectByID
   - UpdateProject
   - DeleteProject
   - ListProjects
-- [ ] Implement tokens CRUD operations:
+- [x] Implement tokens CRUD operations:
   - CreateToken
   - GetTokenByID
   - UpdateToken
   - DeleteToken
   - ListTokens
   - GetTokensByProjectID
-- [ ] Create database indexes:
+- [x] Create database indexes:
   - Index on tokens.project_id
   - Index on tokens.expires_at
   - Index on tokens.is_active
-- [ ] Implement transaction support
-- [ ] Add database error handling and retry logic
-- [ ] Create database clean-up routines for expired tokens
-- [ ] Set up database backup mechanism
+- [x] Implement transaction support
+- [x] Add database error handling and retry logic
+- [x] Create database clean-up routines for expired tokens
+- [x] Set up database backup mechanism
 
 ### Token Management System
 - [ ] Research UUID generation and validation best practices

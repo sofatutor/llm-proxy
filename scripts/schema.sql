@@ -26,4 +26,10 @@ CREATE TABLE IF NOT EXISTS tokens (
 -- Create indexes on tokens
 CREATE INDEX IF NOT EXISTS idx_tokens_project_id ON tokens(project_id);
 CREATE INDEX IF NOT EXISTS idx_tokens_expires_at ON tokens(expires_at);
-CREATE INDEX IF NOT EXISTS idx_tokens_is_active ON tokens(is_active); 
+CREATE INDEX IF NOT EXISTS idx_tokens_is_active ON tokens(is_active);
+
+-- Enable foreign key support
+PRAGMA foreign_keys = ON;
+
+-- Use Write-Ahead Logging for better concurrency
+PRAGMA journal_mode = WAL;

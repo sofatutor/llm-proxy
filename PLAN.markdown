@@ -12,11 +12,13 @@
 
 > **Note:** While this project uses OpenAI as a case study, the architecture is intentionally generic and can be adapted to any API requiring secure, short-lived (withering) tokens and transparent proxying. The only required intervention is minimal (e.g., Authorization header replacement), ensuring maximum transparency. Future extensions may include custom request/response transformations.
 
+> **Minimum Latency Mandate:** All design and implementation decisions must prioritize minimum added latency. The proxy should introduce as little overhead as possible, with all middleware, token validation, and logging optimized for speed. Performance testing and optimization for low latency are required at every stage.
+
 ## Overview
 This document outlines the implementation plan for a transparent proxy for OpenAI's API. The proxy is designed to handle **withering tokens** (tokens with limited validity, revocation, and rate-limiting), log API calls with metadata (e.g., token counts), support streaming responses, and provide administrative capabilities. Built using Go for performance and concurrency, with SQLite for storage, the system includes a web-based admin UI, Docker deployment, and a CLI benchmark tool.
 
 ## Objectives
-- **Transparent Proxying**: Forward requests to OpenAI's API with minimal overhead
+- **Transparent Proxying**: Forward requests to OpenAI's API with minimal overhead and lowest possible latency
 - **Withering Token Management**: Generate tokens with expiration, revocation, and rate-limiting
 - **Secure Authentication**: Restrict token management with `MANAGEMENT_TOKEN`
 - **Logging**: Record API calls with metadata to local files and async backends
@@ -139,6 +141,7 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 - Use goroutines for concurrency
 - Implement connection pooling
 - Optimize database queries
+- **Aggressively profile and minimize latency at every layer of the stack**
 
 ## API Endpoints
 
@@ -229,7 +232,7 @@ docker run --rm llm-proxy llm-benchmark \
 - Unit tests for all components
 - Integration tests for end-to-end flows
 - Docker tests for container validation
-- Benchmark tests for performance verification
+- Benchmark tests for performance verification, with a focus on measuring and minimizing added latency
 
 ## Timeline
 - **Day 1-2**: Project setup, database, token management
@@ -256,3 +259,5 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 - **Design:** The whitelist logic is implemented so it can be easily extended or made configurable for other APIs in the future.
 - **Transparency:** All other request/response data is passed through unchanged, except for necessary header replacements (e.g., Authorization).
 - **Extensibility:** Future versions may support dynamic or config-driven whitelists, and on-the-fly request/response transformations via middleware.
+
+> **Minimum Latency Principle:** Every architectural component, from HTTP server to middleware and database access, must be designed for minimal latency. Avoid unnecessary processing, blocking operations, or synchronous I/O in the request path. Use concurrency and asynchronous operations where possible to keep proxy response times as close to direct API calls as possible.
