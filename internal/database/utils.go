@@ -9,8 +9,18 @@ import (
 
 // BackupDatabase creates a backup of the database.
 func (d *DB) BackupDatabase(ctx context.Context, backupPath string) error {
+	// Validate the backupPath to ensure it is a valid file path
+	if backupPath == "" {
+		return fmt.Errorf("backup path cannot be empty")
+	}
+	// SQLite does not support parameterized VACUUM INTO, so we must sanitize the path
+	// Only allow simple file paths (no semicolons, no SQL metacharacters)
+	if len(backupPath) > 256 || backupPath[0] == '-' || backupPath[0] == '|' || backupPath[0] == ';' {
+		return fmt.Errorf("invalid backup path")
+	}
 	// For SQLite, we can use the VACUUM INTO statement to create a backup
-	_, err := d.db.ExecContext(ctx, fmt.Sprintf("VACUUM INTO '%s'", backupPath))
+	query := fmt.Sprintf("VACUUM INTO '%s'", backupPath)
+	_, err := d.db.ExecContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to backup database: %w", err)
 	}
@@ -18,6 +28,8 @@ func (d *DB) BackupDatabase(ctx context.Context, backupPath string) error {
 }
 
 // MaintainDatabase performs regular maintenance on the database.
+// WARNING: VACUUM and ANALYZE can be expensive operations. In production, schedule this function to run periodically (e.g., daily) rather than on every call.
+// The caller is responsible for scheduling.
 func (d *DB) MaintainDatabase(ctx context.Context) error {
 	// Run VACUUM to reclaim space and optimize the database
 	_, err := d.db.ExecContext(ctx, "VACUUM")
