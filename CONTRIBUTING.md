@@ -80,7 +80,7 @@ All code changes **must** be covered by tests, with a minimum of 90% code covera
 
 ### Pull Request Process
 
-1. Update the WIP.markdown file to reflect your changes
+1. Update the WIP.md file to reflect your changes
 2. Ensure all tests pass: `make test`
 3. Verify code coverage meets the minimum 90% requirement: `make coverage`
 4. Run the linter to check for code style issues: `make lint`
@@ -96,7 +96,7 @@ This project uses a structured PR strategy:
 2. **Coverage Enforcement**: PRs must maintain 90%+ code coverage
 3. **Small, Focused PRs**: Each PR should address a specific logical component or feature
 4. **Feature Branches**: Use feature branches named according to the phase and component (e.g., `feature/phase-1-directory-structure`)
-5. **WIP Updates**: Each PR should update WIP.markdown to mark completed tasks
+5. **WIP Updates**: Each PR should update WIP.md to mark completed tasks
 6. **Review Friendly**: Keep PRs small enough for effective code review
 7. **Dependencies**: Consider task dependencies when planning PRs
 

@@ -1,0 +1,137 @@
+package token
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"time"
+)
+
+// Errors related to token validation
+var (
+	ErrTokenNotFound  = errors.New("token not found")
+	ErrTokenInactive  = errors.New("token is inactive")
+	ErrTokenExpired   = errors.New("token has expired")
+	ErrTokenRateLimit = errors.New("token has reached rate limit")
+)
+
+// TokenValidator defines the interface for token validation
+type TokenValidator interface {
+	// ValidateToken validates a token and returns the associated project ID
+	ValidateToken(ctx context.Context, token string) (string, error)
+
+	// ValidateTokenWithTracking validates a token, returns the project ID, and tracks usage
+	ValidateTokenWithTracking(ctx context.Context, token string) (string, error)
+}
+
+// TokenStore defines the interface for token storage and retrieval
+type TokenStore interface {
+	// GetTokenByID retrieves a token by its ID
+	GetTokenByID(ctx context.Context, tokenID string) (TokenData, error)
+
+	// IncrementTokenUsage increments the usage count for a token
+	IncrementTokenUsage(ctx context.Context, tokenID string) error
+}
+
+// TokenData represents the data associated with a token
+type TokenData struct {
+	Token        string     // The token ID
+	ProjectID    string     // The associated project ID
+	ExpiresAt    *time.Time // When the token expires (nil for no expiration)
+	IsActive     bool       // Whether the token is active
+	RequestCount int        // Number of requests made with this token
+	MaxRequests  *int       // Maximum number of requests allowed (nil for unlimited)
+	CreatedAt    time.Time  // When the token was created
+	LastUsedAt   *time.Time // When the token was last used (nil if never used)
+}
+
+// IsValid returns true if the token is active, not expired, and not rate limited
+func (t *TokenData) IsValid() bool {
+	return t.IsActive && !IsExpired(t.ExpiresAt) && !t.IsRateLimited()
+}
+
+// IsRateLimited returns true if the token has reached its maximum number of requests
+func (t *TokenData) IsRateLimited() bool {
+	if t.MaxRequests == nil {
+		return false
+	}
+	return t.RequestCount >= *t.MaxRequests
+}
+
+// ValidateTokenFormat checks if a token has the correct format
+func (t *TokenData) ValidateFormat() error {
+	return ValidateTokenFormat(t.Token)
+}
+
+// StandardValidator is a validator that uses a TokenStore for validation
+type StandardValidator struct {
+	store TokenStore
+}
+
+// NewValidator creates a new StandardValidator with the given TokenStore
+func NewValidator(store TokenStore) *StandardValidator {
+	return &StandardValidator{
+		store: store,
+	}
+}
+
+// ValidateToken validates a token without incrementing usage
+func (v *StandardValidator) ValidateToken(ctx context.Context, tokenID string) (string, error) {
+	// First validate the token format
+	if err := ValidateTokenFormat(tokenID); err != nil {
+		return "", fmt.Errorf("invalid token format: %w", err)
+	}
+
+	// Retrieve the token from the store
+	tokenData, err := v.store.GetTokenByID(ctx, tokenID)
+	if err != nil {
+		if errors.Is(err, ErrTokenNotFound) {
+			return "", ErrTokenNotFound
+		}
+		return "", fmt.Errorf("failed to retrieve token: %w", err)
+	}
+
+	// Check if the token is active
+	if !tokenData.IsActive {
+		return "", ErrTokenInactive
+	}
+
+	// Check if the token has expired
+	if IsExpired(tokenData.ExpiresAt) {
+		return "", ErrTokenExpired
+	}
+
+	// Check if the token has reached its rate limit
+	if tokenData.IsRateLimited() {
+		return "", ErrTokenRateLimit
+	}
+
+	// Token is valid, return the project ID
+	return tokenData.ProjectID, nil
+}
+
+// ValidateTokenWithTracking validates a token and increments its usage count
+func (v *StandardValidator) ValidateTokenWithTracking(ctx context.Context, tokenID string) (string, error) {
+	// Validate the token first
+	projectID, err := v.ValidateToken(ctx, tokenID)
+	if err != nil {
+		return "", err
+	}
+
+	// Increment the token usage
+	if err := v.store.IncrementTokenUsage(ctx, tokenID); err != nil {
+		return "", fmt.Errorf("failed to track token usage: %w", err)
+	}
+
+	return projectID, nil
+}
+
+// ValidateTokenFormat checks if a token string has the correct format
+func ValidateToken(ctx context.Context, validator TokenValidator, tokenID string) (string, error) {
+	return validator.ValidateToken(ctx, tokenID)
+}
+
+// ValidateTokenWithTracking validates a token and tracks its usage
+func ValidateTokenWithTracking(ctx context.Context, validator TokenValidator, tokenID string) (string, error) {
+	return validator.ValidateTokenWithTracking(ctx, tokenID)
+}

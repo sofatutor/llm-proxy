@@ -66,8 +66,7 @@ Thumbs.db
 /data/
 
 # Coverage reports
-coverage.out
-coverage.txt
+coverage.*
 /coverage/
 
 # Node (for admin UI, if applicable)
