@@ -208,3 +208,43 @@ func TestIsTokenValid_ClosedDB(t *testing.T) {
 		t.Error("expected error for IsTokenValid on closed DB")
 	}
 }
+
+func TestBackupDatabase_Errors(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	// Empty path
+	if err := db.BackupDatabase(ctx, ""); err == nil {
+		t.Error("expected error for empty backup path")
+	}
+	// Invalid path (starts with -)
+	if err := db.BackupDatabase(ctx, "-badpath.db"); err == nil {
+		t.Error("expected error for invalid backup path")
+	}
+	// Simulate DB error by closing DB
+	_ = db.Close()
+	if err := db.BackupDatabase(ctx, "/tmp/llm-proxy-test-backup.db"); err == nil {
+		t.Error("expected error for closed DB in BackupDatabase")
+	}
+}
+
+func TestMaintainDatabase_DBError(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	_ = db.Close()
+	if err := db.MaintainDatabase(ctx); err == nil {
+		t.Error("expected error for closed DB in MaintainDatabase")
+	}
+}
+
+func TestGetStats_DBError(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	_ = db.Close()
+	_, err := db.GetStats(ctx)
+	if err == nil {
+		t.Error("expected error for closed DB in GetStats")
+	}
+}

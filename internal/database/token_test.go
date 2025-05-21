@@ -433,3 +433,48 @@ func TestTokenCRUD_ClosedDB(t *testing.T) {
 		t.Error("expected error for CleanExpiredTokens on closed DB")
 	}
 }
+
+func TestUpdateToken_EmptyToken(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	tk := Token{Token: "", ProjectID: "p", IsActive: true, CreatedAt: time.Now()}
+	if err := db.UpdateToken(ctx, tk); err == nil {
+		t.Error("expected error for empty token in UpdateToken")
+	}
+}
+
+func TestDeleteToken_EmptyToken(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	if err := db.DeleteToken(ctx, ""); err == nil {
+		t.Error("expected error for empty token in DeleteToken")
+	}
+}
+
+func TestQueryTokens_LongToken(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	longToken := make([]byte, 300)
+	for i := range longToken {
+		longToken[i] = 'x'
+	}
+	tk := Token{Token: string(longToken), ProjectID: "p", IsActive: true, CreatedAt: time.Now()}
+	_ = db.CreateProject(ctx, Project{ID: "p", Name: "P", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+	_ = db.CreateToken(ctx, tk)
+	tokens, err := db.ListTokens(ctx)
+	if err != nil {
+		t.Fatalf("ListTokens failed: %v", err)
+	}
+	found := false
+	for _, t := range tokens {
+		if t.Token == string(longToken) {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected to find token with long value")
+	}
+}

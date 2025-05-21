@@ -252,3 +252,57 @@ func TestListProjects_Empty(t *testing.T) {
 		t.Errorf("expected 0 projects, got %d", len(projects))
 	}
 }
+
+func TestGetProjectByName_EmptyName(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	_, err := db.GetProjectByName(ctx, "")
+	if err == nil {
+		t.Error("expected error for empty name in GetProjectByName")
+	}
+}
+
+func TestUpdateProject_EmptyID(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	p := Project{ID: "", Name: "Name", OpenAIAPIKey: "key", UpdatedAt: time.Now()}
+	if err := db.UpdateProject(ctx, p); err == nil {
+		t.Error("expected error for empty ID in UpdateProject")
+	}
+}
+
+func TestDeleteProject_EmptyID(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	if err := db.DeleteProject(ctx, ""); err == nil {
+		t.Error("expected error for empty ID in DeleteProject")
+	}
+}
+
+func TestListProjects_LongNames(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	longName := make([]byte, 300)
+	for i := range longName {
+		longName[i] = 'a'
+	}
+	p := Project{ID: "long", Name: string(longName), OpenAIAPIKey: "key", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	_ = db.CreateProject(ctx, p)
+	projects, err := db.ListProjects(ctx)
+	if err != nil {
+		t.Fatalf("ListProjects failed: %v", err)
+	}
+	found := false
+	for _, proj := range projects {
+		if proj.ID == "long" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected to find project with long name")
+	}
+}
