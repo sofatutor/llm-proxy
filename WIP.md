@@ -112,7 +112,7 @@ Repository structure, configuration, Docker, security, documentation, and founda
 - [ ] Implement proxy middleware chain:
   - [x] Request logging middleware
   - [x] Authentication middleware
-  - [ ] Rate-limiting middleware *(only per-token rate limiting is implemented; generic/global middleware is still missing)*
+  - [ ] Rate-limiting middleware *(only per-token rate limiting is implemented; generic/global middleware is still missing; planned for a future phase—see PLAN.md for details)*
   - [x] Request validation middleware
   - [x] Timeout middleware
 - [ ] Define and document allowed API routes and methods in configuration
