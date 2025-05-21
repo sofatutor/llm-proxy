@@ -46,7 +46,7 @@ func (d *DB) GetStats(ctx context.Context) (map[string]interface{}, error) {
 
 	// Get database size
 	var dbSize int64
-	err := d.db.QueryRowContext(ctx, "SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()").Scan(&dbSize)
+	err := d.db.QueryRowContext(ctx, "SELECT (SELECT page_count FROM pragma_page_count) * (SELECT page_size FROM pragma_page_size)").Scan(&dbSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get database size: %w", err)
 	}
