@@ -1,10 +1,12 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -103,6 +105,9 @@ func (p *TransparentProxy) director(req *http.Request) {
 		return
 	}
 
+	// Store project ID in context for logging and billing
+	*req = *req.WithContext(context.WithValue(req.Context(), ctxKeyProjectID, projectID))
+
 	// Get API key for project
 	apiKey, err := p.projectStore.GetAPIKeyForProject(req.Context(), projectID)
 	if err != nil {
@@ -116,6 +121,11 @@ func (p *TransparentProxy) director(req *http.Request) {
 
 	// Add proxy identification headers
 	req.Header.Set("X-Proxy", "llm-proxy")
+	req.Header.Set("X-Proxy-Version", version)
+	req.Header.Set("X-Proxy-ID", projectID)
+
+	// Preserve or strip certain headers
+	p.processRequestHeaders(req)
 
 	p.logger.Debug("Proxying request",
 		zap.String("method", req.Method),
@@ -123,14 +133,77 @@ func (p *TransparentProxy) director(req *http.Request) {
 		zap.String("project_id", projectID))
 }
 
+// processRequestHeaders handles the manipulation of request headers
+func (p *TransparentProxy) processRequestHeaders(req *http.Request) {
+	// Headers to remove for security/privacy reasons
+	headersToRemove := []string{
+		"X-Forwarded-For",      // We'll set this ourselves if needed
+		"X-Real-IP",            // Remove client IP for privacy
+		"CF-Connecting-IP",     // Cloudflare headers
+		"CF-IPCountry",         // Cloudflare headers
+		"X-Client-IP",          // Other proxies
+		"X-Original-Forwarded-For", // Chain of proxies
+	}
+
+	// Remove headers that shouldn't be passed to the upstream
+	for _, header := range headersToRemove {
+		req.Header.Del(header)
+	}
+
+	// Set X-Forwarded-For if configured to do so
+	if p.config.SetXForwardedFor {
+		// Get the client IP
+		clientIP := req.RemoteAddr
+		// Remove port if present
+		if idx := strings.LastIndex(clientIP, ":"); idx != -1 {
+			clientIP = clientIP[:idx]
+		}
+		req.Header.Set("X-Forwarded-For", clientIP)
+	}
+
+	// If Content-Length is 0 and there's a body, let Go calculate the correct Content-Length
+	if req.ContentLength == 0 && req.Body != nil {
+		req.Header.Del("Content-Length")
+	}
+
+	// Ensure proper Accept header for SSE streaming if needed
+	if isStreamingRequest(req) && req.Header.Get("Accept") == "" {
+		req.Header.Set("Accept", "text/event-stream")
+	}
+}
+
 // modifyResponse processes the response before returning it to the client
 func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 	// Add proxy headers
 	res.Header.Set("X-Proxy", "llm-proxy")
+	res.Header.Set("X-Proxy-Version", version)
+
+	// Get request from response
+	req := res.Request
+	if req == nil {
+		p.logger.Warn("Response has no request")
+		return nil
+	}
+
+	// Get project ID from context
+	projectID, _ := req.Context().Value(ctxKeyProjectID).(string)
+	if projectID != "" {
+		res.Header.Set("X-Proxy-ID", projectID)
+	}
 
 	// For streaming responses, we just pass through
 	if isStreaming(res) {
 		return nil
+	}
+
+	// Process response body to extract metadata for non-streaming responses
+	if res.StatusCode == http.StatusOK &&
+		strings.Contains(res.Header.Get("Content-Type"), "application/json") &&
+		res.Body != nil {
+		// Extract metadata without consuming the response body
+		if err := p.extractResponseMetadata(res); err != nil {
+			p.logger.Warn("Failed to extract response metadata", zap.Error(err))
+		}
 	}
 
 	// Update metrics
@@ -142,6 +215,79 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 	p.metrics.mu.Unlock()
 
 	return nil
+}
+
+// extractResponseMetadata extracts metadata from the response body without consuming it
+func (p *TransparentProxy) extractResponseMetadata(res *http.Response) error {
+	// Check if we need to process the response
+	if res.Body == nil {
+		return errors.New("response body is nil")
+	}
+
+	// We need to read the body to extract metadata, but we must also
+	// preserve it for the client. This is done by creating a new Reader
+	// that allows us to read the body twice.
+	bodyBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Replace the body with a new ReadCloser that can be read again
+	res.Body.Close()
+	res.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+	// Parse the body to extract metadata
+	metadata, err := p.parseOpenAIResponseMetadata(bodyBytes)
+	if err != nil {
+		return fmt.Errorf("failed to parse response metadata: %w", err)
+	}
+
+	// Add metadata to response headers
+	for k, v := range metadata {
+		res.Header.Set(fmt.Sprintf("X-OpenAI-%s", k), v)
+	}
+
+	return nil
+}
+
+// parseOpenAIResponseMetadata extracts metadata from OpenAI API responses
+func (p *TransparentProxy) parseOpenAIResponseMetadata(bodyBytes []byte) (map[string]string, error) {
+	metadata := make(map[string]string)
+
+	// Try to parse as JSON
+	var result map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+		return metadata, fmt.Errorf("failed to parse response JSON: %w", err)
+	}
+
+	// Look for usage information
+	if usage, ok := result["usage"].(map[string]interface{}); ok {
+		// Extract token counts
+		if promptTokens, ok := usage["prompt_tokens"].(float64); ok {
+			metadata["Prompt-Tokens"] = fmt.Sprintf("%.0f", promptTokens)
+		}
+		if completionTokens, ok := usage["completion_tokens"].(float64); ok {
+			metadata["Completion-Tokens"] = fmt.Sprintf("%.0f", completionTokens)
+		}
+		if totalTokens, ok := usage["total_tokens"].(float64); ok {
+			metadata["Total-Tokens"] = fmt.Sprintf("%.0f", totalTokens)
+		}
+	}
+
+	// Extract model information
+	if model, ok := result["model"].(string); ok {
+		metadata["Model"] = model
+	}
+
+	// Extract other potentially useful metadata
+	if id, ok := result["id"].(string); ok {
+		metadata["ID"] = id
+	}
+	if created, ok := result["created"].(float64); ok {
+		metadata["Created"] = fmt.Sprintf("%.0f", created)
+	}
+
+	return metadata, nil
 }
 
 // errorHandler handles errors that occur during proxying
@@ -450,4 +596,31 @@ func isStreaming(res *http.Response) bool {
 		strings.ToLower(res.Header.Get("Transfer-Encoding")),
 		"chunked",
 	)
+}
+
+// isStreamingRequest checks if a request is intended for streaming
+func isStreamingRequest(req *http.Request) bool {
+	// Check for SSE Accept header
+	if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
+		return true
+	}
+	
+	// Check query parameters for stream=true (common in OpenAI APIs)
+	if req.URL.Query().Get("stream") == "true" {
+		return true
+	}
+	
+	// Check the request body for streaming flag
+	// This is a heuristic and may need refinement for specific APIs
+	if req.Body != nil && req.Header.Get("Content-Type") == "application/json" {
+		// Don't read the body directly to avoid consuming it
+		// Just check the Content-Type and method for now
+		if req.Method == "POST" {
+			// For OpenAI, the common pattern is POST with JSON containing "stream": true
+			// But checking this would require reading the body, which we want to avoid
+			// We'll just rely on the Accept header and query params for now
+		}
+	}
+	
+	return false
 }
