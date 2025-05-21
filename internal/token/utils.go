@@ -212,10 +212,9 @@ type TokenInfo struct {
 
 // GetTokenInfo creates a TokenInfo struct with token details
 func GetTokenInfo(token TokenData) (TokenInfo, error) {
-	creationTime, err := GetTokenCreationTime(token.Token)
-	if err != nil {
-		creationTime = token.CreatedAt // Fallback to database creation time
-	}
+	// Use the canonical creation time from the database
+	// Note: UUIDv7 embeds a timestamp, but the library does not expose it; CreatedAt is the source of truth
+	creationTime := token.CreatedAt
 
 	info := TokenInfo{
 		Token:           token.Token,

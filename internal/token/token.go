@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -94,21 +93,4 @@ func DecodeToken(token string) (uuid.UUID, error) {
 	}
 
 	return id, nil
-}
-
-// GetTokenCreationTime extracts the timestamp from a token.
-// This works because UUIDv7 embeds a timestamp in the UUID.
-func GetTokenCreationTime(token string) (time.Time, error) {
-	_, err := DecodeToken(token)
-	if err != nil {
-		return time.Time{}, err
-	}
-
-	// UUIDv7 stores a timestamp in the first 48 bits
-	// This is an approximation - limited by what google/uuid exposes
-	// For v7 UUIDs, we can't directly extract the timestamp yet with google/uuid
-	// This is a limitation of the current API
-	// However, since we just created the token, we can return the current time
-	// In a production system, we'd either store the creation time or use a better method
-	return time.Now(), nil
 }

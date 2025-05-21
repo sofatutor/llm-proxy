@@ -152,44 +152,6 @@ func TestDecodeToken(t *testing.T) {
 	}
 }
 
-func TestGetTokenCreationTime(t *testing.T) {
-	// Generate a token to check
-	token, err := GenerateToken()
-	if err != nil {
-		t.Fatalf("Failed to generate token for test: %v", err)
-	}
-
-	tests := []struct {
-		name    string
-		token   string
-		wantErr bool
-	}{
-		{
-			name:    "Valid token",
-			token:   token,
-			wantErr: false,
-		},
-		{
-			name:    "Invalid token",
-			token:   "not_a_token",
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := GetTokenCreationTime(tt.token)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetTokenCreationTime() error = %v, wantErr %v", err, tt.wantErr)
-			}
-
-			// Note: We can't easily test the actual time value since it's based on the
-			// internal structure of UUIDv7, but we can verify that the function doesn't
-			// error for valid tokens.
-		})
-	}
-}
-
 func TestTokenGeneration_Multiple(t *testing.T) {
 	// Generate multiple tokens and ensure they're all unique
 	tokenCount := 100
