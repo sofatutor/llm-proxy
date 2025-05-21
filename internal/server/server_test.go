@@ -13,6 +13,7 @@ import (
 
 	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/sofatutor/llm-proxy/internal/token"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHealthEndpoint(t *testing.T) {
@@ -23,7 +24,8 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 
 	// Create a new server
-	server := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	server, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
 
 	// Create a request to the health endpoint
 	req, err := http.NewRequest("GET", "/health", nil)
@@ -74,9 +76,11 @@ func TestHealthEndpoint(t *testing.T) {
 func TestServerLifecycle(t *testing.T) {
 	// Use httptest.NewServer to start the server with the health handler
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		New(&config.Config{
+		server, err := New(&config.Config{
 			RequestTimeout: 1 * time.Second,
-		}, &mockTokenStore{}, &mockProjectStore{}).handleHealth(w, r)
+		}, &mockTokenStore{}, &mockProjectStore{})
+		require.NoError(t, err)
+		server.handleHealth(w, r)
 	}))
 	defer ts.Close()
 
@@ -108,7 +112,8 @@ func TestServerLifecycle(t *testing.T) {
 	}
 
 	// Create a server with the test server's config
-	shutdownTestServer := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	shutdownTestServer, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
 	// Replace the internal http.Server with the test server's
 	shutdownTestServer.server = shutdownServer.Config
 
@@ -133,7 +138,8 @@ func TestHandleHealthJSONError(t *testing.T) {
 	}
 
 	// Create a new server
-	server := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	server, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
 
 	// Create a response recorder that allows us to examine the response
 	rr := httptest.NewRecorder()
@@ -238,7 +244,8 @@ func TestServer_New_WithDependencyInjection_ConfigAndFallback(t *testing.T) {
 	ts := &mockTokenStore{}
 	ps := &mockProjectStore{}
 
-	srv := New(cfg, ts, ps)
+	srv, err := New(cfg, ts, ps)
+	require.NoError(t, err)
 	if srv.tokenStore != ts {
 		t.Errorf("tokenStore not injected correctly")
 	}
@@ -246,7 +253,7 @@ func TestServer_New_WithDependencyInjection_ConfigAndFallback(t *testing.T) {
 		t.Errorf("projectStore not injected correctly")
 	}
 
-	err := srv.initializeAPIRoutes()
+	err = srv.initializeAPIRoutes()
 	if err != nil {
 		t.Fatalf("initializeAPIRoutes failed: %v", err)
 	}
@@ -301,7 +308,8 @@ apis:
 		APIConfigPath:      tmpFile.Name(),
 		DefaultAPIProvider: "test_api",
 	}
-	srv2 := New(cfg2, ts, ps)
+	srv2, err := New(cfg2, ts, ps)
+	require.NoError(t, err)
 	err = srv2.initializeAPIRoutes()
 	if err != nil {
 		t.Fatalf("initializeAPIRoutes (config branch) failed: %v", err)

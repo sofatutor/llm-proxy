@@ -43,10 +43,13 @@ const Version = "0.1.0"
 // New creates a new HTTP server with the provided configuration and store implementations.
 // It initializes the server with appropriate timeouts and registers all necessary route handlers.
 // The server is not started until the Start method is called.
-func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.ProjectStore) *Server {
+func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.ProjectStore) (*Server, error) {
 	mux := http.NewServeMux()
 
-	logger, _ := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile)
+	logger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize logger: %w", err)
+	}
 
 	s := &Server{
 		config:       cfg,
@@ -65,7 +68,7 @@ func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.Pro
 	// Register routes
 	mux.HandleFunc("/health", s.handleHealth)
 
-	return s
+	return s, nil
 }
 
 // Start initializes all required components and starts the HTTP server.
@@ -155,7 +158,10 @@ func (s *Server) initializeAPIRoutes() error {
 	// (No more creation of mock stores or test data here)
 	tokenValidator := token.NewValidator(s.tokenStore)
 	cachedValidator := token.NewCachedValidator(tokenValidator)
-	proxyHandler := proxy.NewTransparentProxyWithLogger(*proxyConfig, cachedValidator, s.projectStore, s.logger)
+	proxyHandler, err := proxy.NewTransparentProxyWithLogger(*proxyConfig, cachedValidator, s.projectStore, s.logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize proxy: %w", err)
+	}
 
 	// Register proxy routes
 	s.server.Handler.(*http.ServeMux).Handle("/v1/", proxyHandler.Handler())

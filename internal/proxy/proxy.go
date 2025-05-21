@@ -43,16 +43,23 @@ type ProxyMetrics struct {
 
 // NewTransparentProxy creates a new proxy instance with an internally
 // configured logger based on the provided ProxyConfig.
-func NewTransparentProxy(config ProxyConfig, validator TokenValidator, store ProjectStore) *TransparentProxy {
-	logger, _ := logging.NewLogger(config.LogLevel, config.LogFormat, config.LogFile)
+func NewTransparentProxy(config ProxyConfig, validator TokenValidator, store ProjectStore) (*TransparentProxy, error) {
+	logger, err := logging.NewLogger(config.LogLevel, config.LogFormat, config.LogFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize logger: %w", err)
+	}
 	return NewTransparentProxyWithLogger(config, validator, store, logger)
 }
 
 // NewTransparentProxyWithLogger allows providing a custom logger. If logger is nil
 // a new one is created based on the ProxyConfig.
-func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator, store ProjectStore, logger *zap.Logger) *TransparentProxy {
+func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator, store ProjectStore, logger *zap.Logger) (*TransparentProxy, error) {
 	if logger == nil {
-		logger, _ = logging.NewLogger(config.LogLevel, config.LogFormat, config.LogFile)
+		var err error
+		logger, err = logging.NewLogger(config.LogLevel, config.LogFormat, config.LogFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize logger: %w", err)
+		}
 	}
 
 	proxy := &TransparentProxy{
@@ -74,7 +81,7 @@ func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator,
 
 	proxy.proxy = reverseProxy
 
-	return proxy
+	return proxy, nil
 }
 
 // director is the Director function for the reverse proxy
