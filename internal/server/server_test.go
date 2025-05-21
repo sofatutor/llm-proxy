@@ -265,7 +265,11 @@ func TestServer_New_WithDependencyInjection_ConfigAndFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() {
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			t.Fatalf("failed to remove temp file: %v", err)
+		}
+	}()
 	configYAML := `
 default_api: test_api
 apis:
@@ -288,7 +292,9 @@ apis:
 	if _, err := tmpFile.Write([]byte(configYAML)); err != nil {
 		t.Fatalf("Failed to write config: %v", err)
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		t.Fatalf("Failed to close temp file: %v", err)
+	}
 	cfg2 := &config.Config{
 		ListenAddr:         ":8080",
 		RequestTimeout:     30 * time.Second,

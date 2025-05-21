@@ -55,7 +55,7 @@ apis:
 		APIConfigPath:      tmpFile.Name(),
 		DefaultAPIProvider: "test_api",
 	}
-	srv := New(cfg)
+	srv := New(cfg, &mockTokenStore{}, &mockProjectStore{})
 
 	// Initialize API routes
 	err = srv.initializeAPIRoutes()
@@ -115,7 +115,7 @@ func TestDefaultOpenAIFallback(t *testing.T) {
 		DefaultAPIProvider: "openai",
 		OpenAIAPIURL:       "https://api.openai.com",
 	}
-	srv := New(cfg)
+	srv := New(cfg, &mockTokenStore{}, &mockProjectStore{})
 
 	// Initialize API routes - should fall back to default OpenAI config
 	err := srv.initializeAPIRoutes()
