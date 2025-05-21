@@ -19,7 +19,7 @@ func testDB(t *testing.T) (*DB, func()) {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	dbPath := dbFile.Name()
-	dbFile.Close()
+	_ = dbFile.Close()
 
 	// Create database
 	db, err := New(Config{
@@ -29,14 +29,14 @@ func testDB(t *testing.T) (*DB, func()) {
 		ConnMaxLifetime: time.Minute,
 	})
 	if err != nil {
-		os.Remove(dbPath)
+		_ = os.Remove(dbPath)
 		t.Fatalf("Failed to create database: %v", err)
 	}
 
 	// Return database and cleanup function
 	return db, func() {
-		db.Close()
-		os.Remove(dbPath)
+		_ = db.Close()
+		_ = os.Remove(dbPath)
 	}
 }
 

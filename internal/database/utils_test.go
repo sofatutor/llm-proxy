@@ -84,7 +84,7 @@ func TestDatabaseUtils(t *testing.T) {
 
 	// Test BackupDatabase
 	backupPath := os.TempDir() + "/llm-proxy-test-backup.db"
-	defer os.Remove(backupPath)
+	defer func() { _ = os.Remove(backupPath) }()
 
 	err = db.BackupDatabase(ctx, backupPath)
 	if err != nil {

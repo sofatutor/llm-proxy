@@ -34,9 +34,9 @@ type Config struct {
 // DefaultConfig returns a default database configuration.
 func DefaultConfig() Config {
 	return Config{
-		Path:           "data/llm-proxy.db",
-		MaxOpenConns:   10,
-		MaxIdleConns:   5,
+		Path:            "data/llm-proxy.db",
+		MaxOpenConns:    10,
+		MaxIdleConns:    5,
 		ConnMaxLifetime: time.Hour,
 	}
 }
@@ -61,13 +61,13 @@ func New(config Config) (*DB, error) {
 
 	// Test the connection
 	if err := db.Ping(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
 	// Initialize database (create tables, indexes)
 	if err := initDatabase(db); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
@@ -77,7 +77,7 @@ func New(config Config) (*DB, error) {
 // Close closes the database connection.
 func (d *DB) Close() error {
 	if d.db != nil {
-		return d.db.Close()
+		_ = d.db.Close()
 	}
 	return nil
 }
@@ -143,16 +143,14 @@ func (d *DB) Transaction(ctx context.Context, fn func(*sql.Tx) error) error {
 	// If the function panics, rollback the transaction
 	defer func() {
 		if p := recover(); p != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			panic(p) // Re-throw the panic after rolling back
 		}
 	}()
 
 	// Execute the function
 	if err := fn(tx); err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			return fmt.Errorf("error: %v, rollback error: %v", err, rbErr)
-		}
+		_ = tx.Rollback()
 		return err
 	}
 

@@ -219,7 +219,9 @@ func (d *DB) queryTokens(ctx context.Context, query string, args ...interface{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tokens: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var tokens []Token
 	for rows.Next() {
