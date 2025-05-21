@@ -84,11 +84,8 @@ func (s *Server) initializeComponents() error {
 		return fmt.Errorf("failed to initialize API routes: %w", err)
 	}
 
-	// TODO: Initialize other components
-	// - Database connection
-	// - Logging
-	// - Admin routes
-	// - Metrics
+	// Pending: database, logging, admin, and metrics initialization.
+	// See server_test.go for test stubs covering these responsibilities.
 
 	return nil
 }

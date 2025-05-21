@@ -190,4 +190,18 @@ func (m *mockFailingResponseWriter) WriteHeader(statusCode int) {
 	m.ResponseWriter.WriteHeader(statusCode)
 }
 
-// Remove duplicate definition
+func TestInitializeComponents_DatabaseInitializationPending(t *testing.T) {
+	t.Skip("Database connection initialization is not yet implemented in initializeComponents (see TODO in server.go)")
+}
+
+func TestInitializeComponents_LoggingInitializationPending(t *testing.T) {
+	t.Skip("Logging initialization is not yet implemented in initializeComponents (see TODO in server.go)")
+}
+
+func TestInitializeComponents_AdminRoutesInitializationPending(t *testing.T) {
+	t.Skip("Admin routes initialization is not yet implemented in initializeComponents (see TODO in server.go)")
+}
+
+func TestInitializeComponents_MetricsInitializationPending(t *testing.T) {
+	t.Skip("Metrics initialization is not yet implemented in initializeComponents (see TODO in server.go)")
+}
