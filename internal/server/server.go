@@ -144,34 +144,24 @@ func (s *Server) initializeAPIRoutes() error {
 		}
 	}
 
-	// Initialize token store and project store based on environment
-	var tokenStore database.TokenStore
-	var projectStore database.ProjectStore
+	// Initialize token store and project store
+	tokenStore := database.NewMockTokenStore()
+	projectStore := database.NewMockProjectStore()
 
-	if s.config.Environment == "development" {
-		// Use mock stores in development
-		tokenStore = database.NewMockTokenStore()
-		projectStore = database.NewMockProjectStore()
+	// Create a sample project and token for testing
+	projectID := "project_123"
+	apiKey := "sk-1234567890"
+	_, err = projectStore.CreateMockProject(projectID, "Test Project", apiKey)
+	if err != nil {
+		log.Printf("Warning: Failed to create mock project: %v", err)
+	}
 
-		// Create a sample project and token for testing
-		projectID := "project_123"
-		apiKey := "sk-1234567890"
-		_, err = projectStore.CreateMockProject(projectID, "Test Project", apiKey)
-		if err != nil {
-			log.Printf("Warning: Failed to create mock project: %v", err)
-		}
-
-		// Create test token
-		tokenID := "tkn_abcdefghijklmnopqrstuv"
-		// Token expires in 1 day, is active, and has no request limit
-		_, err = tokenStore.CreateMockToken(tokenID, projectID, 24*time.Hour, true, nil)
-		if err != nil {
-			log.Printf("Warning: Failed to create mock token: %v", err)
-		}
-	} else {
-		// Use real database-backed stores in production
-		tokenStore = database.NewTokenStore(s.config.DatabaseConfig)
-		projectStore = database.NewProjectStore(s.config.DatabaseConfig)
+	// Create test token
+	tokenID := "tkn_abcdefghijklmnopqrstuv"
+	// Token expires in 1 day, is active, and has no request limit
+	_, err = tokenStore.CreateMockToken(tokenID, projectID, 24*time.Hour, true, nil)
+	if err != nil {
+		log.Printf("Warning: Failed to create mock token: %v", err)
 	}
 
 	// Create token validator
