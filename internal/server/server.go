@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/sofatutor/llm-proxy/internal/token"
+	"go.uber.org/zap"
 )
 
 // Server represents the HTTP server for the LLM Proxy.
@@ -24,6 +26,7 @@ type Server struct {
 	config       *config.Config
 	tokenStore   token.TokenStore
 	projectStore proxy.ProjectStore
+	logger       *zap.Logger
 }
 
 // HealthResponse is the response body for the health check endpoint.
@@ -40,13 +43,19 @@ const Version = "0.1.0"
 // New creates a new HTTP server with the provided configuration and store implementations.
 // It initializes the server with appropriate timeouts and registers all necessary route handlers.
 // The server is not started until the Start method is called.
-func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.ProjectStore) *Server {
+func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.ProjectStore) (*Server, error) {
 	mux := http.NewServeMux()
+
+	logger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize logger: %w", err)
+	}
 
 	s := &Server{
 		config:       cfg,
 		tokenStore:   tokenStore,
 		projectStore: projectStore,
+		logger:       logger,
 		server: &http.Server{
 			Addr:         cfg.ListenAddr,
 			Handler:      mux,
@@ -59,7 +68,7 @@ func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.Pro
 	// Register routes
 	mux.HandleFunc("/health", s.handleHealth)
 
-	return s
+	return s, nil
 }
 
 // Start initializes all required components and starts the HTTP server.
@@ -149,7 +158,10 @@ func (s *Server) initializeAPIRoutes() error {
 	// (No more creation of mock stores or test data here)
 	tokenValidator := token.NewValidator(s.tokenStore)
 	cachedValidator := token.NewCachedValidator(tokenValidator)
-	proxyHandler := proxy.NewTransparentProxy(*proxyConfig, cachedValidator, s.projectStore)
+	proxyHandler, err := proxy.NewTransparentProxyWithLogger(*proxyConfig, cachedValidator, s.projectStore, s.logger)
+	if err != nil {
+		return fmt.Errorf("failed to initialize proxy: %w", err)
+	}
 
 	// Register proxy routes
 	s.server.Handler.(*http.ServeMux).Handle("/v1/", proxyHandler.Handler())

@@ -62,6 +62,10 @@ type ProxyConfig struct {
 
 	// LogLevel controls the verbosity of logging
 	LogLevel string
+	// LogFormat controls the log output format (json or console)
+	LogFormat string
+	// LogFile specifies a file path for logs (stdout if empty)
+	LogFile string
 
 	// SetXForwardedFor determines whether to set the X-Forwarded-For header
 	SetXForwardedFor bool

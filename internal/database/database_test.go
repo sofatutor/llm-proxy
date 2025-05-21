@@ -205,6 +205,9 @@ func TestInitDatabase_Error(t *testing.T) {
 }
 
 func TestNew_PermissionDenied(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root, permission test not reliable")
+	}
 	dir, err := os.MkdirTemp("", "llm-proxy-test-perm")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)

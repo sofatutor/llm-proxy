@@ -121,7 +121,10 @@ func runWithHooks(doneCh chan os.Signal, srv serverInterface, forceNoTest bool) 
 		ts := database.NewMockTokenStore()
 		ps := database.NewMockProjectStore()
 		tokenStoreAdapter := database.NewTokenStoreAdapter(ts)
-		s = server.New(cfg, tokenStoreAdapter, ps)
+		s, err = server.New(cfg, tokenStoreAdapter, ps)
+		if err != nil {
+			log.Fatalf("failed to initialize server: %v", err)
+		}
 	}
 
 	go func() {

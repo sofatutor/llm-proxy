@@ -17,6 +17,7 @@ import (
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
@@ -126,7 +127,8 @@ func TestTransparentProxy_BasicProxying(t *testing.T) {
 	}
 
 	// Create proxy
-	proxy := NewTransparentProxy(config, mockValidator, mockStore)
+	proxy, err := NewTransparentProxyWithLogger(config, mockValidator, mockStore, zap.NewNop())
+	require.NoError(t, err)
 
 	// Create request to test
 	reqBody := strings.NewReader(`{"prompt": "Hello, world!"}`)
@@ -150,7 +152,7 @@ func TestTransparentProxy_BasicProxying(t *testing.T) {
 
 	// Parse response body
 	var response map[string]interface{}
-	err := json.NewDecoder(resp.Body).Decode(&response)
+	err = json.NewDecoder(resp.Body).Decode(&response)
 	assert.NoError(t, err, "Expected no error decoding response")
 
 	// Verify the request was properly proxied
@@ -188,7 +190,8 @@ func TestTransparentProxy_StreamingResponses(t *testing.T) {
 	}
 
 	// Create proxy
-	proxy := NewTransparentProxy(config, mockValidator, mockStore)
+	proxy, err := NewTransparentProxyWithLogger(config, mockValidator, mockStore, zap.NewNop())
+	require.NoError(t, err)
 
 	// Create request to test
 	req := httptest.NewRequest("GET", "/v1/streaming", nil)
@@ -249,7 +252,8 @@ func TestTransparentProxy_InvalidToken(t *testing.T) {
 	}
 
 	// Create proxy
-	proxy := NewTransparentProxy(config, mockValidator, mockStore)
+	proxy, err := NewTransparentProxyWithLogger(config, mockValidator, mockStore, zap.NewNop())
+	require.NoError(t, err)
 
 	// Create request with invalid token
 	req := httptest.NewRequest("POST", "/v1/completions", nil)
@@ -272,7 +276,7 @@ func TestTransparentProxy_InvalidToken(t *testing.T) {
 
 	// Parse error response
 	var errResponse map[string]interface{}
-	err := json.NewDecoder(resp.Body).Decode(&errResponse)
+	err = json.NewDecoder(resp.Body).Decode(&errResponse)
 	assert.NoError(t, err, "Expected no error decoding response")
 
 	// Verify error message
@@ -301,7 +305,8 @@ func TestTransparentProxy_DisallowedEndpoint(t *testing.T) {
 	}
 
 	// Create proxy
-	proxy := NewTransparentProxy(config, mockValidator, mockStore)
+	proxy, err := NewTransparentProxyWithLogger(config, mockValidator, mockStore, zap.NewNop())
+	require.NoError(t, err)
 
 	// Create request to a disallowed endpoint
 	req := httptest.NewRequest("POST", "/v1/disallowed_endpoint", nil)
@@ -341,7 +346,8 @@ func TestTransparentProxy_DisallowedMethod(t *testing.T) {
 	}
 
 	// Create proxy
-	proxy := NewTransparentProxy(config, mockValidator, mockStore)
+	proxy, err := NewTransparentProxyWithLogger(config, mockValidator, mockStore, zap.NewNop())
+	require.NoError(t, err)
 
 	// Create request with disallowed method
 	req := httptest.NewRequest("DELETE", "/v1/completions", nil)
@@ -385,7 +391,8 @@ func TestTransparentProxy_LargeRequestBody(t *testing.T) {
 	}
 
 	// Create proxy
-	proxy := NewTransparentProxy(config, mockValidator, mockStore)
+	proxy, err := NewTransparentProxyWithLogger(config, mockValidator, mockStore, zap.NewNop())
+	require.NoError(t, err)
 
 	// Create large request body (100KB)
 	largeBody := bytes.Repeat([]byte("a"), 100*1024)
@@ -413,7 +420,8 @@ func TestTransparentProxy_LargeRequestBody(t *testing.T) {
 }
 
 func TestTransparentProxy_ErrorHandler(t *testing.T) {
-	proxy := NewTransparentProxy(ProxyConfig{}, nil, nil)
+	proxy, err := NewTransparentProxyWithLogger(ProxyConfig{}, nil, nil, zap.NewNop())
+	require.NoError(t, err)
 	testCases := []struct {
 		name        string
 		ctxErr      error
@@ -446,7 +454,8 @@ func TestTransparentProxy_ErrorHandler(t *testing.T) {
 }
 
 func TestTransparentProxy_HandleValidationError(t *testing.T) {
-	proxy := NewTransparentProxy(ProxyConfig{}, nil, nil)
+	proxy, err := NewTransparentProxyWithLogger(ProxyConfig{}, nil, nil, zap.NewNop())
+	require.NoError(t, err)
 	testCases := []struct {
 		name       string
 		err        error
@@ -479,9 +488,10 @@ func TestTransparentProxy_HandleValidationError(t *testing.T) {
 // Minimal mock http.Server for Shutdown test
 
 func TestTransparentProxy_Shutdown(t *testing.T) {
-	proxy := NewTransparentProxy(ProxyConfig{}, nil, nil)
+	proxy, err := NewTransparentProxyWithLogger(ProxyConfig{}, nil, nil, zap.NewNop())
+	require.NoError(t, err)
 	// Case: no httpServer
-	err := proxy.Shutdown(context.Background())
+	err = proxy.Shutdown(context.Background())
 	assert.NoError(t, err)
 
 	// Case: with httpServer
