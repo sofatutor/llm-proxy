@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -41,9 +42,18 @@ type ProxyMetrics struct {
 // NewTransparentProxy creates a new proxy instance
 func NewTransparentProxy(config ProxyConfig, validator TokenValidator, store ProjectStore) *TransparentProxy {
 	// Initialize logger
-	logger, _ := zap.NewProduction()
+	logger, err := zap.NewProduction()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to create production logger: %v\n", err)
+		logger = zap.NewNop()
+	}
 	if config.LogLevel == "debug" {
-		logger, _ = zap.NewDevelopment()
+		devLogger, err := zap.NewDevelopment()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to create development logger: %v\n", err)
+		} else {
+			logger = devLogger
+		}
 	}
 
 	proxy := &TransparentProxy{
