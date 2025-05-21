@@ -57,7 +57,10 @@ This document outlines the implementation plan for a transparent proxy for OpenA
    - Token validation
    - Request forwarding with header manipulation
    - Response parsing for metadata
-   - Streaming support
+   - Streaming support (SSE)
+   - Generic design for multiple API providers
+   - Minimal request/response transformation
+   - High performance with connection pooling
 
 6. **Admin UI**
    - HTML-based interface with basic auth
@@ -225,6 +228,10 @@ docker run --rm llm-proxy llm-benchmark \
 - Monitor with Prometheus/Grafana
 - Clean up expired tokens periodically
 - Store secrets in a secure manager
+- Implement Redis-backed distributed rate limiting
+- Set up horizontal scaling with load balancing
+- Add Redis-backed request caching for improved performance
+- Implement cache invalidation and consistency mechanisms
 
 ## Testing Strategy
 - **Test-Driven Development (TDD) is mandatory for all code.**
@@ -261,3 +268,14 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 - **Extensibility:** Future versions may support dynamic or config-driven whitelists, and on-the-fly request/response transformations via middleware.
 
 > **Minimum Latency Principle:** Every architectural component, from HTTP server to middleware and database access, must be designed for minimal latency. Avoid unnecessary processing, blocking operations, or synchronous I/O in the request path. Use concurrency and asynchronous operations where possible to keep proxy response times as close to direct API calls as possible.
+
+## CLI Tool (Setup & OpenAI Chat)
+- A CLI tool (`llm-proxy setup` and `llm-proxy openai chat`) will be implemented in a separate PR after all proxy prerequisites are complete.
+- The tool will automate onboarding, configuration, and provide an interactive chat interface.
+- See WIP.md for tracking and requirements.
+
+## API Endpoint Handling
+- No custom OpenAI endpoint handlers are required.
+- The proxy uses a config-driven allowlist (routes and methods) for supported APIs.
+- Middleware enforces this allowlist for all proxied requests.
+- The allowlist is defined in configuration (YAML, JSON, TOML, or env vars).

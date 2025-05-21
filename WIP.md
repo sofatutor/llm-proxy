@@ -105,15 +105,18 @@ Repository structure, configuration, Docker, security, documentation, and founda
 - [x] Implement token caching for performance
 
 ### Proxy Logic
-- [ ] Research HTTP proxying best practices in Go
-- [ ] Design proxy architecture (reverse proxy, forwarding proxy)
-- [ ] Create OpenAI API client wrapper
+- [x] Research HTTP proxying best practices in Go
+- [x] Design transparent proxy architecture using httputil.ReverseProxy
+- [x] Implement middleware chain for request processing
+- [x] Add support for streaming responses (SSE)
 - [ ] Implement proxy middleware chain:
-  - Request logging middleware
-  - Authentication middleware
-  - Rate-limiting middleware
-  - Request validation middleware
-  - Timeout middleware
+  - [x] Request logging middleware
+  - [x] Authentication middleware
+  - [ ] Rate-limiting middleware *(only per-token rate limiting is implemented; generic/global middleware is planned for a future phase—see PLAN.md for details. Expected in Phase 3 or later, after core proxy and per-token logic are stable.)*
+  - [x] Request validation middleware
+  - [x] Timeout middleware
+- [ ] Define and document allowed API routes and methods in configuration
+- [ ] Ensure middleware enforces this allowlist for all proxied requests
 - [ ] Create OpenAI API endpoint handlers:
   - /v1/chat/completions
   - /v1/completions
@@ -170,15 +173,16 @@ Repository structure, configuration, Docker, security, documentation, and founda
 
 5. **Rate Limiting** (`feature/phase-2-rate-limiting`)
    - Track request counts
-   - Create rate-limiting logic
+   - Create in-memory rate-limiting logic
    - Implement last_used_at updates
    - Add max_requests enforcement
+   - Create extension points for future distributed rate limiting
 
 6. **Proxy Architecture** (`feature/phase-2-proxy-arch`)
-   - Research HTTP proxying
-   - Design proxy architecture
-   - Create OpenAI API client wrapper
-   - Set up basic proxy structure
+   - Research HTTP proxying ✅
+   - Design transparent proxy architecture using httputil.ReverseProxy ✅
+   - Set up basic proxy structure ✅
+   - Implement tests for proxy functionality ✅
 
 7. **Proxy Middleware** (`feature/phase-2-proxy-middleware`)
    - Implement request logging middleware
@@ -197,6 +201,11 @@ Repository structure, configuration, Docker, security, documentation, and founda
    - Add chunked transfer support
    - Create streaming metadata aggregation
    - Test streaming with all endpoints
+
+### CLI Tool (Setup & OpenAI Chat)
+- [ ] Implement CLI tool (`llm-proxy setup` and `llm-proxy openai chat`) **in a separate PR** (`feature/llm-proxy-cli`)
+  - Only to be tackled once all proxy prerequisites for successful usage are met
+  - See PLAN.md for detailed requirements
 
 ## Phase 3: API and Interfaces
 
@@ -662,6 +671,17 @@ Repository structure, configuration, Docker, security, documentation, and founda
   - Custom metrics
   - Alert configurations
   - Dashboard templates
+- [ ] Implement distributed rate limiting:
+  - Redis-backed rate limiting
+  - Consistent behavior across multiple instances
+  - Failover mechanisms
+  - Performance optimization
+- [ ] Implement request caching system:
+  - Redis-backed response cache
+  - Configurable TTL for different endpoints
+  - Cache invalidation strategies
+  - Cache hit/miss metrics
+  - Support for cache control headers
 - [ ] Document scaling considerations:
   - Horizontal scaling
   - Vertical scaling
