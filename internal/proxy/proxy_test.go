@@ -576,7 +576,7 @@ func TestValidateRequestMiddleware_EndpointNotAllowed(t *testing.T) {
 }
 
 func TestModifyResponse_NonStreamingErrorIncrementsErrorCount(t *testing.T) {
-	p := &TransparentProxy{metrics: &ProxyMetrics{}}
+	p := &TransparentProxy{metrics: &ProxyMetrics{}, logger: zap.NewNop()}
 	res := &http.Response{
 		StatusCode: 500,
 		Header:     make(http.Header),
@@ -584,6 +584,7 @@ func TestModifyResponse_NonStreamingErrorIncrementsErrorCount(t *testing.T) {
 	}
 	// Not streaming
 	res.Header.Set("Content-Type", "application/json")
+	res.Request = httptest.NewRequest("POST", "/v1/completions", nil)
 	err := p.modifyResponse(res)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(1), p.metrics.RequestCount)
@@ -591,7 +592,7 @@ func TestModifyResponse_NonStreamingErrorIncrementsErrorCount(t *testing.T) {
 }
 
 func TestModifyResponse_StreamingReturnsEarly(t *testing.T) {
-	p := &TransparentProxy{metrics: &ProxyMetrics{}}
+	p := &TransparentProxy{metrics: &ProxyMetrics{}, logger: zap.NewNop()}
 	res := &http.Response{
 		StatusCode: 200,
 		Header:     make(http.Header),
