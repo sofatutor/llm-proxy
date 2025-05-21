@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/config"
-	"github.com/sofatutor/llm-proxy/internal/database"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/sofatutor/llm-proxy/internal/token"
 )
@@ -21,8 +20,10 @@ import (
 // It encapsulates the underlying http.Server along with application configuration
 // and handles request routing and server lifecycle management.
 type Server struct {
-	server *http.Server
-	config *config.Config
+	server       *http.Server
+	config       *config.Config
+	tokenStore   token.TokenStore
+	projectStore proxy.ProjectStore
 }
 
 // HealthResponse is the response body for the health check endpoint.
@@ -36,16 +37,16 @@ type HealthResponse struct {
 // Version is the application version, following semantic versioning.
 const Version = "0.1.0"
 
-// New creates a new HTTP server with the provided configuration.
-// It initializes the server with appropriate timeouts and registers
-// all necessary route handlers.
-//
+// New creates a new HTTP server with the provided configuration and store implementations.
+// It initializes the server with appropriate timeouts and registers all necessary route handlers.
 // The server is not started until the Start method is called.
-func New(cfg *config.Config) *Server {
+func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.ProjectStore) *Server {
 	mux := http.NewServeMux()
 
 	s := &Server{
-		config: cfg,
+		config:       cfg,
+		tokenStore:   tokenStore,
+		projectStore: projectStore,
 		server: &http.Server{
 			Addr:         cfg.ListenAddr,
 			Handler:      mux,
@@ -144,35 +145,11 @@ func (s *Server) initializeAPIRoutes() error {
 		}
 	}
 
-	// Initialize token store and project store
-	tokenStore := database.NewMockTokenStore()
-	projectStore := database.NewMockProjectStore()
-
-	// Create a sample project and token for testing
-	projectID := "project_123"
-	apiKey := "sk-1234567890"
-	_, err = projectStore.CreateMockProject(projectID, "Test Project", apiKey)
-	if err != nil {
-		log.Printf("Warning: Failed to create mock project: %v", err)
-	}
-
-	// Create test token
-	tokenID := "tkn_abcdefghijklmnopqrstuv"
-	// Token expires in 1 day, is active, and has no request limit
-	_, err = tokenStore.CreateMockToken(tokenID, projectID, 24*time.Hour, true, nil)
-	if err != nil {
-		log.Printf("Warning: Failed to create mock token: %v", err)
-	}
-
-	// Create token validator
-	tokenStoreAdapter := database.NewTokenStoreAdapter(tokenStore)
-	tokenValidator := token.NewValidator(tokenStoreAdapter)
-
-	// Add caching for better performance
+	// Use the injected tokenStore and projectStore
+	// (No more creation of mock stores or test data here)
+	tokenValidator := token.NewValidator(s.tokenStore)
 	cachedValidator := token.NewCachedValidator(tokenValidator)
-
-	// Create the proxy handler
-	proxyHandler := proxy.NewTransparentProxy(*proxyConfig, cachedValidator, projectStore)
+	proxyHandler := proxy.NewTransparentProxy(*proxyConfig, cachedValidator, s.projectStore)
 
 	// Register proxy routes
 	s.server.Handler.(*http.ServeMux).Handle("/v1/", proxyHandler.Handler())
