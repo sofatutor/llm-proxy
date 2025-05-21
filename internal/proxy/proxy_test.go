@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"errors"
-	"io/ioutil"
 
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.uber.org/zap"
 )
 
 // MockTokenValidator mocks the token validation interface
@@ -142,11 +142,9 @@ func TestTransparentProxy_BasicProxying(t *testing.T) {
 
 	// Check response
 	resp := w.Result()
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			t.Logf("Failed to close response body: %v", err)
-		}
-	}()
+	if err := resp.Body.Close(); err != nil {
+		t.Logf("Failed to close response body: %v", err)
+	}
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "Expected 200 status code")
 
@@ -205,11 +203,9 @@ func TestTransparentProxy_StreamingResponses(t *testing.T) {
 
 	// Check response
 	resp := w.Result()
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			t.Logf("Failed to close response body: %v", err)
-		}
-	}()
+	if err := resp.Body.Close(); err != nil {
+		t.Logf("Failed to close response body: %v", err)
+	}
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "Expected 200 status code")
 	assert.Equal(t, "text/event-stream", resp.Header.Get("Content-Type"), "Expected SSE content type")
@@ -268,11 +264,9 @@ func TestTransparentProxy_InvalidToken(t *testing.T) {
 
 	// Check response - should be an error
 	resp := w.Result()
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			t.Logf("Failed to close response body: %v", err)
-		}
-	}()
+	if err := resp.Body.Close(); err != nil {
+		t.Logf("Failed to close response body: %v", err)
+	}
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "Expected 401 status code for invalid token")
 
@@ -322,11 +316,9 @@ func TestTransparentProxy_DisallowedEndpoint(t *testing.T) {
 
 	// Check response - should be 404 Not Found
 	resp := w.Result()
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			t.Logf("Failed to close response body: %v", err)
-		}
-	}()
+	if err := resp.Body.Close(); err != nil {
+		t.Logf("Failed to close response body: %v", err)
+	}
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "Expected 404 status code for disallowed endpoint")
 }
@@ -363,11 +355,9 @@ func TestTransparentProxy_DisallowedMethod(t *testing.T) {
 
 	// Check response - should be 405 Method Not Allowed
 	resp := w.Result()
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			t.Logf("Failed to close response body: %v", err)
-		}
-	}()
+	if err := resp.Body.Close(); err != nil {
+		t.Logf("Failed to close response body: %v", err)
+	}
 
 	assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode, "Expected 405 status code for disallowed method")
 }
@@ -411,11 +401,9 @@ func TestTransparentProxy_LargeRequestBody(t *testing.T) {
 
 	// Check response
 	resp := w.Result()
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			t.Logf("Failed to close response body: %v", err)
-		}
-	}()
+	if err := resp.Body.Close(); err != nil {
+		t.Logf("Failed to close response body: %v", err)
+	}
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "Expected 200 status code for large request")
 
@@ -447,8 +435,10 @@ func TestTransparentProxy_ErrorHandler(t *testing.T) {
 			}
 			proxy.errorHandler(w, r, tc.proxyErr)
 			resp := w.Result()
-			defer resp.Body.Close()
-			body, _ := ioutil.ReadAll(resp.Body)
+			if err := resp.Body.Close(); err != nil {
+				t.Logf("Failed to close response body: %v", err)
+			}
+			body, _ := io.ReadAll(resp.Body)
 			assert.Equal(t, tc.wantStatus, resp.StatusCode)
 			assert.Contains(t, string(body), tc.wantMessage)
 		})
@@ -475,8 +465,10 @@ func TestTransparentProxy_HandleValidationError(t *testing.T) {
 			w := httptest.NewRecorder()
 			proxy.handleValidationError(w, tc.err)
 			resp := w.Result()
-			defer resp.Body.Close()
-			body, _ := ioutil.ReadAll(resp.Body)
+			if err := resp.Body.Close(); err != nil {
+				t.Logf("Failed to close response body: %v", err)
+			}
+			body, _ := io.ReadAll(resp.Body)
 			assert.Equal(t, tc.wantStatus, resp.StatusCode)
 			assert.Contains(t, string(body), tc.wantCode)
 			assert.Contains(t, string(body), tc.wantMsg)
@@ -485,24 +477,6 @@ func TestTransparentProxy_HandleValidationError(t *testing.T) {
 }
 
 // Minimal mock http.Server for Shutdown test
-
-type mockHTTPServer struct {
-	shutdownCalled bool
-}
-
-func (m *mockHTTPServer) Shutdown(ctx context.Context) error {
-	m.shutdownCalled = true
-	return nil
-}
-
-// httpServerAdapter allows us to use mockHTTPServer as *http.Server for testing
-type httpServerAdapter struct {
-	*mockHTTPServer
-}
-
-func (h *httpServerAdapter) Shutdown(ctx context.Context) error {
-	return h.mockHTTPServer.Shutdown(ctx)
-}
 
 func TestTransparentProxy_Shutdown(t *testing.T) {
 	proxy := NewTransparentProxy(ProxyConfig{}, nil, nil)
@@ -520,4 +494,213 @@ func TestTransparentProxy_Shutdown(t *testing.T) {
 	// (Full mocking would require interface refactor)
 	err = proxy.Shutdown(context.Background())
 	assert.NoError(t, err)
+}
+
+func TestExtractTokenFromHeader(t *testing.T) {
+	tests := []struct {
+		header  string
+		want    string
+		comment string
+	}{
+		{"", "", "empty header"},
+		{"Basic abcdef", "", "not Bearer"},
+		{"Bearer", "", "Bearer with no token"},
+		{"Bearer    ", "", "Bearer with only spaces"},
+		{"Bearer token123", "token123", "normal Bearer token"},
+		{"Bearer   token123   ", "token123", "Bearer with extra spaces"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.comment, func(t *testing.T) {
+			got := extractTokenFromHeader(tc.header)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestIsMethodAllowed(t *testing.T) {
+	p := &TransparentProxy{config: ProxyConfig{}}
+	// No allowed methods: allow all
+	assert.True(t, p.isMethodAllowed("GET"))
+	assert.True(t, p.isMethodAllowed("POST"))
+
+	p.config.AllowedMethods = []string{"GET", "POST"}
+	assert.True(t, p.isMethodAllowed("GET"))
+	assert.True(t, p.isMethodAllowed("POST"))
+	assert.False(t, p.isMethodAllowed("DELETE"))
+}
+
+func TestIsEndpointAllowed(t *testing.T) {
+	p := &TransparentProxy{config: ProxyConfig{}}
+	// No allowed endpoints: allow all
+	assert.True(t, p.isEndpointAllowed("/v1/foo"))
+	assert.True(t, p.isEndpointAllowed("/v1/bar"))
+
+	p.config.AllowedEndpoints = []string{"/v1/foo", "/v1/bar"}
+	assert.True(t, p.isEndpointAllowed("/v1/foo/extra")) // prefix match
+	assert.True(t, p.isEndpointAllowed("/v1/bar"))
+	assert.False(t, p.isEndpointAllowed("/v1/baz"))
+}
+
+func TestValidateRequestMiddleware_MethodNotAllowed(t *testing.T) {
+	p := &TransparentProxy{
+		config: ProxyConfig{AllowedMethods: []string{"POST"}},
+		logger: zap.NewNop(),
+	}
+	h := p.ValidateRequestMiddleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/v1/completions", nil)
+	h.ServeHTTP(w, r)
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	var resp map[string]interface{}
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+	assert.Equal(t, "Method not allowed", resp["error"])
+}
+
+func TestValidateRequestMiddleware_EndpointNotAllowed(t *testing.T) {
+	p := &TransparentProxy{
+		config: ProxyConfig{AllowedEndpoints: []string{"/v1/allowed"}, AllowedMethods: []string{"POST"}},
+		logger: zap.NewNop(),
+	}
+	h := p.ValidateRequestMiddleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/v1/disallowed", nil)
+	h.ServeHTTP(w, r)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	var resp map[string]interface{}
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+	assert.Equal(t, "Endpoint not found", resp["error"])
+}
+
+func TestModifyResponse_NonStreamingErrorIncrementsErrorCount(t *testing.T) {
+	p := &TransparentProxy{metrics: &ProxyMetrics{}}
+	res := &http.Response{
+		StatusCode: 500,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader("error")),
+	}
+	// Not streaming
+	res.Header.Set("Content-Type", "application/json")
+	err := p.modifyResponse(res)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), p.metrics.RequestCount)
+	assert.Equal(t, int64(1), p.metrics.ErrorCount)
+}
+
+func TestModifyResponse_StreamingReturnsEarly(t *testing.T) {
+	p := &TransparentProxy{metrics: &ProxyMetrics{}}
+	res := &http.Response{
+		StatusCode: 200,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader("stream")),
+	}
+	res.Header.Set("Content-Type", "text/event-stream")
+	err := p.modifyResponse(res)
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), p.metrics.RequestCount)
+	assert.Equal(t, int64(0), p.metrics.ErrorCount)
+}
+
+func TestDirector_ErrorBranches(t *testing.T) {
+	validConfig := ProxyConfig{TargetBaseURL: "http://example.com"}
+
+	t.Run("missing Authorization header", func(t *testing.T) {
+		p := &TransparentProxy{
+			config:         validConfig,
+			logger:         zap.NewNop(),
+			tokenValidator: &MockTokenValidator{},
+			projectStore:   &MockProjectStore{},
+		}
+		getCtxErr := func(req *http.Request) error {
+			p.director(req)
+			val := req.Context().Value(ctxKeyValidationError)
+			if val == nil {
+				return nil
+			}
+			err, _ := val.(error)
+			return err
+		}
+		req := httptest.NewRequest("GET", "/", nil)
+		err := getCtxErr(req)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "authorization")
+	})
+
+	t.Run("invalid Authorization header", func(t *testing.T) {
+		p := &TransparentProxy{
+			config:         validConfig,
+			logger:         zap.NewNop(),
+			tokenValidator: &MockTokenValidator{},
+			projectStore:   &MockProjectStore{},
+		}
+		getCtxErr := func(req *http.Request) error {
+			p.director(req)
+			val := req.Context().Value(ctxKeyValidationError)
+			if val == nil {
+				return nil
+			}
+			err, _ := val.(error)
+			return err
+		}
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Authorization", "Basic abcdef")
+		err := getCtxErr(req)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "authorization")
+	})
+
+	t.Run("token validation error", func(t *testing.T) {
+		mockValidator := new(MockTokenValidator)
+		mockValidator.On("ValidateTokenWithTracking", mock.Anything, "badtoken").Return("", errors.New("token fail"))
+		p := &TransparentProxy{
+			config:         validConfig,
+			logger:         zap.NewNop(),
+			tokenValidator: mockValidator,
+			projectStore:   &MockProjectStore{},
+		}
+		getCtxErr := func(req *http.Request) error {
+			p.director(req)
+			val := req.Context().Value(ctxKeyValidationError)
+			if val == nil {
+				return nil
+			}
+			err, _ := val.(error)
+			return err
+		}
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Authorization", "Bearer badtoken")
+		err := getCtxErr(req)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "token fail")
+	})
+
+	t.Run("project store error", func(t *testing.T) {
+		mockValidator := new(MockTokenValidator)
+		mockValidator.On("ValidateTokenWithTracking", mock.Anything, "goodtoken").Return("projid", nil)
+		mockStore := new(MockProjectStore)
+		mockStore.On("GetAPIKeyForProject", mock.Anything, "projid").Return("", errors.New("store fail"))
+		p := &TransparentProxy{
+			config:         validConfig,
+			logger:         zap.NewNop(),
+			tokenValidator: mockValidator,
+			projectStore:   mockStore,
+		}
+		getCtxErr := func(req *http.Request) error {
+			p.director(req)
+			val := req.Context().Value(ctxKeyValidationError)
+			if val == nil {
+				return nil
+			}
+			err, _ := val.(error)
+			return err
+		}
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Authorization", "Bearer goodtoken")
+		err := getCtxErr(req)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "store fail")
+	})
 }
