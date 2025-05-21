@@ -6,11 +6,15 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/database"
+	"github.com/sofatutor/llm-proxy/internal/proxy"
+	"github.com/sofatutor/llm-proxy/internal/token"
 )
 
 // Server represents the HTTP server for the LLM Proxy.
@@ -63,16 +67,123 @@ func New(cfg *config.Config) *Server {
 // It returns an error if the server fails to start or encounters an
 // unrecoverable error during operation.
 func (s *Server) Start() error {
-	// TODO: Initialize required components
-	// - Database connection
-	// - Logging
-	// - Proxy routes
-	// - Admin routes
-	// - Metrics
+	// Initialize required components
+	if err := s.initializeComponents(); err != nil {
+		return fmt.Errorf("failed to initialize components: %w", err)
+	}
 
 	log.Printf("Server starting on %s\n", s.config.ListenAddr)
 
 	return s.server.ListenAndServe()
+}
+
+// initializeComponents sets up all the required components for the server
+func (s *Server) initializeComponents() error {
+	// Initialize API routes from configuration
+	if err := s.initializeAPIRoutes(); err != nil {
+		return fmt.Errorf("failed to initialize API routes: %w", err)
+	}
+
+	// TODO: Initialize other components
+	// - Database connection
+	// - Logging
+	// - Admin routes
+	// - Metrics
+
+	return nil
+}
+
+// initializeAPIRoutes sets up the API proxy routes based on configuration
+func (s *Server) initializeAPIRoutes() error {
+	// Load API providers configuration
+	apiConfig, err := proxy.LoadAPIConfigFromFile(s.config.APIConfigPath)
+	if err != nil {
+		// If the config file doesn't exist or has errors, fall back to a default OpenAI configuration
+		log.Printf("Warning: Failed to load API config from %s: %v", s.config.APIConfigPath, err)
+		log.Printf("Using default OpenAI configuration")
+		
+		// Create a default API configuration
+		apiConfig = &proxy.APIConfig{
+			DefaultAPI: "openai",
+			APIs: map[string]*proxy.APIProviderConfig{
+				"openai": {
+					BaseURL: s.config.OpenAIAPIURL,
+					AllowedEndpoints: []string{
+						"/v1/chat/completions",
+						"/v1/completions",
+						"/v1/embeddings",
+						"/v1/models",
+						"/v1/edits",
+						"/v1/fine-tunes",
+						"/v1/files",
+						"/v1/images/generations",
+						"/v1/audio/transcriptions",
+						"/v1/moderations",
+					},
+					AllowedMethods: []string{"GET", "POST", "DELETE"},
+					Timeouts: proxy.TimeoutConfig{
+						Request:        s.config.RequestTimeout,
+						ResponseHeader: 30 * time.Second,
+						IdleConnection: 90 * time.Second,
+						FlushInterval:  100 * time.Millisecond,
+					},
+					Connection: proxy.ConnectionConfig{
+						MaxIdleConns:        100,
+						MaxIdleConnsPerHost: 20,
+					},
+				},
+			},
+		}
+	}
+
+	// Get proxy configuration for the default API provider
+	proxyConfig, err := apiConfig.GetProxyConfigForAPI(s.config.DefaultAPIProvider)
+	if err != nil {
+		// If specified provider doesn't exist, use the default one
+		log.Printf("Warning: %v", err)
+		proxyConfig, err = apiConfig.GetProxyConfigForAPI(apiConfig.DefaultAPI)
+		if err != nil {
+			return fmt.Errorf("failed to get proxy configuration: %w", err)
+		}
+	}
+
+	// Initialize token store and project store
+	tokenStore := database.NewMockTokenStore()
+	projectStore := database.NewMockProjectStore()
+	
+	// Create a sample project and token for testing
+	projectID := "project_123"
+	apiKey := "sk-1234567890"
+	_, err = projectStore.CreateMockProject(projectID, "Test Project", apiKey)
+	if err != nil {
+		log.Printf("Warning: Failed to create mock project: %v", err)
+	}
+	
+	// Create test token
+	tokenID := "tkn_abcdefghijklmnopqrstuv"
+	// Token expires in 1 day, is active, and has no request limit
+	_, err = tokenStore.CreateMockToken(tokenID, projectID, 24*time.Hour, true, nil)
+	if err != nil {
+		log.Printf("Warning: Failed to create mock token: %v", err)
+	}
+	
+	// Create token validator
+	tokenStoreAdapter := database.NewTokenStoreAdapter(tokenStore)
+	tokenValidator := token.NewValidator(tokenStoreAdapter)
+	
+	// Add caching for better performance
+	cachedValidator := token.NewCachedValidator(tokenValidator)
+	
+	// Create the proxy handler
+	proxyHandler := proxy.NewTransparentProxy(*proxyConfig, cachedValidator, projectStore)
+	
+	// Register proxy routes
+	s.server.Handler.(*http.ServeMux).Handle("/v1/", proxyHandler.Handler())
+	
+	log.Printf("Initialized proxy for %s with %d allowed endpoints", 
+		proxyConfig.TargetBaseURL, len(proxyConfig.AllowedEndpoints))
+		
+	return nil
 }
 
 // Shutdown gracefully shuts down the server without interrupting
