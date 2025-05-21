@@ -225,7 +225,7 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 
 	// Create tokens with different configurations for testing
 	now := time.Now().UTC()
-	
+
 	// Token with past expiration
 	pastExpiry := now.Add(-1 * time.Hour)
 	maxRequests := 10
@@ -238,7 +238,7 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 		MaxRequests:  &maxRequests,
 		CreatedAt:    now.Truncate(time.Second),
 	}
-	
+
 	// Token with rate limit reached
 	rateLimitedToken := Token{
 		Token:        "rate-limited-token",
@@ -248,7 +248,7 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 		MaxRequests:  &maxRequests,
 		CreatedAt:    now.Truncate(time.Second),
 	}
-	
+
 	// Inactive token
 	inactiveToken := Token{
 		Token:        "inactive-token",
@@ -257,7 +257,7 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 		RequestCount: 0,
 		CreatedAt:    now.Truncate(time.Second),
 	}
-	
+
 	// Valid token
 	futureExpiry := now.Add(24 * time.Hour)
 	validToken := Token{
@@ -286,7 +286,7 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 	if !retrievedExpiredToken.IsExpired() {
 		t.Fatalf("Expected expired token to be expired")
 	}
-	
+
 	// Test rate limiting
 	retrievedRateLimitedToken, err := db.GetTokenByID(ctx, rateLimitedToken.Token)
 	if err != nil {
@@ -295,7 +295,7 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 	if !retrievedRateLimitedToken.IsRateLimited() {
 		t.Fatalf("Expected rate-limited token to be rate limited")
 	}
-	
+
 	// Test inactive token
 	retrievedInactiveToken, err := db.GetTokenByID(ctx, inactiveToken.Token)
 	if err != nil {
@@ -304,7 +304,7 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 	if retrievedInactiveToken.IsValid() {
 		t.Fatalf("Expected inactive token to be invalid")
 	}
-	
+
 	// Test valid token
 	retrievedValidToken, err := db.GetTokenByID(ctx, validToken.Token)
 	if err != nil {
@@ -313,7 +313,7 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 	if !retrievedValidToken.IsValid() {
 		t.Fatalf("Expected valid token to be valid")
 	}
-	
+
 	// Test CleanExpiredTokens
 	cleaned, err := db.CleanExpiredTokens(ctx)
 	if err != nil {
@@ -322,7 +322,7 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 	if cleaned != 1 {
 		t.Fatalf("Expected 1 expired token to be cleaned, got %d", cleaned)
 	}
-	
+
 	// Verify expired token was cleaned
 	_, err = db.GetTokenByID(ctx, expiredToken.Token)
 	if err != ErrTokenNotFound {
