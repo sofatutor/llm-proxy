@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 )
@@ -76,12 +77,16 @@ func (d *DB) GetStats(ctx context.Context) (map[string]interface{}, error) {
 	stats["expired_token_count"] = expiredTokens
 
 	// Count total request count
-	var totalRequests int64
+	var totalRequests sql.NullInt64
 	err = d.db.QueryRowContext(ctx, "SELECT SUM(request_count) FROM tokens").Scan(&totalRequests)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sum request counts: %w", err)
 	}
-	stats["total_request_count"] = totalRequests
+	if totalRequests.Valid {
+		stats["total_request_count"] = totalRequests.Int64
+	} else {
+		stats["total_request_count"] = int64(0)
+	}
 
 	return stats, nil
 }

@@ -139,6 +139,9 @@ func initDatabase(db *sql.DB) error {
 
 // Transaction executes the given function within a transaction.
 func (d *DB) Transaction(ctx context.Context, fn func(*sql.Tx) error) error {
+	if d == nil || d.db == nil {
+		return fmt.Errorf("database is nil")
+	}
 	tx, err := d.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)

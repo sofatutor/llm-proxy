@@ -158,3 +158,53 @@ func TestIsTokenValid_EdgeCases(t *testing.T) {
 		}
 	}
 }
+
+func TestMaintainDatabase_EmptyDB(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	if err := db.MaintainDatabase(ctx); err != nil {
+		t.Fatalf("MaintainDatabase failed on empty DB: %v", err)
+	}
+}
+
+func TestGetStats_EmptyDB(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	stats, err := db.GetStats(ctx)
+	if err != nil {
+		t.Fatalf("GetStats failed on empty DB: %v", err)
+	}
+	if stats["project_count"].(int) != 0 {
+		t.Errorf("expected 0 projects, got %d", stats["project_count"].(int))
+	}
+	if stats["active_token_count"].(int) != 0 {
+		t.Errorf("expected 0 active tokens, got %d", stats["active_token_count"].(int))
+	}
+	if stats["expired_token_count"].(int) != 0 {
+		t.Errorf("expected 0 expired tokens, got %d", stats["expired_token_count"].(int))
+	}
+	if stats["total_request_count"].(int64) != 0 {
+		t.Errorf("expected 0 total requests, got %d", stats["total_request_count"].(int64))
+	}
+}
+
+func TestMaintainDatabase_ClosedDB(t *testing.T) {
+	db, cleanup := testDB(t)
+	cleanup()
+	ctx := context.Background()
+	if err := db.MaintainDatabase(ctx); err == nil {
+		t.Error("expected error for MaintainDatabase on closed DB")
+	}
+}
+
+func TestIsTokenValid_ClosedDB(t *testing.T) {
+	db, cleanup := testDB(t)
+	cleanup()
+	ctx := context.Background()
+	_, err := db.IsTokenValid(ctx, "x")
+	if err == nil {
+		t.Error("expected error for IsTokenValid on closed DB")
+	}
+}

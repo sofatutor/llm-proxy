@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -327,5 +328,108 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 	_, err = db.GetTokenByID(ctx, expiredToken.Token)
 	if err != ErrTokenNotFound {
 		t.Fatalf("Expected ErrTokenNotFound for cleaned token, got %v", err)
+	}
+}
+
+func TestGetTokenByID_NotFound(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	_, err := db.GetTokenByID(ctx, "does-not-exist")
+	if err != ErrTokenNotFound {
+		t.Errorf("expected ErrTokenNotFound, got %v", err)
+	}
+}
+
+func TestListTokens_Multiple(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	project := Project{ID: "p", Name: "P", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	_ = db.CreateProject(ctx, project)
+	for i := 0; i < 5; i++ {
+		tk := Token{
+			Token:     "tk-" + strconv.Itoa(i),
+			ProjectID: project.ID,
+			IsActive:  true,
+			CreatedAt: time.Now(),
+		}
+		if err := db.CreateToken(ctx, tk); err != nil {
+			t.Fatalf("Failed to create token: %v", err)
+		}
+	}
+	tokens, err := db.ListTokens(ctx)
+	if err != nil {
+		t.Fatalf("ListTokens failed: %v", err)
+	}
+	if len(tokens) != 5 {
+		t.Errorf("expected 5 tokens, got %d", len(tokens))
+	}
+}
+
+func TestUpdateToken_InvalidInput(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	tk := Token{Token: "", ProjectID: "", IsActive: true, CreatedAt: time.Now()}
+	if err := db.UpdateToken(ctx, tk); err == nil {
+		t.Error("expected error for empty token in UpdateToken")
+	}
+}
+
+func TestDeleteToken_InvalidInput(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	if err := db.DeleteToken(ctx, ""); err == nil {
+		t.Error("expected error for empty token in DeleteToken")
+	}
+}
+
+func TestListTokens_Empty(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	tokens, err := db.ListTokens(ctx)
+	if err != nil {
+		t.Fatalf("ListTokens failed: %v", err)
+	}
+	if len(tokens) != 0 {
+		t.Errorf("expected 0 tokens, got %d", len(tokens))
+	}
+}
+
+func TestTokenCRUD_ClosedDB(t *testing.T) {
+	db, cleanup := testDB(t)
+	cleanup()
+	ctx := context.Background()
+	tk := Token{Token: "x", ProjectID: "x", IsActive: true, CreatedAt: time.Now()}
+	if err := db.CreateToken(ctx, tk); err == nil {
+		t.Error("expected error for CreateToken on closed DB")
+	}
+	_, err := db.GetTokenByID(ctx, "x")
+	if err == nil {
+		t.Error("expected error for GetTokenByID on closed DB")
+	}
+	if err := db.UpdateToken(ctx, tk); err == nil {
+		t.Error("expected error for UpdateToken on closed DB")
+	}
+	if err := db.DeleteToken(ctx, "x"); err == nil {
+		t.Error("expected error for DeleteToken on closed DB")
+	}
+	_, err = db.ListTokens(ctx)
+	if err == nil {
+		t.Error("expected error for ListTokens on closed DB")
+	}
+	_, err = db.GetTokensByProjectID(ctx, "x")
+	if err == nil {
+		t.Error("expected error for GetTokensByProjectID on closed DB")
+	}
+	if err := db.IncrementTokenUsage(ctx, "x"); err == nil {
+		t.Error("expected error for IncrementTokenUsage on closed DB")
+	}
+	_, err = db.CleanExpiredTokens(ctx)
+	if err == nil {
+		t.Error("expected error for CleanExpiredTokens on closed DB")
 	}
 }

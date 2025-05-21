@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -129,5 +130,125 @@ func TestProjectCRUD(t *testing.T) {
 	err = db.DeleteProject(ctx, "non-existent")
 	if err != ErrProjectNotFound {
 		t.Fatalf("Expected ErrProjectNotFound, got %v", err)
+	}
+}
+
+func TestProjectCRUD_Errors(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	project := Project{
+		ID:           "dup-id",
+		Name:         "Dup Project",
+		OpenAIAPIKey: "key",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	if err := db.CreateProject(ctx, project); err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+	// Duplicate ID
+	dup := project
+	dup.Name = "Other Name"
+	if err := db.CreateProject(ctx, dup); err == nil {
+		t.Error("expected error for duplicate project ID")
+	}
+	// Duplicate Name
+	project2 := Project{
+		ID:           "other-id",
+		Name:         project.Name,
+		OpenAIAPIKey: "key2",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	if err := db.CreateProject(ctx, project2); err == nil {
+		t.Error("expected error for duplicate project Name")
+	}
+	// ListProjects on empty DB
+	db2, cleanup2 := testDB(t)
+	defer cleanup2()
+	projects, err := db2.ListProjects(ctx)
+	if err != nil {
+		t.Fatalf("ListProjects failed: %v", err)
+	}
+	if len(projects) != 0 {
+		t.Errorf("expected 0 projects, got %d", len(projects))
+	}
+	// Update non-existent project
+	p := Project{ID: "nope", Name: "nope", OpenAIAPIKey: "k", UpdatedAt: time.Now()}
+	if err := db.UpdateProject(ctx, p); err != ErrProjectNotFound {
+		t.Errorf("expected ErrProjectNotFound, got %v", err)
+	}
+	// Delete non-existent project
+	if err := db.DeleteProject(ctx, "nope"); err != ErrProjectNotFound {
+		t.Errorf("expected ErrProjectNotFound, got %v", err)
+	}
+}
+
+func TestGetProjectByName_NotFound(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	_, err := db.GetProjectByName(ctx, "does-not-exist")
+	if err != ErrProjectNotFound {
+		t.Errorf("expected ErrProjectNotFound, got %v", err)
+	}
+}
+
+func TestListProjects_Multiple(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	for i := 0; i < 5; i++ {
+		p := Project{
+			ID:           "id-" + strconv.Itoa(i),
+			Name:         "Project-" + strconv.Itoa(i),
+			OpenAIAPIKey: "key",
+			CreatedAt:    time.Now(),
+			UpdatedAt:    time.Now(),
+		}
+		if err := db.CreateProject(ctx, p); err != nil {
+			t.Fatalf("Failed to create project: %v", err)
+		}
+	}
+	projects, err := db.ListProjects(ctx)
+	if err != nil {
+		t.Fatalf("ListProjects failed: %v", err)
+	}
+	if len(projects) != 5 {
+		t.Errorf("expected 5 projects, got %d", len(projects))
+	}
+}
+
+func TestUpdateProject_InvalidInput(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	p := Project{ID: "", Name: "", OpenAIAPIKey: "", UpdatedAt: time.Now()}
+	if err := db.UpdateProject(ctx, p); err == nil {
+		t.Error("expected error for empty ID in UpdateProject")
+	}
+}
+
+func TestDeleteProject_InvalidInput(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	if err := db.DeleteProject(ctx, ""); err == nil {
+		t.Error("expected error for empty ID in DeleteProject")
+	}
+}
+
+func TestListProjects_Empty(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+	projects, err := db.ListProjects(ctx)
+	if err != nil {
+		t.Fatalf("ListProjects failed: %v", err)
+	}
+	if len(projects) != 0 {
+		t.Errorf("expected 0 projects, got %d", len(projects))
 	}
 }
