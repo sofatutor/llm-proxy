@@ -137,11 +137,11 @@ func (p *TransparentProxy) director(req *http.Request) {
 func (p *TransparentProxy) processRequestHeaders(req *http.Request) {
 	// Headers to remove for security/privacy reasons
 	headersToRemove := []string{
-		"X-Forwarded-For",      // We'll set this ourselves if needed
-		"X-Real-IP",            // Remove client IP for privacy
-		"CF-Connecting-IP",     // Cloudflare headers
-		"CF-IPCountry",         // Cloudflare headers
-		"X-Client-IP",          // Other proxies
+		"X-Forwarded-For",          // We'll set this ourselves if needed
+		"X-Real-IP",                // Remove client IP for privacy
+		"CF-Connecting-IP",         // Cloudflare headers
+		"CF-IPCountry",             // Cloudflare headers
+		"X-Client-IP",              // Other proxies
 		"X-Original-Forwarded-For", // Chain of proxies
 	}
 
@@ -233,7 +233,10 @@ func (p *TransparentProxy) extractResponseMetadata(res *http.Response) error {
 	}
 
 	// Replace the body with a new ReadCloser that can be read again
-	res.Body.Close()
+	err = res.Body.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close response body: %w", err)
+	}
 	res.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
 	// Parse the body to extract metadata
@@ -604,23 +607,17 @@ func isStreamingRequest(req *http.Request) bool {
 	if strings.Contains(req.Header.Get("Accept"), "text/event-stream") {
 		return true
 	}
-	
+
 	// Check query parameters for stream=true (common in OpenAI APIs)
 	if req.URL.Query().Get("stream") == "true" {
 		return true
 	}
-	
+
 	// Check the request body for streaming flag
 	// This is a heuristic and may need refinement for specific APIs
-	if req.Body != nil && req.Header.Get("Content-Type") == "application/json" {
-		// Don't read the body directly to avoid consuming it
-		// Just check the Content-Type and method for now
-		if req.Method == "POST" {
-			// For OpenAI, the common pattern is POST with JSON containing "stream": true
-			// But checking this would require reading the body, which we want to avoid
-			// We'll just rely on the Accept header and query params for now
-		}
-	}
-	
+	// For OpenAI, the common pattern is POST with JSON containing "stream": true
+	// But checking this would require reading the body, which we want to avoid
+	// We'll just rely on the Accept header and query params for now
+
 	return false
 }

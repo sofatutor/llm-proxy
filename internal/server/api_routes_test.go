@@ -17,7 +17,11 @@ func TestAPIRoutesInitialization(t *testing.T) {
 	// Create a temporary API config file
 	tmpFile, err := os.CreateTemp("", "api_config_*.yaml")
 	require.NoError(t, err, "Failed to create temp file")
-	defer os.Remove(tmpFile.Name())
+	defer func() {
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			t.Fatalf("failed to remove temp file: %v", err)
+		}
+	}()
 
 	// Write test config
 	testConfig := `
@@ -64,7 +68,11 @@ apis:
 	// Test allowed endpoint
 	respAllowed, err := http.Get(testServer.URL + "/v1/test")
 	require.NoError(t, err, "Failed to make request to allowed endpoint")
-	defer respAllowed.Body.Close()
+	defer func() {
+		if err := respAllowed.Body.Close(); err != nil {
+			t.Fatalf("failed to close respAllowed body: %v", err)
+		}
+	}()
 
 	// Since we're not setting up a complete proxy with mocked token validator,
 	// we expect authentication failures, not 404
@@ -73,18 +81,26 @@ apis:
 	// Test disallowed endpoint
 	respDisallowed, err := http.Get(testServer.URL + "/v1/not_allowed")
 	require.NoError(t, err, "Failed to make request to disallowed endpoint")
-	defer respDisallowed.Body.Close()
+	defer func() {
+		if err := respDisallowed.Body.Close(); err != nil {
+			t.Fatalf("failed to close respDisallowed body: %v", err)
+		}
+	}()
 
 	assert.Equal(t, http.StatusNotFound, respDisallowed.StatusCode, "Expected 404 for disallowed endpoint")
 
 	// Test disallowed method
 	req, err := http.NewRequest("DELETE", testServer.URL+"/v1/test", nil)
 	require.NoError(t, err, "Failed to create DELETE request")
-	
+
 	client := &http.Client{}
 	respMethod, err := client.Do(req)
 	require.NoError(t, err, "Failed to make DELETE request")
-	defer respMethod.Body.Close()
+	defer func() {
+		if err := respMethod.Body.Close(); err != nil {
+			t.Fatalf("failed to close respMethod body: %v", err)
+		}
+	}()
 
 	assert.Equal(t, http.StatusMethodNotAllowed, respMethod.StatusCode, "Expected 405 for disallowed method")
 }
@@ -112,7 +128,11 @@ func TestDefaultOpenAIFallback(t *testing.T) {
 	// Test common OpenAI endpoint
 	respAllowed, err := http.Get(testServer.URL + "/v1/models")
 	require.NoError(t, err, "Failed to make request to OpenAI endpoint")
-	defer respAllowed.Body.Close()
+	defer func() {
+		if err := respAllowed.Body.Close(); err != nil {
+			t.Fatalf("failed to close respAllowed body: %v", err)
+		}
+	}()
 
 	// We expect authentication issues, not 404
 	assert.NotEqual(t, http.StatusNotFound, respAllowed.StatusCode, "Expected OpenAI endpoint to be found")
@@ -120,7 +140,11 @@ func TestDefaultOpenAIFallback(t *testing.T) {
 	// Test disallowed endpoint
 	respDisallowed, err := http.Get(testServer.URL + "/v1/not_an_openai_endpoint")
 	require.NoError(t, err, "Failed to make request to disallowed endpoint")
-	defer respDisallowed.Body.Close()
+	defer func() {
+		if err := respDisallowed.Body.Close(); err != nil {
+			t.Fatalf("failed to close respDisallowed body: %v", err)
+		}
+	}()
 
 	assert.Equal(t, http.StatusNotFound, respDisallowed.StatusCode, "Expected 404 for disallowed endpoint")
 }

@@ -57,8 +57,10 @@ func TestMockProjectStore_ListProjects(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, projects, 0)
 	// Add projects
-	store.CreateProject(ctx, Project{ID: "p1", Name: "A", OpenAIAPIKey: "k1"})
-	store.CreateProject(ctx, Project{ID: "p2", Name: "B", OpenAIAPIKey: "k2"})
+	err = store.CreateProject(ctx, Project{ID: "p1", Name: "A", OpenAIAPIKey: "k1"})
+	assert.NoError(t, err)
+	err = store.CreateProject(ctx, Project{ID: "p2", Name: "B", OpenAIAPIKey: "k2"})
+	assert.NoError(t, err)
 	projects, err = store.ListProjects(ctx)
 	assert.NoError(t, err)
 	assert.Len(t, projects, 2)
@@ -84,7 +86,8 @@ func TestMockProjectStore_CreateMockProject(t *testing.T) {
 func TestMockProjectStore_GetAPIKeyForProject(t *testing.T) {
 	store := NewMockProjectStore()
 	ctx := context.Background()
-	store.CreateProject(ctx, Project{ID: "p1", Name: "N", OpenAIAPIKey: "k1"})
+	err := store.CreateProject(ctx, Project{ID: "p1", Name: "N", OpenAIAPIKey: "k1"})
+	assert.NoError(t, err)
 	key, err := store.GetAPIKeyForProject(ctx, "p1")
 	assert.NoError(t, err)
 	assert.Equal(t, "k1", key)
