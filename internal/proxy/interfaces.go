@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 )
@@ -61,6 +62,20 @@ type ProxyConfig struct {
 
 	// LogLevel controls the verbosity of logging
 	LogLevel string
+}
+
+// Validate checks that the ProxyConfig is valid and returns an error if not.
+func (c *ProxyConfig) Validate() error {
+	if c.TargetBaseURL == "" {
+		return errors.New("TargetBaseURL must not be empty")
+	}
+	if len(c.AllowedMethods) == 0 {
+		return errors.New("AllowedMethods must not be empty")
+	}
+	if len(c.AllowedEndpoints) == 0 {
+		return errors.New("AllowedEndpoints must not be empty")
+	}
+	return nil
 }
 
 // ErrorResponse is the standard format for error responses
