@@ -253,20 +253,17 @@ func (cv *CachedValidator) invalidateCache(tokenID string) {
 
 // evictOldest removes the single oldest entry from the cache
 func (cv *CachedValidator) evictOldest() {
-	cacheSizeBefore := len(cv.cache)
 	if cv.heap.Len() == 0 {
-		log.Printf("[DEBUG] Heap is empty, cannot evict more.")
 		return
 	}
 	entry := heap.Pop(&cv.heap).(*cacheEntry)
-	log.Printf("[DEBUG] Evicting tokenID=%s (insertedAt=%d)", entry.tokenID, entry.insertedAt)
-	delete(cv.cache, entry.tokenID)
+	// Remove from heapIndex
 	delete(cv.heapIndex, entry.tokenID)
+	// Remove from cache
+	delete(cv.cache, entry.tokenID)
 	cv.statsMutex.Lock()
 	cv.evictions++
 	cv.statsMutex.Unlock()
-	cacheSizeAfter := len(cv.cache)
-	log.Printf("[DEBUG] Cache size after eviction: %d (before: %d)", cacheSizeAfter, cacheSizeBefore)
 }
 
 // startCleanup periodically cleans up expired entries from the cache
