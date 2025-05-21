@@ -19,7 +19,7 @@ var (
 type TokenValidator interface {
 	// ValidateToken validates a token and returns the associated project ID
 	ValidateToken(ctx context.Context, token string) (string, error)
-	
+
 	// ValidateTokenWithTracking validates a token, returns the project ID, and tracks usage
 	ValidateTokenWithTracking(ctx context.Context, token string) (string, error)
 }
@@ -28,7 +28,7 @@ type TokenValidator interface {
 type TokenStore interface {
 	// GetTokenByID retrieves a token by its ID
 	GetTokenByID(ctx context.Context, tokenID string) (TokenData, error)
-	
+
 	// IncrementTokenUsage increments the usage count for a token
 	IncrementTokenUsage(ctx context.Context, tokenID string) error
 }

@@ -73,12 +73,12 @@ func TimeUntilExpiration(expiresAt *time.Time) time.Duration {
 	if expiresAt == nil {
 		return 1<<63 - 1 // Max duration, practically "never"
 	}
-	
-	until := expiresAt.Sub(time.Now())
+
+	until := time.Until(*expiresAt)
 	if until < 0 {
 		return 0 // Already expired
 	}
-	
+
 	return until
 }
 
@@ -88,8 +88,8 @@ func ExpiresWithin(expiresAt *time.Time, duration time.Duration) bool {
 	if expiresAt == nil {
 		return false // No expiration
 	}
-	
-	expiresIn := expiresAt.Sub(time.Now())
+
+	expiresIn := time.Until(*expiresAt)
 	return expiresIn >= 0 && expiresIn <= duration
 }
 
@@ -99,10 +99,10 @@ func FormatExpirationTime(expiresAt *time.Time) string {
 	if expiresAt == nil {
 		return "Never expires"
 	}
-	
+
 	if expiresAt.Before(time.Now()) {
 		return "Expired"
 	}
-	
+
 	return expiresAt.Format(time.RFC3339)
 }

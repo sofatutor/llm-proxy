@@ -9,12 +9,12 @@ import (
 
 // Manager provides a unified interface for all token operations
 type Manager struct {
-	validator   TokenValidator
-	revoker     *Revoker
-	limiter     *StandardRateLimiter
-	generator   *TokenGenerator
-	store       interface{} // Underlying store (should implement multiple store interfaces)
-	useCaching  bool
+	validator  TokenValidator
+	revoker    *Revoker
+	limiter    *StandardRateLimiter
+	generator  *TokenGenerator
+	store      interface{} // Underlying store (should implement multiple store interfaces)
+	useCaching bool
 }
 
 // NewManager creates a new token manager with the given store
@@ -42,7 +42,7 @@ func NewManager(store interface{}, useCaching bool) (*Manager, error) {
 	return &Manager{
 		validator:  validator,
 		revoker:    revoker,
-		limiter:    limiter, 
+		limiter:    limiter,
 		generator:  generator,
 		store:      store,
 		useCaching: useCaching,
@@ -71,7 +71,7 @@ func (m *Manager) CreateToken(ctx context.Context, projectID string, options Tok
 
 	// For now, we'll add the token directly to the mock store in tests
 	// In real implementation, this would call a store method
-	
+
 	// Example implementation for testing only:
 	if mockStore, ok := m.store.(interface {
 		AddToken(tokenID string, data TokenData)
@@ -165,13 +165,13 @@ func (m *Manager) GetTokenStats(ctx context.Context, tokenID string) (*TokenStat
 	}
 
 	stats := &TokenStats{
-		Token:            tokenData.Token,
-		RequestCount:     tokenData.RequestCount,
-		RemainingCount:   remaining,
-		LastUsed:         tokenData.LastUsedAt,
-		TimeRemaining:    timeRemaining,
-		IsValid:          tokenData.IsValid(),
-		ObfuscatedToken:  ObfuscateToken(tokenData.Token),
+		Token:           tokenData.Token,
+		RequestCount:    tokenData.RequestCount,
+		RemainingCount:  remaining,
+		LastUsed:        tokenData.LastUsedAt,
+		TimeRemaining:   timeRemaining,
+		IsValid:         tokenData.IsValid(),
+		ObfuscatedToken: ObfuscateToken(tokenData.Token),
 	}
 
 	return stats, nil
@@ -227,10 +227,10 @@ func (m *Manager) WithGeneratorOptions(expiration time.Duration, maxRequests *in
 type TokenOptions struct {
 	// Expiration duration (0 for no expiration)
 	Expiration time.Duration
-	
+
 	// Maximum requests (nil for no limit)
 	MaxRequests *int
-	
+
 	// Custom metadata (implementation-dependent)
 	Metadata map[string]string
 }

@@ -53,7 +53,7 @@ func TestValidateTokenFormat(t *testing.T) {
 		{
 			name:    "Valid token format",
 			token:   "tkn_dGhpcyBpcyBhIHZhbGlkIHRva2Vu", // "this is a valid token" encoded
-			wantErr: true, // Will fail decode step
+			wantErr: true,                               // Will fail decode step
 		},
 		{
 			name:    "Invalid prefix",
@@ -182,7 +182,7 @@ func TestGetTokenCreationTime(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetTokenCreationTime() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			
+
 			// Note: We can't easily test the actual time value since it's based on the
 			// internal structure of UUIDv7, but we can verify that the function doesn't
 			// error for valid tokens.

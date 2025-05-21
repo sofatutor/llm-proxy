@@ -44,13 +44,13 @@ func GenerateToken() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal UUID: %w", err)
 	}
-	
+
 	// Use URL-safe base64 encoding without padding
 	encoded := base64.RawURLEncoding.EncodeToString(uuidBytes)
-	
+
 	// Combine prefix with encoded UUID
 	token := TokenPrefix + encoded
-	
+
 	return token, nil
 }
 
@@ -61,13 +61,13 @@ func ValidateTokenFormat(token string) error {
 	if !TokenRegex.MatchString(token) {
 		return ErrInvalidTokenFormat
 	}
-	
+
 	// Attempt to decode the token to ensure it was properly generated
 	_, err := DecodeToken(token)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrTokenDecodingFailed, err)
 	}
-	
+
 	return nil
 }
 
@@ -77,22 +77,22 @@ func DecodeToken(token string) (uuid.UUID, error) {
 	if !strings.HasPrefix(token, TokenPrefix) {
 		return uuid.UUID{}, ErrInvalidTokenFormat
 	}
-	
+
 	// Remove the prefix
 	encodedPart := strings.TrimPrefix(token, TokenPrefix)
-	
+
 	// Decode from base64
 	uuidBytes, err := base64.RawURLEncoding.DecodeString(encodedPart)
 	if err != nil {
 		return uuid.UUID{}, fmt.Errorf("failed to decode token: %w", err)
 	}
-	
+
 	// Parse the UUID
 	var id uuid.UUID
 	if err := id.UnmarshalBinary(uuidBytes); err != nil {
 		return uuid.UUID{}, fmt.Errorf("failed to unmarshal UUID: %w", err)
 	}
-	
+
 	return id, nil
 }
 
@@ -103,7 +103,7 @@ func GetTokenCreationTime(token string) (time.Time, error) {
 	if err != nil {
 		return time.Time{}, err
 	}
-	
+
 	// UUIDv7 stores a timestamp in the first 48 bits
 	// This is an approximation - limited by what google/uuid exposes
 	// For v7 UUIDs, we can't directly extract the timestamp yet with google/uuid

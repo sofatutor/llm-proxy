@@ -10,32 +10,32 @@ import (
 func TestTokenGenerator(t *testing.T) {
 	// Create a token generator
 	generator := NewTokenGenerator()
-	
+
 	// Test generating a token with default options
 	token, err := generator.Generate()
 	if err != nil {
 		t.Fatalf("Failed to generate token: %v", err)
 	}
-	
+
 	// Check that the token format is valid
 	if err := ValidateTokenFormat(token); err != nil {
 		t.Errorf("Generated token has invalid format: %v", err)
 	}
-	
+
 	// Test generating a token with custom expiration
 	customExpiration := 1 * time.Hour
 	customGenerator := generator.WithExpiration(customExpiration)
-	
-	token, expiresAt, maxRequests, err := customGenerator.GenerateWithOptions(0, nil)
+
+	token2, expiresAt, maxRequests, err := customGenerator.GenerateWithOptions(0, nil)
 	if err != nil {
 		t.Fatalf("Failed to generate token with options: %v", err)
 	}
-	
+
 	// Check that the token format is valid
-	if err := ValidateTokenFormat(token); err != nil {
+	if err := ValidateTokenFormat(token2); err != nil {
 		t.Errorf("Generated token has invalid format: %v", err)
 	}
-	
+
 	// Check that the expiration time is set correctly
 	if expiresAt == nil {
 		t.Errorf("Expected expiration time, got nil")
@@ -43,25 +43,25 @@ func TestTokenGenerator(t *testing.T) {
 		expectedExpiry := time.Now().Add(customExpiration)
 		timeDiff := expectedExpiry.Sub(*expiresAt)
 		if timeDiff < -1*time.Second || timeDiff > 1*time.Second {
-			t.Errorf("Expiration time is not close to expected: got %v, want %v (diff: %v)", 
+			t.Errorf("Expiration time is not close to expected: got %v, want %v (diff: %v)",
 				*expiresAt, expectedExpiry, timeDiff)
 		}
 	}
-	
+
 	// Check that the max requests is still nil (unlimited)
 	if maxRequests != nil {
 		t.Errorf("Expected nil max requests, got %v", *maxRequests)
 	}
-	
+
 	// Test with custom max requests
 	maxReq := 100
 	customGenerator = generator.WithMaxRequests(maxReq)
-	
-	token, expiresAt, maxRequests, err = customGenerator.GenerateWithOptions(0, nil)
+
+	_, _, maxRequests, err = customGenerator.GenerateWithOptions(0, nil)
 	if err != nil {
 		t.Fatalf("Failed to generate token with options: %v", err)
 	}
-	
+
 	// Check that the max requests is set correctly
 	if maxRequests == nil {
 		t.Errorf("Expected max requests to be set, got nil")
@@ -71,6 +71,7 @@ func TestTokenGenerator(t *testing.T) {
 }
 
 func TestExtractTokenFromHeader(t *testing.T) {
+	validToken, _ := GenerateToken()
 	tests := []struct {
 		name        string
 		header      string
@@ -79,8 +80,8 @@ func TestExtractTokenFromHeader(t *testing.T) {
 	}{
 		{
 			name:        "Valid Bearer token",
-			header:      "Bearer tkn_validtoken12345678901",
-			wantToken:   "tkn_validtoken12345678901",
+			header:      "Bearer " + validToken,
+			wantToken:   validToken,
 			wantSuccess: true,
 		},
 		{
@@ -91,7 +92,7 @@ func TestExtractTokenFromHeader(t *testing.T) {
 		},
 		{
 			name:        "Missing Bearer prefix",
-			header:      "tkn_validtoken12345678901",
+			header:      validToken,
 			wantToken:   "",
 			wantSuccess: false,
 		},
@@ -114,7 +115,7 @@ func TestExtractTokenFromHeader(t *testing.T) {
 			wantSuccess: false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotToken, gotSuccess := ExtractTokenFromHeader(tt.header)
@@ -134,25 +135,25 @@ func TestExtractTokenFromRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to generate token: %v", err)
 	}
-	
+
 	// Create test request with Authorization header
 	authHeaderReq, _ := http.NewRequest("GET", "https://example.com", nil)
 	authHeaderReq.Header.Set("Authorization", "Bearer "+token)
-	
+
 	// Create test request with X-API-Key header
 	apiKeyReq, _ := http.NewRequest("GET", "https://example.com", nil)
 	apiKeyReq.Header.Set("X-API-Key", token)
-	
+
 	// Create test request with query parameter
 	queryParamReq, _ := http.NewRequest("GET", "https://example.com?token="+token, nil)
-	
+
 	// Create test request with no token
 	noTokenReq, _ := http.NewRequest("GET", "https://example.com", nil)
-	
+
 	// Create test request with invalid token
 	invalidTokenReq, _ := http.NewRequest("GET", "https://example.com", nil)
 	invalidTokenReq.Header.Set("Authorization", "Bearer invalidtoken")
-	
+
 	tests := []struct {
 		name        string
 		request     *http.Request
@@ -190,7 +191,7 @@ func TestExtractTokenFromRequest(t *testing.T) {
 			wantSuccess: false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotToken, gotSuccess := ExtractTokenFromRequest(tt.request)
@@ -206,10 +207,10 @@ func TestExtractTokenFromRequest(t *testing.T) {
 
 func TestGenerateRandomKey(t *testing.T) {
 	tests := []struct {
-		name        string
-		length      int
-		wantMinLen  int
-		wantErr     bool
+		name       string
+		length     int
+		wantMinLen int
+		wantErr    bool
 	}{
 		{
 			name:       "Standard length",
@@ -236,7 +237,7 @@ func TestGenerateRandomKey(t *testing.T) {
 			wantErr:    false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := GenerateRandomKey(tt.length)
@@ -244,11 +245,11 @@ func TestGenerateRandomKey(t *testing.T) {
 				t.Errorf("GenerateRandomKey() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			
+
 			if len(got) < tt.wantMinLen {
 				t.Errorf("GenerateRandomKey() returned key length %v, want at least %v", len(got), tt.wantMinLen)
 			}
-			
+
 			// Check that the key only contains expected characters
 			validChars := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 			for _, c := range got {
@@ -261,38 +262,21 @@ func TestGenerateRandomKey(t *testing.T) {
 }
 
 func TestTruncateToken(t *testing.T) {
+	validToken, _ := GenerateToken()
+	showChars := 4
+	shortToken := validToken[:showChars*2]
+	longExpected := validToken[:showChars] + "..." + validToken[len(validToken)-showChars:]
 	tests := []struct {
 		name      string
 		token     string
 		showChars int
 		want      string
 	}{
-		{
-			name:      "Short token (no truncation)",
-			token:     "tkn_short",
-			showChars: 4,
-			want:      "tkn_short",
-		},
-		{
-			name:      "Long token",
-			token:     "tkn_thisislongerthanshowchars",
-			showChars: 5,
-			want:      "tkn_t...chars",
-		},
-		{
-			name:      "Empty token",
-			token:     "",
-			showChars: 4,
-			want:      "",
-		},
-		{
-			name:      "Zero show chars",
-			token:     "tkn_token",
-			showChars: 0,
-			want:      "tkn_token", // No truncation because showChars*2 is zero
-		},
+		{"Short token (no truncation)", shortToken, showChars, shortToken},
+		{"Long token", validToken, showChars, longExpected},
+		{"Empty token", "", showChars, ""},
+		{"Zero show chars", validToken, 0, "..."},
 	}
-	
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := TruncateToken(tt.token, tt.showChars)
@@ -330,7 +314,7 @@ func TestObfuscateToken(t *testing.T) {
 			want:  "",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := ObfuscateToken(tt.token)
@@ -347,18 +331,18 @@ func TestGetTokenInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to generate token: %v", err)
 	}
-	
+
 	now := time.Now()
 	future := now.Add(1 * time.Hour)
 	past := now.Add(-1 * time.Hour)
 	lastUsed := now.Add(-30 * time.Minute)
-	
+
 	maxReq := 100
-	
+
 	tests := []struct {
-		name       string
-		tokenData  TokenData
-		wantValid  bool
+		name      string
+		tokenData TokenData
+		wantValid bool
 	}{
 		{
 			name: "Valid active token",
@@ -459,23 +443,23 @@ func TestGetTokenInfo(t *testing.T) {
 			wantValid: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			info, err := GetTokenInfo(tt.tokenData)
 			if err != nil {
 				t.Fatalf("GetTokenInfo() error = %v", err)
 			}
-			
+
 			if info.IsValid != tt.wantValid {
 				t.Errorf("GetTokenInfo().IsValid = %v, want %v", info.IsValid, tt.wantValid)
 			}
-			
+
 			// Check that the obfuscated token is different from the original
 			if info.Token == info.ObfuscatedToken && len(info.Token) > 12 {
 				t.Errorf("GetTokenInfo() did not obfuscate the token")
 			}
-			
+
 			// Check time remaining for tokens with expiration
 			if tt.tokenData.ExpiresAt != nil && !IsExpired(tt.tokenData.ExpiresAt) {
 				if info.TimeRemaining == "" {
@@ -492,12 +476,12 @@ func TestFormatTokenInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to generate token: %v", err)
 	}
-	
+
 	now := time.Now()
 	future := now.Add(1 * time.Hour)
 	lastUsed := now.Add(-30 * time.Minute)
 	maxReq := 100
-	
+
 	// Create a token data
 	tokenData := TokenData{
 		Token:        token,
@@ -509,27 +493,27 @@ func TestFormatTokenInfo(t *testing.T) {
 		CreatedAt:    now,
 		LastUsedAt:   &lastUsed,
 	}
-	
+
 	// Format the token info
 	formatted := FormatTokenInfo(tokenData)
-	
+
 	// Check that the formatted string contains all the expected information
 	expectedParts := []string{
-		"Token:", 
-		"Created:", 
-		"Expires:", 
-		"Active: true", 
-		"Requests: 50 / 100", 
-		"Last Used:", 
+		"Token:",
+		"Created:",
+		"Expires:",
+		"Active: true",
+		"Requests: 50 / 100",
+		"Last Used:",
 		"Valid: true",
 	}
-	
+
 	for _, part := range expectedParts {
 		if !strings.Contains(formatted, part) {
 			t.Errorf("FormatTokenInfo() does not contain expected part: %s", part)
 		}
 	}
-	
+
 	// Test with different token to make sure each field is formatted correctly
 	noExpiry := TokenData{
 		Token:        token,
@@ -541,9 +525,9 @@ func TestFormatTokenInfo(t *testing.T) {
 		CreatedAt:    now,
 		LastUsedAt:   nil,
 	}
-	
+
 	formatted = FormatTokenInfo(noExpiry)
-	
+
 	// Check specific parts for the no-expiry token
 	expectedParts = []string{
 		"Expires: Never",
@@ -552,10 +536,32 @@ func TestFormatTokenInfo(t *testing.T) {
 		"Last Used: Never",
 		"Valid: false",
 	}
-	
+
 	for _, part := range expectedParts {
 		if !strings.Contains(formatted, part) {
 			t.Errorf("FormatTokenInfo() does not contain expected part: %s", part)
 		}
+	}
+}
+
+func TestFormatDuration(t *testing.T) {
+	tests := []struct {
+		dur      time.Duration
+		expected string
+	}{
+		{30 * time.Second, "30 seconds"},
+		{90 * time.Second, "1 minutes"},
+		{2 * time.Hour, "2 hours"},
+		{48 * time.Hour, "2 days"},
+		{40 * 24 * time.Hour, "1 months"},
+		{400 * 24 * time.Hour, "1 years"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			got := formatDuration(tt.dur)
+			if got != tt.expected {
+				t.Errorf("formatDuration(%v) = %q, want %q", tt.dur, got, tt.expected)
+			}
+		})
 	}
 }

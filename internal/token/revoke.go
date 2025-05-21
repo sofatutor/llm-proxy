@@ -16,16 +16,16 @@ var (
 type RevocationStore interface {
 	// RevokeToken disables a token by setting is_active to false
 	RevokeToken(ctx context.Context, tokenID string) error
-	
+
 	// DeleteToken completely removes a token from storage
 	DeleteToken(ctx context.Context, tokenID string) error
-	
+
 	// RevokeBatchTokens revokes multiple tokens at once
 	RevokeBatchTokens(ctx context.Context, tokenIDs []string) (int, error)
-	
+
 	// RevokeProjectTokens revokes all tokens for a project
 	RevokeProjectTokens(ctx context.Context, projectID string) (int, error)
-	
+
 	// RevokeExpiredTokens revokes all tokens that have expired
 	RevokeExpiredTokens(ctx context.Context) (int, error)
 }
@@ -48,7 +48,7 @@ func (r *Revoker) RevokeToken(ctx context.Context, tokenID string) error {
 	if err := ValidateTokenFormat(tokenID); err != nil {
 		return fmt.Errorf("invalid token format: %w", err)
 	}
-	
+
 	// Attempt to revoke the token
 	err := r.store.RevokeToken(ctx, tokenID)
 	if err != nil {
@@ -60,7 +60,7 @@ func (r *Revoker) RevokeToken(ctx context.Context, tokenID string) error {
 		}
 		return fmt.Errorf("failed to revoke token: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -70,7 +70,7 @@ func (r *Revoker) DeleteToken(ctx context.Context, tokenID string) error {
 	if err := ValidateTokenFormat(tokenID); err != nil {
 		return fmt.Errorf("invalid token format: %w", err)
 	}
-	
+
 	// Attempt to delete the token
 	err := r.store.DeleteToken(ctx, tokenID)
 	if err != nil {
@@ -79,7 +79,7 @@ func (r *Revoker) DeleteToken(ctx context.Context, tokenID string) error {
 		}
 		return fmt.Errorf("failed to delete token: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -88,20 +88,20 @@ func (r *Revoker) RevokeBatchTokens(ctx context.Context, tokenIDs []string) (int
 	if len(tokenIDs) == 0 {
 		return 0, nil
 	}
-	
+
 	// Validate all token formats first
 	for _, tokenID := range tokenIDs {
 		if err := ValidateTokenFormat(tokenID); err != nil {
 			return 0, fmt.Errorf("invalid token format for %s: %w", tokenID, err)
 		}
 	}
-	
+
 	// Revoke the tokens
 	count, err := r.store.RevokeBatchTokens(ctx, tokenIDs)
 	if err != nil {
 		return 0, fmt.Errorf("failed to revoke tokens in batch: %w", err)
 	}
-	
+
 	return count, nil
 }
 
@@ -110,12 +110,12 @@ func (r *Revoker) RevokeProjectTokens(ctx context.Context, projectID string) (in
 	if projectID == "" {
 		return 0, errors.New("project ID cannot be empty")
 	}
-	
+
 	count, err := r.store.RevokeProjectTokens(ctx, projectID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to revoke project tokens: %w", err)
 	}
-	
+
 	return count, nil
 }
 
@@ -125,7 +125,7 @@ func (r *Revoker) RevokeExpiredTokens(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to revoke expired tokens: %w", err)
 	}
-	
+
 	return count, nil
 }
 
@@ -153,7 +153,7 @@ func (a *AutomaticRevocation) Start() {
 		ticker := time.NewTicker(a.interval)
 		defer ticker.Stop()
 		defer close(a.stoppedChan)
-		
+
 		for {
 			select {
 			case <-ticker.C:

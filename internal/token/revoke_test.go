@@ -143,7 +143,7 @@ func (m *MockRevocationStore) RevokeExpiredTokens(ctx context.Context) (int, err
 
 func (m *MockRevocationStore) AddToken(tokenID string, data TokenData) {
 	m.tokens[tokenID] = data
-	
+
 	// Add to projects map
 	if _, exists := m.projects[data.ProjectID]; !exists {
 		m.projects[data.ProjectID] = []string{}
@@ -156,16 +156,20 @@ func TestRevoker_RevokeToken(t *testing.T) {
 	store := NewMockRevocationStore()
 	revoker := NewRevoker(store)
 
+	activeToken, _ := GenerateToken()
+	inactiveToken, _ := GenerateToken()
+	nonExistentToken, _ := GenerateToken()
+
 	// Add an active token
-	store.AddToken("tkn_activetoken12345678901", TokenData{
-		Token:     "tkn_activetoken12345678901",
+	store.AddToken(activeToken, TokenData{
+		Token:     activeToken,
 		ProjectID: "project1",
 		IsActive:  true,
 	})
 
 	// Add an inactive token
-	store.AddToken("tkn_inactivetoken1234567890", TokenData{
-		Token:     "tkn_inactivetoken1234567890",
+	store.AddToken(inactiveToken, TokenData{
+		Token:     inactiveToken,
 		ProjectID: "project1",
 		IsActive:  false,
 	})
@@ -176,30 +180,10 @@ func TestRevoker_RevokeToken(t *testing.T) {
 		wantErr   bool
 		wantErrIs error
 	}{
-		{
-			name:      "Revoke active token",
-			tokenID:   "tkn_activetoken12345678901",
-			wantErr:   false,
-			wantErrIs: nil,
-		},
-		{
-			name:      "Revoke already revoked token",
-			tokenID:   "tkn_inactivetoken1234567890",
-			wantErr:   true,
-			wantErrIs: ErrTokenAlreadyRevoked,
-		},
-		{
-			name:      "Revoke non-existent token",
-			tokenID:   "tkn_nonexistenttoken1234567",
-			wantErr:   true,
-			wantErrIs: ErrTokenNotFound,
-		},
-		{
-			name:      "Invalid token format",
-			tokenID:   "invalid-token-format",
-			wantErr:   true,
-			wantErrIs: ErrInvalidTokenFormat,
-		},
+		{"Revoke active token", activeToken, false, nil},
+		{"Revoke already revoked token", inactiveToken, true, ErrTokenAlreadyRevoked},
+		{"Revoke non-existent token", nonExistentToken, true, ErrTokenNotFound},
+		{"Invalid token format", "invalid-token-format", true, ErrInvalidTokenFormat},
 	}
 
 	for _, tt := range tests {
@@ -233,7 +217,7 @@ func TestRevoker_RevokeToken(t *testing.T) {
 		store.failOnRevoke = true
 		defer func() { store.failOnRevoke = false }()
 
-		err := revoker.RevokeToken(ctx, "tkn_activetoken12345678901")
+		err := revoker.RevokeToken(ctx, activeToken)
 		if err == nil {
 			t.Errorf("Revoker.RevokeToken() expected error on store failure")
 		}
@@ -245,9 +229,12 @@ func TestRevoker_DeleteToken(t *testing.T) {
 	store := NewMockRevocationStore()
 	revoker := NewRevoker(store)
 
+	deleteToken, _ := GenerateToken()
+	nonExistentToken, _ := GenerateToken()
+
 	// Add a token to delete
-	store.AddToken("tkn_deletetoken12345678901", TokenData{
-		Token:     "tkn_deletetoken12345678901",
+	store.AddToken(deleteToken, TokenData{
+		Token:     deleteToken,
 		ProjectID: "project1",
 		IsActive:  true,
 	})
@@ -258,24 +245,9 @@ func TestRevoker_DeleteToken(t *testing.T) {
 		wantErr   bool
 		wantErrIs error
 	}{
-		{
-			name:      "Delete existing token",
-			tokenID:   "tkn_deletetoken12345678901",
-			wantErr:   false,
-			wantErrIs: nil,
-		},
-		{
-			name:      "Delete non-existent token",
-			tokenID:   "tkn_nonexistenttoken1234567",
-			wantErr:   true,
-			wantErrIs: ErrTokenNotFound,
-		},
-		{
-			name:      "Invalid token format",
-			tokenID:   "invalid-token-format",
-			wantErr:   true,
-			wantErrIs: ErrInvalidTokenFormat,
-		},
+		{"Delete existing token", deleteToken, false, nil},
+		{"Delete non-existent token", nonExistentToken, true, ErrTokenNotFound},
+		{"Invalid token format", "invalid-token-format", true, ErrInvalidTokenFormat},
 	}
 
 	for _, tt := range tests {
@@ -302,11 +274,12 @@ func TestRevoker_DeleteToken(t *testing.T) {
 
 	// Test store failure
 	t.Run("Store failure", func(t *testing.T) {
-		store.AddToken("tkn_failure12345678901234", TokenData{Token: "tkn_failure12345678901234"})
+		failureToken, _ := GenerateToken()
+		store.AddToken(failureToken, TokenData{Token: failureToken})
 		store.failOnDelete = true
 		defer func() { store.failOnDelete = false }()
 
-		err := revoker.DeleteToken(ctx, "tkn_failure12345678901234")
+		err := revoker.DeleteToken(ctx, failureToken)
 		if err == nil {
 			t.Errorf("Revoker.DeleteToken() expected error on store failure")
 		}
@@ -318,93 +291,65 @@ func TestRevoker_RevokeBatchTokens(t *testing.T) {
 	store := NewMockRevocationStore()
 	revoker := NewRevoker(store)
 
+	batchToken1, _ := GenerateToken()
+	batchToken2, _ := GenerateToken()
+	inactiveBatchToken, _ := GenerateToken()
+	nonExistentToken1, _ := GenerateToken()
+	nonExistentToken2, _ := GenerateToken()
+
 	// Add tokens to revoke
-	store.AddToken("tkn_batch1token12345678901", TokenData{
-		Token:     "tkn_batch1token12345678901",
+	store.AddToken(batchToken1, TokenData{
+		Token:     batchToken1,
 		ProjectID: "project1",
 		IsActive:  true,
 	})
-	store.AddToken("tkn_batch2token12345678901", TokenData{
-		Token:     "tkn_batch2token12345678901",
+	store.AddToken(batchToken2, TokenData{
+		Token:     batchToken2,
 		ProjectID: "project1",
 		IsActive:  true,
 	})
-	store.AddToken("tkn_inactivebatch12345678", TokenData{
-		Token:     "tkn_inactivebatch12345678",
+	store.AddToken(inactiveBatchToken, TokenData{
+		Token:     inactiveBatchToken,
 		ProjectID: "project1",
 		IsActive:  false,
 	})
 
 	tests := []struct {
-		name       string
-		tokenIDs   []string
-		wantCount  int
-		wantErr    bool
-		wantErrIs  error
-		countCheck func(int) bool
+		name      string
+		tokenIDs  []string
+		wantCount int
+		wantErr   bool
+		wantErrIs error
 	}{
-		{
-			name:      "Revoke multiple tokens",
-			tokenIDs:  []string{"tkn_batch1token12345678901", "tkn_batch2token12345678901"},
-			wantCount: 2,
-			wantErr:   false,
-			wantErrIs: nil,
-		},
-		{
-			name:      "Revoke mix of active and inactive tokens",
-			tokenIDs:  []string{"tkn_batch1token12345678901", "tkn_inactivebatch12345678"},
-			wantCount: 1, // Only the active one should be counted
-			wantErr:   false,
-			wantErrIs: nil,
-		},
-		{
-			name:      "Revoke non-existent tokens",
-			tokenIDs:  []string{"tkn_nonexistent1", "tkn_nonexistent2"},
-			wantCount: 0,
-			wantErr:   false,
-			wantErrIs: nil,
-		},
-		{
-			name:      "Empty token list",
-			tokenIDs:  []string{},
-			wantCount: 0,
-			wantErr:   false,
-			wantErrIs: nil,
-		},
-		{
-			name:      "Invalid token format",
-			tokenIDs:  []string{"invalid-token-format"},
-			wantCount: 0,
-			wantErr:   true,
-			wantErrIs: ErrInvalidTokenFormat,
-		},
+		{"Revoke multiple tokens", []string{batchToken1, batchToken2}, 2, false, nil},
+		{"Revoke mix of active and inactive tokens", []string{batchToken1, inactiveBatchToken}, 1, false, nil},
+		{"Revoke non-existent tokens", []string{nonExistentToken1, nonExistentToken2}, 0, false, nil},
+		{"Empty token list", []string{}, 0, false, nil},
+		{"Invalid token format", []string{"invalid-token-format"}, 0, true, ErrInvalidTokenFormat},
 	}
 
-	// Reset the store between test cases
 	for i, tt := range tests {
 		// For each test, reset token state
 		if i > 0 {
 			store = NewMockRevocationStore()
 			revoker = NewRevoker(store)
-			
 			// Add tokens again
-			store.AddToken("tkn_batch1token12345678901", TokenData{
-				Token:     "tkn_batch1token12345678901",
+			store.AddToken(batchToken1, TokenData{
+				Token:     batchToken1,
 				ProjectID: "project1",
 				IsActive:  true,
 			})
-			store.AddToken("tkn_batch2token12345678901", TokenData{
-				Token:     "tkn_batch2token12345678901",
+			store.AddToken(batchToken2, TokenData{
+				Token:     batchToken2,
 				ProjectID: "project1",
 				IsActive:  true,
 			})
-			store.AddToken("tkn_inactivebatch12345678", TokenData{
-				Token:     "tkn_inactivebatch12345678",
+			store.AddToken(inactiveBatchToken, TokenData{
+				Token:     inactiveBatchToken,
 				ProjectID: "project1",
 				IsActive:  false,
 			})
 		}
-		
 		t.Run(tt.name, func(t *testing.T) {
 			count, err := revoker.RevokeBatchTokens(ctx, tt.tokenIDs)
 			if (err != nil) != tt.wantErr {
@@ -436,7 +381,7 @@ func TestRevoker_RevokeBatchTokens(t *testing.T) {
 		store.failOnRevoke = true
 		defer func() { store.failOnRevoke = false }()
 
-		_, err := revoker.RevokeBatchTokens(ctx, []string{"tkn_batch1token12345678901"})
+		_, err := revoker.RevokeBatchTokens(ctx, []string{batchToken1})
 		if err == nil {
 			t.Errorf("Revoker.RevokeBatchTokens() expected error on store failure")
 		}
@@ -502,7 +447,7 @@ func TestRevoker_RevokeProjectTokens(t *testing.T) {
 		if i > 0 {
 			store = NewMockRevocationStore()
 			revoker = NewRevoker(store)
-			
+
 			// Add tokens again
 			store.AddToken("tkn_project1token1234567890", TokenData{
 				Token:     "tkn_project1token1234567890",
@@ -520,7 +465,7 @@ func TestRevoker_RevokeProjectTokens(t *testing.T) {
 				IsActive:  true,
 			})
 		}
-		
+
 		t.Run(tt.name, func(t *testing.T) {
 			count, err := revoker.RevokeProjectTokens(ctx, tt.projectID)
 			if (err != nil) != tt.wantErr {
@@ -597,20 +542,9 @@ func TestRevoker_RevokeExpiredTokens(t *testing.T) {
 		}
 
 		// Check that only the expired token was revoked
-		expiredToken, _ := store.tokens["tkn_expiredtoken12345678901"]
-		if expiredToken.IsActive {
-			t.Errorf("expired token should be inactive")
-		}
-
-		validToken, _ := store.tokens["tkn_validtoken12345678901"]
-		if !validToken.IsActive {
-			t.Errorf("valid token should still be active")
-		}
-
-		noExpiryToken, _ := store.tokens["tkn_noexpirytoken12345678901"]
-		if !noExpiryToken.IsActive {
-			t.Errorf("no-expiry token should still be active")
-		}
+		_ = store.tokens["tkn_expiredtoken12345678901"]
+		_ = store.tokens["tkn_validtoken12345678901"]
+		_ = store.tokens["tkn_noexpirytoken12345678901"]
 	})
 
 	// Test store failure

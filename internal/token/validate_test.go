@@ -74,9 +74,15 @@ func TestTokenDataIsValid(t *testing.T) {
 	now := time.Now()
 	future := now.Add(1 * time.Hour)
 	past := now.Add(-1 * time.Hour)
-	
+
 	requestLimit := 100
-	
+
+	validToken, _ := GenerateToken()
+	inactiveToken, _ := GenerateToken()
+	expiredToken, _ := GenerateToken()
+	ratelimitedToken, _ := GenerateToken()
+	validWithExpiryToken, _ := GenerateToken()
+
 	tests := []struct {
 		name        string
 		token       TokenData
@@ -85,7 +91,7 @@ func TestTokenDataIsValid(t *testing.T) {
 		{
 			name: "Valid active token with no expiration or limits",
 			token: TokenData{
-				Token:        "tkn_validtoken",
+				Token:        validToken,
 				ProjectID:    "project1",
 				IsActive:     true,
 				RequestCount: 0,
@@ -97,7 +103,7 @@ func TestTokenDataIsValid(t *testing.T) {
 		{
 			name: "Inactive token",
 			token: TokenData{
-				Token:        "tkn_inactivetoken",
+				Token:        inactiveToken,
 				ProjectID:    "project1",
 				IsActive:     false,
 				RequestCount: 0,
@@ -107,7 +113,7 @@ func TestTokenDataIsValid(t *testing.T) {
 		{
 			name: "Expired token",
 			token: TokenData{
-				Token:        "tkn_expiredtoken",
+				Token:        expiredToken,
 				ProjectID:    "project1",
 				IsActive:     true,
 				RequestCount: 0,
@@ -118,7 +124,7 @@ func TestTokenDataIsValid(t *testing.T) {
 		{
 			name: "Rate-limited token",
 			token: TokenData{
-				Token:        "tkn_ratelimitedtoken",
+				Token:        ratelimitedToken,
 				ProjectID:    "project1",
 				IsActive:     true,
 				RequestCount: 100,
@@ -129,7 +135,7 @@ func TestTokenDataIsValid(t *testing.T) {
 		{
 			name: "Valid token with future expiration and under limit",
 			token: TokenData{
-				Token:        "tkn_validwithexpiry",
+				Token:        validWithExpiryToken,
 				ProjectID:    "project1",
 				IsActive:     true,
 				RequestCount: 50,
@@ -160,9 +166,14 @@ func TestStandardValidator_ValidateToken(t *testing.T) {
 	past := now.Add(-1 * time.Hour)
 	requestLimit := 100
 
+	validToken, _ := GenerateToken()
+	inactiveToken, _ := GenerateToken()
+	expiredToken, _ := GenerateToken()
+	ratelimitedToken, _ := GenerateToken()
+
 	// Valid token
-	store.AddToken("tkn_validtoken1234567890abc", TokenData{
-		Token:        "tkn_validtoken1234567890abc",
+	store.AddToken(validToken, TokenData{
+		Token:        validToken,
 		ProjectID:    "project1",
 		IsActive:     true,
 		RequestCount: 50,
@@ -172,8 +183,8 @@ func TestStandardValidator_ValidateToken(t *testing.T) {
 	})
 
 	// Inactive token
-	store.AddToken("tkn_inactivetoken12345678901", TokenData{
-		Token:        "tkn_inactivetoken12345678901",
+	store.AddToken(inactiveToken, TokenData{
+		Token:        inactiveToken,
 		ProjectID:    "project2",
 		IsActive:     false,
 		RequestCount: 0,
@@ -181,8 +192,8 @@ func TestStandardValidator_ValidateToken(t *testing.T) {
 	})
 
 	// Expired token
-	store.AddToken("tkn_expiredtoken12345678901", TokenData{
-		Token:        "tkn_expiredtoken12345678901",
+	store.AddToken(expiredToken, TokenData{
+		Token:        expiredToken,
 		ProjectID:    "project3",
 		IsActive:     true,
 		RequestCount: 0,
@@ -191,8 +202,8 @@ func TestStandardValidator_ValidateToken(t *testing.T) {
 	})
 
 	// Rate-limited token
-	store.AddToken("tkn_ratelimitedtoken12345678", TokenData{
-		Token:        "tkn_ratelimitedtoken12345678",
+	store.AddToken(ratelimitedToken, TokenData{
+		Token:        ratelimitedToken,
 		ProjectID:    "project4",
 		IsActive:     true,
 		RequestCount: 100,
@@ -208,25 +219,25 @@ func TestStandardValidator_ValidateToken(t *testing.T) {
 	}{
 		{
 			name:      "Valid token",
-			tokenID:   "tkn_validtoken1234567890abc",
+			tokenID:   validToken,
 			wantErr:   false,
 			wantErrIs: nil,
 		},
 		{
 			name:      "Inactive token",
-			tokenID:   "tkn_inactivetoken12345678901",
+			tokenID:   inactiveToken,
 			wantErr:   true,
 			wantErrIs: ErrTokenInactive,
 		},
 		{
 			name:      "Expired token",
-			tokenID:   "tkn_expiredtoken12345678901",
+			tokenID:   expiredToken,
 			wantErr:   true,
 			wantErrIs: ErrTokenExpired,
 		},
 		{
 			name:      "Rate-limited token",
-			tokenID:   "tkn_ratelimitedtoken12345678",
+			tokenID:   ratelimitedToken,
 			wantErr:   true,
 			wantErrIs: ErrTokenRateLimit,
 		},
@@ -261,7 +272,7 @@ func TestStandardValidator_ValidateToken(t *testing.T) {
 		store.failOnGet = true
 		defer func() { store.failOnGet = false }()
 
-		_, err := validator.ValidateToken(ctx, "tkn_validtoken1234567890abc")
+		_, err := validator.ValidateToken(ctx, validToken)
 		if err == nil {
 			t.Errorf("StandardValidator.ValidateToken() expected error on store failure")
 		}
@@ -272,7 +283,7 @@ func TestStandardValidator_ValidateToken(t *testing.T) {
 		store.tokenExists = false
 		defer func() { store.tokenExists = true }()
 
-		_, err := validator.ValidateToken(ctx, "tkn_validtoken1234567890abc")
+		_, err := validator.ValidateToken(ctx, validToken)
 		if !errors.Is(err, ErrTokenNotFound) {
 			t.Errorf("StandardValidator.ValidateToken() error = %v, want %v", err, ErrTokenNotFound)
 		}
@@ -289,8 +300,9 @@ func TestStandardValidator_ValidateTokenWithTracking(t *testing.T) {
 	future := now.Add(1 * time.Hour)
 	requestLimit := 100
 
-	store.AddToken("tkn_validtoken1234567890abc", TokenData{
-		Token:        "tkn_validtoken1234567890abc",
+	validToken, _ := GenerateToken()
+	store.AddToken(validToken, TokenData{
+		Token:        validToken,
 		ProjectID:    "project1",
 		IsActive:     true,
 		RequestCount: 50,
@@ -301,7 +313,7 @@ func TestStandardValidator_ValidateTokenWithTracking(t *testing.T) {
 
 	// Test successful tracking
 	t.Run("Successful validation with tracking", func(t *testing.T) {
-		projectID, err := validator.ValidateTokenWithTracking(ctx, "tkn_validtoken1234567890abc")
+		projectID, err := validator.ValidateTokenWithTracking(ctx, validToken)
 		if err != nil {
 			t.Errorf("StandardValidator.ValidateTokenWithTracking() error = %v", err)
 			return
@@ -311,8 +323,7 @@ func TestStandardValidator_ValidateTokenWithTracking(t *testing.T) {
 			t.Errorf("StandardValidator.ValidateTokenWithTracking() projectID = %v, want %v", projectID, "project1")
 		}
 
-		// Check that the request count was incremented
-		token, err := store.GetTokenByID(ctx, "tkn_validtoken1234567890abc")
+		token, err := store.GetTokenByID(ctx, validToken)
 		if err != nil {
 			t.Errorf("GetTokenByID() error = %v", err)
 			return
@@ -332,7 +343,7 @@ func TestStandardValidator_ValidateTokenWithTracking(t *testing.T) {
 		store.failOnIncr = true
 		defer func() { store.failOnIncr = false }()
 
-		_, err := validator.ValidateTokenWithTracking(ctx, "tkn_validtoken1234567890abc")
+		_, err := validator.ValidateTokenWithTracking(ctx, validToken)
 		if err == nil {
 			t.Errorf("StandardValidator.ValidateTokenWithTracking() expected error on increment failure")
 		}
@@ -345,4 +356,23 @@ func TestStandardValidator_ValidateTokenWithTracking(t *testing.T) {
 			t.Errorf("StandardValidator.ValidateTokenWithTracking() expected error on validation failure")
 		}
 	})
+}
+
+func TestTokenData_ValidateFormat(t *testing.T) {
+	validToken, _ := GenerateToken()
+	invalidToken := "invalid-token-format"
+
+	tests := []struct {
+		token   TokenData
+		wantErr bool
+	}{
+		{TokenData{Token: validToken}, false},
+		{TokenData{Token: invalidToken}, true},
+	}
+	for _, tt := range tests {
+		err := tt.token.ValidateFormat()
+		if (err != nil) != tt.wantErr {
+			t.Errorf("TokenData.ValidateFormat() error = %v, wantErr %v", err, tt.wantErr)
+		}
+	}
 }
