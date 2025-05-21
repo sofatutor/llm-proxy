@@ -19,185 +19,21 @@ This document provides a detailed sequential implementation checklist for the Tr
 
 ## Outstanding Review Comments
 
-The following review comments from PRs are not yet fully resolved. Each will be addressed in sequence, with status tracked here:
-
-- [x] **Optimize cache eviction with min-heap/priority queue**
-  - The eviction strategy in `CachedValidator.evictOldest` now uses a min-heap for efficient eviction. Verified by new and existing tests.
-  - Thoroughly tested for correctness and efficiency (see `TestCachedValidator_EvictOldest_CorrectnessAndEfficiency`).
-  - 90%+ code coverage confirmed.
-- [x] **Use named constant for max duration**
-  - The literal `1<<63 - 1` in `TimeUntilExpiration` is now replaced with the named constant `MaxDuration`.
-  - All tests pass and coverage is confirmed.
-- [x] **Use composite interface for Manager store**
-  - The Manager now uses a ManagerStore composite interface embedding TokenStore, RevocationStore, and RateLimitStore. All usages and tests updated. Type safety is now enforced by the type system.
-
-> Fully addressed comments (for reference):
-> - [x] Use DB creation time as fallback for token creation time (implemented)
-> - [x] Document UUIDv7 timestamp extraction limitation and future improvements (documented)
+See DONE.md for all completed review comments. Only unresolved or in-progress comments are tracked here.
 
 ## Pull Request Strategy
 
-This project uses a structured PR strategy to maintain code quality and keep implementation manageable:
-
-1. **Test-Driven Development (TDD) Required**: Every PR must begin with failing unit tests for the feature or fix, followed by implementation to make the tests pass.
-2. **Coverage Enforcement**: PRs must not be merged unless 90%+ code coverage is maintained, as verified by CI.
-3. **Small, Focused PRs**: Each PR should address a specific logical component or feature
-4. **Feature Branches**: Use feature branches named according to the phase and component (e.g., `feature/phase-1-directory-structure`)
-5. **Phase Integration Branches**: Optional integration branches (e.g., `phase-1`) can be used to integrate multiple PRs before merging to main
-6. **WIP Updates**: Each PR should update WIP.md to mark completed tasks
-7. **Review Friendly**: Keep PRs small enough for effective code review
-8. **Dependencies**: Consider task dependencies when planning PRs
-
-For each phase, specific PRs are outlined to implement the required functionality in manageable chunks.
+All completed PR strategy tasks have been moved to DONE.md. Only new or in-progress strategy changes will be tracked here.
 
 ## Phase 0: Pre-Development Setup
 
-### GitHub and Project Management
-- [x] Create GitHub repository "llm-proxy"
-- [x] Set up README with project description and goals
-- [x] Choose and add appropriate license (MIT, Apache 2.0, etc.)
-- [x] Configure .gitignore for Go projects and secrets
-- [x] Set up branch protection rules (protect main branch)
-- [~] Create project board for task tracking
-- [x] Set up issue templates for bugs and feature requests
-- [x] Configure GitHub Actions for CI/CD:
-  - Linting workflow
-  - Testing workflow with coverage enforcement
-  - Build workflow
-  - Docker image workflow
-
-### Development Environment
-- [x] Set up Go development environment (Go 1.23+)
-- [x] Install required development tools:
-  - golangci-lint for code quality
-  - godoc for documentation
-  - mockgen for test mocks
-  - swag for API documentation
-- [x] Configure editor/IDE with Go plugins
-- [x] Set up Go development container (optional)
-- [x] Prepare local SQLite environment
-
-### Pull Requests for Phase 0
-
-1. **Initial Repository Setup** (`main`)
-   - Create GitHub repository "llm-proxy"
-   - Set up README with project description and goals
-   - Choose and add appropriate license
-   - Configure .gitignore for Go projects and secrets
-
-2. **GitHub Configuration** (`feature/phase-0-github-config`)
-   - Set up branch protection rules
-   - Create project board for task tracking
-   - Set up issue templates
-   - Configure GitHub Actions for CI/CD
+**Abstract:**
+Initial repository setup, GitHub configuration, development environment, and CI/CD were fully established. See DONE.md for all completed setup and project management tasks.
 
 ## Phase 1: Project Setup
 
-### Repository Initialization
-- [x] Initialize Git repository locally
-- [x] Create initial commit
-- [x] Push to GitHub repository
-- [x] Initialize Go module (`go mod init github.com/<username>/llm-proxy`)
-- [x] Add .gitignore for Go, editor, and secrets
-
-### Directory Structure
-- [x] Create `/cmd/proxy` (main proxy server)
-- [x] Create `/cmd/benchmark` (benchmark tool)
-- [x] Create `/internal/database` (DB logic)
-- [x] Create `/internal/token` (token management)
-- [x] Create `/internal/proxy` (proxy logic)
-- [x] Create `/internal/admin` (admin UI handlers)
-- [x] Create `/internal/logging` (logging system)
-- [x] Create `/api` (OpenAPI spec, shared API types)
-- [x] Create `/web` (static assets for Admin UI)
-- [x] Create `/config` (config templates/examples)
-- [x] Create `/scripts` (build/deploy scripts)
-- [x] Create `/docs` (design docs, architecture)
-- [x] Create `/test` (integration/e2e tests, fixtures)
-
-### Project Configuration
-- [x] Create Makefile with common commands (build, test, lint, run, docker)
-- [x] Add initial go.mod with dependencies (router, SQLite, UUID, config, logging, testing)
-- [x] Create README.md (overview, features, architecture, setup, usage, contributing)
-- [x] Add OpenAPI spec to `/api`
-- [x] Set up configuration management (env vars, config files, validation)
-- [x] Add .env.example for environment variables
-- [x] Set up basic application entry point at `/cmd/proxy/main.go`
-- [x] Implement command-line flag parsing
-- [x] Set up basic HTTP server with health check endpoint
-
-### CI/CD & Tooling
-- [x] Set up GitHub Actions for linting, testing, build, Docker
-- [x] Add golangci-lint config
-- [x] Add code formatting (gofmt) checks
-- [x] Add dependency management steps (go mod tidy)
-
-### Docker & Deployment
-- [x] Create multi-stage Dockerfile
-- [x] Create docker-compose.yml
-- [x] Add non-root user to Dockerfile
-- [x] Add volumes for data, logs, config
-
-### Security
-- [x] Add secrets management (env vars, .env.example)
-- [x] Add .gitignore for secrets, build artifacts
-- [x] Document security best practices (token security, API key management, non-root containers)
-
-### Documentation
-- [x] Add godoc comments to all public types/functions
-- [x] Add contributing guidelines
-- [x] Add architecture and design docs to `/docs`
-
-### Testing
-- [x] **Test-Driven Development (TDD) Required**: All code must be written using TDD. Write failing tests before implementation.
-- [x] **Coverage Requirement**: Maintain at least 90% code coverage, enforced by CI.
-- [x] Place unit tests next to code in `/internal` and `/cmd`
-- [x] Use `/test` for integration/e2e tests and fixtures
-- [x] All core logic, error paths, and main.go entrypoint are robustly tested with 90%+ coverage (see coverage reports for details).
-
-**Note:** Robust testability and coverage for all main application logic, including error paths and server lifecycle, is ensured. All critical paths in `cmd/proxy` and related components are covered by unit tests, with dependency injection and mocks used for full control in tests.
-
-### Pull Requests for Phase 1
-
-1. **Basic Directory Structure** (`feature/phase-1-directory-structure`)
-   - Create all basic directories (`/cmd`, `/internal`, `/api`, etc.)
-   - Add placeholder README files in key directories
-   - Set up .gitignore for Go, editor, and secrets
-
-2. **Project Configuration** (`feature/phase-1-project-config`)
-   - Create Makefile with common commands
-   - Add initial go.mod with basic dependencies
-   - Create comprehensive README.md
-   - Add .env.example for environment variables
-
-3. **Basic Application Setup** (`feature/phase-1-app-setup`)
-   - Set up application entry point at `/cmd/proxy/main.go`
-   - Implement command-line flag parsing
-   - Create basic HTTP server with health check endpoint
-   - Add configuration management framework
-
-4. **CI/CD Setup** (`feature/phase-1-cicd`)
-   - Set up GitHub Actions for linting, testing, building
-   - Add golangci-lint configuration
-   - Add code formatting checks
-
-5. **Docker Setup** (`feature/phase-1-docker`)
-   - Create multi-stage Dockerfile
-   - Create docker-compose.yml
-   - Configure volumes for data persistence
-   - Add non-root user and security best practices
-
-6. **Security Enhancements** (`feature/phase-1-security`)
-   - Add enhanced secrets management in .env.example
-   - Update .gitignore for comprehensive security coverage
-   - Document security best practices
-   - Improve Dockerfile security
-
-7. **Documentation Foundations** (`feature/phase-1-docs`)
-   - Add godoc comments to all public types/functions
-   - Add contributing guidelines
-   - Create architecture documentation
-   - Add security documentation
+**Abstract:**
+Repository structure, configuration, Docker, security, documentation, and foundational testing were implemented. All core project scaffolding and best practices are in place. See DONE.md for details.
 
 ## Phase 2: Core Components
 
