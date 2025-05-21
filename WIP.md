@@ -17,6 +17,24 @@ This document provides a detailed sequential implementation checklist for the Tr
 - [ ] SKIPPED: Task temporarily skipped
 - [x] DONE: Task completed
 
+## Outstanding Review Comments
+
+The following review comments from PRs are not yet fully resolved. Each will be addressed in sequence, with status tracked here:
+
+- [x] **Optimize cache eviction with min-heap/priority queue**
+  - The eviction strategy in `CachedValidator.evictOldest` now uses a min-heap for efficient eviction. Verified by new and existing tests.
+  - Thoroughly tested for correctness and efficiency (see `TestCachedValidator_EvictOldest_CorrectnessAndEfficiency`).
+  - 90%+ code coverage confirmed.
+- [x] **Use named constant for max duration**
+  - The literal `1<<63 - 1` in `TimeUntilExpiration` is now replaced with the named constant `MaxDuration`.
+  - All tests pass and coverage is confirmed.
+- [x] **Use composite interface for Manager store**
+  - The Manager now uses a ManagerStore composite interface embedding TokenStore, RevocationStore, and RateLimitStore. All usages and tests updated. Type safety is now enforced by the type system.
+
+> Fully addressed comments (for reference):
+> - [x] Use DB creation time as fallback for token creation time (implemented)
+> - [x] Document UUIDv7 timestamp extraction limitation and future improvements (documented)
+
 ## Pull Request Strategy
 
 This project uses a structured PR strategy to maintain code quality and keep implementation manageable:
@@ -26,7 +44,7 @@ This project uses a structured PR strategy to maintain code quality and keep imp
 3. **Small, Focused PRs**: Each PR should address a specific logical component or feature
 4. **Feature Branches**: Use feature branches named according to the phase and component (e.g., `feature/phase-1-directory-structure`)
 5. **Phase Integration Branches**: Optional integration branches (e.g., `phase-1`) can be used to integrate multiple PRs before merging to main
-6. **WIP Updates**: Each PR should update WIP.markdown to mark completed tasks
+6. **WIP Updates**: Each PR should update WIP.md to mark completed tasks
 7. **Review Friendly**: Keep PRs small enough for effective code review
 8. **Dependencies**: Consider task dependencies when planning PRs
 
