@@ -135,3 +135,30 @@ func TestMockTokenStore_ImportExportTokenData(t *testing.T) {
 	exported := ExportTokenData(dbToken)
 	assert.Equal(t, td.Token, exported.Token)
 }
+
+func TestTokenStoreAdapter_Basic(t *testing.T) {
+	store := NewMockTokenStore()
+	adapter := NewTokenStoreAdapter(store)
+	ctx := context.Background()
+
+	tk := Token{Token: "t1", ProjectID: "p1", IsActive: true, CreatedAt: time.Now()}
+	err := store.CreateToken(ctx, tk)
+	assert.NoError(t, err)
+
+	// GetTokenByID success
+	got, err := adapter.GetTokenByID(ctx, "t1")
+	assert.NoError(t, err)
+	assert.Equal(t, tk.Token, got.Token)
+
+	// GetTokenByID not found
+	_, err = adapter.GetTokenByID(ctx, "notfound")
+	assert.ErrorIs(t, err, token.ErrTokenNotFound)
+
+	// IncrementTokenUsage success
+	err = adapter.IncrementTokenUsage(ctx, "t1")
+	assert.NoError(t, err)
+
+	// IncrementTokenUsage not found
+	err = adapter.IncrementTokenUsage(ctx, "notfound")
+	assert.ErrorIs(t, err, token.ErrTokenNotFound)
+}

@@ -196,3 +196,80 @@ func TestValidateAPIConfig(t *testing.T) {
 	}
 	assert.Error(t, validateAPIConfig(missingMethodsConfig), "Config with no allowed methods should return error")
 }
+
+func TestLoadAPIConfigFromFile_Valid(t *testing.T) {
+	tmp, err := os.CreateTemp("", "apiconfig-*.yaml")
+	assert.NoError(t, err)
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	content := `
+apis:
+  openai:
+    base_url: "https://api.openai.com"
+    allowed_endpoints:
+      - "/v1/completions"
+    allowed_methods:
+      - "POST"
+    timeouts:
+      request: 30s
+      response_header: 10s
+      idle_connection: 60s
+      flush_interval: 100ms
+    connection:
+      max_idle_conns: 10
+      max_idle_conns_per_host: 2
+  other:
+    base_url: "https://api.other.com"
+    allowed_endpoints: ["/foo"]
+    allowed_methods: ["GET"]
+    timeouts:
+      request: 10s
+      response_header: 5s
+      idle_connection: 20s
+      flush_interval: 50ms
+    connection:
+      max_idle_conns: 5
+      max_idle_conns_per_host: 1
+default_api: "openai"
+`
+	_, err = tmp.WriteString(content)
+	assert.NoError(t, err)
+	_ = tmp.Close()
+
+	cfg, err := LoadAPIConfigFromFile(tmp.Name())
+	assert.NoError(t, err)
+	assert.Equal(t, "openai", cfg.DefaultAPI)
+	assert.Contains(t, cfg.APIs, "openai")
+	assert.Contains(t, cfg.APIs, "other")
+	assert.Equal(t, "https://api.openai.com", cfg.APIs["openai"].BaseURL)
+	assert.Equal(t, []string{"/v1/completions"}, cfg.APIs["openai"].AllowedEndpoints)
+	assert.Equal(t, []string{"POST"}, cfg.APIs["openai"].AllowedMethods)
+	assert.Equal(t, 10, cfg.APIs["openai"].Connection.MaxIdleConns)
+	assert.Equal(t, 2, cfg.APIs["openai"].Connection.MaxIdleConnsPerHost)
+}
+
+func TestLoadAPIConfigFromFile_InvalidFile(t *testing.T) {
+	_, err := LoadAPIConfigFromFile("/does/not/exist.yaml")
+	assert.Error(t, err)
+}
+
+func TestLoadAPIConfigFromFile_InvalidYAML(t *testing.T) {
+	tmp, err := os.CreateTemp("", "apiconfig-bad-*.yaml")
+	assert.NoError(t, err)
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	_, err = tmp.WriteString("not: [valid: yaml")
+	assert.NoError(t, err)
+	_ = tmp.Close()
+	_, err = LoadAPIConfigFromFile(tmp.Name())
+	assert.Error(t, err)
+}
+
+func TestLoadAPIConfigFromFile_InvalidConfig(t *testing.T) {
+	tmp, err := os.CreateTemp("", "apiconfig-empty-*.yaml")
+	assert.NoError(t, err)
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	_, err = tmp.WriteString("apis: {}\n")
+	assert.NoError(t, err)
+	_ = tmp.Close()
+	_, err = LoadAPIConfigFromFile(tmp.Name())
+	assert.Error(t, err)
+}
