@@ -110,11 +110,13 @@ Repository structure, configuration, Docker, security, documentation, and founda
 - [x] Implement middleware chain for request processing
 - [x] Add support for streaming responses (SSE)
 - [ ] Implement proxy middleware chain:
-  - Request logging middleware
-  - Authentication middleware
-  - Rate-limiting middleware
-  - Request validation middleware
-  - Timeout middleware
+  - [x] Request logging middleware
+  - [x] Authentication middleware
+  - [ ] Rate-limiting middleware *(only per-token rate limiting is implemented; generic/global middleware is still missing)*
+  - [x] Request validation middleware
+  - [x] Timeout middleware
+- [ ] Define and document allowed API routes and methods in configuration
+- [ ] Ensure middleware enforces this allowlist for all proxied requests
 - [ ] Create OpenAI API endpoint handlers:
   - /v1/chat/completions
   - /v1/completions
@@ -199,6 +201,11 @@ Repository structure, configuration, Docker, security, documentation, and founda
    - Add chunked transfer support
    - Create streaming metadata aggregation
    - Test streaming with all endpoints
+
+### CLI Tool (Setup & OpenAI Chat)
+- [ ] Implement CLI tool (`llm-proxy setup` and `llm-proxy openai chat`) **in a separate PR** (`feature/llm-proxy-cli`)
+  - Only to be tackled once all proxy prerequisites for successful usage are met
+  - See PLAN.md for detailed requirements
 
 ## Phase 3: API and Interfaces
 

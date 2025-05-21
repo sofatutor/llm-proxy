@@ -268,3 +268,14 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 - **Extensibility:** Future versions may support dynamic or config-driven whitelists, and on-the-fly request/response transformations via middleware.
 
 > **Minimum Latency Principle:** Every architectural component, from HTTP server to middleware and database access, must be designed for minimal latency. Avoid unnecessary processing, blocking operations, or synchronous I/O in the request path. Use concurrency and asynchronous operations where possible to keep proxy response times as close to direct API calls as possible.
+
+## CLI Tool (Setup & OpenAI Chat)
+- A CLI tool (`llm-proxy setup` and `llm-proxy openai chat`) will be implemented in a separate PR after all proxy prerequisites are complete.
+- The tool will automate onboarding, configuration, and provide an interactive chat interface.
+- See WIP.md for tracking and requirements.
+
+## API Endpoint Handling
+- No custom OpenAI endpoint handlers are required.
+- The proxy uses a config-driven allowlist (routes and methods) for supported APIs.
+- Middleware enforces this allowlist for all proxied requests.
+- The allowlist is defined in configuration (YAML, JSON, TOML, or env vars).
