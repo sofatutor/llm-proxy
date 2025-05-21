@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -21,6 +22,7 @@ type MockStore struct {
 	failOnRevoke  bool
 	failOnDelete  bool
 	customGetHook func(tokenID string) (TokenData, error)
+	mutex         sync.RWMutex // Add mutex for thread safety
 }
 
 func NewMockStore() *MockStore {
@@ -32,6 +34,8 @@ func NewMockStore() *MockStore {
 
 // TokenStore implementation
 func (m *MockStore) GetTokenByID(ctx context.Context, tokenID string) (TokenData, error) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
 	if m.failOnGet {
 		return TokenData{}, ErrLimitOperation
 	}
@@ -49,6 +53,8 @@ func (m *MockStore) GetTokenByID(ctx context.Context, tokenID string) (TokenData
 }
 
 func (m *MockStore) IncrementTokenUsage(ctx context.Context, tokenID string) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	if m.failOnIncr {
 		return ErrLimitOperation
 	}
@@ -68,6 +74,8 @@ func (m *MockStore) IncrementTokenUsage(ctx context.Context, tokenID string) err
 
 // RateLimitStore implementation
 func (m *MockStore) ResetTokenUsage(ctx context.Context, tokenID string) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	if m.failOnReset {
 		return ErrLimitOperation
 	}
@@ -84,6 +92,8 @@ func (m *MockStore) ResetTokenUsage(ctx context.Context, tokenID string) error {
 }
 
 func (m *MockStore) UpdateTokenLimit(ctx context.Context, tokenID string, maxRequests *int) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	if m.failOnUpdate {
 		return ErrLimitOperation
 	}
@@ -101,6 +111,8 @@ func (m *MockStore) UpdateTokenLimit(ctx context.Context, tokenID string, maxReq
 
 // RevocationStore implementation
 func (m *MockStore) RevokeToken(ctx context.Context, tokenID string) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	if m.failOnRevoke {
 		return ErrLimitOperation
 	}
@@ -121,6 +133,8 @@ func (m *MockStore) RevokeToken(ctx context.Context, tokenID string) error {
 }
 
 func (m *MockStore) DeleteToken(ctx context.Context, tokenID string) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	if m.failOnDelete {
 		return ErrLimitOperation
 	}
@@ -135,6 +149,8 @@ func (m *MockStore) DeleteToken(ctx context.Context, tokenID string) error {
 }
 
 func (m *MockStore) RevokeBatchTokens(ctx context.Context, tokenIDs []string) (int, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	if m.failOnRevoke {
 		return 0, ErrLimitOperation
 	}
@@ -159,6 +175,8 @@ func (m *MockStore) RevokeBatchTokens(ctx context.Context, tokenIDs []string) (i
 }
 
 func (m *MockStore) RevokeProjectTokens(ctx context.Context, projectID string) (int, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	if m.failOnRevoke {
 		return 0, ErrLimitOperation
 	}
@@ -182,6 +200,8 @@ func (m *MockStore) RevokeProjectTokens(ctx context.Context, projectID string) (
 }
 
 func (m *MockStore) RevokeExpiredTokens(ctx context.Context) (int, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	if m.failOnRevoke {
 		return 0, ErrLimitOperation
 	}
@@ -207,7 +227,16 @@ func (m *MockStore) RevokeExpiredTokens(ctx context.Context) (int, error) {
 }
 
 func (m *MockStore) AddToken(tokenID string, data TokenData) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	m.tokens[tokenID] = data
+}
+
+func (m *MockStore) GetTokenUnsafe(tokenID string) (TokenData, bool) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	tok, ok := m.tokens[tokenID]
+	return tok, ok
 }
 
 // Test the full token lifecycle

@@ -3,6 +3,7 @@ package token
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 )
@@ -13,6 +14,7 @@ type MockTokenStore struct {
 	tokenExists bool
 	failOnGet   bool
 	failOnIncr  bool
+	mutex       sync.RWMutex // Add mutex for thread safety
 }
 
 func NewMockTokenStore() *MockTokenStore {
@@ -25,6 +27,8 @@ func NewMockTokenStore() *MockTokenStore {
 }
 
 func (m *MockTokenStore) GetTokenByID(ctx context.Context, tokenID string) (TokenData, error) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
 	if m.failOnGet {
 		return TokenData{}, errors.New("mock store failure")
 	}
@@ -48,6 +52,8 @@ func (m *MockTokenStore) GetTokenByID(ctx context.Context, tokenID string) (Toke
 }
 
 func (m *MockTokenStore) IncrementTokenUsage(ctx context.Context, tokenID string) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	if m.failOnIncr {
 		return errors.New("mock increment failure")
 	}
@@ -67,6 +73,8 @@ func (m *MockTokenStore) IncrementTokenUsage(ctx context.Context, tokenID string
 }
 
 func (m *MockTokenStore) AddToken(tokenID string, data TokenData) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	m.tokens[tokenID] = data
 }
 

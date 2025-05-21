@@ -22,6 +22,10 @@ func (s *CompleteStore) CreateToken(ctx context.Context, token TokenData) error 
 	return nil
 }
 
+func (s *CompleteStore) GetTokenUnsafe(tokenID string) (TokenData, bool) {
+	return s.MockStore.GetTokenUnsafe(tokenID)
+}
+
 func TestManager_CreateToken(t *testing.T) {
 	ctx := context.Background()
 	store := &CompleteStore{
@@ -175,9 +179,11 @@ func TestManager_TokenRevocation(t *testing.T) {
 	}
 	// Force the expired token's ExpiresAt to a time well in the past
 	past := time.Now().Add(-2 * time.Hour)
+	store.mutex.Lock()
 	tok := store.tokens[expiredToken.Token]
 	tok.ExpiresAt = &past
 	store.tokens[expiredToken.Token] = tok
+	store.mutex.Unlock()
 
 	// Revoke the first token
 	err = manager.RevokeToken(ctx, token1.Token)
@@ -205,7 +211,7 @@ func TestManager_TokenRevocation(t *testing.T) {
 	}
 
 	// Ensure expired token is now inactive
-	tok = store.tokens[expiredToken.Token]
+	tok, _ = store.GetTokenUnsafe(expiredToken.Token)
 	if tok.IsActive {
 		t.Errorf("Expired token should be inactive after revocation")
 	}
@@ -425,9 +431,11 @@ func TestManager_StartAutomaticRevocation(t *testing.T) {
 		t.Fatalf("CreateToken() error = %v", err)
 	}
 	// Force expiration
+	store.mutex.Lock()
 	tok := store.tokens[token.Token]
 	tok.ExpiresAt = &past
 	store.tokens[token.Token] = tok
+	store.mutex.Unlock()
 
 	// Start automatic revocation
 	auto := manager.StartAutomaticRevocation(100 * time.Millisecond)
@@ -437,7 +445,7 @@ func TestManager_StartAutomaticRevocation(t *testing.T) {
 	time.Sleep(250 * time.Millisecond)
 
 	// Token should be revoked
-	tok = store.tokens[token.Token]
+	tok, _ = store.GetTokenUnsafe(token.Token)
 	if tok.IsActive {
 		t.Errorf("Token should be inactive after automatic revocation")
 	}

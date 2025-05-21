@@ -207,13 +207,10 @@ func (cv *CachedValidator) evictOldest() {
 		oldest = append(oldest, cacheAge{k, v.ValidUntil})
 	}
 
-	// Sort by expiration time (in-place sort would be more efficient)
-	// For simplicity, just find the N oldest by iterating
 	for i := 0; i < toRemove && i < len(oldest); i++ {
 		var oldestKey string
 		var oldestTime time.Time
 
-		// Find oldest entry
 		first := true
 		for k, v := range cv.cache {
 			if first || v.ValidUntil.Before(oldestTime) {
@@ -223,10 +220,11 @@ func (cv *CachedValidator) evictOldest() {
 			}
 		}
 
-		// Remove oldest entry
 		if oldestKey != "" {
 			delete(cv.cache, oldestKey)
+			cv.statsMutex.Lock()
 			cv.evictions++
+			cv.statsMutex.Unlock()
 		}
 	}
 }
@@ -251,7 +249,9 @@ func (cv *CachedValidator) cleanup() {
 	for k, v := range cv.cache {
 		if now.After(v.ValidUntil) {
 			delete(cv.cache, k)
+			cv.statsMutex.Lock()
 			cv.evictions++
+			cv.statsMutex.Unlock()
 		}
 	}
 }
