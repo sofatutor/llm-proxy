@@ -204,7 +204,7 @@ Repository structure, configuration, Docker, security, documentation, and founda
    - Support streaming with transparent pass-through
 
 ### CLI Tool (Setup & OpenAI Chat)
-- [x] Implement CLI tool (`llm-proxy setup` and `llm-proxy openai chat`) **in a separate PR** (`feature/llm-proxy-cli`)
+- [ ] Implement CLI tool (`llm-proxy setup` and `llm-proxy openai chat`) **in a separate PR** (`feature/llm-proxy-cli`)
   - CLI tool structure and commands design
   - Basic CLI framework with flag parsing
   - 'llm-proxy setup' command for configuration with these improvements:
@@ -281,7 +281,7 @@ A new `llm-proxy manage` command will be introduced to provide a clear, user-fri
   - GET for listing/retrieval
   - PUT for updates
   - DELETE for removal
-- [ ] Add health check endpoint `/health` for monitoring **[NEW]**
+- [ ] Add health check endpoint `/health` for monitoring
 - [ ] Implement rate limiting for management API
 - [ ] Add comprehensive error handling
 - [ ] Create API documentation with examples (expand for new endpoints)
@@ -304,7 +304,7 @@ A new `llm-proxy manage` command will be introduced to provide a clear, user-fri
 - [ ] Add telemetry collection
 - [ ] Implement feature flags for gradual rollout
 - [ ] Create API versioning strategy
-- [ ] Add proxy metrics/logging/timing improvements **[NEW]**
+- [ ] Add proxy metrics/logging/timing improvements
 
 ### Admin UI
 - [ ] Design HTML interface wireframes
@@ -415,7 +415,7 @@ A new `llm-proxy manage` command will be introduced to provide a clear, user-fri
 - [ ] Implement audit logging for security events
 - [ ] Create log visualization recommendations
 - [ ] Add log sampling for high-volume deployments
-- [ ] Add proxy metrics/logging/timing improvements **[NEW]**
+- [ ] Add proxy metrics/logging/timing improvements 
 
 ### Monitoring System
 - [ ] Implement health check endpoints
@@ -834,4 +834,4 @@ A new `llm-proxy manage` command will be introduced to provide a clear, user-fri
   - Developing Management API endpoints for token/project management
 
 ## Phase 2/3: Config/YAML
-- [ ] Expanded provider config and YAML changes (document and test) **[NEW]**
+- [ ] Expand provider config and YAML changes (document and test)
