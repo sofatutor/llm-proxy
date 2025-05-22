@@ -42,6 +42,9 @@ var (
 	osExit = os.Exit
 )
 
+// Global flag for management API base URL
+var manageAPIBaseURL string
+
 // Setup command definition
 var setupCmd = &cobra.Command{
 	Use:   "setup",
@@ -305,7 +308,7 @@ func init() {
 			if err != nil {
 				return err
 			}
-			url := "http://localhost:8080/manage/projects"
+			url := manageAPIBaseURL + "/manage/projects"
 			req, err := http.NewRequest("GET", url, nil)
 			if err != nil {
 				return err
@@ -355,7 +358,7 @@ func init() {
 				return err
 			}
 			id := args[0]
-			url := fmt.Sprintf("http://localhost:8080/manage/projects/%s", id)
+			url := fmt.Sprintf("%s/manage/projects/%s", manageAPIBaseURL, id)
 			req, err := http.NewRequest("GET", url, nil)
 			if err != nil {
 				return err
@@ -407,7 +410,7 @@ func init() {
 			}
 			body := api.ProjectCreateRequest{Name: name, OpenAIAPIKey: openaiKey}
 			jsonBody, _ := json.Marshal(body)
-			url := "http://localhost:8080/manage/projects"
+			url := manageAPIBaseURL + "/manage/projects"
 			req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 			if err != nil {
 				return err
@@ -470,7 +473,7 @@ func init() {
 				body["openai_api_key"] = openaiKey
 			}
 			jsonBody, _ := json.Marshal(body)
-			url := fmt.Sprintf("http://localhost:8080/manage/projects/%s", id)
+			url := fmt.Sprintf("%s/manage/projects/%s", manageAPIBaseURL, id)
 			req, err := http.NewRequest("PATCH", url, bytes.NewBuffer(jsonBody))
 			if err != nil {
 				return err
@@ -520,7 +523,7 @@ func init() {
 				return err
 			}
 			id := args[0]
-			url := fmt.Sprintf("http://localhost:8080/manage/projects/%s", id)
+			url := fmt.Sprintf("%s/manage/projects/%s", manageAPIBaseURL, id)
 			req, err := http.NewRequest("DELETE", url, nil)
 			if err != nil {
 				return err
@@ -587,7 +590,7 @@ func init() {
 				"duration_hours": duration,
 			}
 			jsonBody, _ := json.Marshal(body)
-			url := "http://localhost:8080/manage/tokens" // TODO: make configurable
+			url := manageAPIBaseURL + "/manage/tokens"
 			req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 			if err != nil {
 				return fmt.Errorf("failed to create request: %w", err)
@@ -642,8 +645,46 @@ func init() {
 		Use:   "get <token>",
 		Short: "Get token validity/status",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("TODO: Get token %s\n", args[0])
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_ = godotenv.Load()
+			mgmtToken, err := api.GetManagementToken(cmd)
+			if err != nil {
+				return err
+			}
+			tokenID := args[0]
+			url := fmt.Sprintf("%s/manage/tokens/%s", manageAPIBaseURL, tokenID)
+			req, err := http.NewRequest("GET", url, nil)
+			if err != nil {
+				return err
+			}
+			req.Header.Set("Authorization", "Bearer "+mgmtToken)
+			client := &http.Client{}
+			resp, err := client.Do(req)
+			if err != nil {
+				return err
+			}
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					log.Printf("Error closing response body: %v", err)
+				}
+			}()
+			if resp.StatusCode != http.StatusOK {
+				var errResp map[string]interface{}
+				_ = json.NewDecoder(resp.Body).Decode(&errResp)
+				return fmt.Errorf("server error: %s", errResp["message"])
+			}
+			var tkn api.TokenCreateResponse
+			if err := json.NewDecoder(resp.Body).Decode(&tkn); err != nil {
+				return err
+			}
+			jsonOut, _ := cmd.Flags().GetBool("json")
+			if jsonOut {
+				out, _ := json.MarshalIndent(tkn, "", "  ")
+				fmt.Println(string(out))
+			} else {
+				fmt.Printf("Token: %s\nExpires at: %s\n", tkn.Token, tkn.ExpiresAt)
+			}
+			return nil
 		},
 	}
 
@@ -668,6 +709,9 @@ func init() {
 		},
 	}
 	cobraRoot.AddCommand(benchmarkCmd)
+
+	// Add persistent flag for management API base URL
+	cobraRoot.PersistentFlags().StringVar(&manageAPIBaseURL, "manage-api-base-url", "http://localhost:8080", "Base URL for management API (default: http://localhost:8080)")
 
 	// For test compatibility, define rootCmd as alias
 	rootCmd = cobraRoot
