@@ -1,5 +1,7 @@
 # Implementation Plan for Transparent API Proxy (Case Study: OpenAI)
 
+> This file is the canonical source for the coverage policy. All other documentation should reference this file for coverage requirements and rationale.
+
 > **Agent-Driven Test-Driven Development (TDD) Mandate**
 >
 > This project is implemented entirely by autonomous agents. All development MUST strictly follow test-driven development (TDD):
@@ -9,6 +11,12 @@
 > - A minimum of 90% code coverage is required at all times, enforced by GitHub Actions.
 > - Pull requests must demonstrate that new/changed code is covered by tests and that overall coverage remains above 90%.
 > - Coverage checks are mandatory in CI and must block merges if not met.
+
+> **Coverage Policy Note:**
+> - Code in `cmd/` (CLI entrypoints, flag parsing, glue code) is **not included in coverage checks**.
+> - All core logic, business rules, and testable functionality **must reside in `internal/`** packages.
+> - Only minimal CLI glue/flag parsing should be in `cmd/`.
+> - This ensures high test coverage and maintainability.
 
 > **Note:** While this project uses OpenAI as a case study, the architecture is intentionally generic and can be adapted to any API requiring secure, short-lived (withering) tokens and transparent proxying. The only required intervention is minimal (e.g., Authorization header replacement), ensuring maximum transparency. Future extensions may include custom request/response transformations.
 

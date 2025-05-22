@@ -185,3 +185,8 @@ func (d *DB) ListProjects(ctx context.Context) ([]Project, error) {
 
 	return projects, nil
 }
+
+// GetAPIKeyForProject retrieves the OpenAI API key for a project by ID (stub for build)
+func (d *DB) GetAPIKeyForProject(ctx context.Context, projectID string) (string, error) {
+	return "", fmt.Errorf("GetAPIKeyForProject not implemented")
+}

@@ -10,6 +10,8 @@
 > - Pull requests must demonstrate that new/changed code is covered by tests and that overall coverage remains above 90%.
 > - Coverage checks are mandatory in CI and must block merges if not met.
 
+> See PLAN.md for the canonical coverage policy and rationale.
+
 This document provides a detailed sequential implementation checklist for the Transparent LLM Proxy for OpenAI. Tasks are organized into phases with dependencies clearly marked. Each task has a status indicator:
 
 - [ ] TODO: Task not yet started
@@ -205,6 +207,7 @@ Repository structure, configuration, Docker, security, documentation, and founda
 
 ### CLI Tool (Setup & OpenAI Chat)
 - [ ] Implement CLI tool (`llm-proxy setup` and `llm-proxy openai chat`) **in a separate PR** (`feature/llm-proxy-cli`)
+  - **Note:** Only glue/flag parsing should be in `cmd/`. All real logic must be in `internal/` for coverage and testability. CLI code in `cmd/` is not included in coverage checks.
   - CLI tool structure and commands design
   - Basic CLI framework with flag parsing
   - 'llm-proxy setup' command for configuration with these improvements:

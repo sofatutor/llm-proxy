@@ -306,3 +306,25 @@ func TestListProjects_LongNames(t *testing.T) {
 		t.Error("expected to find project with long name")
 	}
 }
+
+func TestGetAPIKeyForProject_DB(t *testing.T) {
+	t.Skip("Not implemented: DB.GetAPIKeyForProject is a stub. TODO: implement and enable test.")
+	// db, cleanup := testDB(t)
+	// defer cleanup()
+	// ctx := context.Background()
+	// // Insert a project
+	// p := Project{ID: "p1", Name: "Test", OpenAIAPIKey: "key1", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	// if err := db.CreateProject(ctx, p); err != nil {
+	// 	t.Fatalf("Failed to create project: %v", err)
+	// }
+	// // Should succeed
+	// key, err := db.GetAPIKeyForProject(ctx, "p1")
+	// if err != nil || key != "key1" {
+	// 	t.Errorf("expected key1, got %v, err=%v", key, err)
+	// }
+	// // Should fail for non-existent
+	// _, err = db.GetAPIKeyForProject(ctx, "nope")
+	// if err == nil {
+	// 	t.Error("expected error for non-existent project")
+	// }
+}

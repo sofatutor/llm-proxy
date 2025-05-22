@@ -394,18 +394,18 @@ func TestRevoker_RevokeProjectTokens(t *testing.T) {
 	revoker := NewRevoker(store)
 
 	// Add tokens for different projects
-	store.AddToken("tkn_project1token1234567890", TokenData{
-		Token:     "tkn_project1token1234567890",
+	store.AddToken("sk-project1token1234567890", TokenData{
+		Token:     "sk-project1token1234567890",
 		ProjectID: "project1",
 		IsActive:  true,
 	})
-	store.AddToken("tkn_project1token2234567890", TokenData{
-		Token:     "tkn_project1token2234567890",
+	store.AddToken("sk-project1token2234567890", TokenData{
+		Token:     "sk-project1token2234567890",
 		ProjectID: "project1",
 		IsActive:  true,
 	})
-	store.AddToken("tkn_project2token1234567890", TokenData{
-		Token:     "tkn_project2token1234567890",
+	store.AddToken("sk-project2token1234567890", TokenData{
+		Token:     "sk-project2token1234567890",
 		ProjectID: "project2",
 		IsActive:  true,
 	})
@@ -449,18 +449,18 @@ func TestRevoker_RevokeProjectTokens(t *testing.T) {
 			revoker = NewRevoker(store)
 
 			// Add tokens again
-			store.AddToken("tkn_project1token1234567890", TokenData{
-				Token:     "tkn_project1token1234567890",
+			store.AddToken("sk-project1token1234567890", TokenData{
+				Token:     "sk-project1token1234567890",
 				ProjectID: "project1",
 				IsActive:  true,
 			})
-			store.AddToken("tkn_project1token2234567890", TokenData{
-				Token:     "tkn_project1token2234567890",
+			store.AddToken("sk-project1token2234567890", TokenData{
+				Token:     "sk-project1token2234567890",
 				ProjectID: "project1",
 				IsActive:  true,
 			})
-			store.AddToken("tkn_project2token1234567890", TokenData{
-				Token:     "tkn_project2token1234567890",
+			store.AddToken("sk-project2token1234567890", TokenData{
+				Token:     "sk-project2token1234567890",
 				ProjectID: "project2",
 				IsActive:  true,
 			})
@@ -510,20 +510,20 @@ func TestRevoker_RevokeExpiredTokens(t *testing.T) {
 	past := now.Add(-1 * time.Hour)
 	future := now.Add(1 * time.Hour)
 
-	store.AddToken("tkn_expiredtoken12345678901", TokenData{
-		Token:     "tkn_expiredtoken12345678901",
+	store.AddToken("sk-expiredtoken12345678901", TokenData{
+		Token:     "sk-expiredtoken12345678901",
 		ProjectID: "project1",
 		IsActive:  true,
 		ExpiresAt: &past,
 	})
-	store.AddToken("tkn_validtoken12345678901", TokenData{
-		Token:     "tkn_validtoken12345678901",
+	store.AddToken("sk-validtoken12345678901", TokenData{
+		Token:     "sk-validtoken12345678901",
 		ProjectID: "project1",
 		IsActive:  true,
 		ExpiresAt: &future,
 	})
-	store.AddToken("tkn_noexpirytoken12345678901", TokenData{
-		Token:     "tkn_noexpirytoken12345678901",
+	store.AddToken("sk-noexpirytoken12345678901", TokenData{
+		Token:     "sk-noexpirytoken12345678901",
 		ProjectID: "project1",
 		IsActive:  true,
 		ExpiresAt: nil,
@@ -542,9 +542,9 @@ func TestRevoker_RevokeExpiredTokens(t *testing.T) {
 		}
 
 		// Check that only the expired token was revoked
-		_ = store.tokens["tkn_expiredtoken12345678901"]
-		_ = store.tokens["tkn_validtoken12345678901"]
-		_ = store.tokens["tkn_noexpirytoken12345678901"]
+		_ = store.tokens["sk-expiredtoken12345678901"]
+		_ = store.tokens["sk-validtoken12345678901"]
+		_ = store.tokens["sk-noexpirytoken12345678901"]
 	})
 
 	// Test store failure
@@ -567,8 +567,8 @@ func TestAutomaticRevocation(t *testing.T) {
 	now := time.Now()
 	past := now.Add(-1 * time.Hour)
 
-	store.AddToken("tkn_expiredtoken12345678901", TokenData{
-		Token:     "tkn_expiredtoken12345678901",
+	store.AddToken("sk-expiredtoken12345678901", TokenData{
+		Token:     "sk-expiredtoken12345678901",
 		ProjectID: "project1",
 		IsActive:  true,
 		ExpiresAt: &past,
@@ -588,7 +588,7 @@ func TestAutomaticRevocation(t *testing.T) {
 	autoRevoke.Stop()
 
 	// Check that the expired token was revoked
-	token, exists := store.tokens["tkn_expiredtoken12345678901"]
+	token, exists := store.tokens["sk-expiredtoken12345678901"]
 	if !exists {
 		t.Fatalf("token should exist in store")
 	}
