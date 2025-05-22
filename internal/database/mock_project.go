@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"sync"
+
+	"github.com/sofatutor/llm-proxy/internal/proxy"
 )
 
 // MockProjectStore is an in-memory implementation of ProjectStore for testing and development
@@ -22,7 +24,7 @@ func NewMockProjectStore() *MockProjectStore {
 }
 
 // CreateProject creates a new project in the store
-func (m *MockProjectStore) CreateProject(ctx context.Context, project Project) error {
+func (m *MockProjectStore) DBCreateProject(ctx context.Context, project Project) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -36,7 +38,7 @@ func (m *MockProjectStore) CreateProject(ctx context.Context, project Project) e
 }
 
 // GetProjectByID retrieves a project by ID
-func (m *MockProjectStore) GetProjectByID(ctx context.Context, projectID string) (Project, error) {
+func (m *MockProjectStore) DBGetProjectByID(ctx context.Context, projectID string) (Project, error) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 
@@ -49,7 +51,7 @@ func (m *MockProjectStore) GetProjectByID(ctx context.Context, projectID string)
 }
 
 // UpdateProject updates a project in the store
-func (m *MockProjectStore) UpdateProject(ctx context.Context, project Project) error {
+func (m *MockProjectStore) DBUpdateProject(ctx context.Context, project Project) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -63,7 +65,7 @@ func (m *MockProjectStore) UpdateProject(ctx context.Context, project Project) e
 }
 
 // DeleteProject deletes a project from the store
-func (m *MockProjectStore) DeleteProject(ctx context.Context, projectID string) error {
+func (m *MockProjectStore) DBDeleteProject(ctx context.Context, projectID string) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -77,7 +79,7 @@ func (m *MockProjectStore) DeleteProject(ctx context.Context, projectID string) 
 }
 
 // ListProjects retrieves all projects from the store
-func (m *MockProjectStore) ListProjects(ctx context.Context) ([]Project, error) {
+func (m *MockProjectStore) DBListProjects(ctx context.Context) ([]Project, error) {
 	m.mutex.RLock()
 	defer m.mutex.RUnlock()
 
@@ -106,7 +108,7 @@ func (m *MockProjectStore) CreateMockProject(projectID, name, apiKey string) (Pr
 		OpenAIAPIKey: apiKey,
 	}
 
-	err := m.CreateProject(context.Background(), project)
+	err := m.DBCreateProject(context.Background(), project)
 	return project, err
 }
 
@@ -121,4 +123,37 @@ func (m *MockProjectStore) GetAPIKeyForProject(ctx context.Context, projectID st
 	}
 
 	return apiKey, nil
+}
+
+// --- proxy.ProjectStore interface adapters ---
+func (m *MockProjectStore) ListProjects(ctx context.Context) ([]proxy.Project, error) {
+	dbProjects, err := m.DBListProjects(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []proxy.Project
+	for _, p := range dbProjects {
+		out = append(out, ToProxyProject(p))
+	}
+	return out, nil
+}
+
+func (m *MockProjectStore) CreateProject(ctx context.Context, p proxy.Project) error {
+	return m.DBCreateProject(ctx, ToDBProject(p))
+}
+
+func (m *MockProjectStore) GetProjectByID(ctx context.Context, id string) (proxy.Project, error) {
+	dbP, err := m.DBGetProjectByID(ctx, id)
+	if err != nil {
+		return proxy.Project{}, err
+	}
+	return ToProxyProject(dbP), nil
+}
+
+func (m *MockProjectStore) UpdateProject(ctx context.Context, p proxy.Project) error {
+	return m.DBUpdateProject(ctx, ToDBProject(p))
+}
+
+func (m *MockProjectStore) DeleteProject(ctx context.Context, id string) error {
+	return m.DBDeleteProject(ctx, id)
 }

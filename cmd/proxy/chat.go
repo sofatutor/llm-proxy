@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/chzyer/readline"
+	"github.com/sofatutor/llm-proxy/internal/api"
 	"github.com/spf13/cobra"
 )
 
@@ -257,10 +258,10 @@ func getChatResponse(messages []ChatMessage, rl *readline.Instance) (*ChatRespon
 	if verboseMode {
 		grey := func(s string) string { return "\033[90m" + s + "\033[0m" }
 		onset := startTime
-		receivedAt := parseTimeHeader(resp.Header.Get("X-Proxy-Received-At"))
-		sentAt := parseTimeHeader(resp.Header.Get("X-Proxy-Sent-Backend-At"))
-		firstRespAt := parseTimeHeader(resp.Header.Get("X-Proxy-First-Response-At"))
-		finalRespAt := parseTimeHeader(resp.Header.Get("X-Proxy-Final-Response-At"))
+		receivedAt := api.ParseTimeHeader(resp.Header.Get("X-Proxy-Received-At"))
+		sentAt := api.ParseTimeHeader(resp.Header.Get("X-Proxy-Sent-Backend-At"))
+		firstRespAt := api.ParseTimeHeader(resp.Header.Get("X-Proxy-First-Response-At"))
+		finalRespAt := api.ParseTimeHeader(resp.Header.Get("X-Proxy-Final-Response-At"))
 
 		fmt.Printf("\n%s\n", grey(fmt.Sprintf("[Verbose] Response status: %s", resp.Status)))
 		if !receivedAt.IsZero() {
@@ -435,16 +436,4 @@ func getChatResponse(messages []ChatMessage, rl *readline.Instance) (*ChatRespon
 
 		return &response, nil
 	}
-}
-
-// Add this helper at the end of the file
-func parseTimeHeader(val string) time.Time {
-	if val == "" {
-		return time.Time{}
-	}
-	t, err := time.Parse(time.RFC3339Nano, val)
-	if err != nil {
-		return time.Time{}
-	}
-	return t
 }

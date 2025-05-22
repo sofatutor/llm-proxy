@@ -331,3 +331,5 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 - Ensures all user/server/management logic is in one place (`cmd/proxy/`), while benchmarks are isolated.
 
 - In-memory DB is only used for tests
+
+- Stage core proxy logic (streaming, allowlist, error handling, metrics/logging) from internal/proxy in PR: Feature: Transparent Proxy Core

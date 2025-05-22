@@ -239,6 +239,18 @@ func (m *MockStore) GetTokenUnsafe(tokenID string) (TokenData, bool) {
 	return tok, ok
 }
 
+func (m *MockStore) CreateToken(ctx context.Context, td TokenData) error {
+	return nil
+}
+
+func (m *MockStore) GetTokensByProjectID(ctx context.Context, projectID string) ([]TokenData, error) {
+	return nil, nil
+}
+
+func (m *MockStore) ListTokens(ctx context.Context) ([]TokenData, error) {
+	return nil, nil
+}
+
 // Test the full token lifecycle
 func TestTokenLifecycle(t *testing.T) {
 	ctx := context.Background()

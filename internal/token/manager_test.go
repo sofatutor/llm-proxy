@@ -26,6 +26,14 @@ func (s *CompleteStore) GetTokenUnsafe(tokenID string) (TokenData, bool) {
 	return s.MockStore.GetTokenUnsafe(tokenID)
 }
 
+func (s *CompleteStore) GetTokensByProjectID(ctx context.Context, projectID string) ([]TokenData, error) {
+	return nil, nil
+}
+
+func (s *CompleteStore) ListTokens(ctx context.Context) ([]TokenData, error) {
+	return nil, nil
+}
+
 func TestManager_CreateToken(t *testing.T) {
 	ctx := context.Background()
 	store := &CompleteStore{

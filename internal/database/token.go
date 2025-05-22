@@ -274,19 +274,73 @@ func NewDBTokenStoreAdapter(db *DB) *DBTokenStoreAdapter {
 	return &DBTokenStoreAdapter{db: db}
 }
 
-// Stub implementations for build success
 func (a *DBTokenStoreAdapter) GetTokenByID(ctx context.Context, tokenID string) (token.TokenData, error) {
-	return token.TokenData{}, nil
+	dbToken, err := a.db.GetTokenByID(ctx, tokenID)
+	if err != nil {
+		if errors.Is(err, ErrTokenNotFound) {
+			return token.TokenData{}, token.ErrTokenNotFound
+		}
+		return token.TokenData{}, err
+	}
+	return ExportTokenData(dbToken), nil
 }
+
 func (a *DBTokenStoreAdapter) IncrementTokenUsage(ctx context.Context, tokenID string) error {
-	return nil
+	return a.db.IncrementTokenUsage(ctx, tokenID)
 }
+
 func (a *DBTokenStoreAdapter) CreateToken(ctx context.Context, td token.TokenData) error {
-	return nil
+	dbToken := ImportTokenData(td)
+	return a.db.CreateToken(ctx, dbToken)
 }
+
 func (a *DBTokenStoreAdapter) ListTokens(ctx context.Context) ([]token.TokenData, error) {
-	return nil, nil
+	dbTokens, err := a.db.ListTokens(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tokens := make([]token.TokenData, len(dbTokens))
+	for i, t := range dbTokens {
+		tokens[i] = ExportTokenData(t)
+	}
+	return tokens, nil
 }
+
 func (a *DBTokenStoreAdapter) GetTokensByProjectID(ctx context.Context, projectID string) ([]token.TokenData, error) {
-	return nil, nil
+	dbTokens, err := a.db.GetTokensByProjectID(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	tokens := make([]token.TokenData, len(dbTokens))
+	for i, t := range dbTokens {
+		tokens[i] = ExportTokenData(t)
+	}
+	return tokens, nil
+}
+
+// ImportTokenData and ExportTokenData helpers
+func ImportTokenData(td token.TokenData) Token {
+	return Token{
+		Token:        td.Token,
+		ProjectID:    td.ProjectID,
+		ExpiresAt:    td.ExpiresAt,
+		IsActive:     td.IsActive,
+		RequestCount: td.RequestCount,
+		MaxRequests:  td.MaxRequests,
+		CreatedAt:    td.CreatedAt,
+		LastUsedAt:   td.LastUsedAt,
+	}
+}
+
+func ExportTokenData(t Token) token.TokenData {
+	return token.TokenData{
+		Token:        t.Token,
+		ProjectID:    t.ProjectID,
+		ExpiresAt:    t.ExpiresAt,
+		IsActive:     t.IsActive,
+		RequestCount: t.RequestCount,
+		MaxRequests:  t.MaxRequests,
+		CreatedAt:    t.CreatedAt,
+		LastUsedAt:   t.LastUsedAt,
+	}
 }

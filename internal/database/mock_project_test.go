@@ -4,13 +4,14 @@ import (
 	"context"
 	"testing"
 
+	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestMockProjectStore_BasicCRUD(t *testing.T) {
 	store := NewMockProjectStore()
 	ctx := context.Background()
-	project := Project{ID: "p1", Name: "Test Project", OpenAIAPIKey: "key1"}
+	project := proxy.Project{ID: "p1", Name: "Test Project", OpenAIAPIKey: "key1"}
 
 	// CreateProject
 	err := store.CreateProject(ctx, project)
@@ -37,7 +38,7 @@ func TestMockProjectStore_BasicCRUD(t *testing.T) {
 	assert.Equal(t, "Updated Name", got.Name)
 
 	// UpdateProject (not found)
-	err = store.UpdateProject(ctx, Project{ID: "notfound"})
+	err = store.UpdateProject(ctx, proxy.Project{ID: "notfound"})
 	assert.Error(t, err)
 
 	// DeleteProject
@@ -57,9 +58,9 @@ func TestMockProjectStore_ListProjects(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, projects, 0)
 	// Add projects
-	err = store.CreateProject(ctx, Project{ID: "p1", Name: "A", OpenAIAPIKey: "k1"})
+	err = store.CreateProject(ctx, proxy.Project{ID: "p1", Name: "A", OpenAIAPIKey: "k1"})
 	assert.NoError(t, err)
-	err = store.CreateProject(ctx, Project{ID: "p2", Name: "B", OpenAIAPIKey: "k2"})
+	err = store.CreateProject(ctx, proxy.Project{ID: "p2", Name: "B", OpenAIAPIKey: "k2"})
 	assert.NoError(t, err)
 	projects, err = store.ListProjects(ctx)
 	assert.NoError(t, err)
@@ -86,7 +87,7 @@ func TestMockProjectStore_CreateMockProject(t *testing.T) {
 func TestMockProjectStore_GetAPIKeyForProject(t *testing.T) {
 	store := NewMockProjectStore()
 	ctx := context.Background()
-	err := store.CreateProject(ctx, Project{ID: "p1", Name: "N", OpenAIAPIKey: "k1"})
+	err := store.CreateProject(ctx, proxy.Project{ID: "p1", Name: "N", OpenAIAPIKey: "k1"})
 	assert.NoError(t, err)
 	key, err := store.GetAPIKeyForProject(ctx, "p1")
 	assert.NoError(t, err)

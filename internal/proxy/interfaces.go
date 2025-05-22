@@ -16,10 +16,17 @@ type TokenValidator interface {
 	ValidateTokenWithTracking(ctx context.Context, token string) (string, error)
 }
 
-// ProjectStore defines the interface for retrieving project information
+// ProjectStore defines the interface for retrieving and managing project information
+// (extended for management API)
 type ProjectStore interface {
 	// GetAPIKeyForProject retrieves the API key for a project
 	GetAPIKeyForProject(ctx context.Context, projectID string) (string, error)
+	// Management API CRUD
+	ListProjects(ctx context.Context) ([]Project, error)
+	CreateProject(ctx context.Context, project Project) error
+	GetProjectByID(ctx context.Context, projectID string) (Project, error)
+	UpdateProject(ctx context.Context, project Project) error
+	DeleteProject(ctx context.Context, projectID string) error
 }
 
 // Proxy defines the interface for a transparent HTTP proxy
@@ -122,3 +129,13 @@ const (
 	// ctxKeyProjectID is the context key for the project ID
 	ctxKeyProjectID contextKey = "project_id"
 )
+
+// Project represents a project for the management API and proxy
+// (copied from database/models.go)
+type Project struct {
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	OpenAIAPIKey string    `json:"openai_api_key"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
