@@ -1,5 +1,7 @@
 # Implementation Plan for Transparent API Proxy (Case Study: OpenAI)
 
+> This file is the canonical source for the coverage policy. All other documentation should reference this file for coverage requirements and rationale.
+
 > **Agent-Driven Test-Driven Development (TDD) Mandate**
 >
 > This project is implemented entirely by autonomous agents. All development MUST strictly follow test-driven development (TDD):

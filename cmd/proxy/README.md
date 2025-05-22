@@ -7,7 +7,7 @@ This CLI tool provides a command-line interface for interacting with the LLM Pro
 To build the CLI tool:
 
 ```bash
-go build -o llm-proxy ./cmd/benchmark
+go build -o llm-proxy ./cmd/proxy
 ```
 
 ## Commands
@@ -159,7 +159,7 @@ Follow these steps in order to test the entire workflow:
 
 ```bash
 # Build the CLI tool
-go build -o llm-proxy ./cmd/benchmark
+go build -o llm-proxy ./cmd/proxy
 
 # Setup with your OpenAI API key (interactive mode)
 ./llm-proxy setup --interactive
@@ -282,3 +282,11 @@ go test ./cmd/benchmark
 - Feature implementations will be expanded in future versions.
 - For production use, ensure you have properly configured your environment variables
   and security settings.
+
+## Benchmark Tool
+
+To build the benchmark tool separately:
+
+```bash
+go build -o llm-benchmark ./cmd/benchmark
+```

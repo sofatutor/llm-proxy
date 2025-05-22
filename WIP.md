@@ -10,11 +10,7 @@
 > - Pull requests must demonstrate that new/changed code is covered by tests and that overall coverage remains above 90%.
 > - Coverage checks are mandatory in CI and must block merges if not met.
 
-> **Coverage Policy Note:**
-> - Code in `cmd/` (CLI entrypoints, flag parsing, glue code) is **not included in coverage checks**.
-> - All core logic, business rules, and testable functionality **must reside in `internal/`** packages.
-> - Only minimal CLI glue/flag parsing should be in `cmd/`.
-> - This ensures high test coverage and maintainability.
+> See PLAN.md for the canonical coverage policy and rationale.
 
 This document provides a detailed sequential implementation checklist for the Transparent LLM Proxy for OpenAI. Tasks are organized into phases with dependencies clearly marked. Each task has a status indicator:
 
