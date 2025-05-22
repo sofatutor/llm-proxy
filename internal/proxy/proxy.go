@@ -15,9 +15,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"go.uber.org/zap"
+)
+
+// Add context keys for timing
+const (
+	ctxKeyProxyReceivedAt    = "proxy_received_at"
+	ctxKeyProxySentBackendAt = "proxy_sent_backend_at"
+	ctxKeyProxyFirstRespAt   = "proxy_first_response_at"
+	ctxKeyProxyFinalRespAt   = "proxy_final_response_at"
+	ctxKeyRequestID          = "request_id"
 )
 
 // TransparentProxy implements the Proxy interface for transparent proxying
@@ -141,7 +151,9 @@ func (p *TransparentProxy) director(req *http.Request) {
 	// Preserve or strip certain headers
 	p.processRequestHeaders(req)
 
+	requestID, _ := req.Context().Value(ctxKeyRequestID).(string)
 	p.logger.Debug("Proxying request",
+		zap.String("request_id", requestID),
 		zap.String("method", req.Method),
 		zap.String("path", req.URL.Path),
 		zap.String("project_id", projectID))
@@ -205,6 +217,14 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 		res.Header.Set("X-Proxy-ID", projectID)
 	}
 
+	// Calculate and add response time header
+	startTime, ok := req.Context().Value(ctxKeyRequestStart).(time.Time)
+	if ok {
+		remoteCallDuration := time.Since(startTime)
+		res.Header.Set("X-LLM-Proxy-Remote-Duration", remoteCallDuration.String())
+		res.Header.Set("X-LLM-Proxy-Remote-Duration-Ms", fmt.Sprintf("%.2f", float64(remoteCallDuration.Milliseconds())))
+	}
+
 	// For streaming responses, we just pass through
 	if isStreaming(res) {
 		return nil
@@ -238,6 +258,16 @@ func (p *TransparentProxy) extractResponseMetadata(res *http.Response) error {
 		return errors.New("response body is nil")
 	}
 
+	// Only parse as JSON if Content-Type is application/json and not compressed
+	contentType := res.Header.Get("Content-Type")
+	contentEncoding := res.Header.Get("Content-Encoding")
+	if !strings.Contains(contentType, "application/json") || (contentEncoding != "" && contentEncoding != "identity") {
+		p.logger.Debug("Skipping metadata extraction: not JSON or compressed",
+			zap.String("content_type", contentType),
+			zap.String("content_encoding", contentEncoding))
+		return nil
+	}
+
 	// We need to read the body to extract metadata, but we must also
 	// preserve it for the client. This is done by creating a new Reader
 	// that allows us to read the body twice.
@@ -256,7 +286,11 @@ func (p *TransparentProxy) extractResponseMetadata(res *http.Response) error {
 	// Parse the body to extract metadata
 	metadata, err := p.parseOpenAIResponseMetadata(bodyBytes)
 	if err != nil {
-		return fmt.Errorf("failed to parse response metadata: %w", err)
+		p.logger.Debug("Failed to extract response metadata",
+			zap.Error(err),
+			zap.String("content_type", contentType),
+			zap.String("content_encoding", contentEncoding))
+		return nil
 	}
 
 	// Add metadata to response headers
@@ -316,7 +350,9 @@ func (p *TransparentProxy) errorHandler(w http.ResponseWriter, r *http.Request, 
 	}
 
 	// Handle different error types
+	requestID, _ := r.Context().Value(ctxKeyRequestID).(string)
 	p.logger.Error("Proxy error",
+		zap.String("request_id", requestID),
 		zap.Error(err),
 		zap.String("method", r.Method),
 		zap.String("path", r.URL.Path))
@@ -350,6 +386,14 @@ func (p *TransparentProxy) errorHandler(w http.ResponseWriter, r *http.Request, 
 
 // handleValidationError handles errors specific to token validation
 func (p *TransparentProxy) handleValidationError(w http.ResponseWriter, err error) {
+	// Try to get request ID from context if available
+	var requestID string
+	if w != nil {
+		if req, ok := w.(interface{ Request() *http.Request }); ok && req.Request() != nil {
+			requestID, _ = req.Request().Context().Value(ctxKeyRequestID).(string)
+		}
+	}
+
 	statusCode := http.StatusUnauthorized
 	errorResponse := ErrorResponse{
 		Error: "Authentication error",
@@ -385,6 +429,10 @@ func (p *TransparentProxy) handleValidationError(w http.ResponseWriter, err erro
 	if err := json.NewEncoder(w).Encode(errorResponse); err != nil {
 		p.logger.Error("Failed to encode error response", zap.Error(err))
 	}
+
+	p.logger.Error("Validation error",
+		zap.String("request_id", requestID),
+		zap.Error(err))
 }
 
 // createTransport creates an HTTP transport with appropriate settings
@@ -407,13 +455,128 @@ func (p *TransparentProxy) createTransport() *http.Transport {
 
 // Handler returns the HTTP handler for the proxy
 func (p *TransparentProxy) Handler() http.Handler {
-	// Apply middleware chain
-	return Chain(p.proxy,
-		p.LoggingMiddleware(),
-		p.ValidateRequestMiddleware(),
-		p.TimeoutMiddleware(p.config.RequestTimeout),
-		p.MetricsMiddleware(),
-	)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Generate request ID and add to context
+		requestID := uuid.New().String()
+		ctx := context.WithValue(r.Context(), ctxKeyRequestID, requestID)
+		r = r.WithContext(ctx)
+
+		// Set X-Request-ID header
+		w.Header().Set("X-Request-ID", requestID)
+
+		// Record when proxy receives the request
+		receivedAt := time.Now().UTC()
+		ctx = context.WithValue(ctx, ctxKeyProxyReceivedAt, receivedAt)
+		r = r.WithContext(ctx)
+
+		// Wrap the ResponseWriter to allow us to set headers at first/last byte
+		rw := &timingResponseWriter{ResponseWriter: w}
+
+		// Instrument the reverse proxy
+		p.proxy.Director = func(req *http.Request) {
+			// Record when proxy sends to backend
+			sentAt := time.Now().UTC()
+			ctx := context.WithValue(req.Context(), ctxKeyProxySentBackendAt, sentAt)
+			*req = *req.WithContext(ctx)
+			p.director(req)
+		}
+
+		p.proxy.ModifyResponse = func(res *http.Response) error {
+			// Record when proxy receives first byte from backend (non-streaming)
+			firstRespAt := time.Now().UTC()
+			ctx := context.WithValue(res.Request.Context(), ctxKeyProxyFirstRespAt, firstRespAt)
+			res.Request = res.Request.WithContext(ctx)
+			// For non-streaming, final response is the same as first
+			ctx = context.WithValue(res.Request.Context(), ctxKeyProxyFinalRespAt, firstRespAt)
+			res.Request = res.Request.WithContext(ctx)
+			// Set headers
+			setTimingHeaders(res, res.Request.Context())
+			// Set X-Request-ID header in response
+			requestID, _ := res.Request.Context().Value(ctxKeyRequestID).(string)
+			if requestID != "" {
+				res.Header.Set("X-Request-ID", requestID)
+			}
+			// Log timings
+			logProxyTimings(p.logger, res.Request.Context())
+			return p.modifyResponse(res)
+		}
+
+		p.proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+			logProxyTimings(p.logger, r.Context())
+			p.errorHandler(w, r, err)
+		}
+
+		// For streaming, we need to hook into the ResponseWriter
+		// We'll use a custom writer to set first/last byte timings
+		p.proxy.ServeHTTP(rw, r)
+	})
+}
+
+type timingResponseWriter struct {
+	http.ResponseWriter
+	firstByteOnce sync.Once
+	finalByteOnce sync.Once
+	firstByteAt   time.Time
+	finalByteAt   time.Time
+}
+
+func (w *timingResponseWriter) Write(b []byte) (int, error) {
+	now := time.Now().UTC()
+	w.firstByteOnce.Do(func() {
+		w.firstByteAt = now
+		w.Header().Set("X-Proxy-First-Response-At", w.firstByteAt.Format(time.RFC3339Nano))
+	})
+	w.finalByteAt = now
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *timingResponseWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func setTimingHeaders(res *http.Response, ctx context.Context) {
+	if v := ctx.Value(ctxKeyProxyReceivedAt); v != nil {
+		if t, ok := v.(time.Time); ok {
+			res.Header.Set("X-Proxy-Received-At", t.Format(time.RFC3339Nano))
+		}
+	}
+	if v := ctx.Value(ctxKeyProxySentBackendAt); v != nil {
+		if t, ok := v.(time.Time); ok {
+			res.Header.Set("X-Proxy-Sent-Backend-At", t.Format(time.RFC3339Nano))
+		}
+	}
+	if v := ctx.Value(ctxKeyProxyFirstRespAt); v != nil {
+		if t, ok := v.(time.Time); ok {
+			res.Header.Set("X-Proxy-First-Response-At", t.Format(time.RFC3339Nano))
+		}
+	}
+	if v := ctx.Value(ctxKeyProxyFinalRespAt); v != nil {
+		if t, ok := v.(time.Time); ok {
+			res.Header.Set("X-Proxy-Final-Response-At", t.Format(time.RFC3339Nano))
+		}
+	}
+}
+
+func logProxyTimings(logger *zap.Logger, ctx context.Context) {
+	received, _ := ctx.Value(ctxKeyProxyReceivedAt).(time.Time)
+	sent, _ := ctx.Value(ctxKeyProxySentBackendAt).(time.Time)
+	first, _ := ctx.Value(ctxKeyProxyFirstRespAt).(time.Time)
+	final, _ := ctx.Value(ctxKeyProxyFinalRespAt).(time.Time)
+	requestID, _ := ctx.Value(ctxKeyRequestID).(string)
+	if !received.IsZero() && !sent.IsZero() {
+		logger.Debug("Proxy overhead (pre-backend)", zap.Duration("duration", sent.Sub(received)), zap.String("request_id", requestID))
+	}
+	if !sent.IsZero() && !first.IsZero() {
+		logger.Debug("Backend latency (first byte)", zap.Duration("duration", first.Sub(sent)), zap.String("request_id", requestID))
+	}
+	if !first.IsZero() && !final.IsZero() {
+		logger.Debug("Streaming duration", zap.Duration("duration", final.Sub(first)), zap.String("request_id", requestID))
+	}
+	if !received.IsZero() && !final.IsZero() {
+		logger.Debug("Total proxy duration", zap.Duration("duration", final.Sub(received)), zap.String("request_id", requestID))
+	}
 }
 
 // LoggingMiddleware logs request details
@@ -421,7 +584,9 @@ func (p *TransparentProxy) LoggingMiddleware() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
+			requestID, _ := r.Context().Value(ctxKeyRequestID).(string)
 			p.logger.Info("Request started",
+				zap.String("request_id", requestID),
 				zap.String("method", r.Method),
 				zap.String("path", r.URL.Path),
 				zap.String("remote_addr", r.RemoteAddr))
@@ -438,6 +603,7 @@ func (p *TransparentProxy) LoggingMiddleware() Middleware {
 			// Log request completion
 			duration := time.Since(start)
 			p.logger.Info("Request completed",
+				zap.String("request_id", requestID),
 				zap.String("method", r.Method),
 				zap.String("path", r.URL.Path),
 				zap.Int("status", rec.statusCode),
