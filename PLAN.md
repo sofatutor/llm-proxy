@@ -169,6 +169,7 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 - **Authentication**: `Authorization: Bearer <withering-token>`
 - Forwards requests to `https://api.openai.com/v1/*`
 - Supports streaming (`stream=true`)
+- **Documentation Note:** The proxy API is not documented with Swagger/OpenAPI except for authentication, allowed paths/methods, and transparency. Request/response schemas are not defined here; refer to the backend provider's documentation for those details. See rationale below.
 
 ### Admin UI (`/admin/*`)
 - **Authentication**: Basic auth (`ADMIN_USER`, `ADMIN_PASSWORD`)
@@ -196,6 +197,13 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 - `/manage/tokens` (CRUD): POST, GET, DELETE
   - Auth: `Authorization: Bearer <MANAGEMENT_TOKEN>`
   - Request/response formats: [documented in code, needs expansion here]
+- **Swagger/OpenAPI Documentation Policy:**
+  - Swagger/OpenAPI documentation is maintained only for the Management API endpoints (`/manage/*`).
+  - The proxy API (`/v1/*`) is not documented with Swagger/OpenAPI except for authentication and allowed paths/methods. This is because the proxy is transparent and does not define or validate backend schemas. Users should refer to the backend provider's documentation for those endpoints.
+
+#### Rationale
+- The proxy is designed for maximum transparency and minimum latency. It does not interpret or validate backend API payloads, only enforcing authentication and allowed paths/methods.
+- Swagger/OpenAPI is essential for the Management API, which is a stable, user-facing contract. For the proxy API, only proxy-specific behavior and constraints are documented.
 
 ### Health Check
 - `/health`: Returns status, timestamp, version
