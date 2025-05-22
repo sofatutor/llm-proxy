@@ -114,7 +114,7 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 - Support streaming with Server-Sent Events
 
 ### 5. Logging System
- - Implement JSON Lines local logging ✅
+ - Implement JSON Lines local logging
 - Create asynchronous worker for external logging
 - Extract metadata from responses
 
@@ -293,28 +293,21 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 > **Minimum Latency Principle:** Every architectural component, from HTTP server to middleware and database access, must be designed for minimal latency. Avoid unnecessary processing, blocking operations, or synchronous I/O in the request path. Use concurrency and asynchronous operations where possible to keep proxy response times as close to direct API calls as possible.
 
 ## CLI Tool (Setup, Server, Chat)
-- Add support for daemon mode (`llm-proxy server -d`), PID file management, and advanced CLI flags **[NEW]**
-  - Rationale: Enables background operation, process management, and improved operational flexibility for production use.
-- Expanded documentation and end-to-end usage examples **[NEW]**
-  - Rationale: Ensures users can easily set up, run, and interact with the proxy in all supported modes.
-- Improved flag parsing and configuration overrides **[NEW]**
-  - Rationale: Allows for more robust and user-friendly CLI experience, supporting both interactive and automated workflows.
+- Add support for daemon mode (`llm-proxy server -d`), PID file management, and advanced CLI flags
+- Expanded documentation and end-to-end usage examples
+- Improved flag parsing and configuration overrides
 
 ## Logging System
-- Add proxy metrics/logging/timing improvements (duration, request/response stats, error tracking) **[NEW]**
-  - Rationale: Enables detailed performance monitoring, troubleshooting, and auditability.
+- Add proxy metrics/logging/timing improvements (duration, request/response stats, error tracking)
 
 ## Monitoring
-- Add health check endpoint `/health` for readiness/liveness probes **[NEW]**
-  - Rationale: Supports container orchestration, uptime monitoring, and automated health checks.
+- Add health check endpoint `/health` for readiness/liveness probes
 
 ## API Provider Config
-- Expanded YAML config for API providers, endpoints, and methods **[NEW]**
-  - Rationale: Improves extensibility and maintainability for supporting multiple API backends and custom endpoints.
+- Expanded YAML config for API providers, endpoints, and methods
 
 ## Benchmark Tool
-- Refactor and expand benchmark tool, add setup logic, restore tests **[NEW]**
-  - Rationale: Ensures performance can be measured, compared, and optimized as the proxy evolves.
+- Refactor and expand benchmark tool, add setup logic, restore tests
 
 ## Project Directory Structure (Updated)
 

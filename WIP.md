@@ -216,9 +216,9 @@ Repository structure, configuration, Docker, security, documentation, and founda
     - Streaming mode for real-time responses
     - Verbose mode for displaying timing information
     - Shows proxy overhead compared to remote call duration
-  - 'llm-proxy server' command with daemon mode (-d option) and PID file support **[NEW: expanded flags, background/foreground, PID management]**
-  - Advanced CLI flag parsing and configuration overrides **[NEW]**
-  - Comprehensive end-to-end usage documentation and advanced examples **[NEW]**
+  - 'llm-proxy server' command with daemon mode (-d option) and PID file support
+  - Advanced CLI flag parsing and configuration overrides
+  - Comprehensive end-to-end usage documentation and advanced examples
   - Test cases for CLI tool verification (needs expansion for new features) **[IN PROGRESS]**
   - Documentation for CLI usage (needs update for new features) **[IN PROGRESS]**
 
@@ -533,7 +533,7 @@ A new `llm-proxy manage` command will be introduced to provide a clear, user-fri
 - [ ] Implement progress reporting
 - [ ] Add customizable request templates
 - [ ] Create documentation with examples
-- [ ] Refactor and expand benchmark tool, add setup logic, restore tests **[NEW]**
+- [ ] Refactor and expand benchmark tool, add setup logic, restore tests
 
 ### Pull Requests for Phase 5
 
