@@ -22,12 +22,14 @@ import (
 )
 
 // Add context keys for timing
+type ctxKey string
+
 const (
-	ctxKeyProxyReceivedAt    = "proxy_received_at"
-	ctxKeyProxySentBackendAt = "proxy_sent_backend_at"
-	ctxKeyProxyFirstRespAt   = "proxy_first_response_at"
-	ctxKeyProxyFinalRespAt   = "proxy_final_response_at"
-	ctxKeyRequestID          = "request_id"
+	ctxKeyProxyReceivedAt    ctxKey = "proxy_received_at"
+	ctxKeyProxySentBackendAt ctxKey = "proxy_sent_backend_at"
+	ctxKeyProxyFirstRespAt   ctxKey = "proxy_first_response_at"
+	ctxKeyProxyFinalRespAt   ctxKey = "proxy_final_response_at"
+	ctxKeyRequestID          ctxKey = "request_id"
 )
 
 // TransparentProxy implements the Proxy interface for transparent proxying
@@ -515,7 +517,6 @@ func (p *TransparentProxy) Handler() http.Handler {
 type timingResponseWriter struct {
 	http.ResponseWriter
 	firstByteOnce sync.Once
-	finalByteOnce sync.Once
 	firstByteAt   time.Time
 	finalByteAt   time.Time
 }
