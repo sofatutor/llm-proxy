@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -110,7 +109,6 @@ func TestManagementAPI_Integration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List projects request failed: %v", err)
 	}
-	body, _ := io.ReadAll(resp.Body)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
