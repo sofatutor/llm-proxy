@@ -46,6 +46,14 @@ func (m *MockProjectStore) GetAPIKeyForProject(ctx context.Context, projectID st
 	return args.String(0), args.Error(1)
 }
 
+func (m *MockProjectStore) ListProjects(ctx context.Context) ([]Project, error) { return nil, nil }
+func (m *MockProjectStore) CreateProject(ctx context.Context, p Project) error  { return nil }
+func (m *MockProjectStore) GetProjectByID(ctx context.Context, id string) (Project, error) {
+	return Project{}, nil
+}
+func (m *MockProjectStore) UpdateProject(ctx context.Context, p Project) error { return nil }
+func (m *MockProjectStore) DeleteProject(ctx context.Context, id string) error { return nil }
+
 // MockAPIServer creates a mock server to represent the target API
 func createMockAPIServer(t *testing.T) *httptest.Server {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
