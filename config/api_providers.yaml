@@ -38,16 +38,27 @@ apis:
       - /v1/images/variations
       
       # Audio
+      - /v1/audio/speech
       - /v1/audio/transcriptions
       - /v1/audio/translations
       
       # Moderations
       - /v1/moderations
+
+      # Threads
+      - /v1/threads
+
+      # Messages
+      - /v1/messages
+
+      # Runs
+      - /v1/runs
     
     allowed_methods:
       - GET
       - POST
       - DELETE
+      - OPTIONS
     
     # Timeout settings in seconds
     timeouts:
