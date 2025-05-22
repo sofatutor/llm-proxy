@@ -20,9 +20,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Define a custom context key type to avoid staticcheck warning
-type ctxKey string
-
 // MockTokenStore with methods that return testable results
 type MockTokenStoreExtended struct {
 	mock.Mock
@@ -543,7 +540,7 @@ func TestHandleTokens(t *testing.T) {
 
 func TestGetRequestID(t *testing.T) {
 	// With request ID in context
-	ctx := context.WithValue(context.Background(), ctxKey("request_id"), "test-id")
+	ctx := context.WithValue(context.Background(), ctxKeyRequestID, "test-id")
 	id := getRequestID(ctx)
 	assert.Equal(t, "test-id", id)
 
@@ -645,7 +642,7 @@ func TestHandleListProjects_Error(t *testing.T) {
 	w := httptest.NewRecorder()
 
 	// Use custom context key type
-	ctx := context.WithValue(context.Background(), ctxKey("request_id"), "test-id")
+	ctx := context.WithValue(context.Background(), ctxKeyRequestID, "test-id")
 	req = req.WithContext(ctx)
 
 	server.handleListProjects(w, req)

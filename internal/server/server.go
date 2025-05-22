@@ -20,6 +20,10 @@ import (
 	"go.uber.org/zap"
 )
 
+type ctxKey string
+
+const ctxKeyRequestID ctxKey = "request_id"
+
 // Server represents the HTTP server for the LLM Proxy.
 // It encapsulates the underlying http.Server along with application configuration
 // and handles request routing and server lifecycle management.
@@ -503,7 +507,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 }
 
 func getRequestID(ctx context.Context) string {
-	if v := ctx.Value("request_id"); v != nil {
+	if v := ctx.Value(ctxKeyRequestID); v != nil {
 		if id, ok := v.(string); ok && id != "" {
 			return id
 		}
