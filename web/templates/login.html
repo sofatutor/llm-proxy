@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.title}} - LLM Proxy Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/css/admin.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            width: 100%;
+            max-width: 400px;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .logo h2 {
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .logo p {
+            color: #666;
+            margin-bottom: 0;
+        }
+        .form-control {
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+            padding: 0.75rem 1rem;
+            font-size: 1rem;
+        }
+        .form-control:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 0.75rem 2rem;
+            font-weight: 600;
+            width: 100%;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+        }
+        .alert {
+            border-radius: 10px;
+            border: none;
+        }
+        .help-text {
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #e9ecef;
+            font-size: 0.9rem;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="logo">
+            <h2>🚀 LLM Proxy</h2>
+            <p>Admin Dashboard</p>
+        </div>
+
+        {{if .error}}
+        <div class="alert alert-danger" role="alert">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            {{.error}}
+        </div>
+        {{end}}
+
+        <form method="POST" action="/auth/login">
+            <div class="mb-3">
+                <label for="management_token" class="form-label">Management Token</label>
+                <input type="password" class="form-control" id="management_token" name="management_token" 
+                       placeholder="Enter your management token" required
+                       autocomplete="current-password">
+            </div>
+
+            <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="remember_me" name="remember_me" value="true">
+                <label class="form-check-label" for="remember_me">
+                    Keep me logged in for 30 days
+                </label>
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-shield-lock"></i>
+                Sign In
+            </button>
+        </form>
+
+        <div class="help-text">
+            <p><strong>Need your management token?</strong></p>
+            <ul class="mb-0">
+                <li>Check your <code>.env</code> file for <code>MANAGEMENT_TOKEN</code></li>
+                <li>Or run <code>llm-proxy setup</code> to generate a new one</li>
+                <li>Contact your administrator if you don't have access</li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Auto-focus the token input
+        document.getElementById('management_token').focus();
+        
+        // Clear any stored error after a few seconds
+        const errorAlert = document.querySelector('.alert-danger');
+        if (errorAlert) {
+            setTimeout(() => {
+                errorAlert.style.opacity = '0';
+                setTimeout(() => {
+                    errorAlert.remove();
+                }, 500);
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

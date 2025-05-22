@@ -46,12 +46,12 @@ var (
 	serverLogLevel     string
 	pidFile            string
 	debugMode          bool
-	
+
 	// Admin server flags
-	adminListenAddr     string
-	adminAPIBaseURL     string
+	adminListenAddr      string
+	adminAPIBaseURL      string
 	adminManagementToken string
-	adminEnvFile        string
+	adminEnvFile         string
 )
 
 // Add this before init()
@@ -78,7 +78,7 @@ func init() {
 	serverCmd.Flags().StringVar(&serverLogLevel, "log-level", "", "Log level: debug, info, warn, error (overrides env var)")
 	serverCmd.Flags().StringVar(&pidFile, "pid-file", "tmp/server.pid", "PID file for daemon mode (relative to project root)")
 	serverCmd.Flags().BoolVarP(&debugMode, "debug", "v", false, "Enable debug logging (overrides log-level)")
-	
+
 	// Admin server command flags
 	adminServerCmd.Flags().StringVar(&adminListenAddr, "listen", ":8081", "Admin UI server listen address")
 	adminServerCmd.Flags().StringVar(&adminAPIBaseURL, "api-base-url", "http://localhost:8080", "Base URL for Management API")
@@ -277,13 +277,12 @@ func runAdminServer(cmd *cobra.Command, args []string) {
 		cfg.AdminUI.ManagementToken = adminManagementToken
 	}
 
-	// Validate required fields
+	// Set management token if provided (optional for browser-based auth)
 	if cfg.AdminUI.ManagementToken == "" {
 		if token := os.Getenv("MANAGEMENT_TOKEN"); token != "" {
 			cfg.AdminUI.ManagementToken = token
-		} else {
-			log.Fatalf("Management token is required (use --management-token flag or MANAGEMENT_TOKEN env var)")
 		}
+		// No longer fatal - users can authenticate via web interface
 	}
 
 	// Create admin server
@@ -300,8 +299,10 @@ func runAdminServer(cmd *cobra.Command, args []string) {
 	go func() {
 		log.Printf("Admin UI server starting on %s", cfg.AdminUI.ListenAddr)
 		log.Printf("Management API: %s", cfg.AdminUI.APIBaseURL)
+		log.Printf("Open your browser and go to http://localhost%s", cfg.AdminUI.ListenAddr)
+		log.Printf("You'll be prompted to enter your management token for authentication")
 		log.Printf("Press Ctrl+C to stop")
-		
+
 		if err := server.Start(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Admin server error: %v", err)
 		}

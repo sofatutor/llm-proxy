@@ -7,20 +7,39 @@ import (
 	"context"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"github.com/sofatutor/llm-proxy/internal/config"
 )
+
+// Session represents a user session
+type Session struct {
+	ID         string
+	Token      string
+	CreatedAt  time.Time
+	ExpiresAt  time.Time
+	RememberMe bool
+}
+
+// getSessionSecret derives a secret key from the management token and a salt
+func getSessionSecret(cfg *config.Config) []byte {
+	salt := "llmproxy-cookie-salt" // TODO: move to config/env
+	return []byte(cfg.AdminUI.ManagementToken + salt)
+}
 
 // Server represents the Admin UI HTTP server.
 // It provides a web interface for managing projects and tokens
 // by communicating with the Management API.
 type Server struct {
-	server   *http.Server
-	config   *config.Config
-	engine   *gin.Engine
+	server    *http.Server
+	config    *config.Config
+	engine    *gin.Engine
 	apiClient *APIClient
 }
 
@@ -35,13 +54,21 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	}
 
 	engine := gin.New()
-	
+
 	// Add middleware
 	engine.Use(gin.Logger())
 	engine.Use(gin.Recovery())
 
+	// Add session middleware
+	store := cookie.NewStore(getSessionSecret(cfg))
+	engine.Use(sessions.Sessions("llmproxy_session", store))
+
 	// Create API client for communicating with Management API
-	apiClient := NewAPIClient(cfg.AdminUI.APIBaseURL, cfg.AdminUI.ManagementToken)
+	// Note: API client will be updated when user logs in
+	var apiClient *APIClient
+	if cfg.AdminUI.ManagementToken != "" {
+		apiClient = NewAPIClient(cfg.AdminUI.APIBaseURL, cfg.AdminUI.ManagementToken)
+	}
 
 	s := &Server{
 		config:    cfg,
@@ -77,49 +104,65 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) setupRoutes() {
 	// Serve static files (CSS, JS, images)
 	s.engine.Static("/static", "./web/static")
-	
+
 	// Load HTML templates with custom functions
 	s.engine.SetFuncMap(s.templateFuncs())
 	s.engine.LoadHTMLFiles(
 		"web/templates/base.html",
 		"web/templates/dashboard.html",
+		"web/templates/simple-dashboard.html",
 		"web/templates/error.html",
-		"web/templates/projects/list.html",
+		"web/templates/login.html",
+		"web/templates/projects-list-complete.html",
+		"web/templates/tokens-list-complete.html",
 		"web/templates/projects/new.html",
 		"web/templates/projects/show.html",
 		"web/templates/projects/edit.html",
-		"web/templates/tokens/list.html",
 		"web/templates/tokens/new.html",
 		"web/templates/tokens/created.html",
 	)
+
+	// Authentication routes (no middleware)
+	auth := s.engine.Group("/auth")
+	{
+		auth.GET("/login", s.handleLoginForm)
+		auth.POST("/login", s.handleLogin)
+		auth.GET("/logout", s.handleLogout)  // Allow GET for direct URL access
+		auth.POST("/logout", s.handleLogout) // Keep POST for form submission
+	}
 
 	// Root route - redirect to dashboard
 	s.engine.GET("/", func(c *gin.Context) {
 		c.Redirect(http.StatusMovedPermanently, "/dashboard")
 	})
 
-	// Dashboard
-	s.engine.GET("/dashboard", s.handleDashboard)
-
-	// Projects routes
-	projects := s.engine.Group("/projects")
+	// Protected routes with authentication middleware
+	protected := s.engine.Group("/")
+	protected.Use(s.authMiddleware())
 	{
-		projects.GET("", s.handleProjectsList)
-		projects.GET("/new", s.handleProjectsNew)
-		projects.POST("", s.handleProjectsCreate)
-		projects.GET("/:id", s.handleProjectsShow)
-		projects.GET("/:id/edit", s.handleProjectsEdit)
-		projects.PUT("/:id", s.handleProjectsUpdate)
-		projects.DELETE("/:id", s.handleProjectsDelete)
-	}
+		// Dashboard
+		protected.GET("/dashboard", s.handleDashboard)
 
-	// Tokens routes
-	tokens := s.engine.Group("/tokens")
-	{
-		tokens.GET("", s.handleTokensList)
-		tokens.GET("/new", s.handleTokensNew)
-		tokens.POST("", s.handleTokensCreate)
-		tokens.GET("/:token", s.handleTokensShow)
+		// Projects routes
+		projects := protected.Group("/projects")
+		{
+			projects.GET("", s.handleProjectsList)
+			projects.GET("/new", s.handleProjectsNew)
+			projects.POST("", s.handleProjectsCreate)
+			projects.GET("/:id", s.handleProjectsShow)
+			projects.GET("/:id/edit", s.handleProjectsEdit)
+			projects.PUT("/:id", s.handleProjectsUpdate)
+			projects.DELETE("/:id", s.handleProjectsDelete)
+		}
+
+		// Tokens routes
+		tokens := protected.Group("/tokens")
+		{
+			tokens.GET("", s.handleTokensList)
+			tokens.GET("/new", s.handleTokensNew)
+			tokens.POST("", s.handleTokensCreate)
+			tokens.GET("/:token", s.handleTokensShow)
+		}
 	}
 
 	// Health check
@@ -135,8 +178,11 @@ func (s *Server) setupRoutes() {
 
 // Dashboard handlers
 func (s *Server) handleDashboard(c *gin.Context) {
+	// Get API client from context
+	apiClient := c.MustGet("apiClient").(*APIClient)
+
 	// Get dashboard data from Management API
-	dashboardData, err := s.apiClient.GetDashboardData(c.Request.Context())
+	dashboardData, err := apiClient.GetDashboardData(c.Request.Context())
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to load dashboard data: %v", err),
@@ -144,7 +190,7 @@ func (s *Server) handleDashboard(c *gin.Context) {
 		return
 	}
 
-	c.HTML(http.StatusOK, "dashboard.html", gin.H{
+	c.HTML(http.StatusOK, "simple-dashboard.html", gin.H{
 		"title": "Dashboard",
 		"data":  dashboardData,
 	})
@@ -152,10 +198,13 @@ func (s *Server) handleDashboard(c *gin.Context) {
 
 // Project handlers
 func (s *Server) handleProjectsList(c *gin.Context) {
+	// Get API client from context
+	apiClient := c.MustGet("apiClient").(*APIClient)
+
 	page := getPageFromQuery(c, 1)
 	pageSize := getPageSizeFromQuery(c, 10)
 
-	projects, pagination, err := s.apiClient.GetProjects(c.Request.Context(), page, pageSize)
+	projects, pagination, err := apiClient.GetProjects(c.Request.Context(), page, pageSize)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to load projects: %v", err),
@@ -163,7 +212,7 @@ func (s *Server) handleProjectsList(c *gin.Context) {
 		return
 	}
 
-	c.HTML(http.StatusOK, "projects/list.html", gin.H{
+	c.HTML(http.StatusOK, "projects-list-complete.html", gin.H{
 		"title":      "Projects",
 		"projects":   projects,
 		"pagination": pagination,
@@ -177,6 +226,9 @@ func (s *Server) handleProjectsNew(c *gin.Context) {
 }
 
 func (s *Server) handleProjectsCreate(c *gin.Context) {
+	// Get API client from context
+	apiClient := c.MustGet("apiClient").(*APIClient)
+
 	var req struct {
 		Name         string `form:"name" binding:"required"`
 		OpenAIAPIKey string `form:"openai_api_key" binding:"required"`
@@ -190,7 +242,7 @@ func (s *Server) handleProjectsCreate(c *gin.Context) {
 		return
 	}
 
-	project, err := s.apiClient.CreateProject(c.Request.Context(), req.Name, req.OpenAIAPIKey)
+	project, err := apiClient.CreateProject(c.Request.Context(), req.Name, req.OpenAIAPIKey)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "projects/new.html", gin.H{
 			"title": "Create Project",
@@ -203,9 +255,12 @@ func (s *Server) handleProjectsCreate(c *gin.Context) {
 }
 
 func (s *Server) handleProjectsShow(c *gin.Context) {
+	// Get API client from context
+	apiClient := c.MustGet("apiClient").(*APIClient)
+
 	id := c.Param("id")
-	
-	project, err := s.apiClient.GetProject(c.Request.Context(), id)
+
+	project, err := apiClient.GetProject(c.Request.Context(), id)
 	if err != nil {
 		c.HTML(http.StatusNotFound, "error.html", gin.H{
 			"error": "Project not found",
@@ -220,9 +275,12 @@ func (s *Server) handleProjectsShow(c *gin.Context) {
 }
 
 func (s *Server) handleProjectsEdit(c *gin.Context) {
+	// Get API client from context
+	apiClient := c.MustGet("apiClient").(*APIClient)
+
 	id := c.Param("id")
-	
-	project, err := s.apiClient.GetProject(c.Request.Context(), id)
+
+	project, err := apiClient.GetProject(c.Request.Context(), id)
 	if err != nil {
 		c.HTML(http.StatusNotFound, "error.html", gin.H{
 			"error": "Project not found",
@@ -237,8 +295,11 @@ func (s *Server) handleProjectsEdit(c *gin.Context) {
 }
 
 func (s *Server) handleProjectsUpdate(c *gin.Context) {
+	// Get API client from context
+	apiClient := c.MustGet("apiClient").(*APIClient)
+
 	id := c.Param("id")
-	
+
 	var req struct {
 		Name         string `form:"name"`
 		OpenAIAPIKey string `form:"openai_api_key"`
@@ -251,7 +312,7 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 		return
 	}
 
-	project, err := s.apiClient.UpdateProject(c.Request.Context(), id, req.Name, req.OpenAIAPIKey)
+	project, err := apiClient.UpdateProject(c.Request.Context(), id, req.Name, req.OpenAIAPIKey)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to update project: %v", err),
@@ -263,9 +324,12 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 }
 
 func (s *Server) handleProjectsDelete(c *gin.Context) {
+	// Get API client from context
+	apiClient := c.MustGet("apiClient").(*APIClient)
+
 	id := c.Param("id")
-	
-	err := s.apiClient.DeleteProject(c.Request.Context(), id)
+
+	err := apiClient.DeleteProject(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("Failed to delete project: %v", err),
@@ -278,11 +342,14 @@ func (s *Server) handleProjectsDelete(c *gin.Context) {
 
 // Token handlers
 func (s *Server) handleTokensList(c *gin.Context) {
+	// Get API client from context
+	apiClient := c.MustGet("apiClient").(*APIClient)
+
 	page := getPageFromQuery(c, 1)
 	pageSize := getPageSizeFromQuery(c, 10)
 	projectID := c.Query("project_id")
 
-	tokens, pagination, err := s.apiClient.GetTokens(c.Request.Context(), projectID, page, pageSize)
+	tokens, pagination, err := apiClient.GetTokens(c.Request.Context(), projectID, page, pageSize)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to load tokens: %v", err),
@@ -290,8 +357,7 @@ func (s *Server) handleTokensList(c *gin.Context) {
 		return
 	}
 
-	c.HTML(http.StatusOK, "tokens/list.html", gin.H{
-		"title":      "Tokens",
+	c.HTML(http.StatusOK, "tokens-list-complete.html", gin.H{
 		"tokens":     tokens,
 		"pagination": pagination,
 		"projectId":  projectID,
@@ -299,7 +365,10 @@ func (s *Server) handleTokensList(c *gin.Context) {
 }
 
 func (s *Server) handleTokensNew(c *gin.Context) {
-	projects, _, err := s.apiClient.GetProjects(c.Request.Context(), 1, 100)
+	// Get API client from context
+	apiClient := c.MustGet("apiClient").(*APIClient)
+
+	projects, _, err := apiClient.GetProjects(c.Request.Context(), 1, 100)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to load projects: %v", err),
@@ -314,13 +383,16 @@ func (s *Server) handleTokensNew(c *gin.Context) {
 }
 
 func (s *Server) handleTokensCreate(c *gin.Context) {
+	// Get API client from context
+	apiClient := c.MustGet("apiClient").(*APIClient)
+
 	var req struct {
 		ProjectID     string `form:"project_id" binding:"required"`
 		DurationHours int    `form:"duration_hours" binding:"required,min=1,max=8760"` // Max 1 year
 	}
 
 	if err := c.ShouldBind(&req); err != nil {
-		projects, _, _ := s.apiClient.GetProjects(c.Request.Context(), 1, 100)
+		projects, _, _ := apiClient.GetProjects(c.Request.Context(), 1, 100)
 		c.HTML(http.StatusBadRequest, "tokens/new.html", gin.H{
 			"title":    "Generate Token",
 			"projects": projects,
@@ -329,9 +401,9 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 		return
 	}
 
-	token, err := s.apiClient.CreateToken(c.Request.Context(), req.ProjectID, req.DurationHours)
+	token, err := apiClient.CreateToken(c.Request.Context(), req.ProjectID, req.DurationHours)
 	if err != nil {
-		projects, _, _ := s.apiClient.GetProjects(c.Request.Context(), 1, 100)
+		projects, _, _ := apiClient.GetProjects(c.Request.Context(), 1, 100)
 		c.HTML(http.StatusInternalServerError, "tokens/new.html", gin.H{
 			"title":    "Generate Token",
 			"projects": projects,
@@ -490,5 +562,162 @@ func (s *Server) templateFuncs() template.FuncMap {
 		"not": func(a bool) bool {
 			return !a
 		},
+		"obfuscateAPIKey": func(apiKey string) string {
+			if len(apiKey) <= 12 {
+				if len(apiKey) <= 4 {
+					return strings.Repeat("*", len(apiKey))
+				}
+				return apiKey[:2] + strings.Repeat("*", len(apiKey)-2)
+			}
+			return apiKey[:8] + "..." + apiKey[len(apiKey)-4:]
+		},
+		"obfuscateToken": func(token string) string {
+			if len(token) <= 8 {
+				return "****"
+			}
+			return token[:4] + "****" + token[len(token)-4:]
+		},
 	}
+}
+
+// Authentication handlers
+
+func (s *Server) handleLoginForm(c *gin.Context) {
+	c.HTML(http.StatusOK, "login.html", gin.H{
+		"title": "Sign In",
+	})
+}
+
+func (s *Server) handleLogin(c *gin.Context) {
+	var req struct {
+		ManagementToken string `form:"management_token" binding:"required"`
+		RememberMe      bool   `form:"remember_me"`
+	}
+
+	if err := c.Request.ParseForm(); err == nil {
+		// Only log field presence, not values
+		log.Printf("Raw POST form fields: %v", getFormFieldNames(c.Request.PostForm))
+	}
+
+	if err := c.ShouldBind(&req); err != nil {
+		log.Printf("ShouldBind error: %v", err)
+		c.HTML(http.StatusBadRequest, "login.html", gin.H{
+			"title": "Sign In",
+			"error": "Please enter your management token",
+		})
+		return
+	}
+
+	log.Printf("Login attempt: token=%q rememberMe=%v", obfuscateToken(req.ManagementToken), req.RememberMe)
+
+	// Validate token against the Management API
+	if !s.validateTokenWithAPI(c.Request.Context(), req.ManagementToken) {
+		log.Printf("Token validation failed for token=%q", obfuscateToken(req.ManagementToken))
+		c.HTML(http.StatusUnauthorized, "login.html", gin.H{
+			"title": "Sign In",
+			"error": "Invalid management token. Please check your token and try again.",
+		})
+		return
+	}
+
+	// Set session cookie
+	session := sessions.Default(c)
+	session.Set("token", req.ManagementToken)
+	if req.RememberMe {
+		session.Options(sessions.Options{
+			MaxAge:   30 * 24 * 60 * 60, // 30 days
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   false,
+		})
+	} else {
+		session.Options(sessions.Options{
+			MaxAge:   0,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   false,
+		})
+	}
+	if err := session.Save(); err != nil {
+		log.Printf("Session save error: %v", err)
+	}
+
+	log.Printf("Session saved for token=%q, rememberMe=%v", obfuscateToken(req.ManagementToken), req.RememberMe)
+
+	// Redirect to dashboard
+	c.Redirect(http.StatusSeeOther, "/dashboard")
+}
+
+func (s *Server) handleLogout(c *gin.Context) {
+	session := sessions.Default(c)
+	session.Clear()
+	if err := session.Save(); err != nil {
+		log.Printf("Session save error: %v", err)
+	}
+	c.Redirect(http.StatusSeeOther, "/auth/login")
+}
+
+// authMiddleware checks for valid session
+func (s *Server) authMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		session := sessions.Default(c)
+		token := session.Get("token")
+		if token == nil {
+			c.Redirect(http.StatusSeeOther, "/auth/login")
+			c.Abort()
+			return
+		}
+
+		// Optionally, validate token again or cache validation
+		apiClient := NewAPIClient(s.config.AdminUI.APIBaseURL, token.(string))
+		c.Set("apiClient", apiClient)
+		c.Next()
+	}
+}
+
+// validateTokenWithAPI validates a token against the Management API
+func (s *Server) validateTokenWithAPI(ctx context.Context, token string) bool {
+	// Create a HTTP client to validate the token
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	// Try to access a simple management endpoint with the token
+	req, err := http.NewRequestWithContext(ctx, "GET", s.config.AdminUI.APIBaseURL+"/manage/projects", nil)
+	if err != nil {
+		return false
+	}
+
+	// Add authorization header
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	// Make the request
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("Error closing response body: %v", err)
+		}
+	}()
+
+	// Valid token should return 200 OK (or other success status)
+	return resp.StatusCode >= 200 && resp.StatusCode < 300
+}
+
+// getFormFieldNames returns a slice of form field names for logging
+func getFormFieldNames(form map[string][]string) []string {
+	fields := make([]string, 0, len(form))
+	for k := range form {
+		fields = append(fields, k)
+	}
+	return fields
+}
+
+// obfuscateToken returns a partially masked version of a token for logging
+func obfuscateToken(token string) string {
+	if len(token) <= 8 {
+		return "****"
+	}
+	return token[:4] + "****" + token[len(token)-4:]
 }
