@@ -1,0 +1,201 @@
+{{ define "content" }}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="bi bi-pencil"></i>
+                Edit Project
+            </h1>
+            <div class="btn-group">
+                <a href="/projects/{{ .project.ID }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i>
+                    Back to Project
+                </a>
+                <a href="/projects" class="btn btn-outline-secondary">
+                    <i class="bi bi-list"></i>
+                    All Projects
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Project Details</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="/projects/{{ .project.ID }}">
+                    <input type="hidden" name="_method" value="PUT">
+                    
+                    <div class="mb-3">
+                        <label for="name" class="form-label">
+                            Project Name <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="name" 
+                               name="name" 
+                               required 
+                               placeholder="Enter project name"
+                               value="{{ .project.Name }}">
+                        <div class="form-text">
+                            Choose a descriptive name for your project.
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="openai_api_key" class="form-label">
+                            OpenAI API Key <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                            <input type="password" 
+                                   class="form-control" 
+                                   id="openai_api_key" 
+                                   name="openai_api_key" 
+                                   required 
+                                   placeholder="sk-..."
+                                   value="{{ .project.OpenAIAPIKey }}">
+                            <button class="btn btn-outline-secondary" 
+                                    type="button" 
+                                    onclick="togglePassword('openai_api_key')">
+                                <i class="bi bi-eye" id="openai_api_key_icon"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            Update your OpenAI API key for this project.
+                            <a href="https://platform.openai.com/api-keys" target="_blank" class="text-decoration-none">
+                                Get your API key here <i class="bi bi-box-arrow-up-right"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <i class="bi bi-info-circle"></i>
+                                Project Information
+                            </h6>
+                            <div class="row">
+                                <div class="col-sm-6">
+                                    <strong>Project ID:</strong><br>
+                                    <code class="small">{{ .project.ID }}</code>
+                                </div>
+                                <div class="col-sm-6">
+                                    <strong>Created:</strong><br>
+                                    <small class="text-muted">{{ .project.CreatedAt.Format "2006-01-02 15:04" }}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="d-flex justify-content-between">
+                        <a href="/projects/{{ .project.ID }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i>
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i>
+                            Update Project
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Danger Zone -->
+        <div class="card mt-4 border-danger">
+            <div class="card-header bg-danger text-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Danger Zone
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">
+                    Once you delete a project, there is no going back. This will permanently delete 
+                    the project and all associated tokens.
+                </p>
+                <button type="button" 
+                        class="btn btn-outline-danger" 
+                        onclick="confirmDelete('{{ .project.ID }}', '{{ .project.Name }}')">
+                    <i class="bi bi-trash"></i>
+                    Delete This Project
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the project <strong id="deleteProjectName"></strong>?</p>
+                <p class="text-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    This action cannot be undone and will also delete all associated tokens.
+                </p>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="confirmCheck">
+                    <label class="form-check-label" for="confirmCheck">
+                        I understand this action cannot be undone
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <input type="hidden" name="_method" value="DELETE">
+                    <button type="submit" class="btn btn-danger" id="deleteBtn" disabled>
+                        <i class="bi bi-trash"></i>
+                        Delete Project
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function togglePassword(fieldId) {
+    const field = document.getElementById(fieldId);
+    const icon = document.getElementById(fieldId + '_icon');
+    
+    if (field.type === 'password') {
+        field.type = 'text';
+        icon.className = 'bi bi-eye-slash';
+    } else {
+        field.type = 'password';
+        icon.className = 'bi bi-eye';
+    }
+}
+
+function confirmDelete(projectId, projectName) {
+    document.getElementById('deleteProjectName').textContent = projectName;
+    document.getElementById('deleteForm').action = '/projects/' + projectId;
+    
+    // Reset checkbox and button state
+    const checkbox = document.getElementById('confirmCheck');
+    const deleteBtn = document.getElementById('deleteBtn');
+    checkbox.checked = false;
+    deleteBtn.disabled = true;
+    
+    // Enable delete button when checkbox is checked
+    checkbox.onchange = function() {
+        deleteBtn.disabled = !this.checked;
+    };
+    
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+{{ end }}

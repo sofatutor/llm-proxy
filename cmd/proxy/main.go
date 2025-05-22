@@ -284,6 +284,7 @@ func init() {
 	cobraRoot.AddCommand(setupCmd)
 	cobraRoot.AddCommand(openaiCmd)
 	cobraRoot.AddCommand(serverCmd)
+	cobraRoot.AddCommand(adminServerCmd)
 
 	// Manage command and subcommands
 	var manageCmd = &cobra.Command{

@@ -6,6 +6,7 @@ package admin
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"net/http"
 	"time"
 
@@ -77,8 +78,10 @@ func (s *Server) setupRoutes() {
 	// Serve static files (CSS, JS, images)
 	s.engine.Static("/static", "./web/static")
 	
-	// Load HTML templates
+	// Load HTML templates with custom functions
+	s.engine.SetFuncMap(s.templateFuncs())
 	s.engine.LoadHTMLGlob("web/templates/*")
+	s.engine.LoadHTMLGlob("web/templates/**/*")
 
 	// Root route - redirect to dashboard
 	s.engine.GET("/", func(c *gin.Context) {
@@ -364,4 +367,118 @@ func parsePositiveInt(s string) (int, error) {
 		return 0, err
 	}
 	return result, nil
+}
+
+// templateFuncs returns custom template functions for HTML templates
+func (s *Server) templateFuncs() template.FuncMap {
+	return template.FuncMap{
+		"add": func(a, b int) int {
+			return a + b
+		},
+		"sub": func(a, b int) int {
+			return a - b
+		},
+		"inc": func(a int) int {
+			return a + 1
+		},
+		"dec": func(a int) int {
+			return a - 1
+		},
+		"seq": func(start, end int) []int {
+			if start > end {
+				return []int{}
+			}
+			seq := make([]int, end-start+1)
+			for i := range seq {
+				seq[i] = start + i
+			}
+			return seq
+		},
+		"now": func() time.Time {
+			return time.Now()
+		},
+		"eq": func(a, b any) bool {
+			return a == b
+		},
+		"ne": func(a, b any) bool {
+			return a != b
+		},
+		"lt": func(a, b any) bool {
+			switch v := a.(type) {
+			case int:
+				if b2, ok := b.(int); ok {
+					return v < b2
+				}
+			case int64:
+				if b2, ok := b.(int64); ok {
+					return v < b2
+				}
+			case time.Time:
+				if b2, ok := b.(time.Time); ok {
+					return v.Before(b2)
+				}
+			}
+			return false
+		},
+		"gt": func(a, b any) bool {
+			switch v := a.(type) {
+			case int:
+				if b2, ok := b.(int); ok {
+					return v > b2
+				}
+			case int64:
+				if b2, ok := b.(int64); ok {
+					return v > b2
+				}
+			case time.Time:
+				if b2, ok := b.(time.Time); ok {
+					return v.After(b2)
+				}
+			}
+			return false
+		},
+		"le": func(a, b any) bool {
+			switch v := a.(type) {
+			case int:
+				if b2, ok := b.(int); ok {
+					return v <= b2
+				}
+			case int64:
+				if b2, ok := b.(int64); ok {
+					return v <= b2
+				}
+			case time.Time:
+				if b2, ok := b.(time.Time); ok {
+					return v.Before(b2) || v.Equal(b2)
+				}
+			}
+			return false
+		},
+		"ge": func(a, b any) bool {
+			switch v := a.(type) {
+			case int:
+				if b2, ok := b.(int); ok {
+					return v >= b2
+				}
+			case int64:
+				if b2, ok := b.(int64); ok {
+					return v >= b2
+				}
+			case time.Time:
+				if b2, ok := b.(time.Time); ok {
+					return v.After(b2) || v.Equal(b2)
+				}
+			}
+			return false
+		},
+		"and": func(a, b bool) bool {
+			return a && b
+		},
+		"or": func(a, b bool) bool {
+			return a || b
+		},
+		"not": func(a bool) bool {
+			return !a
+		},
+	}
 }

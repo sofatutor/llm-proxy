@@ -284,43 +284,45 @@ A new `llm-proxy manage` command will be introduced to provide a clear, user-fri
 - Makes it easy for both humans and scripts to use the CLI.
 
 ### Implementation Checklist
-- [ ] Scaffold `manage` command and subcommands in CLI
-- [ ] Implement project CRUD subcommands (list, get, create, update, delete)
-- [ ] Implement token subcommands (generate, get)
-- [ ] Wire subcommands to management API endpoints (`/manage/projects`, `/manage/tokens`)
-- [ ] Require management token for all manage commands (flag or env)
-- [ ] Print results as table by default, with `--json` for machine output
-- [ ] Add tests for CLI manage commands
-- [ ] Document usage in CLI README
+- [x] Scaffold `manage` command and subcommands in CLI
+- [x] Implement project CRUD subcommands (list, get, create, update, delete)
+- [x] Implement token subcommands (generate, get)
+- [x] Wire subcommands to management API endpoints (`/manage/projects`, `/manage/tokens`)
+- [x] Require management token for all manage commands (flag or env)
+- [x] Print results as table by default, with `--json` for machine output
+- [x] Add tests for CLI manage commands
+- [x] Document usage in CLI README
 
 ## Phase 3: API and Interfaces
 
 ### Management API Endpoints
-- [ ] Design Management API with OpenAPI/Swagger:
+- [x] Design Management API with OpenAPI/Swagger:
   - Define endpoints (only for /manage/*, not /v1/*)
   - Document request/response formats for management endpoints
   - Specify authentication requirements
   - Detail error responses
   - **Note:** The proxy API (/v1/*) is not documented with Swagger/OpenAPI except for authentication and allowed paths/methods; refer to backend provider docs for schemas. See PLAN.md for rationale.
-- [ ] Implement authentication middleware with MANAGEMENT_TOKEN
-- [ ] Create /manage/tokens POST endpoint:
+- [x] Implement authentication middleware with MANAGEMENT_TOKEN
+- [x] Create /manage/tokens POST endpoint:
   - Validate request body
   - Generate token based on parameters
   - Return token details
 - [ ] Implement /manage/tokens DELETE endpoint:
-  - Validate token format
-  - Revoke specified token
-  - Return success response
-- [ ] Add /manage/tokens GET endpoint (list active tokens)
-- [ ] Create /manage/projects endpoints:
+  - ~~Validate token format~~
+  - ~~Revoke specified token~~
+  - ~~Return success response~~
+  - **Note:** Individual token deletion not implemented for security (prevents token enumeration). See PR18 security decisions.
+- [x] Add /manage/tokens GET endpoint (list active tokens with sanitized responses)
+- [x] Create /manage/projects endpoints:
   - POST for creation
   - GET for listing/retrieval
-  - PUT for updates
+  - PATCH for updates
   - DELETE for removal
-- [ ] Add health check endpoint `/health` for monitoring
+  - GET by ID for individual project details
+- [x] Add health check endpoint `/health` for monitoring
 - [ ] Implement rate limiting for management API
-- [ ] Add comprehensive error handling
-- [ ] Create API documentation with examples (expand for new endpoints)
+- [x] Add comprehensive error handling
+- [x] Create API documentation with examples (expand for new endpoints)
 
 ### Proxy API Endpoints
 - [x] Implement /v1/* forwarding to OpenAI
@@ -376,22 +378,22 @@ A new `llm-proxy manage` command will be introduced to provide a clear, user-fri
 
 ### Pull Requests for Phase 3
 
-1. **Management API Design** (`feature/phase-3-management-api-design`)
+1. **Management API Design** (`feature/phase-3-management-api-design`) ✅ **Completed in PR18**
    - Create OpenAPI/Swagger specification
    - Document request/response formats
    - Define authentication requirements
    - Detail error responses
 
-2. **Token Management API** (`feature/phase-3-token-api`)
+2. **Token Management API** (`feature/phase-3-token-api`) ✅ **Completed in PR18**
    - Implement authentication middleware
    - Create POST endpoint for token generation
-   - Add DELETE endpoint for token revocation
+   - ~~Add DELETE endpoint for token revocation~~ (Not implemented for security)
    - Implement GET endpoint for listing tokens
 
-3. **Project Management API** (`feature/phase-3-project-api`)
+3. **Project Management API** (`feature/phase-3-project-api`) ✅ **Completed in PR18**
    - Implement project CRUD endpoints
    - Add validation and error handling
-   - Create rate limiting
+   - ~~Create rate limiting~~ (Future PR)
    - Document API with examples
 
 4. **Proxy API Implementation** (`feature/phase-3-proxy-api`)

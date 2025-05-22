@@ -275,7 +275,7 @@ func (c *APIClient) GetTokens(ctx context.Context, projectID string, page, pageS
 
 // CreateToken creates a new token
 func (c *APIClient) CreateToken(ctx context.Context, projectID string, durationHours int) (*TokenCreateResponse, error) {
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"project_id":     projectID,
 		"duration_hours": durationHours,
 	}
@@ -294,7 +294,7 @@ func (c *APIClient) CreateToken(ctx context.Context, projectID string, durationH
 }
 
 // newRequest creates a new HTTP request with authentication
-func (c *APIClient) newRequest(ctx context.Context, method, path string, body interface{}) (*http.Request, error) {
+func (c *APIClient) newRequest(ctx context.Context, method, path string, body any) (*http.Request, error) {
 	var reqBody []byte
 	var err error
 
@@ -321,7 +321,7 @@ func (c *APIClient) newRequest(ctx context.Context, method, path string, body in
 }
 
 // doRequest executes an HTTP request and handles the response
-func (c *APIClient) doRequest(req *http.Request, result interface{}) error {
+func (c *APIClient) doRequest(req *http.Request, result any) error {
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
@@ -329,7 +329,7 @@ func (c *APIClient) doRequest(req *http.Request, result interface{}) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		var errorResp map[string]interface{}
+		var errorResp map[string]any
 		if err := json.NewDecoder(resp.Body).Decode(&errorResp); err == nil {
 			if msg, ok := errorResp["error"].(string); ok {
 				return fmt.Errorf("API error (%d): %s", resp.StatusCode, msg)
