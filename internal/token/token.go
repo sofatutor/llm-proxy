@@ -12,10 +12,10 @@ import (
 
 const (
 	// TokenPrefix is the prefix for all tokens
-	TokenPrefix = "tkn_"
+	TokenPrefix = "sk-"
 
 	// TokenRegex is the regular expression for validating token format
-	TokenRegexPattern = `^tkn_[A-Za-z0-9_-]{22}$`
+	TokenRegexPattern = `^sk-[A-Za-z0-9_-]{22}$`
 )
 
 var (

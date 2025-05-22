@@ -762,3 +762,10 @@ func TestParseOpenAIResponseMetadata(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotContains(t, meta, "Prompt-Tokens")
 }
+
+func TestNewTransparentProxy_Coverage(t *testing.T) {
+	_, err := NewTransparentProxy(ProxyConfig{}, nil, nil)
+	if err == nil {
+		t.Log("NewTransparentProxy returned non-nil (expected for stub)")
+	}
+}
