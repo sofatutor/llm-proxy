@@ -166,14 +166,11 @@ Repository structure, configuration, Docker, security, documentation, and founda
 - [x] Create error handling and response standardization (improved error handling and response checks implemented)
 - [x] Implement request/response logging
 - [x] Add timeout and cancellation handling (context timeouts and error handling improved)
-- [ ] Create retry logic for transient failures
-- [ ] Implement circuit breaker pattern for API stability
-- [ ] Add request validation
+- [x] Add minimal retry logic for transient upstream failures (with tests)
+- [x] Implement simple circuit breaker for upstream API (with tests)
+- [x] Ensure validation is limited to token, path, and method (with tests)
+- [x] Document config-driven extension points for API-specific logic
 - [ ] Create response transformation (if needed)
-- [ ] Add minimal retry logic for transient upstream failures (with tests)
-- [ ] Implement simple circuit breaker for upstream API (with tests)
-- [ ] Ensure validation is limited to token, path, and method (with tests)
-- [ ] Document config-driven extension points for API-specific logic
 
 ### Pull Requests for Phase 2
 
