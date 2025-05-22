@@ -432,3 +432,15 @@ func TestCachedValidator_EvictOldest_CorrectnessAndEfficiency(t *testing.T) {
 		t.Errorf("Cache size = %d, want %d", len(cv.cache), maxSize)
 	}
 }
+
+func (m *MockTokenStore) CreateToken(ctx context.Context, td TokenData) error {
+	return nil
+}
+
+func (m *MockTokenStore) GetTokensByProjectID(ctx context.Context, projectID string) ([]TokenData, error) {
+	return nil, nil
+}
+
+func (m *MockTokenStore) ListTokens(ctx context.Context) ([]TokenData, error) {
+	return nil, nil
+}

@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/sofatutor/llm-proxy/internal/proxy"
 )
 
 // TestProjectCRUD tests project CRUD operations.
@@ -15,7 +17,7 @@ func TestProjectCRUD(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a test project
-	project := Project{
+	project := proxy.Project{
 		ID:           "test-project-id",
 		Name:         "Test Project",
 		OpenAIAPIKey: "test-api-key",
@@ -81,7 +83,7 @@ func TestProjectCRUD(t *testing.T) {
 	}
 
 	// Test UpdateProject with non-existent ID
-	nonExistentProject := Project{
+	nonExistentProject := proxy.Project{
 		ID:           "non-existent",
 		Name:         "Non-existent Project",
 		OpenAIAPIKey: "test-api-key",
@@ -93,7 +95,7 @@ func TestProjectCRUD(t *testing.T) {
 	}
 
 	// Create a second project for ListProjects test
-	project2 := Project{
+	project2 := proxy.Project{
 		ID:           "test-project-id-2",
 		Name:         "Test Project 2",
 		OpenAIAPIKey: "test-api-key-2",
@@ -138,7 +140,7 @@ func TestProjectCRUD_Errors(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 
-	project := Project{
+	project := proxy.Project{
 		ID:           "dup-id",
 		Name:         "Dup Project",
 		OpenAIAPIKey: "key",
@@ -155,7 +157,7 @@ func TestProjectCRUD_Errors(t *testing.T) {
 		t.Error("expected error for duplicate project ID")
 	}
 	// Duplicate Name
-	project2 := Project{
+	project2 := proxy.Project{
 		ID:           "other-id",
 		Name:         project.Name,
 		OpenAIAPIKey: "key2",
@@ -176,7 +178,7 @@ func TestProjectCRUD_Errors(t *testing.T) {
 		t.Errorf("expected 0 projects, got %d", len(projects))
 	}
 	// Update non-existent project
-	p := Project{ID: "nope", Name: "nope", OpenAIAPIKey: "k", UpdatedAt: time.Now()}
+	p := proxy.Project{ID: "nope", Name: "nope", OpenAIAPIKey: "k", UpdatedAt: time.Now()}
 	if err := db.UpdateProject(ctx, p); err != ErrProjectNotFound {
 		t.Errorf("expected ErrProjectNotFound, got %v", err)
 	}
@@ -201,7 +203,7 @@ func TestListProjects_Multiple(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 	for i := 0; i < 5; i++ {
-		p := Project{
+		p := proxy.Project{
 			ID:           "id-" + strconv.Itoa(i),
 			Name:         "Project-" + strconv.Itoa(i),
 			OpenAIAPIKey: "key",
@@ -225,7 +227,7 @@ func TestUpdateProject_InvalidInput(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
 	ctx := context.Background()
-	p := Project{ID: "", Name: "", OpenAIAPIKey: "", UpdatedAt: time.Now()}
+	p := proxy.Project{ID: "", Name: "", OpenAIAPIKey: "", UpdatedAt: time.Now()}
 	if err := db.UpdateProject(ctx, p); err == nil {
 		t.Error("expected error for empty ID in UpdateProject")
 	}
@@ -267,7 +269,7 @@ func TestUpdateProject_EmptyID(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
 	ctx := context.Background()
-	p := Project{ID: "", Name: "Name", OpenAIAPIKey: "key", UpdatedAt: time.Now()}
+	p := proxy.Project{ID: "", Name: "Name", OpenAIAPIKey: "key", UpdatedAt: time.Now()}
 	if err := db.UpdateProject(ctx, p); err == nil {
 		t.Error("expected error for empty ID in UpdateProject")
 	}
@@ -290,7 +292,7 @@ func TestListProjects_LongNames(t *testing.T) {
 	for i := range longName {
 		longName[i] = 'a'
 	}
-	p := Project{ID: "long", Name: string(longName), OpenAIAPIKey: "key", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	p := proxy.Project{ID: "long", Name: string(longName), OpenAIAPIKey: "key", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	_ = db.CreateProject(ctx, p)
 	projects, err := db.ListProjects(ctx)
 	if err != nil {

@@ -31,6 +31,15 @@ type TokenStore interface {
 
 	// IncrementTokenUsage increments the usage count for a token
 	IncrementTokenUsage(ctx context.Context, tokenID string) error
+
+	// CreateToken creates a new token in the store
+	CreateToken(ctx context.Context, token TokenData) error
+
+	// ListTokens retrieves all tokens from the store
+	ListTokens(ctx context.Context) ([]TokenData, error)
+
+	// GetTokensByProjectID retrieves all tokens for a project
+	GetTokensByProjectID(ctx context.Context, projectID string) ([]TokenData, error)
 }
 
 // TokenData represents the data associated with a token

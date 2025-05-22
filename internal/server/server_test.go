@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/stretchr/testify/require"
 )
@@ -225,12 +226,30 @@ func (m *mockTokenStore) GetTokenByID(ctx context.Context, tokenID string) (toke
 func (m *mockTokenStore) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	return errors.New("not implemented")
 }
+func (m *mockTokenStore) CreateToken(ctx context.Context, td token.TokenData) error {
+	return nil
+}
+func (m *mockTokenStore) GetTokensByProjectID(ctx context.Context, projectID string) ([]token.TokenData, error) {
+	return nil, nil
+}
+func (m *mockTokenStore) ListTokens(ctx context.Context) ([]token.TokenData, error) {
+	return nil, nil
+}
 
 type mockProjectStore struct{}
 
 func (m *mockProjectStore) GetAPIKeyForProject(ctx context.Context, projectID string) (string, error) {
 	return "mock-key", nil
 }
+func (m *mockProjectStore) ListProjects(ctx context.Context) ([]proxy.Project, error) {
+	return nil, nil
+}
+func (m *mockProjectStore) CreateProject(ctx context.Context, p proxy.Project) error { return nil }
+func (m *mockProjectStore) GetProjectByID(ctx context.Context, id string) (proxy.Project, error) {
+	return proxy.Project{}, nil
+}
+func (m *mockProjectStore) UpdateProject(ctx context.Context, p proxy.Project) error { return nil }
+func (m *mockProjectStore) DeleteProject(ctx context.Context, id string) error       { return nil }
 
 func TestServer_New_WithDependencyInjection_ConfigAndFallback(t *testing.T) {
 	cfg := &config.Config{

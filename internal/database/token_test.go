@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/sofatutor/llm-proxy/internal/proxy"
 )
 
 // TestTokenCRUD tests token CRUD operations.
@@ -15,7 +17,7 @@ func TestTokenCRUD(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a test project first
-	project := Project{
+	project := proxy.Project{
 		ID:           "test-project-id",
 		Name:         "Test Project",
 		OpenAIAPIKey: "test-api-key",
@@ -212,7 +214,7 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a test project
-	project := Project{
+	project := proxy.Project{
 		ID:           "test-project-id",
 		Name:         "Test Project",
 		OpenAIAPIKey: "test-api-key",
@@ -345,7 +347,7 @@ func TestListTokens_Multiple(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
 	ctx := context.Background()
-	project := Project{ID: "p", Name: "P", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	project := proxy.Project{ID: "p", Name: "P", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	_ = db.CreateProject(ctx, project)
 	for i := 0; i < 5; i++ {
 		tk := Token{
@@ -462,7 +464,7 @@ func TestQueryTokens_LongToken(t *testing.T) {
 		longToken[i] = 'x'
 	}
 	tk := Token{Token: string(longToken), ProjectID: "p", IsActive: true, CreatedAt: time.Now()}
-	_ = db.CreateProject(ctx, Project{ID: "p", Name: "P", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+	_ = db.CreateProject(ctx, proxy.Project{ID: "p", Name: "P", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 	_ = db.CreateToken(ctx, tk)
 	tokens, err := db.ListTokens(ctx)
 	if err != nil {

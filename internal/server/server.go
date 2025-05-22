@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
@@ -67,6 +69,9 @@ func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.Pro
 
 	// Register routes
 	mux.HandleFunc("/health", s.handleHealth)
+	mux.HandleFunc("/manage/projects", s.handleProjects)
+	mux.HandleFunc("/manage/projects/", s.managementAuthMiddleware(s.handleProjectByID))
+	mux.HandleFunc("/manage/tokens", s.managementAuthMiddleware(s.handleTokens))
 
 	return s, nil
 }
@@ -202,4 +207,306 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Status code 200 OK is set implicitly when the response is written successfully
+}
+
+// managementAuthMiddleware checks the management token in the Authorization header
+func (s *Server) managementAuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		const prefix = "Bearer "
+		header := r.Header.Get("Authorization")
+		if !strings.HasPrefix(header, prefix) || len(header) <= len(prefix) {
+			http.Error(w, `{"error":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
+			return
+		}
+		token := header[len(prefix):]
+		if token != s.config.ManagementToken {
+			http.Error(w, `{"error":"invalid management token"}`, http.StatusUnauthorized)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// GET /manage/projects
+func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	projects, err := s.projectStore.ListProjects(ctx)
+	if err != nil {
+		s.logger.Error("failed to list projects", zap.Error(err))
+		http.Error(w, `{"error":"failed to list projects"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(projects); err != nil {
+		s.logger.Error("failed to encode projects response", zap.Error(err))
+	}
+}
+
+// POST /manage/projects
+func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	requestID := getRequestID(ctx)
+	var req struct {
+		Name         string `json:"name"`
+		OpenAIAPIKey string `json:"openai_api_key"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.logger.Error("invalid request body", zap.Error(err), zap.String("request_id", requestID))
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Name == "" || req.OpenAIAPIKey == "" {
+		s.logger.Error("missing required fields", zap.String("name", req.Name), zap.String("openai_api_key", req.OpenAIAPIKey), zap.String("request_id", requestID))
+		http.Error(w, `{"error":"name and openai_api_key are required"}`, http.StatusBadRequest)
+		return
+	}
+	id := generateUUID()
+	now := time.Now().UTC()
+	project := proxy.Project{
+		ID:           id,
+		Name:         req.Name,
+		OpenAIAPIKey: req.OpenAIAPIKey,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := s.projectStore.CreateProject(ctx, project); err != nil {
+		s.logger.Error("failed to create project", zap.Error(err), zap.String("name", req.Name), zap.String("request_id", requestID))
+		http.Error(w, `{"error":"failed to create project"}`, http.StatusInternalServerError)
+		return
+	}
+	s.logger.Info("project created", zap.String("id", id), zap.String("name", req.Name), zap.String("request_id", requestID))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(project); err != nil {
+		s.logger.Error("failed to encode project response", zap.Error(err))
+	}
+}
+
+// GET /manage/projects/{id}
+func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := strings.TrimPrefix(r.URL.Path, "/manage/projects/")
+	if id == "" || strings.Contains(id, "/") {
+		s.logger.Error("invalid project id", zap.String("id", id))
+		http.Error(w, `{"error":"invalid project id"}`, http.StatusBadRequest)
+		return
+	}
+	project, err := s.projectStore.GetProjectByID(ctx, id)
+	if err != nil {
+		s.logger.Error("project not found", zap.String("id", id), zap.Error(err))
+		http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(project); err != nil {
+		s.logger.Error("failed to encode project response", zap.Error(err))
+	}
+}
+
+// PATCH /manage/projects/{id}
+func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := strings.TrimPrefix(r.URL.Path, "/manage/projects/")
+	if id == "" || strings.Contains(id, "/") {
+		s.logger.Error("invalid project id for update", zap.String("id", id))
+		http.Error(w, `{"error":"invalid project id"}`, http.StatusBadRequest)
+		return
+	}
+	var req map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.logger.Error("invalid request body for update", zap.Error(err))
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+	project, err := s.projectStore.GetProjectByID(ctx, id)
+	if err != nil {
+		s.logger.Error("project not found for update", zap.String("id", id), zap.Error(err))
+		http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
+		return
+	}
+	if name, ok := req["name"]; ok {
+		project.Name = name
+	}
+	if key, ok := req["openai_api_key"]; ok {
+		project.OpenAIAPIKey = key
+	}
+	project.UpdatedAt = time.Now().UTC()
+	if err := s.projectStore.UpdateProject(ctx, project); err != nil {
+		s.logger.Error("failed to update project", zap.String("id", id), zap.Error(err))
+		http.Error(w, `{"error":"failed to update project"}`, http.StatusInternalServerError)
+		return
+	}
+	s.logger.Info("project updated", zap.String("id", id))
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(project); err != nil {
+		s.logger.Error("failed to encode project response", zap.Error(err))
+	}
+}
+
+// DELETE /manage/projects/{id}
+func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	requestID := getRequestID(ctx)
+	id := strings.TrimPrefix(r.URL.Path, "/manage/projects/")
+	if id == "" || strings.Contains(id, "/") {
+		s.logger.Error("invalid project id for delete", zap.String("id", id), zap.String("request_id", requestID))
+		http.Error(w, `{"error":"invalid project id"}`, http.StatusBadRequest)
+		return
+	}
+	if err := s.projectStore.DeleteProject(ctx, id); err != nil {
+		s.logger.Error("project not found for delete", zap.String("id", id), zap.Error(err), zap.String("request_id", requestID))
+		http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
+		return
+	}
+	s.logger.Info("project deleted", zap.String("id", id), zap.String("request_id", requestID))
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// generateUUID generates a random UUID (v4)
+func generateUUID() string {
+	b := make([]byte, 16)
+	_, _ = time.Now().UTC().MarshalBinary() // for entropy
+	for i := range b {
+		b[i] = byte(65 + time.Now().UnixNano()%26)
+	}
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// Register a single handler for /manage/projects
+func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
+	if !s.checkManagementAuth(w, r) {
+		return
+	}
+	ctx := r.Context()
+	requestID := getRequestID(ctx)
+
+	switch r.Method {
+	case http.MethodGet:
+		s.logger.Info("listing projects", zap.String("request_id", requestID))
+		s.handleListProjects(w, r.WithContext(ctx))
+	case http.MethodPost:
+		s.logger.Info("creating project", zap.String("request_id", requestID))
+		s.handleCreateProject(w, r.WithContext(ctx))
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// Add this helper to *Server
+func (s *Server) checkManagementAuth(w http.ResponseWriter, r *http.Request) bool {
+	const prefix = "Bearer "
+	header := r.Header.Get("Authorization")
+	if !strings.HasPrefix(header, prefix) || len(header) <= len(prefix) {
+		http.Error(w, `{"error":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
+		return false
+	}
+	token := header[len(prefix):]
+	if token != s.config.ManagementToken {
+		http.Error(w, `{"error":"invalid management token"}`, http.StatusUnauthorized)
+		return false
+	}
+	return true
+}
+
+// Add the handler function
+func (s *Server) handleProjectByID(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		s.handleGetProject(w, r)
+	case http.MethodPatch:
+		s.handleUpdateProject(w, r)
+	case http.MethodDelete:
+		s.handleDeleteProject(w, r)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// Handler for /manage/tokens (POST: create, GET: list)
+func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	requestID := getRequestID(ctx)
+	switch r.Method {
+	case http.MethodPost:
+		var req struct {
+			ProjectID     string `json:"project_id"`
+			DurationHours int    `json:"duration_hours"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			s.logger.Error("invalid token create request body", zap.Error(err), zap.String("request_id", requestID))
+			http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+			return
+		}
+		if req.ProjectID == "" || req.DurationHours <= 0 {
+			s.logger.Error("missing required fields for token create", zap.String("project_id", req.ProjectID), zap.Int("duration_hours", req.DurationHours), zap.String("request_id", requestID))
+			http.Error(w, `{"error":"project_id and duration_hours are required"}`, http.StatusBadRequest)
+			return
+		}
+		// Check project exists
+		_, err := s.projectStore.GetProjectByID(ctx, req.ProjectID)
+		if err != nil {
+			s.logger.Error("project not found for token create", zap.String("project_id", req.ProjectID), zap.Error(err), zap.String("request_id", requestID))
+			http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
+			return
+		}
+		// Generate token
+		tokenStr, expiresAt, _, err := token.NewTokenGenerator().GenerateWithOptions(time.Duration(req.DurationHours)*time.Hour, nil)
+		if err != nil {
+			s.logger.Error("failed to generate token", zap.Error(err), zap.String("request_id", requestID))
+			http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
+			return
+		}
+		now := time.Now().UTC()
+		dbToken := token.TokenData{
+			Token:        tokenStr,
+			ProjectID:    req.ProjectID,
+			ExpiresAt:    expiresAt,
+			IsActive:     true,
+			RequestCount: 0,
+			CreatedAt:    now,
+		}
+		if err := s.tokenStore.CreateToken(ctx, dbToken); err != nil {
+			s.logger.Error("failed to store token", zap.Error(err), zap.String("request_id", requestID))
+			http.Error(w, `{"error":"failed to store token"}`, http.StatusInternalServerError)
+			return
+		}
+		s.logger.Info("token created", zap.String("token", tokenStr), zap.String("project_id", req.ProjectID), zap.String("request_id", requestID))
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+			"token":      tokenStr,
+			"expires_at": expiresAt,
+		}); err != nil {
+			s.logger.Error("failed to encode token response", zap.Error(err))
+		}
+	case http.MethodGet:
+		projectID := r.URL.Query().Get("projectId")
+		var tokens []token.TokenData
+		var err error
+		if projectID != "" {
+			tokens, err = s.tokenStore.GetTokensByProjectID(ctx, projectID)
+		} else {
+			tokens, err = s.tokenStore.ListTokens(ctx)
+		}
+		if err != nil {
+			s.logger.Error("failed to list tokens", zap.Error(err))
+			http.Error(w, `{"error":"failed to list tokens"}`, http.StatusInternalServerError)
+			return
+		}
+		s.logger.Info("tokens listed", zap.Int("count", len(tokens)))
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(tokens); err != nil {
+			s.logger.Error("failed to encode tokens response", zap.Error(err))
+		}
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func getRequestID(ctx context.Context) string {
+	if v := ctx.Value("request_id"); v != nil {
+		if id, ok := v.(string); ok && id != "" {
+			return id
+		}
+	}
+	return uuid.New().String()
 }

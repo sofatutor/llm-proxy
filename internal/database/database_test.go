@@ -7,6 +7,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/sofatutor/llm-proxy/internal/proxy"
 )
 
 // testDB creates a temporary database for testing.
@@ -237,7 +239,7 @@ func TestCRUD_ClosedDB(t *testing.T) {
 	db, cleanup := testDB(t)
 	cleanup()
 	ctx := context.Background()
-	p := Project{ID: "x", Name: "x", OpenAIAPIKey: "x", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	p := proxy.Project{ID: "x", Name: "x", OpenAIAPIKey: "x", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	if err := db.CreateProject(ctx, p); err == nil {
 		t.Error("expected error for CreateProject on closed DB")
 	}

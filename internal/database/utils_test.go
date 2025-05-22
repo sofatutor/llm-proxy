@@ -5,6 +5,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/sofatutor/llm-proxy/internal/proxy"
 )
 
 // TestDatabaseUtils tests the database utility functions.
@@ -15,7 +17,7 @@ func TestDatabaseUtils(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a test project
-	project := Project{
+	project := proxy.Project{
 		ID:           "test-project-id",
 		Name:         "Test Project",
 		OpenAIAPIKey: "test-api-key",
@@ -138,7 +140,7 @@ func TestIsTokenValid_EdgeCases(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 	// Create a project and token
-	project := Project{ID: "p", Name: "P", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	project := proxy.Project{ID: "p", Name: "P", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	_ = db.CreateProject(ctx, project)
 	max := 1
 	expired := time.Now().Add(-time.Hour)

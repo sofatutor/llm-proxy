@@ -169,34 +169,6 @@ func (m *MockTokenStore) CreateMockToken(tokenID, projectID string, expiresIn ti
 	return token, err
 }
 
-// ImportTokenData imports token data from token package into database token
-func ImportTokenData(td token.TokenData) Token {
-	return Token{
-		Token:        td.Token,
-		ProjectID:    td.ProjectID,
-		ExpiresAt:    td.ExpiresAt,
-		IsActive:     td.IsActive,
-		RequestCount: td.RequestCount,
-		MaxRequests:  td.MaxRequests,
-		CreatedAt:    td.CreatedAt,
-		LastUsedAt:   td.LastUsedAt,
-	}
-}
-
-// ExportTokenData exports database token to token package token data
-func ExportTokenData(t Token) token.TokenData {
-	return token.TokenData{
-		Token:        t.Token,
-		ProjectID:    t.ProjectID,
-		ExpiresAt:    t.ExpiresAt,
-		IsActive:     t.IsActive,
-		RequestCount: t.RequestCount,
-		MaxRequests:  t.MaxRequests,
-		CreatedAt:    t.CreatedAt,
-		LastUsedAt:   t.LastUsedAt,
-	}
-}
-
 // TokenStoreAdapter adapts the database.DB to the token.TokenStore interface
 type TokenStoreAdapter struct {
 	store *MockTokenStore
@@ -231,4 +203,36 @@ func (a *TokenStoreAdapter) IncrementTokenUsage(ctx context.Context, tokenID str
 		return err
 	}
 	return nil
+}
+
+// CreateToken creates a new token in the store
+func (a *TokenStoreAdapter) CreateToken(ctx context.Context, td token.TokenData) error {
+	dbToken := ImportTokenData(td)
+	return a.store.CreateToken(ctx, dbToken)
+}
+
+// ListTokens retrieves all tokens from the store
+func (a *TokenStoreAdapter) ListTokens(ctx context.Context) ([]token.TokenData, error) {
+	dbTokens, err := a.store.ListTokens(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tokens := make([]token.TokenData, len(dbTokens))
+	for i, t := range dbTokens {
+		tokens[i] = ExportTokenData(t)
+	}
+	return tokens, nil
+}
+
+// GetTokensByProjectID retrieves all tokens for a project
+func (a *TokenStoreAdapter) GetTokensByProjectID(ctx context.Context, projectID string) ([]token.TokenData, error) {
+	dbTokens, err := a.store.GetTokensByProjectID(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	tokens := make([]token.TokenData, len(dbTokens))
+	for i, t := range dbTokens {
+		tokens[i] = ExportTokenData(t)
+	}
+	return tokens, nil
 }
