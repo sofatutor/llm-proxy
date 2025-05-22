@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestObfuscateKey(t *testing.T) {
@@ -40,26 +41,30 @@ func TestParseTimeHeader(t *testing.T) {
 }
 
 func TestGetManagementToken(t *testing.T) {
-	t.Parallel()
 	cmd := &cobra.Command{}
 	cmd.Flags().String("management-token", "", "")
 
 	// No flag, no env
-	os.Unsetenv("MANAGEMENT_TOKEN")
-	tok, err := GetManagementToken(cmd)
+	err := os.Unsetenv("MANAGEMENT_TOKEN")
+	require.NoError(t, err)
+	val, err := GetManagementToken(cmd)
 	assert.Error(t, err)
-	assert.Empty(t, tok)
+	assert.Empty(t, val)
 
 	// Env only
-	os.Setenv("MANAGEMENT_TOKEN", "env-token")
-	tok, err = GetManagementToken(cmd)
+	err = os.Setenv("MANAGEMENT_TOKEN", "env-token")
+	require.NoError(t, err)
+	val, err = GetManagementToken(cmd)
 	assert.NoError(t, err)
-	assert.Equal(t, "env-token", tok)
-	os.Unsetenv("MANAGEMENT_TOKEN")
+	assert.Equal(t, "env-token", val)
 
-	// Flag only
-	cmd.Flags().Set("management-token", "flag-token")
-	tok, err = GetManagementToken(cmd)
+	err = os.Unsetenv("MANAGEMENT_TOKEN")
+	require.NoError(t, err)
+
+	// Flag overrides env
+	err = cmd.Flags().Set("management-token", "flag-token")
+	require.NoError(t, err)
+	val, err = GetManagementToken(cmd)
 	assert.NoError(t, err)
-	assert.Equal(t, "flag-token", tok)
+	assert.Equal(t, "flag-token", val)
 }

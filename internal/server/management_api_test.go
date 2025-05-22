@@ -20,6 +20,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Define a custom context key type to avoid staticcheck warning
+type ctxKey string
+
 // MockTokenStore with methods that return testable results
 type MockTokenStoreExtended struct {
 	mock.Mock
@@ -540,7 +543,7 @@ func TestHandleTokens(t *testing.T) {
 
 func TestGetRequestID(t *testing.T) {
 	// With request ID in context
-	ctx := context.WithValue(context.Background(), "request_id", "test-id")
+	ctx := context.WithValue(context.Background(), ctxKey("request_id"), "test-id")
 	id := getRequestID(ctx)
 	assert.Equal(t, "test-id", id)
 
@@ -584,7 +587,7 @@ func TestInitializeComponentsAndStart(t *testing.T) {
 	// Create a temporary API config file
 	tempFile, err := os.CreateTemp("", "api_config_*.yaml")
 	require.NoError(t, err)
-	defer os.Remove(tempFile.Name())
+	defer func() { require.NoError(t, os.Remove(tempFile.Name())) }()
 
 	// Write a simple valid API config
 	configData := `
@@ -606,7 +609,7 @@ apis:
       maxIdleConns: 100
       maxIdleConnsPerHost: 20
 `
-	_, err = tempFile.Write([]byte(configData))
+	_, err = tempFile.WriteString(configData)
 	require.NoError(t, err)
 	require.NoError(t, tempFile.Close())
 
@@ -640,6 +643,10 @@ func TestHandleListProjects_Error(t *testing.T) {
 	req := httptest.NewRequest("GET", "/manage/projects", nil)
 	req.Header.Set("Authorization", "Bearer test_management_token")
 	w := httptest.NewRecorder()
+
+	// Use custom context key type
+	ctx := context.WithValue(context.Background(), ctxKey("request_id"), "test-id")
+	req = req.WithContext(ctx)
 
 	server.handleListProjects(w, req)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)

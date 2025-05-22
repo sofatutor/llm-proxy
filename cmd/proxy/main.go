@@ -678,23 +678,3 @@ func main() {
 		log.Fatalf("Error: %v", err)
 	}
 }
-
-// Helper to get management token from flag or env
-func getManagementToken(cmd *cobra.Command) (string, error) {
-	mgmtToken, _ := cmd.Flags().GetString("management-token")
-	if mgmtToken == "" {
-		mgmtToken = os.Getenv("MANAGEMENT_TOKEN")
-	}
-	if mgmtToken == "" {
-		return "", fmt.Errorf("management token is required (set MANAGEMENT_TOKEN env or use --management-token)")
-	}
-	return mgmtToken, nil
-}
-
-// Helper to obfuscate OpenAI key
-func obfuscateKey(key string) string {
-	if len(key) <= 8 {
-		return "****"
-	}
-	return key[:4] + strings.Repeat("*", len(key)-8) + key[len(key)-4:]
-}
