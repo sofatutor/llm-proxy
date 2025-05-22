@@ -504,7 +504,17 @@ func TestHandleTokens(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
-		var response []token.TokenData
+		// Expect sanitized token response (without actual token values)
+		type tokenListResponse struct {
+			ProjectID    string     `json:"project_id"`
+			ExpiresAt    *time.Time `json:"expires_at"`
+			IsActive     bool       `json:"is_active"`
+			RequestCount int        `json:"request_count"`
+			MaxRequests  *int       `json:"max_requests"`
+			CreatedAt    time.Time  `json:"created_at"`
+			LastUsedAt   *time.Time `json:"last_used_at"`
+		}
+		var response []tokenListResponse
 		err := json.NewDecoder(w.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Len(t, response, 2)
@@ -520,7 +530,17 @@ func TestHandleTokens(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
-		var response []token.TokenData
+		// Expect sanitized token response (without actual token values)
+		type tokenListResponse struct {
+			ProjectID    string     `json:"project_id"`
+			ExpiresAt    *time.Time `json:"expires_at"`
+			IsActive     bool       `json:"is_active"`
+			RequestCount int        `json:"request_count"`
+			MaxRequests  *int       `json:"max_requests"`
+			CreatedAt    time.Time  `json:"created_at"`
+			LastUsedAt   *time.Time `json:"last_used_at"`
+		}
+		var response []tokenListResponse
 		err := json.NewDecoder(w.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Len(t, response, 1)
