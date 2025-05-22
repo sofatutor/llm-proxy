@@ -25,23 +25,9 @@ func RetryMiddleware(maxRetries int, baseBackoff time.Duration) Middleware {
 			}
 			// If we exhausted retries, write the last error
 			w.WriteHeader(http.StatusBadGateway)
-			w.Write([]byte("{\"error\":\"Upstream unavailable after retries\"}"))
+			_, _ = w.Write([]byte("{\"error\":\"Upstream unavailable after retries\"}"))
 		})
 	}
-}
-
-// errorCapturingWriter wraps a ResponseWriter and captures the last error from Write.
-type errorCapturingWriter struct {
-	http.ResponseWriter
-	errPtr *error
-}
-
-func (w *errorCapturingWriter) Write(b []byte) (int, error) {
-	n, err := w.ResponseWriter.Write(b)
-	if w.errPtr != nil {
-		*w.errPtr = err
-	}
-	return n, err
 }
 
 // isTransientStatusCode returns true if the status code is a transient network error (502, 503, 504).
@@ -84,5 +70,5 @@ func (b *bufferedResponseRecorder) CopyTo(w http.ResponseWriter) {
 		}
 	}
 	w.WriteHeader(b.statusCode)
-	w.Write(b.body)
+	_, _ = w.Write(b.body)
 }

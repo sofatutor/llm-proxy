@@ -679,7 +679,9 @@ func TestTransparentProxy_RetryLogic_TransientNetworkError(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"ok":true}`))
+		if _, err := w.Write([]byte(`{"ok":true}`)); err != nil {
+			t.Logf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -711,7 +713,9 @@ func TestTransparentProxy_RetryLogic_NonTransientError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		w.WriteHeader(http.StatusBadRequest) // 400
-		w.Write([]byte(`{"error":"bad request"}`))
+		if _, err := w.Write([]byte(`{"error":"bad request"}`)); err != nil {
+			t.Logf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -794,7 +798,9 @@ func TestTransparentProxy_CircuitBreaker_ClosesOnRecovery(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"ok":true}`))
+		if _, err := w.Write([]byte(`{"ok":true}`)); err != nil {
+			t.Logf("Failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -812,7 +818,7 @@ func TestTransparentProxy_CircuitBreaker_ClosesOnRecovery(t *testing.T) {
 	// Trip the circuit breaker (threshold is 5)
 	for i := 0; i < 5; i++ {
 		req := httptest.NewRequest("GET", "/test", nil)
-		req = req.WithContext(context.WithValue(req.Context(), "circuitbreaker_cooldown_override", cooldown))
+		req = req.WithContext(context.WithValue(req.Context(), cbCooldownOverrideKey, cooldown))
 		req.Header.Set("Authorization", "Bearer valid-token")
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, req)
@@ -820,7 +826,7 @@ func TestTransparentProxy_CircuitBreaker_ClosesOnRecovery(t *testing.T) {
 
 	// Next request should get 503 from circuit breaker
 	req := httptest.NewRequest("GET", "/test", nil)
-	req = req.WithContext(context.WithValue(req.Context(), "circuitbreaker_cooldown_override", cooldown))
+	req = req.WithContext(context.WithValue(req.Context(), cbCooldownOverrideKey, cooldown))
 	req.Header.Set("Authorization", "Bearer valid-token")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -839,7 +845,7 @@ func TestTransparentProxy_CircuitBreaker_ClosesOnRecovery(t *testing.T) {
 
 	// Now the circuit breaker should close and allow traffic again
 	req = httptest.NewRequest("GET", "/test", nil)
-	req = req.WithContext(context.WithValue(req.Context(), "circuitbreaker_cooldown_override", cooldown))
+	req = req.WithContext(context.WithValue(req.Context(), cbCooldownOverrideKey, cooldown))
 	req.Header.Set("Authorization", "Bearer valid-token")
 	w = httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
