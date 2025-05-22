@@ -55,11 +55,13 @@ func CircuitBreakerMiddleware(failureThreshold int, cooldown time.Duration, isTr
 }
 
 type circuitBreaker struct {
-	mu              sync.Mutex
-	open            bool
+	mu               sync.Mutex
+	failures         int
+	open             bool
+	lastFailureTime  time.Time
 	failureThreshold int
+	cooldown         time.Duration
+	isTransient      func(status int) bool
+	openedAt         time.Time
 	failureCount     int
-	openedAt        time.Time
-	cooldown        time.Duration
-	isTransient     func(status int) bool
 }
