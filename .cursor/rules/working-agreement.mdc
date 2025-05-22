@@ -41,7 +41,7 @@ alwaysApply: true
 ## Example: How This PR Was Handled
 - Review comments were fetched and addressed one by one.
 - For performance feedback (cache eviction), a min-heap was implemented immediately.
-- All changes were tested (`go test -race ./...`) and linted.
+- All changes were tested (`make test-coverage`) and linted (`make lint`).
 - WIP.markdown is updated to reflect the current state and process.
 
 ---
