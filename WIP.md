@@ -79,6 +79,7 @@ Repository structure, configuration, Docker, security, documentation, and founda
 - [x] Add database error handling and retry logic
 - [x] Create database clean-up routines for expired tokens
 - [x] Set up database backup mechanism
+- [x] Default DB path is now data/llm-proxy.db for development and production. Can be overridden by DATABASE_PATH in .env or --db flag. In-memory DB is only used for tests.
 
 ### Token Management System
 - [x] Research UUID generation and validation best practices
@@ -203,9 +204,59 @@ Repository structure, configuration, Docker, security, documentation, and founda
    - Support streaming with transparent pass-through
 
 ### CLI Tool (Setup & OpenAI Chat)
-- [ ] Implement CLI tool (`llm-proxy setup` and `llm-proxy openai chat`) **in a separate PR** (`feature/llm-proxy-cli`)
-  - Only to be tackled once all proxy prerequisites for successful usage are met
-  - See PLAN.md for detailed requirements
+- [x] Implement CLI tool (`llm-proxy setup` and `llm-proxy openai chat`) **in a separate PR** (`feature/llm-proxy-cli`)
+  - CLI tool structure and commands design
+  - Basic CLI framework with flag parsing
+  - 'llm-proxy setup' command for configuration with these improvements:
+    - Automatic project creation and token generation
+    - Secure random token generation for MANAGEMENT_TOKEN
+    - Ability to skip through existing settings in interactive mode
+    - Preserving existing configuration values
+  - 'llm-proxy openai chat' command with advanced features:
+    - Streaming mode for real-time responses
+    - Verbose mode for displaying timing information
+    - Shows proxy overhead compared to remote call duration
+  - 'llm-proxy server' command with daemon mode (-d option) and PID file support **[NEW: expanded flags, background/foreground, PID management]**
+  - Advanced CLI flag parsing and configuration overrides **[NEW]**
+  - Comprehensive end-to-end usage documentation and advanced examples **[NEW]**
+  - Test cases for CLI tool verification (needs expansion for new features) **[IN PROGRESS]**
+  - Documentation for CLI usage (needs update for new features) **[IN PROGRESS]**
+
+## IN PROGRESS: CLI Management Command for Projects and Tokens
+
+A new `llm-proxy manage` command will be introduced to provide a clear, user-friendly CLI for project and token management. This command will support CRUD operations for projects and token generation/validation, separated from setup and server commands for clarity and best practices.
+
+### Command Structure
+
+- `llm-proxy manage project <subcommand>`
+  - `list` — List all projects
+  - `get <project-id>` — Get details for a project
+  - `create --name <name> --openai-key <key>` — Create a new project
+  - `update <project-id> [--name ...] [--openai-key ...]` — Update a project
+  - `delete <project-id>` — Delete a project
+
+- `llm-proxy manage token <subcommand>`
+  - `generate --project-id <id> --duration <hours>` — Generate a new token for a project
+  - `get <token>` — Get validity/status for a token
+
+### Output Format
+- By default, results are shown in a human-friendly table.
+- Use `--json` flag for machine-readable JSON output.
+
+### Rationale
+- Keeps setup and management concerns separate for clarity and maintainability.
+- Follows CLI and Go best practices (SRP, discoverability, UX).
+- Makes it easy for both humans and scripts to use the CLI.
+
+### Implementation Checklist
+- [ ] Scaffold `manage` command and subcommands in CLI
+- [ ] Implement project CRUD subcommands (list, get, create, update, delete)
+- [ ] Implement token subcommands (generate, get)
+- [ ] Wire subcommands to management API endpoints (`/manage/projects`, `/manage/tokens`)
+- [ ] Require management token for all manage commands (flag or env)
+- [ ] Print results as table by default, with `--json` for machine output
+- [ ] Add tests for CLI manage commands
+- [ ] Document usage in CLI README
 
 ## Phase 3: API and Interfaces
 
@@ -230,9 +281,10 @@ Repository structure, configuration, Docker, security, documentation, and founda
   - GET for listing/retrieval
   - PUT for updates
   - DELETE for removal
+- [ ] Add health check endpoint `/health` for monitoring **[NEW]**
 - [ ] Implement rate limiting for management API
 - [ ] Add comprehensive error handling
-- [ ] Create API documentation with examples
+- [ ] Create API documentation with examples (expand for new endpoints)
 
 ### Proxy API Endpoints
 - [x] Implement /v1/* forwarding to OpenAI
@@ -252,6 +304,7 @@ Repository structure, configuration, Docker, security, documentation, and founda
 - [ ] Add telemetry collection
 - [ ] Implement feature flags for gradual rollout
 - [ ] Create API versioning strategy
+- [ ] Add proxy metrics/logging/timing improvements **[NEW]**
 
 ### Admin UI
 - [ ] Design HTML interface wireframes
@@ -362,6 +415,7 @@ Repository structure, configuration, Docker, security, documentation, and founda
 - [ ] Implement audit logging for security events
 - [ ] Create log visualization recommendations
 - [ ] Add log sampling for high-volume deployments
+- [ ] Add proxy metrics/logging/timing improvements **[NEW]**
 
 ### Monitoring System
 - [ ] Implement health check endpoints
@@ -479,6 +533,7 @@ Repository structure, configuration, Docker, security, documentation, and founda
 - [ ] Implement progress reporting
 - [ ] Add customizable request templates
 - [ ] Create documentation with examples
+- [ ] Refactor and expand benchmark tool, add setup logic, restore tests **[NEW]**
 
 ### Pull Requests for Phase 5
 
@@ -777,3 +832,6 @@ Repository structure, configuration, Docker, security, documentation, and founda
   - Implementing error handling and response standardization
   - Implementing retry logic for transient failures
   - Developing Management API endpoints for token/project management
+
+## Phase 2/3: Config/YAML
+- [ ] Expanded provider config and YAML changes (document and test) **[NEW]**
