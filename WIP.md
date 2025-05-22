@@ -230,8 +230,7 @@ Repository structure, configuration, Docker, security, documentation, and founda
    - Support streaming with transparent pass-through
 
 ### CLI Tool (Setup & OpenAI Chat)
-- [ ] Implement CLI tool (`llm-proxy setup` and `llm-proxy openai chat`) **in a separate PR** (`feature/llm-proxy-cli`)
-  - **Note:** Only glue/flag parsing should be in `cmd/`. All real logic must be in `internal/` for coverage and testability. CLI code in `cmd/` is not included in coverage checks.
+- [x] Implement CLI tool (`llm-proxy setup` and `llm-proxy openai chat`) **in a separate PR** (`feature/llm-proxy-cli`)
   - CLI tool structure and commands design
   - Basic CLI framework with flag parsing
   - 'llm-proxy setup' command for configuration with these improvements:
@@ -248,6 +247,15 @@ Repository structure, configuration, Docker, security, documentation, and founda
   - Comprehensive end-to-end usage documentation and advanced examples
   - Test cases for CLI tool verification (needs expansion for new features) **[IN PROGRESS]**
   - Documentation for CLI usage (needs update for new features) **[IN PROGRESS]**
+  - **Management API CLI is now fully configurable via --manage-api-base-url; 'token get' subcommand is implemented.**
+  - **Planned:** Add more integration specs for management API flows.
+
+#### CLI Usage Example
+```sh
+llm-proxy manage project list --manage-api-base-url http://localhost:8080 --management-token <token>
+llm-proxy manage token generate --project-id <project-id> --management-token <token> --manage-api-base-url http://localhost:8080
+llm-proxy manage token get <token> --management-token <token> --manage-api-base-url http://localhost:8080 --json
+```
 
 ## IN PROGRESS: CLI Management Command for Projects and Tokens
 
