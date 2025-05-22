@@ -269,11 +269,13 @@ func generateSecureToken(length int) string {
 	return hex.EncodeToString(b)
 }
 
-// Move openaiCmd and benchmarkCmd to package-level vars
+// For test compatibility
+var rootCmd *cobra.Command
 var openaiCmd *cobra.Command
 var benchmarkCmd *cobra.Command
 
-func main() {
+func init() {
+	// Initialize root command
 	cobraRoot := &cobra.Command{Use: "llm-proxy"}
 
 	// Register setup command flags
@@ -689,14 +691,13 @@ func main() {
 
 	// For test compatibility, define rootCmd as alias
 	rootCmd = cobraRoot
+}
 
-	if err := cobraRoot.Execute(); err != nil {
+func main() {
+	if err := rootCmd.Execute(); err != nil {
 		log.Fatalf("Error: %v", err)
 	}
 }
-
-// For test compatibility
-var rootCmd *cobra.Command
 
 // Helper to get management token from flag or env
 func getManagementToken(cmd *cobra.Command) (string, error) {
