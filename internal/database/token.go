@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/sofatutor/llm-proxy/internal/token"
 )
 
 var (
@@ -261,4 +263,30 @@ func (d *DB) queryTokens(ctx context.Context, query string, args ...interface{})
 	}
 
 	return tokens, nil
+}
+
+// --- token.TokenStore interface adapter for *DB ---
+type DBTokenStoreAdapter struct {
+	db *DB
+}
+
+func NewDBTokenStoreAdapter(db *DB) *DBTokenStoreAdapter {
+	return &DBTokenStoreAdapter{db: db}
+}
+
+// Stub implementations for build success
+func (a *DBTokenStoreAdapter) GetTokenByID(ctx context.Context, tokenID string) (token.TokenData, error) {
+	return token.TokenData{}, nil
+}
+func (a *DBTokenStoreAdapter) IncrementTokenUsage(ctx context.Context, tokenID string) error {
+	return nil
+}
+func (a *DBTokenStoreAdapter) CreateToken(ctx context.Context, td token.TokenData) error {
+	return nil
+}
+func (a *DBTokenStoreAdapter) ListTokens(ctx context.Context) ([]token.TokenData, error) {
+	return nil, nil
+}
+func (a *DBTokenStoreAdapter) GetTokensByProjectID(ctx context.Context, projectID string) ([]token.TokenData, error) {
+	return nil, nil
 }
