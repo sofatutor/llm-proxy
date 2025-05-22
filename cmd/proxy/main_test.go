@@ -2,9 +2,13 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 
+	"github.com/chzyer/readline"
 	"github.com/spf13/cobra"
 )
 
@@ -296,4 +300,124 @@ func stubFatal(t *testing.T) (restore func()) {
 	return func() {
 		osExit = origOsExit
 	}
+}
+
+func Test_runChat_and_getChatResponse(t *testing.T) {
+	// Save and restore globals
+	origProxyURL := proxyURL
+	origProxyToken := proxyToken
+	origModel := model
+	origUseStreaming := useStreaming
+	origVerboseMode := verboseMode
+	defer func() {
+		proxyURL = origProxyURL
+		proxyToken = origProxyToken
+		model = origModel
+		useStreaming = origUseStreaming
+		verboseMode = origVerboseMode
+	}()
+
+	t.Run("runChat missing token", func(t *testing.T) {
+		cmd := &cobra.Command{}
+		proxyToken = ""
+		// Should print error and return
+		runChat(cmd, []string{})
+	})
+
+	t.Run("getChatResponse invalid proxy URL", func(t *testing.T) {
+		proxyURL = ":bad-url"
+		proxyToken = "tok"
+		model = "gpt-3.5-turbo"
+		useStreaming = false
+		resp, err := getChatResponse([]ChatMessage{{Role: "user", Content: "hi"}}, nil)
+		if err == nil || resp != nil {
+			t.Error("expected error for invalid proxy URL")
+		}
+	})
+
+	t.Run("getChatResponse API error", func(t *testing.T) {
+		// Start a dummy server that returns 500
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(500)
+			w.Write([]byte("fail"))
+		}))
+		defer ts.Close()
+		proxyURL = ts.URL
+		proxyToken = "tok"
+		model = "gpt-3.5-turbo"
+		useStreaming = false
+		resp, err := getChatResponse([]ChatMessage{{Role: "user", Content: "hi"}}, nil)
+		if err == nil || resp != nil {
+			t.Error("expected error for API error response")
+		}
+	})
+
+	t.Run("getChatResponse bad JSON", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(200)
+			w.Write([]byte("not json"))
+		}))
+		defer ts.Close()
+		proxyURL = ts.URL
+		proxyToken = "tok"
+		model = "gpt-3.5-turbo"
+		useStreaming = false
+		resp, err := getChatResponse([]ChatMessage{{Role: "user", Content: "hi"}}, nil)
+		if err == nil || resp != nil {
+			t.Error("expected error for bad JSON")
+		}
+	})
+
+	t.Run("getChatResponse streaming", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(200)
+			w.Write([]byte("data: {\"id\":\"abc\",\"object\":\"chat.completion\",\"created\":123,\"model\":\"gpt-3.5-turbo\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}\n\n"))
+		}))
+		defer ts.Close()
+		proxyURL = ts.URL
+		proxyToken = "tok"
+		model = "gpt-3.5-turbo"
+		useStreaming = true
+		// Provide a dummy readline.Instance with a valid Stdout
+		var buf bytes.Buffer
+		rl, err := readline.NewEx(&readline.Config{Prompt: "> ", Stdout: &buf})
+		if err != nil {
+			t.Fatalf("failed to create dummy readline: %v", err)
+		}
+		defer rl.Close()
+		resp, err := getChatResponse([]ChatMessage{{Role: "user", Content: "hi"}}, rl)
+		if err != nil || resp == nil {
+			t.Errorf("expected streaming response, got err=%v resp=%v", err, resp)
+		}
+	})
+
+	t.Run("getChatResponse non-streaming valid", func(t *testing.T) {
+		// Return a valid ChatResponse JSON
+		respObj := ChatResponse{
+			ID:    "id",
+			Model: "gpt-3.5-turbo",
+			Choices: []struct {
+				Index        int         `json:"index"`
+				Message      ChatMessage `json:"message"`
+				FinishReason string      `json:"finish_reason"`
+			}{
+				{0, ChatMessage{Role: "assistant", Content: "hi"}, "stop"},
+			},
+		}
+		b, _ := json.Marshal(respObj)
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(200)
+			w.Write(b)
+		}))
+		defer ts.Close()
+		proxyURL = ts.URL
+		proxyToken = "tok"
+		model = "gpt-3.5-turbo"
+		useStreaming = false
+		resp, err := getChatResponse([]ChatMessage{{Role: "user", Content: "hi"}}, nil)
+		if err != nil || resp == nil {
+			t.Errorf("expected valid response, got err=%v resp=%v", err, resp)
+		}
+	})
 }
