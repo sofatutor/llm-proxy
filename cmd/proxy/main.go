@@ -610,9 +610,11 @@ func init() {
 			}()
 
 			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-				var errMsg string
-				_ = json.NewDecoder(resp.Body).Decode(&errMsg)
-				return fmt.Errorf("server error: %s", errMsg)
+				var errResp map[string]string
+				if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
+					return fmt.Errorf("failed to parse response: %w", err)
+				}
+				return fmt.Errorf("server error: %s", errResp["error"])
 			}
 
 			var result struct {
@@ -641,58 +643,10 @@ func init() {
 	tokenGenerateCmd.Flags().Int("duration", 24, "Token duration in hours (default 24)")
 	tokenGenerateCmd.Flags().Bool("json", false, "Output as JSON")
 
-	var tokenGetCmd = &cobra.Command{
-		Use:   "get <token>",
-		Short: "Get token validity/status",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			_ = godotenv.Load()
-			mgmtToken, err := api.GetManagementToken(cmd)
-			if err != nil {
-				return err
-			}
-			tokenID := args[0]
-			url := fmt.Sprintf("%s/manage/tokens/%s", manageAPIBaseURL, tokenID)
-			req, err := http.NewRequest("GET", url, nil)
-			if err != nil {
-				return err
-			}
-			req.Header.Set("Authorization", "Bearer "+mgmtToken)
-			client := &http.Client{}
-			resp, err := client.Do(req)
-			if err != nil {
-				return err
-			}
-			defer func() {
-				if err := resp.Body.Close(); err != nil {
-					log.Printf("Error closing response body: %v", err)
-				}
-			}()
-			if resp.StatusCode != http.StatusOK {
-				var errResp map[string]interface{}
-				_ = json.NewDecoder(resp.Body).Decode(&errResp)
-				return fmt.Errorf("server error: %s", errResp["message"])
-			}
-			var tkn api.TokenCreateResponse
-			if err := json.NewDecoder(resp.Body).Decode(&tkn); err != nil {
-				return err
-			}
-			jsonOut, _ := cmd.Flags().GetBool("json")
-			if jsonOut {
-				out, _ := json.MarshalIndent(tkn, "", "  ")
-				fmt.Println(string(out))
-			} else {
-				fmt.Printf("Token: %s\nExpires at: %s\n", tkn.Token, tkn.ExpiresAt)
-			}
-			return nil
-		},
-	}
-
 	// Register project subcommands
 	projectCmd.AddCommand(projectListCmd, projectGetCmd, projectCreateCmd, projectUpdateCmd, projectDeleteCmd)
 	// Register token subcommands
 	tokenCmd.AddCommand(tokenGenerateCmd)
-	tokenCmd.AddCommand(tokenGetCmd)
 	// Register manage subcommands
 	manageCmd.AddCommand(projectCmd)
 	manageCmd.AddCommand(tokenCmd)

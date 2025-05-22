@@ -235,19 +235,24 @@ func (s *Server) managementAuthMiddleware(next http.HandlerFunc) http.HandlerFun
 // GET /manage/projects
 // We only register /manage/projects (no trailing slash) for handleProjects. This ensures that both /manage/projects and /manage/projects/ are handled identically, and only /manage/projects/{id} is handled by handleProjectByID. This avoids ambiguity and double handling in Go's http.ServeMux.
 func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(os.Stderr, "DEBUG handleProjects: START method=%s path=%s\n", r.Method, r.URL.Path)
+	s.logger.Debug("handleProjects: START", zap.String("method", r.Method), zap.String("path", r.URL.Path))
 	// Normalize path: treat /manage/projects/ as /manage/projects
 	if r.URL.Path == "/manage/projects/" {
 		r.URL.Path = "/manage/projects"
 	}
 	// DEBUG: Log method and headers
-	fmt.Fprintf(os.Stderr, "DEBUG handleProjects: method=%s\n", r.Method)
+	s.logger.Debug("handleProjects: method", zap.String("method", r.Method))
 	for k, v := range r.Header {
-		fmt.Fprintf(os.Stderr, "DEBUG handleProjects: header %s: %v\n", k, v)
+		s.logger.Debug("handleProjects: header", zap.String("key", k), zap.Any("value", v))
 	}
-	fmt.Fprintf(os.Stderr, "DEBUG handleProjects: config.ManagementToken=%s\n", s.config.ManagementToken)
+	// Mask management token in logs
+	maskedToken := "******"
+	if len(s.config.ManagementToken) > 4 {
+		maskedToken = s.config.ManagementToken[:4] + "******"
+	}
+	s.logger.Debug("handleProjects: config.ManagementToken", zap.String("ManagementToken", maskedToken))
 	if !s.checkManagementAuth(w, r) {
-		fmt.Fprintf(os.Stderr, "DEBUG handleProjects: END (auth failed)\n")
+		s.logger.Debug("handleProjects: END (auth failed)")
 		return
 	}
 	ctx := r.Context()
@@ -263,7 +268,7 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
-	fmt.Fprintf(os.Stderr, "DEBUG handleProjects: END method=%s path=%s\n", r.Method, r.URL.Path)
+	s.logger.Debug("handleProjects: END", zap.String("method", r.Method), zap.String("path", r.URL.Path))
 }
 
 func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
@@ -420,20 +425,28 @@ func generateUUID() string {
 func (s *Server) checkManagementAuth(w http.ResponseWriter, r *http.Request) bool {
 	const prefix = "Bearer "
 	header := r.Header.Get("Authorization")
-	fmt.Fprintf(os.Stderr, "DEBUG checkManagementAuth: header=%q\n", header)
+	maskedHeader := header
+	if len(header) > 10 {
+		maskedHeader = header[:10] + "..."
+	}
+	s.logger.Debug("checkManagementAuth: header", zap.String("header", maskedHeader))
 	if !strings.HasPrefix(header, prefix) || len(header) <= len(prefix) {
-		fmt.Fprintf(os.Stderr, "DEBUG checkManagementAuth: missing or invalid prefix\n")
+		s.logger.Debug("checkManagementAuth: missing or invalid prefix")
 		http.Error(w, `{"error":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
 		return false
 	}
 	token := header[len(prefix):]
-	fmt.Fprintf(os.Stderr, "DEBUG checkManagementAuth: token=%q, expected=%q\n", token, s.config.ManagementToken)
+	maskedToken := "******"
+	if len(s.config.ManagementToken) > 4 {
+		maskedToken = s.config.ManagementToken[:4] + "******"
+	}
+	s.logger.Debug("checkManagementAuth: token compare", zap.String("token", token), zap.String("expected", maskedToken))
 	if token != s.config.ManagementToken {
-		fmt.Fprintf(os.Stderr, "DEBUG checkManagementAuth: token mismatch\n")
+		s.logger.Debug("checkManagementAuth: token mismatch")
 		http.Error(w, `{"error":"invalid management token"}`, http.StatusUnauthorized)
 		return false
 	}
-	fmt.Fprintf(os.Stderr, "DEBUG checkManagementAuth: token match\n")
+	s.logger.Debug("checkManagementAuth: token match")
 	return true
 }
 
