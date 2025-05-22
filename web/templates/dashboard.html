@@ -1,0 +1,154 @@
+{{ define "content" }}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="bi bi-speedometer2"></i>
+            Dashboard
+        </h1>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- Total Projects Card -->
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Projects</h5>
+                        <h2 class="mb-0">{{ .data.TotalProjects }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-folder fs-1"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="/projects" class="text-white text-decoration-none">
+                    View all <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Tokens Card -->
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Total Tokens</h5>
+                        <h2 class="mb-0">{{ .data.TotalTokens }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-key fs-1"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="/tokens" class="text-white text-decoration-none">
+                    View all <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Tokens Card -->
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Active Tokens</h5>
+                        <h2 class="mb-0">{{ .data.ActiveTokens }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-check-circle fs-1"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <small>{{ .data.ExpiredTokens }} expired</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Requests Card -->
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Total Requests</h5>
+                        <h2 class="mb-0">{{ .data.TotalRequests }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-graph-up fs-1"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <small>{{ .data.RequestsToday }} today</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Quick Actions -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-lightning"></i>
+                    Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="/projects/new" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i>
+                        Create New Project
+                    </a>
+                    <a href="/tokens/new" class="btn btn-success">
+                        <i class="bi bi-key"></i>
+                        Generate Token
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-clock-history"></i>
+                    Recent Activity
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-4">
+                        <div class="border-end">
+                            <h4 class="text-primary">{{ .data.RequestsToday }}</h4>
+                            <small class="text-muted">Today</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="border-end">
+                            <h4 class="text-info">{{ .data.RequestsThisWeek }}</h4>
+                            <small class="text-muted">This Week</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <h4 class="text-success">{{ .data.TotalRequests }}</h4>
+                        <small class="text-muted">All Time</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{ end }}
