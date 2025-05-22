@@ -34,15 +34,16 @@ const (
 
 // TransparentProxy implements the Proxy interface for transparent proxying
 type TransparentProxy struct {
-	config         ProxyConfig
-	tokenValidator TokenValidator
-	projectStore   ProjectStore
-	logger         *zap.Logger
-	metrics        *ProxyMetrics
-	proxy          *httputil.ReverseProxy
-	httpServer     *http.Server
-	shuttingDown   bool
-	mu             sync.RWMutex
+	config               ProxyConfig
+	tokenValidator       TokenValidator
+	projectStore         ProjectStore
+	logger               *zap.Logger
+	metrics              *ProxyMetrics
+	proxy                *httputil.ReverseProxy
+	httpServer           *http.Server
+	shuttingDown         bool
+	mu                   sync.RWMutex
+	allowedMethodsHeader string // cached comma-separated allowed methods
 }
 
 // ProxyMetrics tracks proxy usage statistics
@@ -74,12 +75,19 @@ func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator,
 		}
 	}
 
+	// Precompute allowed methods header
+	allowedMethodsHeader := "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+	if len(config.AllowedMethods) > 0 {
+		allowedMethodsHeader = strings.Join(config.AllowedMethods, ", ")
+	}
+
 	proxy := &TransparentProxy{
-		config:         config,
-		tokenValidator: validator,
-		projectStore:   store,
-		logger:         logger,
-		metrics:        &ProxyMetrics{},
+		config:               config,
+		tokenValidator:       validator,
+		projectStore:         store,
+		logger:               logger,
+		metrics:              &ProxyMetrics{},
+		allowedMethodsHeader: allowedMethodsHeader,
 	}
 
 	// Initialize the reverse proxy
@@ -427,6 +435,24 @@ func (p *TransparentProxy) createTransport() *http.Transport {
 // Handler returns the HTTP handler for the proxy
 func (p *TransparentProxy) Handler() http.Handler {
 	return p.ValidateRequestMiddleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Only set CORS headers if Origin header is present
+		if origin := r.Header.Get("Origin"); origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With")
+		}
+
+		// Short-circuit OPTIONS requests: no auth required, respond with 204 and CORS headers
+		if r.Method == http.MethodOptions {
+			if reqHeaders := r.Header.Get("Access-Control-Request-Headers"); reqHeaders != "" {
+				w.Header().Set("Access-Control-Allow-Headers", reqHeaders)
+			} else {
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With")
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
 		// Generate request ID and add to context
 		requestID := uuid.New().String()
 		ctx := context.WithValue(r.Context(), ctxKeyRequestID, requestID)

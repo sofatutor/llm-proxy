@@ -276,7 +276,9 @@ func TestTransparentProxy_InvalidToken(t *testing.T) {
 
 	// Check response - should be an error
 	resp := w.Result()
-	defer resp.Body.Close()
+	if err := resp.Body.Close(); err != nil {
+		t.Logf("Failed to close response body: %v", err)
+	}
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "Expected 401 status code for invalid token")
 
@@ -327,7 +329,9 @@ func TestTransparentProxy_DisallowedEndpoint(t *testing.T) {
 
 	// Check response - should be 404 Not Found
 	resp := w.Result()
-	defer resp.Body.Close()
+	if err := resp.Body.Close(); err != nil {
+		t.Logf("Failed to close response body: %v", err)
+	}
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "Expected 404 status code for disallowed endpoint")
 }
@@ -365,7 +369,9 @@ func TestTransparentProxy_DisallowedMethod(t *testing.T) {
 
 	// Check response - should be 405 Method Not Allowed
 	resp := w.Result()
-	defer resp.Body.Close()
+	if err := resp.Body.Close(); err != nil {
+		t.Logf("Failed to close response body: %v", err)
+	}
 
 	assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode, "Expected 405 status code for disallowed method")
 }
