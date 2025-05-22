@@ -54,7 +54,7 @@
                                     <code class="small">{{ .ProjectID }}</code>
                                 </td>
                                 <td>
-                                    {{ if and .IsActive (gt .ExpiresAt.Unix now.Unix) }}
+                                    {{ if and .IsActive (and .ExpiresAt (gt .ExpiresAt.Unix now.Unix)) }}
                                     <span class="badge bg-success">
                                         <i class="bi bi-check-circle"></i>
                                         Active
@@ -67,15 +67,21 @@
                                     {{ end }}
                                 </td>
                                 <td>
+                                    {{ if .ExpiresAt }}
                                     <small class="text-muted">{{ .ExpiresAt.Format "2006-01-02 15:04" }}</small>
                                     {{ if lt .ExpiresAt.Unix now.Unix }}
                                     <br><small class="text-danger">Expired</small>
                                     {{ end }}
+                                    {{ else }}
+                                    <small class="text-muted">Never</small>
+                                    {{ end }}
                                 </td>
                                 <td>
                                     <span class="badge bg-secondary">{{ .RequestCount }}</span>
-                                    {{ if gt .MaxRequests 0 }}
+                                    {{ if and .MaxRequests (gt .MaxRequests 0) }}
                                     / {{ .MaxRequests }}
+                                    {{ else }}
+                                    / ∞
                                     {{ end }}
                                 </td>
                                 <td>

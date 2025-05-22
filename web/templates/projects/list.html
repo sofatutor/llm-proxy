@@ -25,6 +25,7 @@
                             <tr>
                                 <th>Name</th>
                                 <th>ID</th>
+                                <th>OpenAI API Key</th>
                                 <th>Created</th>
                                 <th>Updated</th>
                                 <th class="text-end">Actions</th>
@@ -38,6 +39,9 @@
                                 </td>
                                 <td>
                                     <code class="small">{{ .ID }}</code>
+                                </td>
+                                <td>
+                                    <code class="small text-muted">{{ obfuscateAPIKey .OpenAIAPIKey }}</code>
                                 </td>
                                 <td>
                                     <small class="text-muted">{{ .CreatedAt.Format "2006-01-02 15:04" }}</small>

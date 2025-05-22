@@ -23,11 +23,11 @@ var (
 
 func main() {
 	var (
-		configPath     = flag.String("config", "", "Path to configuration file")
-		listenAddr     = flag.String("listen", ":8081", "Admin UI server listen address")
-		apiBaseURL     = flag.String("api-base-url", "http://localhost:8080", "Base URL for Management API")
+		configPath      = flag.String("config", "", "Path to configuration file")
+		listenAddr      = flag.String("listen", ":8081", "Admin UI server listen address")
+		apiBaseURL      = flag.String("api-base-url", "http://localhost:8080", "Base URL for Management API")
 		managementToken = flag.String("management-token", "", "Management token for API access")
-		showVersion    = flag.Bool("version", false, "Show version and exit")
+		showVersion     = flag.Bool("version", false, "Show version and exit")
 	)
 	flag.Parse()
 

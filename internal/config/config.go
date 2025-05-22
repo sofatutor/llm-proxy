@@ -33,8 +33,8 @@ type Config struct {
 	EnableStreaming    bool   // Whether to enable streaming responses from APIs
 
 	// Admin UI settings
-	AdminUIEnabled bool   // Whether the admin UI is enabled
-	AdminUIPath    string // Base path for the admin UI
+	AdminUIEnabled bool          // Whether the admin UI is enabled
+	AdminUIPath    string        // Base path for the admin UI
 	AdminUI        AdminUIConfig // Admin UI server configuration
 
 	// Logging
