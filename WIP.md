@@ -7,23 +7,31 @@
 - [x] Dashboard with statistics cards and quick actions
 - [x] Project management (list, create, show, edit, delete) with full CRUD
 - [x] Token management (list, generate, success page) with security focus
-- [x] Template system with custom functions (pagination, dates, comparisons)
-- [x] Configuration integration (AdminUIConfig) 
-- [x] Error handling and user-friendly messages
-- [x] JavaScript enhancements and interactivity
-- [x] Template loading fix (simple dashboard works)
+- [x] Template system with custom functions (pagination, dates, comparisons, arithmetic, etc.)
+- [x] Configuration integration (AdminUIConfig, CLI flags, env support)
+- [x] Error handling and user-friendly error pages
+- [x] JavaScript enhancements and interactivity (admin.js)
+- [x] Template loading fix: switched to LoadHTMLFiles with explicit template listing
+- [x] Graceful shutdown handling for admin server
+- [x] Security-focused session and token handling (browser-based login, session cookie, token never exposed after creation)
+- [ ] Consolidate AdminUIEnabled/Enabled config fields (see review feedback)
+- [ ] Standardize template arithmetic helpers (sub/add vs inc/dec) across all templates (see review feedback)
+- [ ] Centralize common JS functions (togglePassword, copyToClipboard, confirmDelete) in admin.js (see review feedback)
 
 ## Next Steps
 - [x] PR #19 created and ready for review
 - [ ] Template inheritance refactoring (optional improvement)
 - [ ] Real-time dashboard updates (future enhancement)
+- [ ] Create help/documentation pages (future enhancement)
 
 ## Architecture
 - **Separate Port**: Admin UI runs on :8081 (zero impact on proxy :8080)
 - **Optional Component**: Can be completely disabled in production
 - **CLI Integration**: `llm-proxy admin-server --management-token TOKEN`
-- **Security**: Tokens only exposed once, sanitized API responses
+- **Security**: Tokens only exposed once, sanitized API responses, session-based login
 - **Modern UI**: Bootstrap 5, responsive design, custom CSS/JS
+- **Graceful Shutdown**: Admin server supports graceful shutdown on SIGINT/SIGTERM
+- **Explicit Template Loading**: Uses LoadHTMLFiles with explicit template listing to avoid directory conflicts
 
 ---
 
@@ -915,54 +923,3 @@ A new `llm-proxy manage` command will be introduced to provide a clear, user-fri
 - [ ] Expand provider config and YAML changes (document and test)
 
 // Note: Linter/staticcheck/errcheck issues for proxy and server resolved in this PR.
-
-# WIP: Admin UI Foundation Implementation (PR #19)
-
-## Status - Admin UI Foundation  
-- [x] Separate admin server (`cmd/admin-server`) with CLI integration
-- [x] Complete Bootstrap 5 responsive UI with custom styling  
-- [x] API client for Management API communication
-- [x] Dashboard with statistics cards and quick actions
-- [x] Project management (list, create, show, edit, delete) with full CRUD
-- [x] Token management (list, generate, success page) with security focus
-- [x] Template system with custom functions (pagination, dates, comparisons)
-- [x] Configuration integration (AdminUIConfig) 
-- [x] Error handling and user-friendly messages
-- [x] JavaScript enhancements and interactivity
-- [x] Template loading fix (simple dashboard works)
-
-## Next Steps
-- [x] PR #19 created and ready for review
-- [ ] Template inheritance refactoring (optional improvement)
-- [ ] Real-time dashboard updates (future enhancement)
-
-## Architecture
-- **Separate Port**: Admin UI runs on :8081 (zero impact on proxy :8080)
-- **Optional Component**: Can be completely disabled in production
-- **CLI Integration**: `llm-proxy admin-server --management-token TOKEN`
-- **Security**: Tokens only exposed once, sanitized API responses
-- **Modern UI**: Bootstrap 5, responsive design, custom CSS/JS
-
----
-
-# WIP: Proxy Robustness PR (Retry Logic, Circuit Breaker, Validation Scope) - COMPLETED
-
-## Status
-- [x] Minimal retry logic for transient upstream failures implemented and tested
-- [x] Simple circuit breaker implemented and tested
-- [x] Validation scope enforced (token, path, method only)
-- [x] All new logic covered by unit/integration tests
-- [x] Test coverage > 90% (see CI output)
-- [x] All tests passing (`make test-coverage`)
-- [x] TDD process followed: failing tests first, then implementation, then green
-- [x] All review and coding best practices enforced (see working agreement)
-- [x] PLAN.md and WIP.md updated
-
-## Next Steps
-- [ ] PR ready for review/merge
-- [ ] Remove temporary PR doc after merge
-
-## Notes
-- See PLAN.md for architecture and rationale
-- See tmp/PR17.md for PR body
-- All changes are traceable, reviewed, and documented
