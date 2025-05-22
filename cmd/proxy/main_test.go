@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/chzyer/readline"
+	"github.com/sofatutor/llm-proxy/internal/api"
 	"github.com/spf13/cobra"
 )
 
@@ -203,18 +204,18 @@ func Test_CLI_AllFunctions_Called(t *testing.T) {
 
 	t.Run("obfuscateKey", func(t *testing.T) {
 		key := "1234567890abcdef"
-		obf := obfuscateKey(key)
+		obf := api.ObfuscateKey(key)
 		if obf == "****" || len(obf) != len(key) {
 			t.Error("obfuscateKey did not obfuscate as expected")
 		}
 	})
 
 	t.Run("parseTimeHeader", func(t *testing.T) {
-		tm := parseTimeHeader("2023-01-01T00:00:00.000Z")
+		tm := api.ParseTimeHeader("2023-01-01T00:00:00.000Z")
 		if tm.IsZero() {
 			t.Error("parseTimeHeader failed to parse valid time")
 		}
-		zero := parseTimeHeader("")
+		zero := api.ParseTimeHeader("")
 		if !zero.IsZero() {
 			t.Error("parseTimeHeader should return zero for empty string")
 		}
@@ -223,7 +224,7 @@ func Test_CLI_AllFunctions_Called(t *testing.T) {
 	t.Run("getManagementToken", func(t *testing.T) {
 		cmd := &cobra.Command{}
 		cmd.Flags().String("management-token", "test-token", "")
-		tok, err := getManagementToken(cmd)
+		tok, err := api.GetManagementToken(cmd)
 		if err != nil || tok != "test-token" {
 			t.Errorf("getManagementToken failed: %v", err)
 		}

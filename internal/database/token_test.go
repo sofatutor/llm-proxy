@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/proxy"
+	"github.com/sofatutor/llm-proxy/internal/token"
+	"github.com/stretchr/testify/require"
 )
 
 // TestTokenCRUD tests token CRUD operations.
@@ -479,4 +481,131 @@ func TestQueryTokens_LongToken(t *testing.T) {
 	if !found {
 		t.Error("expected to find token with long value")
 	}
+}
+
+func TestDBTokenStoreAdapter_GetTokenByID(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	adapter := NewDBTokenStoreAdapter(db)
+	ctx := context.Background()
+
+	// Insert required project
+	proj := Project{ID: "pid", Name: "test", OpenAIAPIKey: "sk-test", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	require.NoError(t, db.DBCreateProject(ctx, proj))
+
+	// Insert a token
+	tok := Token{
+		Token:        "tok1",
+		ProjectID:    "pid",
+		IsActive:     true,
+		RequestCount: 0,
+		CreatedAt:    time.Now(),
+	}
+	require.NoError(t, db.CreateToken(ctx, tok))
+
+	// Happy path
+	res, err := adapter.GetTokenByID(ctx, "tok1")
+	require.NoError(t, err)
+	require.Equal(t, "tok1", res.Token)
+
+	// Error path
+	_, err = adapter.GetTokenByID(ctx, "notfound")
+	require.ErrorIs(t, err, token.ErrTokenNotFound)
+}
+
+func TestDBTokenStoreAdapter_IncrementTokenUsage(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	adapter := NewDBTokenStoreAdapter(db)
+	ctx := context.Background()
+
+	// Insert required project
+	proj := Project{ID: "pid", Name: "test", OpenAIAPIKey: "sk-test", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	require.NoError(t, db.DBCreateProject(ctx, proj))
+
+	tok := Token{
+		Token:        "tok2",
+		ProjectID:    "pid",
+		IsActive:     true,
+		RequestCount: 0,
+		CreatedAt:    time.Now(),
+	}
+	require.NoError(t, db.CreateToken(ctx, tok))
+
+	require.NoError(t, adapter.IncrementTokenUsage(ctx, "tok2"))
+
+	// Error path
+	require.Error(t, adapter.IncrementTokenUsage(ctx, "notfound"))
+}
+
+func TestDBTokenStoreAdapter_CreateToken(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	adapter := NewDBTokenStoreAdapter(db)
+	ctx := context.Background()
+
+	// Insert required project
+	proj := Project{ID: "pid", Name: "test", OpenAIAPIKey: "sk-test", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	require.NoError(t, db.DBCreateProject(ctx, proj))
+
+	td := token.TokenData{
+		Token:        "tok3",
+		ProjectID:    "pid",
+		IsActive:     true,
+		RequestCount: 0,
+		CreatedAt:    time.Now(),
+	}
+	require.NoError(t, adapter.CreateToken(ctx, td))
+
+	// Duplicate
+	require.Error(t, adapter.CreateToken(ctx, td))
+}
+
+func TestDBTokenStoreAdapter_ListTokens(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	adapter := NewDBTokenStoreAdapter(db)
+	ctx := context.Background()
+
+	// Insert required project
+	proj := Project{ID: "pid", Name: "test", OpenAIAPIKey: "sk-test", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	require.NoError(t, db.DBCreateProject(ctx, proj))
+
+	// Insert tokens
+	t1 := Token{Token: "tok4", ProjectID: "pid", IsActive: true, CreatedAt: time.Now()}
+	t2 := Token{Token: "tok5", ProjectID: "pid", IsActive: true, CreatedAt: time.Now()}
+	require.NoError(t, db.CreateToken(ctx, t1))
+	require.NoError(t, db.CreateToken(ctx, t2))
+
+	tokens, err := adapter.ListTokens(ctx)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(tokens), 2)
+}
+
+func TestDBTokenStoreAdapter_GetTokensByProjectID(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	adapter := NewDBTokenStoreAdapter(db)
+	ctx := context.Background()
+
+	// Insert required projects
+	projA := Project{ID: "pidA", Name: "A", OpenAIAPIKey: "sk-a", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	projB := Project{ID: "pidB", Name: "B", OpenAIAPIKey: "sk-b", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	require.NoError(t, db.DBCreateProject(ctx, projA))
+	require.NoError(t, db.DBCreateProject(ctx, projB))
+
+	t1 := Token{Token: "tok6", ProjectID: "pidA", IsActive: true, CreatedAt: time.Now()}
+	t2 := Token{Token: "tok7", ProjectID: "pidB", IsActive: true, CreatedAt: time.Now()}
+	require.NoError(t, db.CreateToken(ctx, t1))
+	require.NoError(t, db.CreateToken(ctx, t2))
+
+	toksA, err := adapter.GetTokensByProjectID(ctx, "pidA")
+	require.NoError(t, err)
+	require.Len(t, toksA, 1)
+	require.Equal(t, "tok6", toksA[0].Token)
+
+	toksB, err := adapter.GetTokensByProjectID(ctx, "pidB")
+	require.NoError(t, err)
+	require.Len(t, toksB, 1)
+	require.Equal(t, "tok7", toksB[0].Token)
 }

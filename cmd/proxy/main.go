@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/sofatutor/llm-proxy/internal/api"
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/spf13/cobra"
 )
@@ -40,27 +41,6 @@ var (
 var (
 	osExit = os.Exit
 )
-
-// ProjectCreateRequest, ProjectCreateResponse, TokenCreateRequest, TokenCreateResponse types (copy from setup.go)
-type ProjectCreateRequest struct {
-	Name         string `json:"name"`
-	OpenAIAPIKey string `json:"openai_api_key"`
-}
-type ProjectCreateResponse struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	OpenAIAPIKey string    `json:"openai_api_key"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-}
-type TokenCreateRequest struct {
-	ProjectID     string `json:"project_id"`
-	DurationHours int    `json:"duration_hours"`
-}
-type TokenCreateResponse struct {
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
-}
 
 // Setup command definition
 var setupCmd = &cobra.Command{
@@ -321,7 +301,7 @@ func init() {
 		Short: "List all projects",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_ = godotenv.Load()
-			mgmtToken, err := getManagementToken(cmd)
+			mgmtToken, err := api.GetManagementToken(cmd)
 			if err != nil {
 				return err
 			}
@@ -344,7 +324,7 @@ func init() {
 			if resp.StatusCode != http.StatusOK {
 				return fmt.Errorf("server error: %s", resp.Status)
 			}
-			var projects []ProjectCreateResponse
+			var projects []api.ProjectCreateResponse
 			if err := json.NewDecoder(resp.Body).Decode(&projects); err != nil {
 				return err
 			}
@@ -355,7 +335,7 @@ func init() {
 			} else {
 				fmt.Printf("%-36s  %-20s  %-32s  %-20s  %-20s\n", "ID", "Name", "OpenAI Key", "Created", "Updated")
 				for _, p := range projects {
-					fmt.Printf("%-36s  %-20s  %-32s  %-20s  %-20s\n", p.ID, p.Name, obfuscateKey(p.OpenAIAPIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
+					fmt.Printf("%-36s  %-20s  %-32s  %-20s  %-20s\n", p.ID, p.Name, api.ObfuscateKey(p.OpenAIAPIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
 				}
 			}
 			return nil
@@ -370,7 +350,7 @@ func init() {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_ = godotenv.Load()
-			mgmtToken, err := getManagementToken(cmd)
+			mgmtToken, err := api.GetManagementToken(cmd)
 			if err != nil {
 				return err
 			}
@@ -394,7 +374,7 @@ func init() {
 			if resp.StatusCode != http.StatusOK {
 				return fmt.Errorf("server error: %s", resp.Status)
 			}
-			var p ProjectCreateResponse
+			var p api.ProjectCreateResponse
 			if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
 				return err
 			}
@@ -403,7 +383,7 @@ func init() {
 				out, _ := json.MarshalIndent(p, "", "  ")
 				fmt.Println(string(out))
 			} else {
-				fmt.Printf("ID: %s\nName: %s\nOpenAI Key: %s\nCreated: %s\nUpdated: %s\n", p.ID, p.Name, obfuscateKey(p.OpenAIAPIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
+				fmt.Printf("ID: %s\nName: %s\nOpenAI Key: %s\nCreated: %s\nUpdated: %s\n", p.ID, p.Name, api.ObfuscateKey(p.OpenAIAPIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
 			}
 			return nil
 		},
@@ -416,7 +396,7 @@ func init() {
 		Short: "Create a new project",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_ = godotenv.Load()
-			mgmtToken, err := getManagementToken(cmd)
+			mgmtToken, err := api.GetManagementToken(cmd)
 			if err != nil {
 				return err
 			}
@@ -425,7 +405,7 @@ func init() {
 			if name == "" || openaiKey == "" {
 				return fmt.Errorf("--name and --openai-key are required")
 			}
-			body := ProjectCreateRequest{Name: name, OpenAIAPIKey: openaiKey}
+			body := api.ProjectCreateRequest{Name: name, OpenAIAPIKey: openaiKey}
 			jsonBody, _ := json.Marshal(body)
 			url := "http://localhost:8080/manage/projects"
 			req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
@@ -447,7 +427,7 @@ func init() {
 			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 				return fmt.Errorf("server error: %s", resp.Status)
 			}
-			var p ProjectCreateResponse
+			var p api.ProjectCreateResponse
 			if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
 				return err
 			}
@@ -456,7 +436,7 @@ func init() {
 				out, _ := json.MarshalIndent(p, "", "  ")
 				fmt.Println(string(out))
 			} else {
-				fmt.Printf("ID: %s\nName: %s\nOpenAI Key: %s\nCreated: %s\nUpdated: %s\n", p.ID, p.Name, obfuscateKey(p.OpenAIAPIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
+				fmt.Printf("ID: %s\nName: %s\nOpenAI Key: %s\nCreated: %s\nUpdated: %s\n", p.ID, p.Name, api.ObfuscateKey(p.OpenAIAPIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
 			}
 			return nil
 		},
@@ -472,7 +452,7 @@ func init() {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_ = godotenv.Load()
-			mgmtToken, err := getManagementToken(cmd)
+			mgmtToken, err := api.GetManagementToken(cmd)
 			if err != nil {
 				return err
 			}
@@ -510,7 +490,7 @@ func init() {
 			if resp.StatusCode != http.StatusOK {
 				return fmt.Errorf("server error: %s", resp.Status)
 			}
-			var p ProjectCreateResponse
+			var p api.ProjectCreateResponse
 			if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
 				return err
 			}
@@ -519,7 +499,7 @@ func init() {
 				out, _ := json.MarshalIndent(p, "", "  ")
 				fmt.Println(string(out))
 			} else {
-				fmt.Printf("ID: %s\nName: %s\nOpenAI Key: %s\nCreated: %s\nUpdated: %s\n", p.ID, p.Name, obfuscateKey(p.OpenAIAPIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
+				fmt.Printf("ID: %s\nName: %s\nOpenAI Key: %s\nCreated: %s\nUpdated: %s\n", p.ID, p.Name, api.ObfuscateKey(p.OpenAIAPIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
 			}
 			return nil
 		},
@@ -535,7 +515,7 @@ func init() {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_ = godotenv.Load()
-			mgmtToken, err := getManagementToken(cmd)
+			mgmtToken, err := api.GetManagementToken(cmd)
 			if err != nil {
 				return err
 			}

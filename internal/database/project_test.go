@@ -309,24 +309,35 @@ func TestListProjects_LongNames(t *testing.T) {
 	}
 }
 
-func TestGetAPIKeyForProject_DB(t *testing.T) {
-	t.Skip("Not implemented: DB.GetAPIKeyForProject is a stub. TODO: implement and enable test.")
-	// db, cleanup := testDB(t)
-	// defer cleanup()
-	// ctx := context.Background()
-	// // Insert a project
-	// p := Project{ID: "p1", Name: "Test", OpenAIAPIKey: "key1", CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	// if err := db.CreateProject(ctx, p); err != nil {
-	// 	t.Fatalf("Failed to create project: %v", err)
-	// }
-	// // Should succeed
-	// key, err := db.GetAPIKeyForProject(ctx, "p1")
-	// if err != nil || key != "key1" {
-	// 	t.Errorf("expected key1, got %v, err=%v", key, err)
-	// }
-	// // Should fail for non-existent
-	// _, err = db.GetAPIKeyForProject(ctx, "nope")
-	// if err == nil {
-	// 	t.Error("expected error for non-existent project")
-	// }
+func TestGetAPIKeyForProject(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Insert a project
+	project := Project{
+		ID:           "pid",
+		Name:         "test",
+		OpenAIAPIKey: "sk-test-key",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	if err := db.DBCreateProject(ctx, project); err != nil {
+		t.Fatalf("failed to create project: %v", err)
+	}
+
+	// Happy path
+	key, err := db.GetAPIKeyForProject(ctx, "pid")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if key != "sk-test-key" {
+		t.Errorf("expected key 'sk-test-key', got '%s'", key)
+	}
+
+	// Error path: non-existent project
+	_, err = db.GetAPIKeyForProject(ctx, "does-not-exist")
+	if err == nil {
+		t.Error("expected error for non-existent project")
+	}
 }

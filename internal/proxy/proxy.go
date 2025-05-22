@@ -716,6 +716,11 @@ func (p *TransparentProxy) MetricsMiddleware() Middleware {
 			// Record metrics
 			duration := time.Since(start)
 			p.metrics.mu.Lock()
+			p.metrics.RequestCount++
+			// Increment error count for status codes >= 400
+			if rec.statusCode >= 400 {
+				p.metrics.ErrorCount++
+			}
 			p.metrics.TotalResponseTime += duration
 			p.metrics.mu.Unlock()
 		})
