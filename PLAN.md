@@ -172,13 +172,25 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 ### Management API
 - `/manage/projects` (CRUD): POST, GET, PUT, DELETE
   - Auth: `Authorization: Bearer <MANAGEMENT_TOKEN>`
-  - Request/response formats: [documented in code, needs expansion here]
+  - Request/response formats:
+    - **POST**: Create a project
+      - Request: `{"name": "<string>", "description": "<string>", "metadata": {"key": "value"}}`
+      - Response: `{"project_id": "<uuid>", "name": "<string>", "description": "<string>", "metadata": {"key": "value"}, "created_at": "<iso8601>"}`
+    - **GET**: Retrieve projects
+      - Request: None
+      - Response: `[{"project_id": "<uuid>", "name": "<string>", "description": "<string>", "metadata": {"key": "value"}, "created_at": "<iso8601>"}]`
+    - **PUT**: Update a project
+      - Request: `{"project_id": "<uuid>", "name": "<string>", "description": "<string>", "metadata": {"key": "value"}}`
+      - Response: `{"project_id": "<uuid>", "name": "<string>", "description": "<string>", "metadata": {"key": "value"}, "updated_at": "<iso8601>"}`
+    - **DELETE**: Delete a project
+      - Request: `{"project_id": "<uuid>"}`
+      - Response: 204 No Content
 - `/manage/tokens` (CRUD): POST, GET, DELETE
   - Auth: `Authorization: Bearer <MANAGEMENT_TOKEN>`
   - Request/response formats: [documented in code, needs expansion here]
 
 ### Health Check
-- `/health`: Returns status, timestamp, version
+- `/health`: Returns status, timestamp, version. This endpoint is used for monitoring the system's health and uptime.
 
 ## Logging Format
 ```json
@@ -315,5 +327,4 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 - Avoids code duplication and confusion about command ownership.
 - Ensures all user/server/management logic is in one place (`cmd/proxy/`), while benchmarks are isolated.
 
-- Default DB path: data/llm-proxy.db (overridable by DATABASE_PATH in .env or --db flag)
 - In-memory DB is only used for tests
