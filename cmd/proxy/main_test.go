@@ -104,6 +104,17 @@ func TestServerCommandArgs(t *testing.T) {
 	}
 }
 
+// Helper to get a temp DB path for tests
+func tempDBPath(t *testing.T) string {
+	db, err := os.CreateTemp(os.TempDir(), "llm-proxy-test-*.db")
+	if err != nil {
+		t.Fatalf("Failed to create temp DB file: %v", err)
+	}
+	db.Close()
+	os.Remove(db.Name()) // Remove the file, just use the path
+	return db.Name()
+}
+
 // Additional tests for runSetup (non-interactive)
 func TestRunSetup_NonInteractive(t *testing.T) {
 	cases := []struct {
@@ -139,17 +150,24 @@ func TestRunSetup_NonInteractive(t *testing.T) {
 			origOpenAI := openAIAPIKey
 			origMgmt := managementToken
 			origConfig := configPath
+			origDB := databasePath
 			origOsExit := osExit
 			defer func() {
 				openAIAPIKey = origOpenAI
 				managementToken = origMgmt
 				configPath = origConfig
+				databasePath = origDB
 				osExit = origOsExit
+				if tc.configPath != "/dev/null/shouldfail.env" {
+					_ = os.Remove(tc.configPath)
+				}
+				_ = os.Remove(databasePath)
 			}()
 
 			openAIAPIKey = tc.openAIAPIKey
 			managementToken = "test-mgmt-token"
 			configPath = tc.configPath
+			databasePath = tempDBPath(t)
 
 			errored := false
 			osExit = func(code int) { errored = true }
@@ -214,7 +232,7 @@ func Test_CLI_AllFunctions_Called(t *testing.T) {
 		configPath = os.TempDir() + "/test_write.env"
 		openAIAPIKey = "sk-test"
 		managementToken = "mgmt-test"
-		databasePath = "/tmp/test.db"
+		databasePath = tempDBPath(t)
 		listenAddr = "localhost:9999"
 		osExit = func(code int) { t.Errorf("osExit called unexpectedly") }
 		defer func() {
@@ -225,6 +243,7 @@ func Test_CLI_AllFunctions_Called(t *testing.T) {
 			listenAddr = origListen
 			osExit = origOsExit
 			_ = os.Remove(configPath)
+			_ = os.Remove(databasePath)
 		}()
 		writeConfig()
 		if _, err := os.Stat(configPath); err != nil {
