@@ -139,9 +139,9 @@ Repository structure, configuration, Docker, security, documentation, and founda
   - Server-Sent Events handling
   - Chunked transfer encoding
   - Streaming metadata aggregation
-- [ ] Create error handling and response standardization
+- [x] Create error handling and response standardization (improved error handling and response checks implemented)
 - [x] Implement request/response logging
-- [ ] Add timeout and cancellation handling
+- [x] Add timeout and cancellation handling (context timeouts and error handling improved)
 - [ ] Create retry logic for transient failures
 - [ ] Implement circuit breaker pattern for API stability
 - [ ] Add request validation
@@ -836,3 +836,5 @@ A new `llm-proxy manage` command will be introduced to provide a clear, user-fri
 
 ## Phase 2/3: Config/YAML
 - [ ] Expand provider config and YAML changes (document and test)
+
+// Note: Linter/staticcheck/errcheck issues for proxy and server resolved in this PR.
