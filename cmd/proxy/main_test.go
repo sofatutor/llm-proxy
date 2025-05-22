@@ -114,8 +114,12 @@ func tempDBPath(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("Failed to create temp DB file: %v", err)
 	}
-	db.Close()
-	os.Remove(db.Name()) // Remove the file, just use the path
+	if err := db.Close(); err != nil {
+		t.Fatalf("Failed to close temp DB file: %v", err)
+	}
+	if err := os.Remove(db.Name()); err != nil {
+		t.Fatalf("Failed to remove temp DB file: %v", err)
+	}
 	return db.Name()
 }
 
@@ -263,7 +267,9 @@ func Test_CLI_AllFunctions_Called(t *testing.T) {
 
 	t.Run("runChat", func(t *testing.T) {
 		// Minimal test: just call with dummy args, expect no panic
-		defer func() { recover() }()
+		defer func() {
+			_ = recover() // Swallow panic for coverage
+		}()
 		cmd := &cobra.Command{}
 		runChat(cmd, []string{})
 	})
@@ -292,14 +298,6 @@ func Test_CLI_AllFunctions_Called(t *testing.T) {
 	t.Run("main", func(t *testing.T) {
 		t.Skip("Blocking, not suitable for unit test")
 	})
-}
-
-func stubFatal(t *testing.T) (restore func()) {
-	origOsExit := osExit
-	osExit = func(code int) { panic("osExit called") }
-	return func() {
-		osExit = origOsExit
-	}
 }
 
 func Test_runChat_and_getChatResponse(t *testing.T) {
@@ -339,7 +337,9 @@ func Test_runChat_and_getChatResponse(t *testing.T) {
 		// Start a dummy server that returns 500
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(500)
-			w.Write([]byte("fail"))
+			if _, err := w.Write([]byte("fail")); err != nil {
+				t.Errorf("failed to write: %v", err)
+			}
 		}))
 		defer ts.Close()
 		proxyURL = ts.URL
@@ -355,7 +355,9 @@ func Test_runChat_and_getChatResponse(t *testing.T) {
 	t.Run("getChatResponse bad JSON", func(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(200)
-			w.Write([]byte("not json"))
+			if _, err := w.Write([]byte("not json")); err != nil {
+				t.Errorf("failed to write: %v", err)
+			}
 		}))
 		defer ts.Close()
 		proxyURL = ts.URL
@@ -372,7 +374,9 @@ func Test_runChat_and_getChatResponse(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(200)
-			w.Write([]byte("data: {\"id\":\"abc\",\"object\":\"chat.completion\",\"created\":123,\"model\":\"gpt-3.5-turbo\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}\n\n"))
+			if _, err := w.Write([]byte("data: {\"id\":\"abc\",\"object\":\"chat.completion\",\"created\":123,\"model\":\"gpt-3.5-turbo\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}\n\n")); err != nil {
+				t.Errorf("failed to write: %v", err)
+			}
 		}))
 		defer ts.Close()
 		proxyURL = ts.URL
@@ -385,7 +389,11 @@ func Test_runChat_and_getChatResponse(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to create dummy readline: %v", err)
 		}
-		defer rl.Close()
+		defer func() {
+			if err := rl.Close(); err != nil {
+				t.Errorf("failed to close readline: %v", err)
+			}
+		}()
 		resp, err := getChatResponse([]ChatMessage{{Role: "user", Content: "hi"}}, rl)
 		if err != nil || resp == nil {
 			t.Errorf("expected streaming response, got err=%v resp=%v", err, resp)
@@ -408,7 +416,9 @@ func Test_runChat_and_getChatResponse(t *testing.T) {
 		b, _ := json.Marshal(respObj)
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(200)
-			w.Write(b)
+			if _, err := w.Write(b); err != nil {
+				t.Errorf("failed to write: %v", err)
+			}
 		}))
 		defer ts.Close()
 		proxyURL = ts.URL

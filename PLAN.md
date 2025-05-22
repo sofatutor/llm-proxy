@@ -10,6 +10,12 @@
 > - Pull requests must demonstrate that new/changed code is covered by tests and that overall coverage remains above 90%.
 > - Coverage checks are mandatory in CI and must block merges if not met.
 
+> **Coverage Policy Note:**
+> - Code in `cmd/` (CLI entrypoints, flag parsing, glue code) is **not included in coverage checks**.
+> - All core logic, business rules, and testable functionality **must reside in `internal/`** packages.
+> - Only minimal CLI glue/flag parsing should be in `cmd/`.
+> - This ensures high test coverage and maintainability.
+
 > **Note:** While this project uses OpenAI as a case study, the architecture is intentionally generic and can be adapted to any API requiring secure, short-lived (withering) tokens and transparent proxying. The only required intervention is minimal (e.g., Authorization header replacement), ensuring maximum transparency. Future extensions may include custom request/response transformations.
 
 > **Minimum Latency Mandate:** All design and implementation decisions must prioritize minimum added latency. The proxy should introduce as little overhead as possible, with all middleware, token validation, and logging optimized for speed. Performance testing and optimization for low latency are required at every stage.
