@@ -190,7 +190,8 @@ This document outlines the implementation plan for a transparent proxy for OpenA
   - Request/response formats: [documented in code, needs expansion here]
 
 ### Health Check
-- `/health`: Returns status, timestamp, version. This endpoint is used for monitoring the system's health and uptime.
+- `/health`: Returns status, timestamp, version
+  - Used for readiness/liveness probes, monitoring, and orchestration.
 
 ## Logging Format
 ```json
@@ -296,12 +297,13 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 - Add support for daemon mode (`llm-proxy server -d`), PID file management, and advanced CLI flags
 - Expanded documentation and end-to-end usage examples
 - Improved flag parsing and configuration overrides
+- Planned: `llm-proxy server` will support subcommands such as `start` (with `-d` for daemon mode), `stop`, and `health` for operational control in the final version.
 
 ## Logging System
 - Add proxy metrics/logging/timing improvements (duration, request/response stats, error tracking)
 
 ## Monitoring
-- Add health check endpoint `/health` for readiness/liveness probes
+- The `/health` endpoint (see API Endpoints) is used for readiness/liveness probes.
 
 ## API Provider Config
 - Expanded YAML config for API providers, endpoints, and methods
