@@ -959,3 +959,45 @@ func (s *stubProjectStore) UpdateProject(ctx context.Context, project Project) e
 func (s *stubProjectStore) DeleteProject(ctx context.Context, projectID string) error {
 	return nil
 }
+
+// Helper for TestTimingResponseWriter_Flush
+type flushRecorder struct {
+	flushed bool
+	http.ResponseWriter
+}
+
+func (f *flushRecorder) Flush() { f.flushed = true }
+
+func TestTimingResponseWriter_Flush(t *testing.T) {
+	rec := &flushRecorder{ResponseWriter: httptest.NewRecorder()}
+	trw := &timingResponseWriter{ResponseWriter: rec}
+	trw.Flush()
+	if !rec.flushed {
+		t.Errorf("Flush was not called on underlying ResponseWriter")
+	}
+}
+
+func TestSetTimingHeaders(t *testing.T) {
+	res := &http.Response{Header: make(http.Header)}
+	now := time.Now().UTC()
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, ctxKeyProxyReceivedAt, now)
+	ctx = context.WithValue(ctx, ctxKeyProxySentBackendAt, now.Add(1*time.Second))
+	ctx = context.WithValue(ctx, ctxKeyProxyFirstRespAt, now.Add(2*time.Second))
+	ctx = context.WithValue(ctx, ctxKeyProxyFinalRespAt, now.Add(3*time.Second))
+
+	setTimingHeaders(res, ctx)
+
+	if res.Header.Get("X-Proxy-Received-At") == "" {
+		t.Errorf("X-Proxy-Received-At header not set")
+	}
+	if res.Header.Get("X-Proxy-Sent-Backend-At") == "" {
+		t.Errorf("X-Proxy-Sent-Backend-At header not set")
+	}
+	if res.Header.Get("X-Proxy-First-Response-At") == "" {
+		t.Errorf("X-Proxy-First-Response-At header not set")
+	}
+	if res.Header.Get("X-Proxy-Final-Response-At") == "" {
+		t.Errorf("X-Proxy-Final-Response-At header not set")
+	}
+}
