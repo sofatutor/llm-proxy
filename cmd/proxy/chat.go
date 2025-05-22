@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -98,7 +99,9 @@ func init() {
 	chatCmd.Flags().BoolVar(&useStreaming, "stream", true, "Use streaming for responses")
 
 	// Make token required
-	chatCmd.MarkFlagRequired("token")
+	if err := chatCmd.MarkFlagRequired("token"); err != nil {
+		log.Printf("Warning: could not mark 'token' flag as required: %v", err)
+	}
 }
 
 // runChat is the main function for the chat command
@@ -126,7 +129,11 @@ func runChat(cmd *cobra.Command, args []string) {
 		fmt.Printf("Error initializing readline: %v\n", err)
 		return
 	}
-	defer rl.Close()
+	defer func() {
+		if err := rl.Close(); err != nil {
+			fmt.Printf("Error closing readline: %v\n", err)
+		}
+	}()
 
 	for {
 		// Read user input
@@ -234,7 +241,11 @@ func getChatResponse(messages []ChatMessage, rl *readline.Instance) (*ChatRespon
 	if err != nil {
 		return nil, fmt.Errorf("error sending request: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			log.Printf("Error closing response body: %v", err)
+		}
+	}()
 
 	// Check for error status
 	if resp.StatusCode != http.StatusOK {
@@ -305,7 +316,9 @@ func getChatResponse(messages []ChatMessage, rl *readline.Instance) (*ChatRespon
 			// Parse the JSON in the SSE data
 			var streamResp ChatCompletionStreamResponse
 			if err := json.Unmarshal([]byte(data), &streamResp); err != nil {
-				fmt.Fprintf(rl.Stdout(), "Error parsing SSE data: %v\n", err)
+				if _, err := fmt.Fprintf(rl.Stdout(), "Error parsing SSE data: %v\n", err); err != nil {
+					log.Printf("Error writing SSE parse error: %v", err)
+				}
 				continue
 			}
 
@@ -314,7 +327,9 @@ func getChatResponse(messages []ChatMessage, rl *readline.Instance) (*ChatRespon
 				delta := streamResp.Choices[0].Delta
 				if delta.Content != "" {
 					fullContent.WriteString(delta.Content)
-					rl.Stdout().Write([]byte(delta.Content))
+					if _, err := rl.Stdout().Write([]byte(delta.Content)); err != nil {
+						log.Printf("Error writing streamed content: %v", err)
+					}
 				}
 
 				// Save model info
@@ -322,10 +337,7 @@ func getChatResponse(messages []ChatMessage, rl *readline.Instance) (*ChatRespon
 					model = streamResp.Model
 				}
 
-				// Check for finish reason
-				if streamResp.Choices[0].FinishReason != "" {
-					// Stream is complete
-				}
+				// Check for finish reason (no action needed)
 			}
 		}
 
@@ -334,7 +346,9 @@ func getChatResponse(messages []ChatMessage, rl *readline.Instance) (*ChatRespon
 		}
 
 		// After streaming, print a newline and refresh the prompt
-		rl.Stdout().Write([]byte("\n"))
+		if _, err := rl.Stdout().Write([]byte("\n")); err != nil {
+			log.Printf("Error writing newline after stream: %v", err)
+		}
 		rl.Refresh()
 
 		// Create a synthetic response from the streamed content
@@ -373,13 +387,19 @@ func getChatResponse(messages []ChatMessage, rl *readline.Instance) (*ChatRespon
 		// For non-streaming, print after reading the response
 		if verboseMode {
 			grey := func(s string) string { return "\033[90m" + s + "\033[0m" }
-			fmt.Fprintf(rl.Stdout(), "\n%s\n", grey(fmt.Sprintf("[Verbose] Total request duration: %s", time.Since(startTime))))
+			if _, err := fmt.Fprintf(rl.Stdout(), "\n%s\n", grey(fmt.Sprintf("[Verbose] Total request duration: %s", time.Since(startTime)))); err != nil {
+				log.Printf("Error writing verbose timing: %v", err)
+			}
 			remoteDuration := resp.Header.Get("X-LLM-Proxy-Remote-Duration-Ms")
 			if remoteDuration != "" {
-				fmt.Fprintf(rl.Stdout(), "%s\n", grey(fmt.Sprintf("[Verbose] Proxy reported remote duration: %s ms", remoteDuration)))
+				if _, err := fmt.Fprintf(rl.Stdout(), "%s\n", grey(fmt.Sprintf("[Verbose] Proxy reported remote duration: %s ms", remoteDuration))); err != nil {
+					log.Printf("Error writing remote duration: %v", err)
+				}
 				if callDuration, err := time.ParseDuration(remoteDuration + "ms"); err == nil {
 					localOverhead := time.Since(startTime) - callDuration
-					fmt.Fprintf(rl.Stdout(), "%s\n", grey(fmt.Sprintf("[Verbose] Proxy overhead: %s", localOverhead)))
+					if _, err := fmt.Fprintf(rl.Stdout(), "%s\n", grey(fmt.Sprintf("[Verbose] Proxy overhead: %s", localOverhead))); err != nil {
+						log.Printf("Error writing proxy overhead: %v", err)
+					}
 				}
 			}
 		}

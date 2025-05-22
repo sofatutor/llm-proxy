@@ -25,16 +25,17 @@ var openaiCmd = &cobra.Command{
 	Long:  `Interact with OpenAI services via the LLM Proxy.`,
 }
 
-var benchmarkCmd = &cobra.Command{
-	Use:   "benchmark",
-	Short: "Run benchmarks against the LLM Proxy",
-	Long:  `Benchmark performance metrics including latency, throughput, and errors.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Benchmark command not yet implemented")
-	},
-}
+var benchmarkCmd *cobra.Command
 
 func init() {
+	benchmarkCmd = &cobra.Command{
+		Use:   "benchmark",
+		Short: "Run benchmarks against the LLM Proxy",
+		Long:  `Benchmark performance metrics including latency, throughput, and errors.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println("Benchmark command not yet implemented")
+		},
+	}
 	// Add subcommands to the root command
 	rootCmd.AddCommand(openaiCmd)
 	rootCmd.AddCommand(benchmarkCmd)

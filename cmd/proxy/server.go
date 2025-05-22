@@ -62,7 +62,7 @@ func init() {
 	serverCmd.Flags().StringVar(&serverListenAddr, "addr", "", "Address to listen on (overrides env var)")
 	serverCmd.Flags().StringVar(&serverDatabasePath, "db", "", "Path to SQLite database (overrides env var)")
 	serverCmd.Flags().StringVar(&serverLogLevel, "log-level", "", "Log level: debug, info, warn, error (overrides env var)")
-	serverCmd.Flags().StringVar(&pidFile, "pid-file", "/tmp/llm-proxy.pid", "PID file for daemon mode")
+	serverCmd.Flags().StringVar(&pidFile, "pid-file", "tmp/server.pid", "PID file for daemon mode (relative to project root)")
 	serverCmd.Flags().BoolVarP(&debugMode, "debug", "v", false, "Enable debug logging (overrides log-level)")
 }
 
@@ -113,7 +113,6 @@ func runServerDaemon() {
 	cmd.sysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true, // Set process group ID
 	}
-	cmd.Cmd.SysProcAttr = cmd.sysProcAttr
 
 	// Start the process
 	if err := cmd.Start(); err != nil {
@@ -121,22 +120,20 @@ func runServerDaemon() {
 		osExit(1)
 	}
 
-	// Save the PID to file
-	// In the real implementation, we would get the process PID
-	// For now, we'll use a dummy value for testing
-	pid := 12345
-	if cmd.Cmd != nil && cmd.Cmd.Process != nil {
-		pid = cmd.Cmd.Process.Pid
+	// Save the actual process PID to the specified pidFile (default: tmp/server.pid)
+	if cmd.Process != nil {
+		pid := cmd.Process.Pid
+		if err := os.MkdirAll("tmp", 0755); err != nil {
+			fmt.Printf("Error creating tmp directory: %v\n", err)
+		}
+		if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", pid)), 0644); err != nil {
+			fmt.Printf("Error writing PID file: %v\n", err)
+		} else {
+			fmt.Printf("Server started in daemon mode with PID %d\n", pid)
+			fmt.Printf("PID file: %s\n", pidFile)
+			fmt.Println("Use 'kill $(cat " + pidFile + ")' to stop the server")
+		}
 	}
-	err = os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", pid)), 0644)
-	if err != nil {
-		fmt.Printf("Error writing PID file: %v\n", err)
-		// Continue anyway
-	}
-
-	fmt.Printf("Server started in daemon mode with PID %d\n", pid)
-	fmt.Printf("PID file: %s\n", pidFile)
-	fmt.Println("Use 'kill $(cat " + pidFile + ")' to stop the server")
 }
 
 // runServerForeground starts the server in foreground mode

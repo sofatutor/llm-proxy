@@ -3,34 +3,26 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"context"
+	"crypto/rand"
 	"encoding/hex"
-	"flag"
+	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/joho/godotenv"
-	"github.com/sofatutor/llm-proxy/internal/config"
-	"github.com/sofatutor/llm-proxy/internal/database"
-	"github.com/sofatutor/llm-proxy/internal/server"
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/spf13/cobra"
 )
 
 // Command line flags
 var (
-	envFile      string
 	listenAddr   string
 	databasePath string
-	logLevel     string
 )
 
 // Configuration options for setup
@@ -46,11 +38,7 @@ var (
 
 // For testing
 var (
-	osExit           = os.Exit
-	logFatalFunc     = log.Fatalf
-	signalNotifyFunc = signal.Notify
-	flagParseFunc    = flag.Parse // Allow overriding flag parsing for tests
-	osSetenvFunc     = os.Setenv  // Allow overriding os.Setenv for tests
+	osExit = os.Exit
 )
 
 // ProjectCreateRequest, ProjectCreateResponse, TokenCreateRequest, TokenCreateResponse types (copy from setup.go)
@@ -281,152 +269,434 @@ func generateSecureToken(length int) string {
 	return hex.EncodeToString(b)
 }
 
-// rootCmd, openaiCmd, chatCmd, benchmarkCmd are defined at the package level (imported from their respective files)
-// Only one rootCmd declaration at the package level
-// Remove any local cobraRoot variable and use rootCmd throughout
-
-// Declare these as package-level variables so they are available for init and tests
-// They are defined in their respective files (chat.go, benchmark.go)
-var openaiCmd *cobra.Command    // defined in chat.go
-var benchmarkCmd *cobra.Command // defined in benchmark.go
-
-func init() {
-	// Add subcommands to openaiCmd
-	openaiCmd.AddCommand(chatCmd)
-	// Add all commands to root
-	rootCmd.AddCommand(setupCmd)
-	rootCmd.AddCommand(openaiCmd)
-	rootCmd.AddCommand(serverCmd)
-	rootCmd.AddCommand(benchmarkCmd)
-}
+// Move openaiCmd and benchmarkCmd to package-level vars
+var openaiCmd *cobra.Command
+var benchmarkCmd *cobra.Command
 
 func main() {
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		osExit(1)
+	cobraRoot := &cobra.Command{Use: "llm-proxy"}
+
+	// Register setup command flags
+	setupCmd.Flags().StringVar(&configPath, "config", ".env", "Path to the configuration file")
+	setupCmd.Flags().StringVar(&openAIAPIKey, "openai-key", "", "OpenAI API Key")
+	setupCmd.Flags().StringVar(&managementToken, "management-token", "", "Management token for the proxy")
+	setupCmd.Flags().StringVar(&databasePath, "db", "data/llm-proxy.db", "Path to SQLite database (default: data/llm-proxy.db, overridden by DATABASE_PATH env var or --db flag)")
+	setupCmd.Flags().StringVar(&listenAddr, "addr", "localhost:8080", "Address to listen on")
+	setupCmd.Flags().BoolVar(&interactiveSetup, "interactive", false, "Run interactive setup")
+	setupCmd.Flags().StringVar(&projectName, "project", "DefaultProject", "Name of the project to create")
+	setupCmd.Flags().IntVar(&tokenDuration, "duration", 24, "Duration of the token in hours")
+	setupCmd.Flags().BoolVar(&skipProjectSetup, "skip-project", false, "Skip project and token setup")
+
+	// Add openai parent command
+	openaiCmd = &cobra.Command{
+		Use:   "openai",
+		Short: "Commands for interacting with OpenAI",
+		Long:  `Interact with OpenAI services via the LLM Proxy.`,
+	}
+	openaiCmd.AddCommand(chatCmd)
+
+	// Add all commands to root
+	cobraRoot.AddCommand(setupCmd)
+	cobraRoot.AddCommand(openaiCmd)
+	cobraRoot.AddCommand(serverCmd)
+
+	// Manage command and subcommands
+	var manageCmd = &cobra.Command{
+		Use:   "manage",
+		Short: "Manage projects and tokens",
+		Long:  `Project and token management commands (CRUD, generation, validation).`,
+	}
+
+	// -- Project subcommands --
+	var projectCmd = &cobra.Command{
+		Use:   "project",
+		Short: "Manage projects",
+		Long:  `CRUD operations for projects.`,
+	}
+
+	var projectListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "List all projects",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_ = godotenv.Load()
+			mgmtToken, err := getManagementToken(cmd)
+			if err != nil {
+				return err
+			}
+			url := "http://localhost:8080/manage/projects"
+			req, err := http.NewRequest("GET", url, nil)
+			if err != nil {
+				return err
+			}
+			req.Header.Set("Authorization", "Bearer "+mgmtToken)
+			client := &http.Client{}
+			resp, err := client.Do(req)
+			if err != nil {
+				return err
+			}
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					log.Printf("Error closing response body: %v", err)
+				}
+			}()
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("server error: %s", resp.Status)
+			}
+			var projects []ProjectCreateResponse
+			if err := json.NewDecoder(resp.Body).Decode(&projects); err != nil {
+				return err
+			}
+			jsonOut, _ := cmd.Flags().GetBool("json")
+			if jsonOut {
+				out, _ := json.MarshalIndent(projects, "", "  ")
+				fmt.Println(string(out))
+			} else {
+				fmt.Printf("%-36s  %-20s  %-32s  %-20s  %-20s\n", "ID", "Name", "OpenAI Key", "Created", "Updated")
+				for _, p := range projects {
+					fmt.Printf("%-36s  %-20s  %-32s  %-20s  %-20s\n", p.ID, p.Name, obfuscateKey(p.OpenAIAPIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
+				}
+			}
+			return nil
+		},
+	}
+	projectListCmd.Flags().Bool("json", false, "Output as JSON")
+	projectListCmd.Flags().String("management-token", "", "Management token (overrides env)")
+
+	var projectGetCmd = &cobra.Command{
+		Use:   "get <project-id>",
+		Short: "Get project details",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_ = godotenv.Load()
+			mgmtToken, err := getManagementToken(cmd)
+			if err != nil {
+				return err
+			}
+			id := args[0]
+			url := fmt.Sprintf("http://localhost:8080/manage/projects/%s", id)
+			req, err := http.NewRequest("GET", url, nil)
+			if err != nil {
+				return err
+			}
+			req.Header.Set("Authorization", "Bearer "+mgmtToken)
+			client := &http.Client{}
+			resp, err := client.Do(req)
+			if err != nil {
+				return err
+			}
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					log.Printf("Error closing response body: %v", err)
+				}
+			}()
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("server error: %s", resp.Status)
+			}
+			var p ProjectCreateResponse
+			if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+				return err
+			}
+			jsonOut, _ := cmd.Flags().GetBool("json")
+			if jsonOut {
+				out, _ := json.MarshalIndent(p, "", "  ")
+				fmt.Println(string(out))
+			} else {
+				fmt.Printf("ID: %s\nName: %s\nOpenAI Key: %s\nCreated: %s\nUpdated: %s\n", p.ID, p.Name, obfuscateKey(p.OpenAIAPIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
+			}
+			return nil
+		},
+	}
+	projectGetCmd.Flags().Bool("json", false, "Output as JSON")
+	projectGetCmd.Flags().String("management-token", "", "Management token (overrides env)")
+
+	var projectCreateCmd = &cobra.Command{
+		Use:   "create",
+		Short: "Create a new project",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_ = godotenv.Load()
+			mgmtToken, err := getManagementToken(cmd)
+			if err != nil {
+				return err
+			}
+			name, _ := cmd.Flags().GetString("name")
+			openaiKey, _ := cmd.Flags().GetString("openai-key")
+			if name == "" || openaiKey == "" {
+				return fmt.Errorf("--name and --openai-key are required")
+			}
+			body := ProjectCreateRequest{Name: name, OpenAIAPIKey: openaiKey}
+			jsonBody, _ := json.Marshal(body)
+			url := "http://localhost:8080/manage/projects"
+			req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+			if err != nil {
+				return err
+			}
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+mgmtToken)
+			client := &http.Client{}
+			resp, err := client.Do(req)
+			if err != nil {
+				return err
+			}
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					log.Printf("Error closing response body: %v", err)
+				}
+			}()
+			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+				return fmt.Errorf("server error: %s", resp.Status)
+			}
+			var p ProjectCreateResponse
+			if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+				return err
+			}
+			jsonOut, _ := cmd.Flags().GetBool("json")
+			if jsonOut {
+				out, _ := json.MarshalIndent(p, "", "  ")
+				fmt.Println(string(out))
+			} else {
+				fmt.Printf("ID: %s\nName: %s\nOpenAI Key: %s\nCreated: %s\nUpdated: %s\n", p.ID, p.Name, obfuscateKey(p.OpenAIAPIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
+			}
+			return nil
+		},
+	}
+	projectCreateCmd.Flags().String("name", "", "Project name (required)")
+	projectCreateCmd.Flags().String("openai-key", "", "OpenAI API Key (required)")
+	projectCreateCmd.Flags().Bool("json", false, "Output as JSON")
+	projectCreateCmd.Flags().String("management-token", "", "Management token (overrides env)")
+
+	var projectUpdateCmd = &cobra.Command{
+		Use:   "update <project-id>",
+		Short: "Update a project",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_ = godotenv.Load()
+			mgmtToken, err := getManagementToken(cmd)
+			if err != nil {
+				return err
+			}
+			id := args[0]
+			name, _ := cmd.Flags().GetString("name")
+			openaiKey, _ := cmd.Flags().GetString("openai-key")
+			if name == "" && openaiKey == "" {
+				return fmt.Errorf("at least one of --name or --openai-key must be set")
+			}
+			body := make(map[string]string)
+			if name != "" {
+				body["name"] = name
+			}
+			if openaiKey != "" {
+				body["openai_api_key"] = openaiKey
+			}
+			jsonBody, _ := json.Marshal(body)
+			url := fmt.Sprintf("http://localhost:8080/manage/projects/%s", id)
+			req, err := http.NewRequest("PATCH", url, bytes.NewBuffer(jsonBody))
+			if err != nil {
+				return err
+			}
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+mgmtToken)
+			client := &http.Client{}
+			resp, err := client.Do(req)
+			if err != nil {
+				return err
+			}
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					log.Printf("Error closing response body: %v", err)
+				}
+			}()
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("server error: %s", resp.Status)
+			}
+			var p ProjectCreateResponse
+			if err := json.NewDecoder(resp.Body).Decode(&p); err != nil {
+				return err
+			}
+			jsonOut, _ := cmd.Flags().GetBool("json")
+			if jsonOut {
+				out, _ := json.MarshalIndent(p, "", "  ")
+				fmt.Println(string(out))
+			} else {
+				fmt.Printf("ID: %s\nName: %s\nOpenAI Key: %s\nCreated: %s\nUpdated: %s\n", p.ID, p.Name, obfuscateKey(p.OpenAIAPIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
+			}
+			return nil
+		},
+	}
+	projectUpdateCmd.Flags().String("name", "", "Project name")
+	projectUpdateCmd.Flags().String("openai-key", "", "OpenAI API Key")
+	projectUpdateCmd.Flags().Bool("json", false, "Output as JSON")
+	projectUpdateCmd.Flags().String("management-token", "", "Management token (overrides env)")
+
+	var projectDeleteCmd = &cobra.Command{
+		Use:   "delete <project-id>",
+		Short: "Delete a project",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_ = godotenv.Load()
+			mgmtToken, err := getManagementToken(cmd)
+			if err != nil {
+				return err
+			}
+			id := args[0]
+			url := fmt.Sprintf("http://localhost:8080/manage/projects/%s", id)
+			req, err := http.NewRequest("DELETE", url, nil)
+			if err != nil {
+				return err
+			}
+			req.Header.Set("Authorization", "Bearer "+mgmtToken)
+			client := &http.Client{}
+			resp, err := client.Do(req)
+			if err != nil {
+				return err
+			}
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					log.Printf("Error closing response body: %v", err)
+				}
+			}()
+			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+				return fmt.Errorf("server error: %s", resp.Status)
+			}
+			fmt.Printf("Project %s deleted.\n", id)
+			return nil
+		},
+	}
+	projectDeleteCmd.Flags().Bool("json", false, "Output as JSON")
+	projectDeleteCmd.Flags().String("management-token", "", "Management token (overrides env)")
+
+	// -- Token subcommands --
+	var tokenCmd = &cobra.Command{
+		Use:   "token",
+		Short: "Manage tokens",
+		Long:  `Generate and validate tokens.`,
+	}
+
+	var tokenGenerateCmd = &cobra.Command{
+		Use:   "generate",
+		Short: "Generate a new token",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Load .env if present
+			_ = godotenv.Load()
+
+			// Get management token: flag > env
+			mgmtToken, _ := cmd.Flags().GetString("management-token")
+			if mgmtToken == "" {
+				mgmtToken = os.Getenv("MANAGEMENT_TOKEN")
+			}
+			if mgmtToken == "" {
+				return fmt.Errorf("management token is required (set MANAGEMENT_TOKEN env or use --management-token)")
+			}
+
+			// Get project ID (required)
+			projectID, _ := cmd.Flags().GetString("project-id")
+			if projectID == "" {
+				return fmt.Errorf("--project-id is required")
+			}
+
+			// Get duration (default 24)
+			duration, _ := cmd.Flags().GetInt("duration")
+			if duration <= 0 {
+				duration = 24
+			}
+
+			// Prepare request
+			body := map[string]interface{}{
+				"project_id":     projectID,
+				"duration_hours": duration,
+			}
+			jsonBody, _ := json.Marshal(body)
+			url := "http://localhost:8080/manage/tokens" // TODO: make configurable
+			req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+			if err != nil {
+				return fmt.Errorf("failed to create request: %w", err)
+			}
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+mgmtToken)
+
+			client := &http.Client{}
+			resp, err := client.Do(req)
+			if err != nil {
+				return fmt.Errorf("request failed: %w", err)
+			}
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					log.Printf("Error closing response body: %v", err)
+				}
+			}()
+
+			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+				var errMsg string
+				_ = json.NewDecoder(resp.Body).Decode(&errMsg)
+				return fmt.Errorf("server error: %s", errMsg)
+			}
+
+			var result struct {
+				Token     string `json:"token"`
+				ExpiresAt string `json:"expires_at"`
+			}
+			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+				return fmt.Errorf("failed to parse response: %w", err)
+			}
+
+			jsonOut, _ := cmd.Flags().GetBool("json")
+			if jsonOut {
+				out, _ := json.MarshalIndent(result, "", "  ")
+				fmt.Println(string(out))
+			} else {
+				fmt.Printf("Token: %s\n", result.Token)
+				fmt.Printf("Obfuscated: %s\n", token.ObfuscateToken(result.Token))
+				fmt.Printf("Expires at: %s\n", result.ExpiresAt)
+			}
+			return nil
+		},
+	}
+
+	tokenGenerateCmd.Flags().String("management-token", "", "Management token (overrides env)")
+	tokenGenerateCmd.Flags().String("project-id", "", "Project ID (required)")
+	tokenGenerateCmd.Flags().Int("duration", 24, "Token duration in hours (default 24)")
+	tokenGenerateCmd.Flags().Bool("json", false, "Output as JSON")
+
+	var tokenGetCmd = &cobra.Command{
+		Use:   "get <token>",
+		Short: "Get token validity/status",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("TODO: Get token %s\n", args[0])
+		},
+	}
+
+	// Register project subcommands
+	projectCmd.AddCommand(projectListCmd, projectGetCmd, projectCreateCmd, projectUpdateCmd, projectDeleteCmd)
+	// Register token subcommands
+	tokenCmd.AddCommand(tokenGenerateCmd)
+	tokenCmd.AddCommand(tokenGetCmd)
+	// Register manage subcommands
+	manageCmd.AddCommand(projectCmd)
+	manageCmd.AddCommand(tokenCmd)
+	// Register manage command with root
+	cobraRoot.AddCommand(manageCmd)
+
+	// In the same place where openaiCmd is assigned, assign benchmarkCmd as well
+	benchmarkCmd = &cobra.Command{
+		Use:   "benchmark",
+		Short: "Run benchmarks against the LLM Proxy",
+		Long:  `Benchmark performance metrics including latency, throughput, and errors.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println("Benchmark command not yet implemented")
+		},
+	}
+	cobraRoot.AddCommand(benchmarkCmd)
+
+	// For test compatibility, define rootCmd as alias
+	rootCmd = cobraRoot
+
+	if err := cobraRoot.Execute(); err != nil {
+		log.Fatalf("Error: %v", err)
 	}
 }
 
 // For test compatibility
 var rootCmd *cobra.Command
-
-// run is a variable to allow mocking in tests
-var run = realRun
-
-// realRun encapsulates the main logic for better testability
-func realRun() {
-	runWithHooks(nil, nil, false)
-}
-
-// runWithHooks allows injection of test hooks for the done channel, server, and skipping the testing.Testing() check.
-// If doneCh is nil, a new channel is created. If srv is nil, a new server is created. If forceNoTest is false, the normal testing.Testing() check is used.
-func runWithHooks(doneCh chan os.Signal, srv serverInterface, forceNoTest bool) {
-	// Parse command line flags
-	flagParseFunc()
-
-	// Load .env file if it exists
-	if _, err := os.Stat(envFile); err == nil {
-		err := godotenv.Load(envFile)
-		if err != nil {
-			log.Printf("Warning: Error loading %s file: %v", envFile, err)
-		} else {
-			log.Printf("Loaded environment from %s", envFile)
-		}
-	}
-
-	// Apply command line overrides to environment variables
-	if listenAddr != "" {
-		if err := osSetenvFunc("LISTEN_ADDR", listenAddr); err != nil {
-			logFatalFunc("Failed to set LISTEN_ADDR environment variable: %v", err)
-		}
-	}
-	if databasePath != "" {
-		if err := osSetenvFunc("DATABASE_PATH", databasePath); err != nil {
-			logFatalFunc("Failed to set DATABASE_PATH environment variable: %v", err)
-		}
-	}
-	if logLevel != "" {
-		if err := osSetenvFunc("LOG_LEVEL", logLevel); err != nil {
-			logFatalFunc("Failed to set LOG_LEVEL environment variable: %v", err)
-		}
-	}
-
-	// Load configuration
-	cfg, err := config.New()
-	if err != nil {
-		logFatalFunc("Failed to load configuration: %v", err)
-	}
-
-	// For tests, return early to avoid starting the server,
-	// but make sure we've gone through the signal setup first
-
-	// Handle graceful shutdown
-	var done chan os.Signal
-	if doneCh != nil {
-		done = doneCh
-	} else {
-		done = make(chan os.Signal, 1)
-	}
-	signalNotifyFunc(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-
-	// The forceNoTest parameter allows tests to skip early exit
-	if !forceNoTest {
-		// Check if we're in a testing environment using the "GO_RUNNING_TESTS" environment variable
-		// This is set in the test files
-		if _, isTest := os.LookupEnv("GO_RUNNING_TESTS"); isTest {
-			return
-		}
-	}
-
-	// Create and start the server
-	var s serverInterface
-	if srv != nil {
-		s = srv
-	} else {
-		ts := database.NewMockTokenStore()
-		ps := database.NewMockProjectStore()
-		tokenStoreAdapter := database.NewTokenStoreAdapter(ts)
-		s, err = server.New(cfg, tokenStoreAdapter, ps)
-		if err != nil {
-			log.Fatalf("failed to initialize server: %v", err)
-		}
-	}
-
-	go func() {
-		if err := s.Start(); err != nil && err != http.ErrServerClosed {
-			logFatalFunc("Server error: %v", err)
-		}
-	}()
-
-	log.Printf("LLM Proxy server started on %s", cfg.ListenAddr)
-	log.Printf("Press Ctrl+C to stop")
-
-	// Wait for interrupt signal
-	<-done
-	log.Println("Server shutting down...")
-
-	// Create a deadline for graceful shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// Attempt graceful shutdown
-	if err := s.Shutdown(ctx); err != nil {
-		logFatalFunc("Server forced to shutdown: %v", err)
-	}
-
-	log.Println("Server exited gracefully")
-}
-
-// serverInterface allows mocking the server in tests
-type serverInterface interface {
-	Start() error
-	Shutdown(ctx context.Context) error
-}
-
-func init() {
-	// ... existing code ...
-	// ... existing code ...
-}
 
 // Helper to get management token from flag or env
 func getManagementToken(cmd *cobra.Command) (string, error) {
