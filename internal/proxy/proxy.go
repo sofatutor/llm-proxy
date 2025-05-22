@@ -434,7 +434,11 @@ func (p *TransparentProxy) createTransport() *http.Transport {
 
 // Handler returns the HTTP handler for the proxy
 func (p *TransparentProxy) Handler() http.Handler {
-	return p.ValidateRequestMiddleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Reorder middleware: ValidateRequestMiddleware first, then CircuitBreaker, then Retry
+	return p.ValidateRequestMiddleware()(CircuitBreakerMiddleware(5, 30*time.Second, func(status int) bool {
+		// Treat 502, 503, 504 as transient (including retry middleware's 502)
+		return status == http.StatusBadGateway || status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout
+	})(RetryMiddleware(2, 100*time.Millisecond)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Only set CORS headers if Origin header is present
 		if origin := r.Header.Get("Origin"); origin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -540,7 +544,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 		}
 
 		p.proxy.ServeHTTP(rw, r)
-	}))
+	}))))
 }
 
 type timingResponseWriter struct {
@@ -646,6 +650,9 @@ func (p *TransparentProxy) LoggingMiddleware() Middleware {
 func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// --- Validation Scope: Only token, path, and method are validated here ---
+			// Do not add API-specific validation or transformation logic here.
+
 			// Check if method is allowed
 			if !p.isMethodAllowed(r.Method) {
 				p.logger.Warn("Method not allowed",
@@ -677,6 +684,8 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 				}
 				return
 			}
+
+			// --- End of validation scope ---
 
 			// Continue to next middleware
 			next.ServeHTTP(w, r)
