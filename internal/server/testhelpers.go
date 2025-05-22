@@ -2,7 +2,7 @@ package server
 
 import "time"
 
-// tokenListResponse matches the sanitized token response schema (shared for tests)
+// TokenListResponse matches the sanitized token response schema (shared for tests and production)
 type TokenListResponse struct {
 	ProjectID    string     `json:"project_id"`
 	ExpiresAt    *time.Time `json:"expires_at"`

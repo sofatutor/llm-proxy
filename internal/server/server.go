@@ -290,7 +290,6 @@ func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.logger.Debug("handleListProjects: END (success)")
 	}
-	s.logger.Debug("handleListProjects: REALLY END")
 }
 
 // POST /manage/projects
@@ -540,19 +539,9 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 
 		// Create sanitized response without actual token values
-		type tokenListResponse struct {
-			ProjectID    string     `json:"project_id"`
-			ExpiresAt    *time.Time `json:"expires_at"`
-			IsActive     bool       `json:"is_active"`
-			RequestCount int        `json:"request_count"`
-			MaxRequests  *int       `json:"max_requests"`
-			CreatedAt    time.Time  `json:"created_at"`
-			LastUsedAt   *time.Time `json:"last_used_at"`
-		}
-
-		sanitizedTokens := make([]tokenListResponse, len(tokens))
+		sanitizedTokens := make([]TokenListResponse, len(tokens))
 		for i, token := range tokens {
-			sanitizedTokens[i] = tokenListResponse{
+			sanitizedTokens[i] = TokenListResponse{
 				ProjectID:    token.ProjectID,
 				ExpiresAt:    token.ExpiresAt,
 				IsActive:     token.IsActive,
