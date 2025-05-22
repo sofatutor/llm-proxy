@@ -110,6 +110,7 @@ Repository structure, configuration, Docker, security, documentation, and founda
 - [x] Design transparent proxy architecture using httputil.ReverseProxy
 - [x] Implement middleware chain for request processing
 - [x] Add support for streaming responses (SSE)
+- [x] Proxy Logic: transparent proxy, streaming, allowlist, error handling, metrics/logging (staged in PR: Feature: Transparent Proxy Core)
 - [ ] Implement proxy middleware chain:
   - [x] Request logging middleware
   - [x] Authentication middleware
