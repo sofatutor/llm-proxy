@@ -169,6 +169,7 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 - **Authentication**: `Authorization: Bearer <withering-token>`
 - Forwards requests to `https://api.openai.com/v1/*`
 - Supports streaming (`stream=true`)
+- **Documentation Note:** The proxy API is not documented with Swagger/OpenAPI except for authentication, allowed paths/methods, and transparency. Request/response schemas are not defined here; refer to the backend provider's documentation for those details. See rationale below.
 
 ### Admin UI (`/admin/*`)
 - **Authentication**: Basic auth (`ADMIN_USER`, `ADMIN_PASSWORD`)
@@ -178,7 +179,7 @@ This document outlines the implementation plan for a transparent proxy for OpenA
   - `/admin/tokens`: Revoke tokens
 
 ### Management API
-- `/manage/projects` (CRUD): POST, GET, PUT, DELETE
+- `/manage/projects` (CRUD): POST, GET, PATCH, DELETE
   - Auth: `Authorization: Bearer <MANAGEMENT_TOKEN>`
   - Request/response formats:
     - **POST**: Create a project
@@ -187,7 +188,7 @@ This document outlines the implementation plan for a transparent proxy for OpenA
     - **GET**: Retrieve projects
       - Request: None
       - Response: `[{"project_id": "<uuid>", "name": "<string>", "description": "<string>", "metadata": {"key": "value"}, "created_at": "<iso8601>"}]`
-    - **PUT**: Update a project
+    - **PATCH**: Update a project
       - Request: `{"project_id": "<uuid>", "name": "<string>", "description": "<string>", "metadata": {"key": "value"}}`
       - Response: `{"project_id": "<uuid>", "name": "<string>", "description": "<string>", "metadata": {"key": "value"}, "updated_at": "<iso8601>"}`
     - **DELETE**: Delete a project
@@ -195,7 +196,25 @@ This document outlines the implementation plan for a transparent proxy for OpenA
       - Response: 204 No Content
 - `/manage/tokens` (CRUD): POST, GET, DELETE
   - Auth: `Authorization: Bearer <MANAGEMENT_TOKEN>`
-  - Request/response formats: [documented in code, needs expansion here]
+  - Request/response formats:
+    - **POST**: Generate a token
+      - Request: `{"project_id": "<uuid>", "duration_hours": <int>}`
+      - Response: `{"token": "<uuid>", "expires_at": "<iso8601>"}`
+    - **GET**: Retrieve tokens
+      - Request: None
+      - Response: `[{"token": "<uuid>", "project_id": "<uuid>", "expires_at": "<iso8601>", "is_active": true, "request_count": 0}]`
+    - **DELETE**: Revoke a token
+      - Request: `{"token": "<uuid>"}`
+      - Response: 204 No Content
+- **CLI is now fully configurable via --manage-api-base-url; 'token get' subcommand is implemented.**
+- **Planned:** Add more integration specs for management API flows.
+
+#### CLI Usage Example
+```sh
+llm-proxy manage project list --manage-api-base-url http://localhost:8080 --management-token <token>
+llm-proxy manage token generate --project-id <project-id> --management-token <token> --manage-api-base-url http://localhost:8080
+llm-proxy manage token get <token> --management-token <token> --manage-api-base-url http://localhost:8080 --json
+```
 
 ### Health Check
 - `/health`: Returns status, timestamp, version

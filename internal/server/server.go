@@ -232,17 +232,63 @@ func (s *Server) managementAuthMiddleware(next http.HandlerFunc) http.HandlerFun
 }
 
 // GET /manage/projects
+// We only register /manage/projects (no trailing slash) for handleProjects. This ensures that both /manage/projects and /manage/projects/ are handled identically, and only /manage/projects/{id} is handled by handleProjectByID. This avoids ambiguity and double handling in Go's http.ServeMux.
+func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
+	s.logger.Debug("handleProjects: START", zap.String("method", r.Method), zap.String("path", r.URL.Path))
+	// Normalize path: treat /manage/projects/ as /manage/projects
+	if r.URL.Path == "/manage/projects/" {
+		r.URL.Path = "/manage/projects"
+	}
+	// DEBUG: Log method and headers
+	for k, v := range r.Header {
+		if strings.EqualFold(k, "Authorization") {
+			s.logger.Debug("handleProjects: header", zap.String("key", k), zap.String("value", "******"))
+		} else {
+			s.logger.Debug("handleProjects: header", zap.String("key", k), zap.Any("value", v))
+		}
+	}
+	// Mask management token in logs
+	maskedToken := "******"
+	if len(s.config.ManagementToken) > 4 {
+		maskedToken = s.config.ManagementToken[:4] + "******"
+	}
+	s.logger.Debug("handleProjects: config.ManagementToken", zap.String("ManagementToken", maskedToken))
+	if !s.checkManagementAuth(w, r) {
+		s.logger.Debug("handleProjects: END (auth failed)")
+		return
+	}
+	ctx := r.Context()
+	requestID := getRequestID(ctx)
+
+	switch r.Method {
+	case http.MethodGet:
+		s.logger.Info("listing projects", zap.String("request_id", requestID))
+		s.handleListProjects(w, r.WithContext(ctx))
+	case http.MethodPost:
+		s.logger.Info("creating project", zap.String("request_id", requestID))
+		s.handleCreateProject(w, r.WithContext(ctx))
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+	s.logger.Debug("handleProjects: END", zap.String("method", r.Method), zap.String("path", r.URL.Path))
+}
+
 func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
+	s.logger.Debug("handleListProjects: START")
 	ctx := r.Context()
 	projects, err := s.projectStore.ListProjects(ctx)
 	if err != nil {
 		s.logger.Error("failed to list projects", zap.Error(err))
 		http.Error(w, `{"error":"failed to list projects"}`, http.StatusInternalServerError)
+		s.logger.Debug("handleListProjects: END (error)")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(projects); err != nil {
 		s.logger.Error("failed to encode projects response", zap.Error(err))
+		s.logger.Debug("handleListProjects: END (encode error)")
+	} else {
+		s.logger.Debug("handleListProjects: END (success)")
 	}
 }
 
@@ -376,39 +422,32 @@ func generateUUID() string {
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }
 
-// Register a single handler for /manage/projects
-func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
-	if !s.checkManagementAuth(w, r) {
-		return
-	}
-	ctx := r.Context()
-	requestID := getRequestID(ctx)
-
-	switch r.Method {
-	case http.MethodGet:
-		s.logger.Info("listing projects", zap.String("request_id", requestID))
-		s.handleListProjects(w, r.WithContext(ctx))
-	case http.MethodPost:
-		s.logger.Info("creating project", zap.String("request_id", requestID))
-		s.handleCreateProject(w, r.WithContext(ctx))
-	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
 // Add this helper to *Server
 func (s *Server) checkManagementAuth(w http.ResponseWriter, r *http.Request) bool {
 	const prefix = "Bearer "
 	header := r.Header.Get("Authorization")
+	maskedHeader := header
+	if len(header) > 10 {
+		maskedHeader = header[:10] + "..."
+	}
+	s.logger.Debug("checkManagementAuth: header", zap.String("header", maskedHeader))
 	if !strings.HasPrefix(header, prefix) || len(header) <= len(prefix) {
+		s.logger.Debug("checkManagementAuth: missing or invalid prefix")
 		http.Error(w, `{"error":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
 		return false
 	}
 	token := header[len(prefix):]
+	maskedToken := "******"
+	if len(s.config.ManagementToken) > 4 {
+		maskedToken = s.config.ManagementToken[:4] + "******"
+	}
+	s.logger.Debug("checkManagementAuth: token compare", zap.String("token", token), zap.String("expected", maskedToken))
 	if token != s.config.ManagementToken {
+		s.logger.Debug("checkManagementAuth: token mismatch")
 		http.Error(w, `{"error":"invalid management token"}`, http.StatusUnauthorized)
 		return false
 	}
+	s.logger.Debug("checkManagementAuth: token match")
 	return true
 }
 
@@ -498,7 +537,22 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		}
 		s.logger.Info("tokens listed", zap.Int("count", len(tokens)))
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(tokens); err != nil {
+
+		// Create sanitized response without actual token values
+		sanitizedTokens := make([]TokenListResponse, len(tokens))
+		for i, token := range tokens {
+			sanitizedTokens[i] = TokenListResponse{
+				ProjectID:    token.ProjectID,
+				ExpiresAt:    token.ExpiresAt,
+				IsActive:     token.IsActive,
+				RequestCount: token.RequestCount,
+				MaxRequests:  token.MaxRequests,
+				CreatedAt:    token.CreatedAt,
+				LastUsedAt:   token.LastUsedAt,
+			}
+		}
+
+		if err := json.NewEncoder(w).Encode(sanitizedTokens); err != nil {
 			s.logger.Error("failed to encode tokens response", zap.Error(err))
 		}
 	default:

@@ -110,9 +110,9 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
-    put:
+    patch:
       summary: Update project
-      description: Updates an existing project
+      description: Updates an existing project (partial update; name and/or openai_api_key)
       operationId: updateProject
       tags:
         - Projects
@@ -123,7 +123,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProjectRequest'
+              $ref: '#/components/schemas/ProjectUpdateRequest'
       responses:
         '200':
           description: Project updated successfully
@@ -406,6 +406,17 @@ components:
       required:
         - name
         - openai_api_key
+
+    ProjectUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: New project name
+        openai_api_key:
+          type: string
+          description: New OpenAI API key
+      # No required fields; partial update
 
     Token:
       type: object

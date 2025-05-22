@@ -504,7 +504,8 @@ func TestHandleTokens(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
-		var response []token.TokenData
+		// Expect sanitized token response (without actual token values)
+		var response []TokenListResponse
 		err := json.NewDecoder(w.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Len(t, response, 2)
@@ -520,7 +521,8 @@ func TestHandleTokens(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
-		var response []token.TokenData
+		// Expect sanitized token response (without actual token values)
+		var response []TokenListResponse
 		err := json.NewDecoder(w.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Len(t, response, 1)

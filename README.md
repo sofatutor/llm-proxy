@@ -44,16 +44,37 @@ See `docs/configuration.md` for all options.
 
 ## Main API Endpoints
 
-### Token Management
-- `POST /manage/tokens` — Create token
-- `DELETE /manage/tokens` — Revoke token
-  
-Example:
+### Management API
+- `/manage/projects` — Project CRUD
+  - `GET /manage/projects` — List all projects
+  - `POST /manage/projects` — Create a new project
+- `/manage/projects/{projectId}`
+  - `GET` — Get project details
+  - `PATCH` — Update a project (partial update)
+  - `DELETE` — Delete a project
+- `/manage/tokens` — Token CRUD
+  - `GET /manage/tokens` — List all tokens
+  - `POST /manage/tokens` — Generate a new token
+- `/manage/tokens/{token}`
+  - `GET` — Get token details
+  - `DELETE` — Revoke a token
+
+All management endpoints require:
+```
+Authorization: Bearer <MANAGEMENT_TOKEN>
+```
+
+#### Example (curl):
 ```bash
-curl -X POST http://localhost:8080/manage/tokens \
+curl -X POST http://localhost:8080/manage/projects \
   -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"project_id": "<uuid>", "duration_hours": 24}'
+  -d '{"name": "My Project", "openai_api_key": "sk-..."}'
+
+curl -X PATCH http://localhost:8080/manage/projects/<project-id> \
+  -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "New Name"}'
 ```
 
 ### Proxy
@@ -67,8 +88,33 @@ curl -H "Authorization: Bearer <withering-token>" \
      http://localhost:8080/v1/chat/completions
 ```
 
+> **Note:** The proxy API is not documented with Swagger/OpenAPI except for authentication and allowed paths/methods. For backend schemas, refer to the provider's documentation.
+
 ### Admin UI
 - `/admin/` — Web interface (requires admin credentials)
+
+## CLI Management Tool
+
+The CLI provides full management of projects and tokens via the `llm-proxy manage` command. All subcommands support the `--manage-api-base-url` flag (default: http://localhost:8080) and require a management token (via `--management-token` or `MANAGEMENT_TOKEN` env).
+
+### Project Management
+```sh
+llm-proxy manage project list --manage-api-base-url http://localhost:8080 --management-token <token>
+llm-proxy manage project get <project-id> --manage-api-base-url http://localhost:8080 --management-token <token>
+llm-proxy manage project create --name "My Project" --openai-key sk-... --manage-api-base-url http://localhost:8080 --management-token <token>
+llm-proxy manage project update <project-id> --name "New Name" --manage-api-base-url http://localhost:8080 --management-token <token>
+llm-proxy manage project delete <project-id> --manage-api-base-url http://localhost:8080 --management-token <token>
+```
+
+### Token Management
+```sh
+llm-proxy manage token generate --project-id <project-id> --duration 24 --manage-api-base-url http://localhost:8080 --management-token <token>
+```
+
+### Flags
+- `--manage-api-base-url` — Set the management API base URL (default: http://localhost:8080)
+- `--management-token` — Provide the management token (or set `MANAGEMENT_TOKEN` env)
+- `--json` — Output results as JSON (optional)
 
 ## Project Structure
 - `/cmd` — Entrypoints (`proxy`, `benchmark`)
