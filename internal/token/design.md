@@ -11,11 +11,11 @@ The token format will follow these principles:
      - Time-ordered for sortability
      - Globally unique with no collision concerns
 
-2. **String Representation**: Formatted as "tkn_" + base64url(UUID) to:
+2. **String Representation**: Formatted as "sk-" + base64url(UUID) to:
    - Provide a namespace/prefix for our tokens (distinguishable)
    - Reduce token length compared to standard UUID string format
    - Make tokens URL-safe and easy to copy/paste
-   - Example: `tkn_1a2b3c4d5e6f7g8h9i0j`
+   - Example: `sk-1a2b3c4d5e6f7g8h9i0j`
 
 3. **Properties**:
    - Length: ~22 characters after encoding (shorter than standard 36-char UUID)
@@ -27,7 +27,7 @@ The token format will follow these principles:
 ## Validation Rules
 
 1. **Format Validation**:
-   - Must match the pattern `^tkn_[A-Za-z0-9_-]{22}$`
+   - Must match the pattern `^sk-[A-Za-z0-9_-]{22}$`
    - Must be decodable to a valid UUID
    - Must be the correct length
 
@@ -52,7 +52,7 @@ The token format will follow these principles:
 1. **Generation Process**:
    - Create a UUID v7 for built-in time ordering
    - Convert to URL-safe base64 encoding
-   - Add "tkn_" prefix
+   - Add "sk-" prefix
    - Validate uniqueness in the database
 
 2. **Configuration Options**:

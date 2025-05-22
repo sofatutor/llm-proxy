@@ -384,3 +384,17 @@ func TestTokenData_ValidateFormat(t *testing.T) {
 		}
 	}
 }
+
+func TestStandardValidator_ValidateToken_Coverage(t *testing.T) {
+	store := NewMockTokenStore()
+	validator := NewValidator(store)
+	ctx := context.Background()
+	_, err := validator.ValidateToken(ctx, "dummy")
+	if err == nil {
+		t.Error("expected error for ValidateToken with dummy token")
+	}
+	_, err = validator.ValidateTokenWithTracking(ctx, "dummy")
+	if err == nil {
+		t.Error("expected error for ValidateTokenWithTracking with dummy token")
+	}
+}
