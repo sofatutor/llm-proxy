@@ -343,3 +343,93 @@ func TestChainMiddleware(t *testing.T) {
 		"middleware1-after",
 	}, calls)
 }
+
+// --- RETRY MIDDLEWARE TESTS ---
+func TestRetryMiddleware_RetriesOnTransientError(t *testing.T) {
+	var callCount int
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount < 3 {
+			w.WriteHeader(http.StatusGatewayTimeout) // 504
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+	mw := RetryMiddleware(2, 1*time.Millisecond)
+	rec := httptest.NewRecorder()
+	mw(h).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	if callCount != 3 {
+		t.Errorf("expected 3 calls (2 retries), got %d", callCount)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 after retries, got %d", rec.Code)
+	}
+}
+
+func TestRetryMiddleware_DoesNotRetryOnPermanentError(t *testing.T) {
+	var callCount int
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusBadRequest) // 400
+	})
+	mw := RetryMiddleware(2, 1*time.Millisecond)
+	rec := httptest.NewRecorder()
+	mw(h).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	if callCount != 1 {
+		t.Errorf("expected 1 call (no retry), got %d", callCount)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec.Code)
+	}
+}
+
+// --- CIRCUIT BREAKER MIDDLEWARE TESTS ---
+func TestCircuitBreakerMiddleware_OpensOnFailures(t *testing.T) {
+	var callCount int
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusBadGateway) // 502
+	})
+	cb := CircuitBreakerMiddleware(2, 10*time.Millisecond, func(status int) bool {
+		return status == http.StatusBadGateway
+	})
+	for i := 0; i < 3; i++ {
+		rec := httptest.NewRecorder()
+		cb(h).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	}
+	// After 2 failures, circuit should open and return 503
+	rec := httptest.NewRecorder()
+	cb(h).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 from open circuit, got %d", rec.Code)
+	}
+}
+
+func TestCircuitBreakerMiddleware_ClosesOnSuccess(t *testing.T) {
+	var callCount int
+	fail := true
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if fail {
+			w.WriteHeader(http.StatusBadGateway)
+		} else {
+			w.WriteHeader(http.StatusOK)
+		}
+	})
+	cb := CircuitBreakerMiddleware(2, 10*time.Millisecond, func(status int) bool {
+		return status == http.StatusBadGateway
+	})
+	// Trip the circuit
+	for i := 0; i < 3; i++ {
+		rec := httptest.NewRecorder()
+		cb(h).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	}
+	// Wait for cooldown
+	time.Sleep(15 * time.Millisecond)
+	fail = false
+	rec := httptest.NewRecorder()
+	cb(h).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 after circuit closes, got %d", rec.Code)
+	}
+}

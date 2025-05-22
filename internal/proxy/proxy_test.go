@@ -668,3 +668,288 @@ func TestNewTransparentProxy_Coverage(t *testing.T) {
 		t.Log("NewTransparentProxy returned non-nil (expected for stub)")
 	}
 }
+
+// --- RETRY LOGIC TESTS ---
+func TestTransparentProxy_RetryLogic_TransientNetworkError(t *testing.T) {
+	failures := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if failures < 2 {
+			failures++
+			w.WriteHeader(http.StatusGatewayTimeout) // 504
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	p := newTestProxyWithConfig(ProxyConfig{
+		TargetBaseURL:    server.URL,
+		AllowedEndpoints: []string{"/test"},
+		AllowedMethods:   []string{"GET"},
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	w := httptest.NewRecorder()
+
+	p.Handler().ServeHTTP(w, req)
+	resp := w.Result()
+	if err := resp.Body.Close(); err != nil {
+		t.Logf("Failed to close response body: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 after retries, got %d", resp.StatusCode)
+	}
+	if failures != 2 {
+		t.Errorf("expected 2 transient failures before success, got %d", failures)
+	}
+}
+
+func TestTransparentProxy_RetryLogic_NonTransientError(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusBadRequest) // 400
+		w.Write([]byte(`{"error":"bad request"}`))
+	}))
+	defer server.Close()
+
+	p := newTestProxyWithConfig(ProxyConfig{
+		TargetBaseURL:    server.URL,
+		AllowedEndpoints: []string{"/test"},
+		AllowedMethods:   []string{"GET"},
+	})
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	w := httptest.NewRecorder()
+
+	p.Handler().ServeHTTP(w, req)
+	resp := w.Result()
+	if err := resp.Body.Close(); err != nil {
+		t.Logf("Failed to close response body: %v", err)
+	}
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 for non-transient error, got %d", resp.StatusCode)
+	}
+	if calls != 1 {
+		t.Errorf("expected 1 call (no retry), got %d", calls)
+	}
+}
+
+// --- CIRCUIT BREAKER TESTS ---
+func TestTransparentProxy_CircuitBreaker_OpensOnRepeatedFailures(t *testing.T) {
+	failures := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		failures++
+		w.WriteHeader(http.StatusGatewayTimeout) // 504 (transient)
+	}))
+	defer server.Close()
+
+	p := newTestProxyWithConfig(ProxyConfig{
+		TargetBaseURL:    server.URL,
+		AllowedEndpoints: []string{"/test"},
+		AllowedMethods:   []string{"GET"},
+	})
+
+	handler := p.Handler() // Reuse the same handler for all requests
+
+	// Hit the proxy enough times to trip the circuit breaker (threshold is 5)
+	for i := 0; i < 5; i++ {
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.Header.Set("Authorization", "Bearer valid-token")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+		resp := w.Result()
+		if err := resp.Body.Close(); err != nil {
+			t.Logf("Failed to close response body: %v", err)
+		}
+		if resp.StatusCode != http.StatusBadGateway {
+			t.Errorf("expected 502 for retry exhaustion, got %d", resp.StatusCode)
+		}
+	}
+
+	// Next request should get 503 from circuit breaker
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	resp := w.Result()
+	if err := resp.Body.Close(); err != nil {
+		t.Logf("Failed to close response body: %v", err)
+	}
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 from circuit breaker, got %d", resp.StatusCode)
+	}
+}
+
+func TestTransparentProxy_CircuitBreaker_ClosesOnRecovery(t *testing.T) {
+	failures := 0
+	var allowSuccess bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !allowSuccess {
+			failures++
+			w.WriteHeader(http.StatusGatewayTimeout) // 504 (transient)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	p := newTestProxyWithConfig(ProxyConfig{
+		TargetBaseURL:    server.URL,
+		AllowedEndpoints: []string{"/test"},
+		AllowedMethods:   []string{"GET"},
+	})
+
+	handler := p.Handler()
+
+	// Use a short cooldown for test speed
+	cooldown := 100 * time.Millisecond
+
+	// Trip the circuit breaker (threshold is 5)
+	for i := 0; i < 5; i++ {
+		req := httptest.NewRequest("GET", "/test", nil)
+		req = req.WithContext(context.WithValue(req.Context(), "circuitbreaker_cooldown_override", cooldown))
+		req.Header.Set("Authorization", "Bearer valid-token")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+	}
+
+	// Next request should get 503 from circuit breaker
+	req := httptest.NewRequest("GET", "/test", nil)
+	req = req.WithContext(context.WithValue(req.Context(), "circuitbreaker_cooldown_override", cooldown))
+	req.Header.Set("Authorization", "Bearer valid-token")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	resp := w.Result()
+	if err := resp.Body.Close(); err != nil {
+		t.Logf("Failed to close response body: %v", err)
+	}
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 from circuit breaker, got %d", resp.StatusCode)
+	}
+
+	// Wait for cooldown
+	t.Log("Waiting for circuit breaker cooldown...")
+	time.Sleep(cooldown + 10*time.Millisecond)
+	allowSuccess = true
+
+	// Now the circuit breaker should close and allow traffic again
+	req = httptest.NewRequest("GET", "/test", nil)
+	req = req.WithContext(context.WithValue(req.Context(), "circuitbreaker_cooldown_override", cooldown))
+	req.Header.Set("Authorization", "Bearer valid-token")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	resp = w.Result()
+	if err := resp.Body.Close(); err != nil {
+		t.Logf("Failed to close response body: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 after circuit breaker recovery, got %d", resp.StatusCode)
+	}
+}
+
+// --- VALIDATION SCOPE TESTS ---
+func TestTransparentProxy_ValidationScope_OnlyTokenPathMethod(t *testing.T) {
+	// Setup proxy with allowed method and endpoint
+	p := newTestProxyWithConfig(ProxyConfig{
+		AllowedMethods:   []string{"GET"},
+		AllowedEndpoints: []string{"/v1/test"},
+	})
+
+	ts := httptest.NewServer(p.Handler())
+	defer ts.Close()
+
+	// Valid request
+	req, _ := http.NewRequest("GET", ts.URL+"/v1/test", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed {
+		t.Errorf("expected valid request, got status %d", resp.StatusCode)
+	}
+
+	// Disallowed method
+	req, _ = http.NewRequest("POST", ts.URL+"/v1/test", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	resp, _ = http.DefaultClient.Do(req)
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405 for disallowed method, got %d", resp.StatusCode)
+	}
+
+	// Disallowed endpoint
+	req, _ = http.NewRequest("GET", ts.URL+"/not-allowed", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	resp, _ = http.DefaultClient.Do(req)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("expected 404 for disallowed endpoint, got %d", resp.StatusCode)
+	}
+}
+
+func TestTransparentProxy_ValidationScope_NoAPISpecificValidation(t *testing.T) {
+	// Setup proxy with no API-specific validation
+	p := newTestProxyWithConfig(ProxyConfig{})
+	ts := httptest.NewServer(p.Handler())
+	defer ts.Close()
+
+	// Any request body or query param should not be validated by proxy
+	req, _ := http.NewRequest("POST", ts.URL+"/v1/test", strings.NewReader(`{"foo":"bar"}`))
+	req.Header.Set("Authorization", "Bearer valid-token")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Should not be 400 or 422 from proxy
+	if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusUnprocessableEntity {
+		t.Errorf("proxy performed API-specific validation, got status %d", resp.StatusCode)
+	}
+}
+
+// newTestProxyWithConfig creates a TransparentProxy with the given config and stub dependencies.
+func newTestProxyWithConfig(cfg ProxyConfig) *TransparentProxy {
+	stubValidator := &stubTokenValidator{}
+	stubStore := &stubProjectStore{}
+	logger := zap.NewNop()
+	p, _ := NewTransparentProxyWithLogger(cfg, stubValidator, stubStore, logger)
+	return p
+}
+
+type stubTokenValidator struct{}
+
+func (s *stubTokenValidator) ValidateTokenWithTracking(ctx context.Context, token string) (string, error) {
+	return "test-project-id", nil
+}
+func (s *stubTokenValidator) ValidateToken(ctx context.Context, token string) (string, error) {
+	return "test-project-id", nil
+}
+
+type stubProjectStore struct{}
+
+func (s *stubProjectStore) GetAPIKeyForProject(ctx context.Context, projectID string) (string, error) {
+	return "api-key", nil
+}
+
+func (s *stubProjectStore) ListProjects(ctx context.Context) ([]Project, error) {
+	return nil, nil
+}
+
+func (s *stubProjectStore) CreateProject(ctx context.Context, project Project) error {
+	return nil
+}
+
+func (s *stubProjectStore) GetProjectByID(ctx context.Context, projectID string) (Project, error) {
+	return Project{}, nil
+}
+
+func (s *stubProjectStore) UpdateProject(ctx context.Context, project Project) error {
+	return nil
+}
+
+func (s *stubProjectStore) DeleteProject(ctx context.Context, projectID string) error {
+	return nil
+}

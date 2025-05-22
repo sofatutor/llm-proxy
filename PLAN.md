@@ -333,3 +333,25 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 - In-memory DB is only used for tests
 
 - Stage core proxy logic (streaming, allowlist, error handling, metrics/logging) from internal/proxy in PR: Feature: Transparent Proxy Core
+
+## Clarification: The proxy only validates the token, the allowed path, and the allowed HTTP method. All other request validation or transformation is out of scope and must be handled by the upstream API or via YAML config if needed. This is to ensure minimum latency and maximum transparency.
+
+## Proxy Robustness Features (PR17)
+
+### Architecture
+- Minimal retry logic for transient upstream failures (conservative, low retry limit)
+- Simple circuit breaker (opens on repeated failures, closes after cooldown)
+- Validation scope strictly limited to token, path, and method
+- All API-specific logic must be config-driven, not in core
+
+### Implementation Steps
+- [x] Add failing tests for retry, circuit breaker, and validation scope
+- [x] Implement retry middleware and wire into proxy
+- [x] Implement circuit breaker middleware and wire into proxy
+- [x] Enforce validation scope in middleware
+- [x] Achieve >90% test coverage for all new logic
+- [x] All tests passing (`make test-coverage`)
+- [x] Update WIP.md and PLAN.md
+
+### References
+- See WIP.md for process and status
