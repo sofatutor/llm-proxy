@@ -114,7 +114,7 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 - Support streaming with Server-Sent Events
 
 ### 5. Logging System
- - Implement JSON Lines local logging ✅
+ - Implement JSON Lines local logging
 - Create asynchronous worker for external logging
 - Extract metadata from responses
 
@@ -168,6 +168,30 @@ This document outlines the implementation plan for a transparent proxy for OpenA
   - `/admin/`: Serves HTML interface
   - `/admin/projects`: CRUD for projects
   - `/admin/tokens`: Revoke tokens
+
+### Management API
+- `/manage/projects` (CRUD): POST, GET, PUT, DELETE
+  - Auth: `Authorization: Bearer <MANAGEMENT_TOKEN>`
+  - Request/response formats:
+    - **POST**: Create a project
+      - Request: `{"name": "<string>", "description": "<string>", "metadata": {"key": "value"}}`
+      - Response: `{"project_id": "<uuid>", "name": "<string>", "description": "<string>", "metadata": {"key": "value"}, "created_at": "<iso8601>"}`
+    - **GET**: Retrieve projects
+      - Request: None
+      - Response: `[{"project_id": "<uuid>", "name": "<string>", "description": "<string>", "metadata": {"key": "value"}, "created_at": "<iso8601>"}]`
+    - **PUT**: Update a project
+      - Request: `{"project_id": "<uuid>", "name": "<string>", "description": "<string>", "metadata": {"key": "value"}}`
+      - Response: `{"project_id": "<uuid>", "name": "<string>", "description": "<string>", "metadata": {"key": "value"}, "updated_at": "<iso8601>"}`
+    - **DELETE**: Delete a project
+      - Request: `{"project_id": "<uuid>"}`
+      - Response: 204 No Content
+- `/manage/tokens` (CRUD): POST, GET, DELETE
+  - Auth: `Authorization: Bearer <MANAGEMENT_TOKEN>`
+  - Request/response formats: [documented in code, needs expansion here]
+
+### Health Check
+- `/health`: Returns status, timestamp, version
+  - Used for readiness/liveness probes, monitoring, and orchestration.
 
 ## Logging Format
 ```json
@@ -269,13 +293,33 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 
 > **Minimum Latency Principle:** Every architectural component, from HTTP server to middleware and database access, must be designed for minimal latency. Avoid unnecessary processing, blocking operations, or synchronous I/O in the request path. Use concurrency and asynchronous operations where possible to keep proxy response times as close to direct API calls as possible.
 
-## CLI Tool (Setup & OpenAI Chat)
-- A CLI tool (`llm-proxy setup` and `llm-proxy openai chat`) will be implemented in a separate PR after all proxy prerequisites are complete.
-- The tool will automate onboarding, configuration, and provide an interactive chat interface.
-- See WIP.md for tracking and requirements.
+## CLI Tool (Setup, Server, Chat)
+- Add support for daemon mode (`llm-proxy server -d`), PID file management, and advanced CLI flags
+- Expanded documentation and end-to-end usage examples
+- Improved flag parsing and configuration overrides
+- Planned: `llm-proxy server` will support subcommands such as `start` (with `-d` for daemon mode), `stop`, and `health` for operational control in the final version.
 
-## API Endpoint Handling
-- No custom OpenAI endpoint handlers are required.
-- The proxy uses a config-driven allowlist (routes and methods) for supported APIs.
-- Middleware enforces this allowlist for all proxied requests.
-- The allowlist is defined in configuration (YAML, JSON, TOML, or env vars).
+## Logging System
+- Add proxy metrics/logging/timing improvements (duration, request/response stats, error tracking)
+
+## Monitoring
+- The `/health` endpoint (see API Endpoints) is used for readiness/liveness probes.
+
+## API Provider Config
+- Expanded YAML config for API providers, endpoints, and methods
+
+## Benchmark Tool
+- Refactor and expand benchmark tool, add setup logic, restore tests
+
+## Project Directory Structure (Updated)
+
+- `cmd/proxy/`: Main CLI for the LLM Proxy. Contains all user/server commands (setup, server, openai chat, etc.), tests, and documentation for the main CLI.
+- `cmd/benchmark/`: Reserved for benchmarking tools only. Contains only benchmark-specific code (or a placeholder if not yet implemented).
+- `internal/`: Shared logic, server, config, token, database, etc.
+
+**Rationale:**
+- Follows Go best practices and Single Responsibility Principle (SRP).
+- Avoids code duplication and confusion about command ownership.
+- Ensures all user/server/management logic is in one place (`cmd/proxy/`), while benchmarks are isolated.
+
+- In-memory DB is only used for tests
