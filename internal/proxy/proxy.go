@@ -434,121 +434,117 @@ func (p *TransparentProxy) createTransport() *http.Transport {
 
 // Handler returns the HTTP handler for the proxy
 func (p *TransparentProxy) Handler() http.Handler {
-	// Add circuit breaker and retry middleware before the core handler
-	return CircuitBreakerMiddleware(5, 30*time.Second, func(status int) bool {
+	// Reorder middleware: ValidateRequestMiddleware first, then CircuitBreaker, then Retry
+	return p.ValidateRequestMiddleware()(CircuitBreakerMiddleware(5, 30*time.Second, func(status int) bool {
 		// Treat 502, 503, 504 as transient (including retry middleware's 502)
 		return status == http.StatusBadGateway || status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout
-	})(
-		RetryMiddleware(2, 100*time.Millisecond)(
-			p.ValidateRequestMiddleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				// Only set CORS headers if Origin header is present
-				if origin := r.Header.Get("Origin"); origin != "" {
-					w.Header().Set("Access-Control-Allow-Origin", "*")
-					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-					w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With")
-				}
+	})(RetryMiddleware(2, 100*time.Millisecond)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Only set CORS headers if Origin header is present
+		if origin := r.Header.Get("Origin"); origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With")
+		}
 
-				// Short-circuit OPTIONS requests: no auth required, respond with 204 and CORS headers
-				if r.Method == http.MethodOptions {
-					if reqHeaders := r.Header.Get("Access-Control-Request-Headers"); reqHeaders != "" {
-						w.Header().Set("Access-Control-Allow-Headers", reqHeaders)
-					} else {
-						w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With")
-					}
-					w.WriteHeader(http.StatusNoContent)
-					return
-				}
+		// Short-circuit OPTIONS requests: no auth required, respond with 204 and CORS headers
+		if r.Method == http.MethodOptions {
+			if reqHeaders := r.Header.Get("Access-Control-Request-Headers"); reqHeaders != "" {
+				w.Header().Set("Access-Control-Allow-Headers", reqHeaders)
+			} else {
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With")
+			}
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 
-				// Generate request ID and add to context
-				requestID := uuid.New().String()
-				ctx := context.WithValue(r.Context(), ctxKeyRequestID, requestID)
-				r = r.WithContext(ctx)
+		// Generate request ID and add to context
+		requestID := uuid.New().String()
+		ctx := context.WithValue(r.Context(), ctxKeyRequestID, requestID)
+		r = r.WithContext(ctx)
 
-				// Set X-Request-ID header
-				w.Header().Set("X-Request-ID", requestID)
+		// Set X-Request-ID header
+		w.Header().Set("X-Request-ID", requestID)
 
-				// Record when proxy receives the request
-				receivedAt := time.Now().UTC()
-				ctx = context.WithValue(ctx, ctxKeyProxyReceivedAt, receivedAt)
-				r = r.WithContext(ctx)
+		// Record when proxy receives the request
+		receivedAt := time.Now().UTC()
+		ctx = context.WithValue(ctx, ctxKeyProxyReceivedAt, receivedAt)
+		r = r.WithContext(ctx)
 
-				// --- Token extraction and validation (moved from director) ---
-				authHeader := r.Header.Get("Authorization")
-				tokenStr := extractTokenFromHeader(authHeader)
-				if tokenStr == "" {
-					p.handleValidationError(w, errors.New("missing or invalid authorization header"))
-					return
-				}
-				projectID, err := p.tokenValidator.ValidateTokenWithTracking(r.Context(), tokenStr)
-				if err != nil {
-					p.handleValidationError(w, err)
-					return
-				}
-				ctx = context.WithValue(r.Context(), ctxKeyProjectID, projectID)
-				r = r.WithContext(ctx)
-				apiKey, err := p.projectStore.GetAPIKeyForProject(r.Context(), projectID)
-				if err != nil {
-					p.handleValidationError(w, fmt.Errorf("failed to get API key: %w", err))
-					return
-				}
-				r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
+		// --- Token extraction and validation (moved from director) ---
+		authHeader := r.Header.Get("Authorization")
+		tokenStr := extractTokenFromHeader(authHeader)
+		if tokenStr == "" {
+			p.handleValidationError(w, errors.New("missing or invalid authorization header"))
+			return
+		}
+		projectID, err := p.tokenValidator.ValidateTokenWithTracking(r.Context(), tokenStr)
+		if err != nil {
+			p.handleValidationError(w, err)
+			return
+		}
+		ctx = context.WithValue(r.Context(), ctxKeyProjectID, projectID)
+		r = r.WithContext(ctx)
+		apiKey, err := p.projectStore.GetAPIKeyForProject(r.Context(), projectID)
+		if err != nil {
+			p.handleValidationError(w, fmt.Errorf("failed to get API key: %w", err))
+			return
+		}
+		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
 
-				// Wrap the ResponseWriter to allow us to set headers at first/last byte
-				rw := &timingResponseWriter{ResponseWriter: w}
+		// Wrap the ResponseWriter to allow us to set headers at first/last byte
+		rw := &timingResponseWriter{ResponseWriter: w}
 
-				// Instrument the reverse proxy (director now only rewrites URL/host)
-				p.proxy.Director = func(req *http.Request) {
-					// Store original path in context for logging
-					*req = *req.WithContext(context.WithValue(req.Context(), ctxKeyOriginalPath, req.URL.Path))
-					targetURL, err := url.Parse(p.config.TargetBaseURL)
-					if err != nil {
-						p.logger.Error("Failed to parse target URL", zap.Error(err))
-						return
-					}
-					// Update request URL
-					req.URL.Scheme = targetURL.Scheme
-					req.URL.Host = targetURL.Host
-					req.Host = targetURL.Host
-					// Add proxy identification headers
-					req.Header.Set("X-Proxy", "llm-proxy")
-					req.Header.Set("X-Proxy-Version", version)
-					if pid, ok := req.Context().Value(ctxKeyProjectID).(string); ok {
-						req.Header.Set("X-Proxy-ID", pid)
-					}
-					// Preserve or strip certain headers
-					p.processRequestHeaders(req)
-					requestID, _ := req.Context().Value(ctxKeyRequestID).(string)
-					p.logger.Debug("Proxying request",
-						zap.String("request_id", requestID),
-						zap.String("method", req.Method),
-						zap.String("path", req.URL.Path),
-						zap.String("project_id", req.Header.Get("X-Proxy-ID")))
-				}
+		// Instrument the reverse proxy (director now only rewrites URL/host)
+		p.proxy.Director = func(req *http.Request) {
+			// Store original path in context for logging
+			*req = *req.WithContext(context.WithValue(req.Context(), ctxKeyOriginalPath, req.URL.Path))
+			targetURL, err := url.Parse(p.config.TargetBaseURL)
+			if err != nil {
+				p.logger.Error("Failed to parse target URL", zap.Error(err))
+				return
+			}
+			// Update request URL
+			req.URL.Scheme = targetURL.Scheme
+			req.URL.Host = targetURL.Host
+			req.Host = targetURL.Host
+			// Add proxy identification headers
+			req.Header.Set("X-Proxy", "llm-proxy")
+			req.Header.Set("X-Proxy-Version", version)
+			if pid, ok := req.Context().Value(ctxKeyProjectID).(string); ok {
+				req.Header.Set("X-Proxy-ID", pid)
+			}
+			// Preserve or strip certain headers
+			p.processRequestHeaders(req)
+			requestID, _ := req.Context().Value(ctxKeyRequestID).(string)
+			p.logger.Debug("Proxying request",
+				zap.String("request_id", requestID),
+				zap.String("method", req.Method),
+				zap.String("path", req.URL.Path),
+				zap.String("project_id", req.Header.Get("X-Proxy-ID")))
+		}
 
-				p.proxy.ModifyResponse = func(res *http.Response) error {
-					firstRespAt := time.Now().UTC()
-					ctx := context.WithValue(res.Request.Context(), ctxKeyProxyFirstRespAt, firstRespAt)
-					res.Request = res.Request.WithContext(ctx)
-					ctx = context.WithValue(res.Request.Context(), ctxKeyProxyFinalRespAt, firstRespAt)
-					res.Request = res.Request.WithContext(ctx)
-					setTimingHeaders(res, res.Request.Context())
-					requestID, _ := res.Request.Context().Value(ctxKeyRequestID).(string)
-					if requestID != "" {
-						res.Header.Set("X-Request-ID", requestID)
-					}
-					logProxyTimings(p.logger, res.Request.Context())
-					return p.modifyResponse(res)
-				}
+		p.proxy.ModifyResponse = func(res *http.Response) error {
+			firstRespAt := time.Now().UTC()
+			ctx := context.WithValue(res.Request.Context(), ctxKeyProxyFirstRespAt, firstRespAt)
+			res.Request = res.Request.WithContext(ctx)
+			ctx = context.WithValue(res.Request.Context(), ctxKeyProxyFinalRespAt, firstRespAt)
+			res.Request = res.Request.WithContext(ctx)
+			setTimingHeaders(res, res.Request.Context())
+			requestID, _ := res.Request.Context().Value(ctxKeyRequestID).(string)
+			if requestID != "" {
+				res.Header.Set("X-Request-ID", requestID)
+			}
+			logProxyTimings(p.logger, res.Request.Context())
+			return p.modifyResponse(res)
+		}
 
-				p.proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-					logProxyTimings(p.logger, r.Context())
-					p.errorHandler(w, r, err)
-				}
+		p.proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+			logProxyTimings(p.logger, r.Context())
+			p.errorHandler(w, r, err)
+		}
 
-				p.proxy.ServeHTTP(rw, r)
-			})),
-		),
-	)
+		p.proxy.ServeHTTP(rw, r)
+	}))))
 }
 
 type timingResponseWriter struct {

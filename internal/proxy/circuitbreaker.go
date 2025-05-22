@@ -30,8 +30,9 @@ func CircuitBreakerMiddleware(failureThreshold int, cooldown time.Duration, isTr
 				}
 				if time.Since(cb.openedAt) < cb.cooldown {
 					cb.mu.Unlock()
+					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusServiceUnavailable)
-					_, _ = w.Write([]byte("{\"error\":\"Upstream unavailable (circuit breaker open)\"}"))
+					w.Write([]byte("{\"error\":\"Upstream unavailable (circuit breaker open)\"}"))
 					return
 				}
 				// Cooldown expired, close circuit

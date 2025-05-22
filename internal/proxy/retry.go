@@ -23,9 +23,9 @@ func RetryMiddleware(maxRetries int, baseBackoff time.Duration) Middleware {
 					time.Sleep(baseBackoff * (1 << attempt))
 				}
 			}
-			// If we exhausted retries, write the last error
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadGateway)
-			_, _ = w.Write([]byte("{\"error\":\"Upstream unavailable after retries\"}"))
+			w.Write([]byte("{\"error\":\"Upstream unavailable after retries\"}"))
 		})
 	}
 }
