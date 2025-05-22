@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -241,9 +240,12 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path = "/manage/projects"
 	}
 	// DEBUG: Log method and headers
-	s.logger.Debug("handleProjects: method", zap.String("method", r.Method))
 	for k, v := range r.Header {
-		s.logger.Debug("handleProjects: header", zap.String("key", k), zap.Any("value", v))
+		if strings.EqualFold(k, "Authorization") {
+			s.logger.Debug("handleProjects: header", zap.String("key", k), zap.String("value", "******"))
+		} else {
+			s.logger.Debug("handleProjects: header", zap.String("key", k), zap.Any("value", v))
+		}
 	}
 	// Mask management token in logs
 	maskedToken := "******"
@@ -272,23 +274,23 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(os.Stderr, "DEBUG handleListProjects: START\n")
+	s.logger.Debug("handleListProjects: START")
 	ctx := r.Context()
 	projects, err := s.projectStore.ListProjects(ctx)
 	if err != nil {
 		s.logger.Error("failed to list projects", zap.Error(err))
 		http.Error(w, `{"error":"failed to list projects"}`, http.StatusInternalServerError)
-		fmt.Fprintf(os.Stderr, "DEBUG handleListProjects: END (error)\n")
+		s.logger.Debug("handleListProjects: END (error)")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(projects); err != nil {
 		s.logger.Error("failed to encode projects response", zap.Error(err))
-		fmt.Fprintf(os.Stderr, "DEBUG handleListProjects: END (encode error)\n")
+		s.logger.Debug("handleListProjects: END (encode error)")
 	} else {
-		fmt.Fprintf(os.Stderr, "DEBUG handleListProjects: END (success)\n")
+		s.logger.Debug("handleListProjects: END (success)")
 	}
-	fmt.Fprintf(os.Stderr, "DEBUG handleListProjects: REALLY END\n")
+	s.logger.Debug("handleListProjects: REALLY END")
 }
 
 // POST /manage/projects

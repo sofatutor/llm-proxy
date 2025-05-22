@@ -111,15 +111,7 @@ func TestManagementAPI_Integration(t *testing.T) {
 		t.Fatalf("List projects request failed: %v", err)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	t.Logf("DIAG: GET /manage/projects status=%d", resp.StatusCode)
-	for k, v := range resp.Header {
-		t.Logf("DIAG: header %s: %v", k, v)
-	}
-	t.Logf("DIAG: body: %s", string(body))
-	t.Logf("ASSERT: resp ptr=%p, resp.StatusCode before assertion: %d", resp, resp.StatusCode)
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("ASSERT FAIL: resp ptr=%p, resp.StatusCode=%d, body=%s", resp, resp.StatusCode, string(body))
-	}
+	require.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
 	// 5. Create Token

@@ -93,19 +93,6 @@ func (m *MockProjectStoreExtended) DeleteProject(ctx context.Context, id string)
 	return args.Error(0)
 }
 
-// Shared test helper for token list response
-// tokenListResponse matches the sanitized token response schema
-// (keep in sync with server.go and OpenAPI spec)
-type tokenListResponse struct {
-	ProjectID    string     `json:"project_id"`
-	ExpiresAt    *time.Time `json:"expires_at"`
-	IsActive     bool       `json:"is_active"`
-	RequestCount int        `json:"request_count"`
-	MaxRequests  *int       `json:"max_requests"`
-	CreatedAt    time.Time  `json:"created_at"`
-	LastUsedAt   *time.Time `json:"last_used_at"`
-}
-
 func setupServerAndMocks(t *testing.T) (*Server, *MockTokenStoreExtended, *MockProjectStoreExtended) {
 	tokenStore := new(MockTokenStoreExtended)
 	projectStore := new(MockProjectStoreExtended)
@@ -518,7 +505,7 @@ func TestHandleTokens(t *testing.T) {
 		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
 		// Expect sanitized token response (without actual token values)
-		var response []tokenListResponse
+		var response []TokenListResponse
 		err := json.NewDecoder(w.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Len(t, response, 2)
@@ -535,7 +522,7 @@ func TestHandleTokens(t *testing.T) {
 		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
 		// Expect sanitized token response (without actual token values)
-		var response []tokenListResponse
+		var response []TokenListResponse
 		err := json.NewDecoder(w.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Len(t, response, 1)

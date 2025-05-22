@@ -109,7 +109,6 @@ llm-proxy manage project delete <project-id> --manage-api-base-url http://localh
 ### Token Management
 ```sh
 llm-proxy manage token generate --project-id <project-id> --duration 24 --manage-api-base-url http://localhost:8080 --management-token <token>
-llm-proxy manage token get <token> --manage-api-base-url http://localhost:8080 --management-token <token> --json
 ```
 
 ### Flags
