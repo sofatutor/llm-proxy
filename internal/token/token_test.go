@@ -52,8 +52,8 @@ func TestValidateTokenFormat(t *testing.T) {
 	}{
 		{
 			name:    "Valid token format",
-			token:   "tkn_dGhpcyBpcyBhIHZhbGlkIHRva2Vu", // "this is a valid token" encoded
-			wantErr: true,                               // Will fail decode step
+			token:   "sk-dGhpcyBpcyBhIHZhbGlkIHRva2Vu", // "this is a valid token" encoded
+			wantErr: true,                              // Will fail decode step
 		},
 		{
 			name:    "Invalid prefix",
@@ -62,12 +62,12 @@ func TestValidateTokenFormat(t *testing.T) {
 		},
 		{
 			name:    "Too short",
-			token:   "tkn_short",
+			token:   "sk-short",
 			wantErr: true,
 		},
 		{
 			name:    "Invalid characters",
-			token:   "tkn_this!has@invalid#chars$",
+			token:   "sk-this!has@invalid#chars$",
 			wantErr: true,
 		},
 		{
@@ -126,7 +126,7 @@ func TestDecodeToken(t *testing.T) {
 		},
 		{
 			name:    "Token with correct prefix but invalid base64",
-			token:   "tkn_not-valid-base64!@#$",
+			token:   "sk-not-valid-base64!@#$",
 			wantErr: true,
 		},
 		{

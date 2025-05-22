@@ -295,13 +295,13 @@ func TestObfuscateToken(t *testing.T) {
 	}{
 		{
 			name:  "Standard token",
-			token: "tkn_abcdefghijklmnopqrst",
-			want:  "tkn_abcd************qrst",
+			token: "sk-abcdefghijklmnopqrst",
+			want:  "sk-abcd************qrst",
 		},
 		{
 			name:  "Short token (no obfuscation)",
-			token: "tkn_abcdefgh",
-			want:  "tkn_abcdefgh",
+			token: "sk-abcdefgh",
+			want:  "sk-abcdefgh",
 		},
 		{
 			name:  "Without prefix",

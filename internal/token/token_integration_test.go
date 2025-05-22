@@ -548,7 +548,7 @@ func TestExpirationAndRevocation(t *testing.T) {
 	veryFuture := now.Add(24 * time.Hour)
 
 	// Add expired token
-	expiredToken := "tkn_expiredtoken12345678901"
+	expiredToken := "sk-expiredtoken12345678901"
 	store.AddToken(expiredToken, TokenData{
 		Token:     expiredToken,
 		ProjectID: "project1",
@@ -558,7 +558,7 @@ func TestExpirationAndRevocation(t *testing.T) {
 	})
 
 	// Add almost expired token
-	almostToken := "tkn_almosttoken12345678901"
+	almostToken := "sk-almosttoken12345678901"
 	store.AddToken(almostToken, TokenData{
 		Token:     almostToken,
 		ProjectID: "project1",
@@ -568,7 +568,7 @@ func TestExpirationAndRevocation(t *testing.T) {
 	})
 
 	// Add valid token
-	validToken := "tkn_validtoken123456789012"
+	validToken := "sk-validtoken123456789012"
 	store.AddToken(validToken, TokenData{
 		Token:     validToken,
 		ProjectID: "project1",
@@ -578,7 +578,7 @@ func TestExpirationAndRevocation(t *testing.T) {
 	})
 
 	// Add non-expiring token
-	nonExpiringToken := "tkn_nonexpiringtoken1234567"
+	nonExpiringToken := "sk-nonexpiringtoken1234567"
 	store.AddToken(nonExpiringToken, TokenData{
 		Token:     nonExpiringToken,
 		ProjectID: "project1",
