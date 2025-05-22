@@ -9,14 +9,15 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
 // APIClient handles communication with the Management API
 type APIClient struct {
-	baseURL     string
-	token       string
-	httpClient  *http.Client
+	baseURL    string
+	token      string
+	httpClient *http.Client
 }
 
 // NewAPIClient creates a new Management API client
@@ -30,6 +31,36 @@ func NewAPIClient(baseURL, token string) *APIClient {
 	}
 }
 
+// ObfuscateAPIKey obfuscates an API key for display purposes
+// Shows first 8 characters followed by dots and last 4 characters
+func ObfuscateAPIKey(apiKey string) string {
+	if len(apiKey) <= 12 {
+		// For short keys, show first few chars + dots
+		if len(apiKey) <= 4 {
+			return strings.Repeat("*", len(apiKey))
+		}
+		return apiKey[:2] + strings.Repeat("*", len(apiKey)-2)
+	}
+
+	// For longer keys (like OpenAI keys), show first 8 and last 4
+	return apiKey[:8] + "..." + apiKey[len(apiKey)-4:]
+}
+
+// ObfuscateToken obfuscates a token for display purposes
+// Shows first 8 characters followed by dots and last 4 characters
+func ObfuscateToken(token string) string {
+	if len(token) <= 12 {
+		// For short tokens, show first few chars + dots
+		if len(token) <= 4 {
+			return strings.Repeat("*", len(token))
+		}
+		return token[:2] + strings.Repeat("*", len(token)-2)
+	}
+
+	// For longer tokens, show first 8 and last 4
+	return token[:8] + "..." + token[len(token)-4:]
+}
+
 // Project represents a project from the Management API
 type Project struct {
 	ID           string    `json:"id"`
@@ -41,12 +72,11 @@ type Project struct {
 
 // Token represents a token from the Management API (sanitized)
 type Token struct {
-	Token        string     `json:"token,omitempty"` // Only present on creation
 	ProjectID    string     `json:"project_id"`
-	ExpiresAt    time.Time  `json:"expires_at"`
+	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
 	IsActive     bool       `json:"is_active"`
 	RequestCount int        `json:"request_count"`
-	MaxRequests  int        `json:"max_requests"`
+	MaxRequests  *int       `json:"max_requests,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 	LastUsedAt   *time.Time `json:"last_used_at,omitempty"`
 }
@@ -326,7 +356,11 @@ func (c *APIClient) doRequest(req *http.Request, result any) error {
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			fmt.Printf("Error closing response body: %v\n", err)
+		}
+	}()
 
 	if resp.StatusCode >= 400 {
 		var errorResp map[string]any
