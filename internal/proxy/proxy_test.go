@@ -276,9 +276,7 @@ func TestTransparentProxy_InvalidToken(t *testing.T) {
 
 	// Check response - should be an error
 	resp := w.Result()
-	if err := resp.Body.Close(); err != nil {
-		t.Logf("Failed to close response body: %v", err)
-	}
+	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "Expected 401 status code for invalid token")
 
@@ -287,7 +285,7 @@ func TestTransparentProxy_InvalidToken(t *testing.T) {
 	err = json.NewDecoder(resp.Body).Decode(&errResponse)
 	assert.NoError(t, err, "Expected no error decoding response")
 
-	// Verify error message
+	// Verify error message (proxy returns {"error": ...})
 	assert.Contains(t, errResponse, "error", "Expected error field in response")
 	assert.Equal(t, "Token is inactive", errResponse["error"], "Expected specific error message for inactive token")
 
@@ -301,7 +299,7 @@ func TestTransparentProxy_DisallowedEndpoint(t *testing.T) {
 	mockAPI := createMockAPIServer(t)
 	defer mockAPI.Close()
 
-	// Create mock dependencies
+	// Create mock dependencies (no need to set up token mocks)
 	mockValidator := new(MockTokenValidator)
 	mockStore := new(MockProjectStore)
 
@@ -329,9 +327,7 @@ func TestTransparentProxy_DisallowedEndpoint(t *testing.T) {
 
 	// Check response - should be 404 Not Found
 	resp := w.Result()
-	if err := resp.Body.Close(); err != nil {
-		t.Logf("Failed to close response body: %v", err)
-	}
+	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode, "Expected 404 status code for disallowed endpoint")
 }
@@ -342,7 +338,7 @@ func TestTransparentProxy_DisallowedMethod(t *testing.T) {
 	mockAPI := createMockAPIServer(t)
 	defer mockAPI.Close()
 
-	// Create mock dependencies
+	// Create mock dependencies (no need to set up token mocks)
 	mockValidator := new(MockTokenValidator)
 	mockStore := new(MockProjectStore)
 
@@ -369,9 +365,7 @@ func TestTransparentProxy_DisallowedMethod(t *testing.T) {
 
 	// Check response - should be 405 Method Not Allowed
 	resp := w.Result()
-	if err := resp.Body.Close(); err != nil {
-		t.Logf("Failed to close response body: %v", err)
-	}
+	defer resp.Body.Close()
 
 	assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode, "Expected 405 status code for disallowed method")
 }
@@ -621,107 +615,6 @@ func TestModifyResponse_StreamingReturnsEarly(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, int64(0), p.metrics.RequestCount)
 	assert.Equal(t, int64(0), p.metrics.ErrorCount)
-}
-
-func TestDirector_ErrorBranches(t *testing.T) {
-	validConfig := ProxyConfig{TargetBaseURL: "http://example.com"}
-
-	t.Run("missing Authorization header", func(t *testing.T) {
-		p := &TransparentProxy{
-			config:         validConfig,
-			logger:         zap.NewNop(),
-			tokenValidator: &MockTokenValidator{},
-			projectStore:   &MockProjectStore{},
-		}
-		getCtxErr := func(req *http.Request) error {
-			p.director(req)
-			val := req.Context().Value(ctxKeyValidationError)
-			if val == nil {
-				return nil
-			}
-			err, _ := val.(error)
-			return err
-		}
-		req := httptest.NewRequest("GET", "/", nil)
-		err := getCtxErr(req)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "authorization")
-	})
-
-	t.Run("invalid Authorization header", func(t *testing.T) {
-		p := &TransparentProxy{
-			config:         validConfig,
-			logger:         zap.NewNop(),
-			tokenValidator: &MockTokenValidator{},
-			projectStore:   &MockProjectStore{},
-		}
-		getCtxErr := func(req *http.Request) error {
-			p.director(req)
-			val := req.Context().Value(ctxKeyValidationError)
-			if val == nil {
-				return nil
-			}
-			err, _ := val.(error)
-			return err
-		}
-		req := httptest.NewRequest("GET", "/", nil)
-		req.Header.Set("Authorization", "Basic abcdef")
-		err := getCtxErr(req)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "authorization")
-	})
-
-	t.Run("token validation error", func(t *testing.T) {
-		mockValidator := new(MockTokenValidator)
-		mockValidator.On("ValidateTokenWithTracking", mock.Anything, "badtoken").Return("", errors.New("token fail"))
-		p := &TransparentProxy{
-			config:         validConfig,
-			logger:         zap.NewNop(),
-			tokenValidator: mockValidator,
-			projectStore:   &MockProjectStore{},
-		}
-		getCtxErr := func(req *http.Request) error {
-			p.director(req)
-			val := req.Context().Value(ctxKeyValidationError)
-			if val == nil {
-				return nil
-			}
-			err, _ := val.(error)
-			return err
-		}
-		req := httptest.NewRequest("GET", "/", nil)
-		req.Header.Set("Authorization", "Bearer badtoken")
-		err := getCtxErr(req)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "token fail")
-	})
-
-	t.Run("project store error", func(t *testing.T) {
-		mockValidator := new(MockTokenValidator)
-		mockValidator.On("ValidateTokenWithTracking", mock.Anything, "goodtoken").Return("projid", nil)
-		mockStore := new(MockProjectStore)
-		mockStore.On("GetAPIKeyForProject", mock.Anything, "projid").Return("", errors.New("store fail"))
-		p := &TransparentProxy{
-			config:         validConfig,
-			logger:         zap.NewNop(),
-			tokenValidator: mockValidator,
-			projectStore:   mockStore,
-		}
-		getCtxErr := func(req *http.Request) error {
-			p.director(req)
-			val := req.Context().Value(ctxKeyValidationError)
-			if val == nil {
-				return nil
-			}
-			err, _ := val.(error)
-			return err
-		}
-		req := httptest.NewRequest("GET", "/", nil)
-		req.Header.Set("Authorization", "Bearer goodtoken")
-		err := getCtxErr(req)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "store fail")
-	})
 }
 
 func TestParseOpenAIResponseMetadata(t *testing.T) {

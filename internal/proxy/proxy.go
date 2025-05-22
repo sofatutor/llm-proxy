@@ -112,43 +112,12 @@ func (p *TransparentProxy) director(req *http.Request) {
 	req.URL.Host = targetURL.Host
 	req.Host = targetURL.Host
 
-	// Keep original path - this is a transparent proxy
-
-	// Extract token from Authorization header
-	authHeader := req.Header.Get("Authorization")
-	token := extractTokenFromHeader(authHeader)
-	if token == "" {
-		*req = *req.WithContext(context.WithValue(req.Context(),
-			ctxKeyValidationError, errors.New("missing or invalid authorization header")))
-		return
-	}
-
-	// Validate token with tracking (increments usage)
-	projectID, err := p.tokenValidator.ValidateTokenWithTracking(req.Context(), token)
-	if err != nil {
-		*req = *req.WithContext(context.WithValue(req.Context(),
-			ctxKeyValidationError, err))
-		return
-	}
-
-	// Store project ID in context for logging and billing
-	*req = *req.WithContext(context.WithValue(req.Context(), ctxKeyProjectID, projectID))
-
-	// Get API key for project
-	apiKey, err := p.projectStore.GetAPIKeyForProject(req.Context(), projectID)
-	if err != nil {
-		*req = *req.WithContext(context.WithValue(req.Context(),
-			ctxKeyValidationError, fmt.Errorf("failed to get API key: %w", err)))
-		return
-	}
-
-	// Replace Authorization header with API key
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
-
 	// Add proxy identification headers
 	req.Header.Set("X-Proxy", "llm-proxy")
 	req.Header.Set("X-Proxy-Version", version)
-	req.Header.Set("X-Proxy-ID", projectID)
+	if pid, ok := req.Context().Value(ctxKeyProjectID).(string); ok {
+		req.Header.Set("X-Proxy-ID", pid)
+	}
 
 	// Preserve or strip certain headers
 	p.processRequestHeaders(req)
@@ -158,7 +127,7 @@ func (p *TransparentProxy) director(req *http.Request) {
 		zap.String("request_id", requestID),
 		zap.String("method", req.Method),
 		zap.String("path", req.URL.Path),
-		zap.String("project_id", projectID))
+		zap.String("project_id", req.Header.Get("X-Proxy-ID")))
 }
 
 // processRequestHeaders handles the manipulation of request headers
@@ -457,7 +426,7 @@ func (p *TransparentProxy) createTransport() *http.Transport {
 
 // Handler returns the HTTP handler for the proxy
 func (p *TransparentProxy) Handler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return p.ValidateRequestMiddleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Generate request ID and add to context
 		requestID := uuid.New().String()
 		ctx := context.WithValue(r.Context(), ctxKeyRequestID, requestID)
@@ -471,34 +440,70 @@ func (p *TransparentProxy) Handler() http.Handler {
 		ctx = context.WithValue(ctx, ctxKeyProxyReceivedAt, receivedAt)
 		r = r.WithContext(ctx)
 
+		// --- Token extraction and validation (moved from director) ---
+		authHeader := r.Header.Get("Authorization")
+		tokenStr := extractTokenFromHeader(authHeader)
+		if tokenStr == "" {
+			p.handleValidationError(w, errors.New("missing or invalid authorization header"))
+			return
+		}
+		projectID, err := p.tokenValidator.ValidateTokenWithTracking(r.Context(), tokenStr)
+		if err != nil {
+			p.handleValidationError(w, err)
+			return
+		}
+		ctx = context.WithValue(r.Context(), ctxKeyProjectID, projectID)
+		r = r.WithContext(ctx)
+		apiKey, err := p.projectStore.GetAPIKeyForProject(r.Context(), projectID)
+		if err != nil {
+			p.handleValidationError(w, fmt.Errorf("failed to get API key: %w", err))
+			return
+		}
+		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
+
 		// Wrap the ResponseWriter to allow us to set headers at first/last byte
 		rw := &timingResponseWriter{ResponseWriter: w}
 
-		// Instrument the reverse proxy
+		// Instrument the reverse proxy (director now only rewrites URL/host)
 		p.proxy.Director = func(req *http.Request) {
-			// Record when proxy sends to backend
-			sentAt := time.Now().UTC()
-			ctx := context.WithValue(req.Context(), ctxKeyProxySentBackendAt, sentAt)
-			*req = *req.WithContext(ctx)
-			p.director(req)
+			// Store original path in context for logging
+			*req = *req.WithContext(context.WithValue(req.Context(), ctxKeyOriginalPath, req.URL.Path))
+			targetURL, err := url.Parse(p.config.TargetBaseURL)
+			if err != nil {
+				p.logger.Error("Failed to parse target URL", zap.Error(err))
+				return
+			}
+			// Update request URL
+			req.URL.Scheme = targetURL.Scheme
+			req.URL.Host = targetURL.Host
+			req.Host = targetURL.Host
+			// Add proxy identification headers
+			req.Header.Set("X-Proxy", "llm-proxy")
+			req.Header.Set("X-Proxy-Version", version)
+			if pid, ok := req.Context().Value(ctxKeyProjectID).(string); ok {
+				req.Header.Set("X-Proxy-ID", pid)
+			}
+			// Preserve or strip certain headers
+			p.processRequestHeaders(req)
+			requestID, _ := req.Context().Value(ctxKeyRequestID).(string)
+			p.logger.Debug("Proxying request",
+				zap.String("request_id", requestID),
+				zap.String("method", req.Method),
+				zap.String("path", req.URL.Path),
+				zap.String("project_id", req.Header.Get("X-Proxy-ID")))
 		}
 
 		p.proxy.ModifyResponse = func(res *http.Response) error {
-			// Record when proxy receives first byte from backend (non-streaming)
 			firstRespAt := time.Now().UTC()
 			ctx := context.WithValue(res.Request.Context(), ctxKeyProxyFirstRespAt, firstRespAt)
 			res.Request = res.Request.WithContext(ctx)
-			// For non-streaming, final response is the same as first
 			ctx = context.WithValue(res.Request.Context(), ctxKeyProxyFinalRespAt, firstRespAt)
 			res.Request = res.Request.WithContext(ctx)
-			// Set headers
 			setTimingHeaders(res, res.Request.Context())
-			// Set X-Request-ID header in response
 			requestID, _ := res.Request.Context().Value(ctxKeyRequestID).(string)
 			if requestID != "" {
 				res.Header.Set("X-Request-ID", requestID)
 			}
-			// Log timings
 			logProxyTimings(p.logger, res.Request.Context())
 			return p.modifyResponse(res)
 		}
@@ -508,10 +513,8 @@ func (p *TransparentProxy) Handler() http.Handler {
 			p.errorHandler(w, r, err)
 		}
 
-		// For streaming, we need to hook into the ResponseWriter
-		// We'll use a custom writer to set first/last byte timings
 		p.proxy.ServeHTTP(rw, r)
-	})
+	}))
 }
 
 type timingResponseWriter struct {
