@@ -1,13 +1,7 @@
 package main
 
 import (
-	"os"
 	"testing"
-)
-
-// Variables that we'll override in tests
-var (
-	osExit = os.Exit
 )
 
 func TestMain(t *testing.T) {
