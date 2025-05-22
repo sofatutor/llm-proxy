@@ -26,6 +26,9 @@ $(BINDIR):
 test:
 	$(GOTEST) -v -race ./...
 
+integration-test:
+	$(GOTEST) -v -race -tags=integration -timeout=5m -run=Integration ./...
+
 test-coverage:
 	$(GOTEST) -v -race -coverprofile=coverage.out -covermode=atomic ./...
 	go tool cover -func=coverage.out
