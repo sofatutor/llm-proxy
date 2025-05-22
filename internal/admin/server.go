@@ -80,8 +80,18 @@ func (s *Server) setupRoutes() {
 	
 	// Load HTML templates with custom functions
 	s.engine.SetFuncMap(s.templateFuncs())
-	s.engine.LoadHTMLGlob("web/templates/*")
-	s.engine.LoadHTMLGlob("web/templates/**/*")
+	s.engine.LoadHTMLFiles(
+		"web/templates/base.html",
+		"web/templates/dashboard.html",
+		"web/templates/error.html",
+		"web/templates/projects/list.html",
+		"web/templates/projects/new.html",
+		"web/templates/projects/show.html",
+		"web/templates/projects/edit.html",
+		"web/templates/tokens/list.html",
+		"web/templates/tokens/new.html",
+		"web/templates/tokens/created.html",
+	)
 
 	// Root route - redirect to dashboard
 	s.engine.GET("/", func(c *gin.Context) {
