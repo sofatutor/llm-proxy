@@ -8,8 +8,12 @@ on:
 
 jobs:
   test:
-    name: Run Tests
+    name: ${{ matrix.test-type == 'unit' && 'Unit Tests' || 'Integration Tests' }}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test-type: [unit, integration]
+      fail-fast: false
     steps:
       - uses: actions/checkout@v3
       
@@ -22,10 +26,19 @@ jobs:
       - name: Install dependencies
         run: go mod download
       
-      - name: Run tests
+      - name: Run unit tests
+        if: matrix.test-type == 'unit'
         run: go test -v -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=./internal/... ./...
       
+      - name: Run integration tests
+        if: matrix.test-type == 'integration'
+        run: go test -v -race -tags=integration -timeout=5m ./...
+        env:
+          # Ensure integration tests have clean environment
+          CGO_ENABLED: 1
+      
       - name: Enforce 90%+ code coverage
+        if: matrix.test-type == 'unit'
         run: |
           total=$(go tool cover -func=coverage.txt | grep total: | awk '{print substr($3, 1, length($3)-1)}')
           echo "Total coverage: $total%"
@@ -33,6 +46,16 @@ jobs:
           if (( cov < 90 )); then
             echo "::error::Test coverage $total% is below the required 90%."
             exit 1
+          fi
+      
+      - name: Test Summary
+        run: |
+          if [ "${{ matrix.test-type }}" = "unit" ]; then
+            echo "✅ Unit tests completed successfully"
+            echo "📊 Code coverage enforced at 90%+"
+          else
+            echo "✅ Integration tests completed successfully"
+            echo "🔗 Full E2E management API workflow tested"
           fi
       
       # - name: Upload coverage to Codecov
