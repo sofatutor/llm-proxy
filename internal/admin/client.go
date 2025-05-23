@@ -129,7 +129,7 @@ func (c *APIClient) GetDashboardData(ctx context.Context) (*DashboardData, error
 
 	// Calculate active/expired tokens and request counts
 	for _, token := range tokens {
-		if token.IsActive && token.ExpiresAt.After(time.Now()) {
+		if token.IsActive && token.ExpiresAt != nil && token.ExpiresAt.After(time.Now()) {
 			data.ActiveTokens++
 		} else {
 			data.ExpiredTokens++

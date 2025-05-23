@@ -13,7 +13,7 @@
 
 ### 2. Start the admin UI (in terminal 2):
 ```bash
-./tmp/llm-proxy admin-server
+./tmp/llm-proxy admin
 ```
 
 ### 3. Open browser and test:

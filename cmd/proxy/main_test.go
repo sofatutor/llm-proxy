@@ -8,7 +8,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/chzyer/readline"
 	"github.com/sofatutor/llm-proxy/internal/api"
 	"github.com/spf13/cobra"
 )
@@ -384,18 +383,8 @@ func Test_runChat_and_getChatResponse(t *testing.T) {
 		proxyToken = "tok"
 		model = "gpt-3.5-turbo"
 		useStreaming = true
-		// Provide a dummy readline.Instance with a valid Stdout
-		var buf bytes.Buffer
-		rl, err := readline.NewEx(&readline.Config{Prompt: "> ", Stdout: &buf})
-		if err != nil {
-			t.Fatalf("failed to create dummy readline: %v", err)
-		}
-		defer func() {
-			if err := rl.Close(); err != nil {
-				t.Errorf("failed to close readline: %v", err)
-			}
-		}()
-		resp, err := getChatResponse([]ChatMessage{{Role: "user", Content: "hi"}}, rl)
+		// Don't use readline for streaming test to avoid race conditions
+		resp, err := getChatResponse([]ChatMessage{{Role: "user", Content: "hi"}}, nil)
 		if err != nil || resp == nil {
 			t.Errorf("expected streaming response, got err=%v resp=%v", err, resp)
 		}

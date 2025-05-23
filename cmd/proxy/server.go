@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
-	"github.com/sofatutor/llm-proxy/internal/admin"
 	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/sofatutor/llm-proxy/internal/database"
 	"github.com/sofatutor/llm-proxy/internal/server"
@@ -47,11 +46,6 @@ var (
 	pidFile            string
 	debugMode          bool
 
-	// Admin server flags
-	adminListenAddr      string
-	adminAPIBaseURL      string
-	adminManagementToken string
-	adminEnvFile         string
 )
 
 // Add this before init()
@@ -62,12 +56,6 @@ var serverCmd = &cobra.Command{
 	Run:   runServer,
 }
 
-var adminServerCmd = &cobra.Command{
-	Use:   "admin-server",
-	Short: "Start the Admin UI server",
-	Long:  `Start the optional Admin UI server for managing projects and tokens via web interface.`,
-	Run:   runAdminServer,
-}
 
 func init() {
 	// Server command flags
@@ -79,11 +67,6 @@ func init() {
 	serverCmd.Flags().StringVar(&pidFile, "pid-file", "tmp/server.pid", "PID file for daemon mode (relative to project root)")
 	serverCmd.Flags().BoolVarP(&debugMode, "debug", "v", false, "Enable debug logging (overrides log-level)")
 
-	// Admin server command flags
-	adminServerCmd.Flags().StringVar(&adminListenAddr, "listen", ":8081", "Admin UI server listen address")
-	adminServerCmd.Flags().StringVar(&adminAPIBaseURL, "api-base-url", "http://localhost:8080", "Base URL for Management API")
-	adminServerCmd.Flags().StringVar(&adminManagementToken, "management-token", "", "Management token for API access")
-	adminServerCmd.Flags().StringVar(&adminEnvFile, "env", ".env", "Path to .env file")
 }
 
 // runServer is the main function for the server command
@@ -254,72 +237,3 @@ func runServerForeground() {
 	log.Println("Server exited gracefully")
 }
 
-// runAdminServer starts the Admin UI server
-func runAdminServer(cmd *cobra.Command, args []string) {
-	// Load environment file if specified
-	if adminEnvFile != "" {
-		if err := godotenv.Load(adminEnvFile); err != nil {
-			log.Printf("Warning: Could not load env file %s: %v", adminEnvFile, err)
-		}
-	}
-
-	// Load configuration
-	cfg := config.DefaultConfig()
-
-	// Override with command line flags
-	if adminListenAddr != ":8081" {
-		cfg.AdminUI.ListenAddr = adminListenAddr
-	}
-	if adminAPIBaseURL != "http://localhost:8080" {
-		cfg.AdminUI.APIBaseURL = adminAPIBaseURL
-	}
-	if adminManagementToken != "" {
-		cfg.AdminUI.ManagementToken = adminManagementToken
-	}
-
-	// Set management token if provided (optional for browser-based auth)
-	if cfg.AdminUI.ManagementToken == "" {
-		if token := os.Getenv("MANAGEMENT_TOKEN"); token != "" {
-			cfg.AdminUI.ManagementToken = token
-		}
-		// No longer fatal - users can authenticate via web interface
-	}
-
-	// Create admin server
-	server, err := admin.NewServer(cfg)
-	if err != nil {
-		log.Fatalf("Failed to create admin server: %v", err)
-	}
-
-	// Handle graceful shutdown
-	done := make(chan os.Signal, 1)
-	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-
-	// Start server in goroutine
-	go func() {
-		log.Printf("Admin UI server starting on %s", cfg.AdminUI.ListenAddr)
-		log.Printf("Management API: %s", cfg.AdminUI.APIBaseURL)
-		log.Printf("Open your browser and go to http://localhost%s", cfg.AdminUI.ListenAddr)
-		log.Printf("You'll be prompted to enter your management token for authentication")
-		log.Printf("Press Ctrl+C to stop")
-
-		if err := server.Start(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Admin server error: %v", err)
-		}
-	}()
-
-	// Wait for interrupt signal
-	<-done
-	log.Println("Admin UI server shutting down...")
-
-	// Create a deadline for graceful shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// Attempt graceful shutdown
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Admin server forced to shutdown: %v", err)
-	}
-
-	log.Println("Admin UI server exited gracefully")
-}

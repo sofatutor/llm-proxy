@@ -1,7 +1,7 @@
 # WIP: Admin UI Foundation Implementation (PR #19)
 
 ## Status - Admin UI Foundation  
-- [x] Separate admin server (`cmd/admin-server`) with CLI integration
+- [x] Admin UI server integrated as `admin` subcommand
 - [x] Complete Bootstrap 5 responsive UI with custom styling  
 - [x] API client for Management API communication
 - [x] Dashboard with statistics cards and quick actions
@@ -27,7 +27,7 @@
 ## Architecture
 - **Separate Port**: Admin UI runs on :8081 (zero impact on proxy :8080)
 - **Optional Component**: Can be completely disabled in production
-- **CLI Integration**: `llm-proxy admin-server --management-token TOKEN`
+- **CLI Integration**: `llm-proxy admin --management-token TOKEN`
 - **Security**: Tokens only exposed once, sanitized API responses, session-based login
 - **Modern UI**: Bootstrap 5, responsive design, custom CSS/JS
 - **Graceful Shutdown**: Admin server supports graceful shutdown on SIGINT/SIGTERM
