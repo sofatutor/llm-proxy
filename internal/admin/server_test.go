@@ -78,11 +78,11 @@ func TestServer_Shutdown_NoServer(t *testing.T) {
 // Only implements methods needed for handler coverage
 
 type mockAPIClient struct {
-	DashboardData any
+	DashboardData *DashboardData
 	DashboardErr  error
 }
 
-func (m *mockAPIClient) GetDashboardData(ctx context.Context) (any, error) {
+func (m *mockAPIClient) GetDashboardData(ctx context.Context) (*DashboardData, error) {
 	return m.DashboardData, m.DashboardErr
 }
 
@@ -141,7 +141,7 @@ func TestServer_HandleDashboard(t *testing.T) {
 	s.engine.LoadHTMLGlob("testdata/simple-dashboard.html") // Use dummy template
 
 	s.engine.GET("/dashboard", func(c *gin.Context) {
-		var client APIClientInterface = &mockAPIClient{DashboardData: map[string]any{"foo": "bar"}}
+		var client APIClientInterface = &mockAPIClient{DashboardData: &DashboardData{TotalProjects: 1, TotalTokens: 2, ActiveTokens: 1, ExpiredTokens: 0, TotalRequests: 10, RequestsToday: 5, RequestsThisWeek: 7}}
 		c.Set("apiClient", client)
 		s.handleDashboard(c)
 	})
