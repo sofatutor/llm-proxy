@@ -45,6 +45,7 @@ type APIClientInterface interface {
 	GetProject(ctx context.Context, projectID string) (*Project, error)
 	UpdateProject(ctx context.Context, projectID string, name string, openAIAPIKey string) (*Project, error)
 	DeleteProject(ctx context.Context, projectID string) error
+	CreateProject(ctx context.Context, name string, openAIAPIKey string) (*Project, error)
 }
 
 // Server represents the Admin UI HTTP server.
@@ -244,7 +245,7 @@ func (s *Server) handleProjectsNew(c *gin.Context) {
 
 func (s *Server) handleProjectsCreate(c *gin.Context) {
 	// Get API client from context
-	apiClient := c.MustGet("apiClient").(*APIClient)
+	apiClient := c.MustGet("apiClient").(APIClientInterface)
 
 	var req struct {
 		Name         string `form:"name" binding:"required"`
