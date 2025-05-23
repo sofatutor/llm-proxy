@@ -95,7 +95,7 @@ func TestNewLogger_ConsoleFormat(t *testing.T) {
 func TestNewLogger_FileError(t *testing.T) {
 	// Try to create a file in a directory that doesn't exist
 	invalidPath := "/non/existent/directory/test.log"
-	
+
 	logger, err := NewLogger("info", "json", invalidPath)
 	assert.Error(t, err)
 	assert.Nil(t, logger)

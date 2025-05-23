@@ -12,9 +12,9 @@ import (
 func TestNewChatClient(t *testing.T) {
 	baseURL := "http://localhost:8080"
 	token := "test-token"
-	
+
 	client := NewChatClient(baseURL, token)
-	
+
 	if client.BaseURL != baseURL {
 		t.Errorf("BaseURL = %q, want %q", client.BaseURL, baseURL)
 	}
@@ -31,10 +31,10 @@ func TestNewChatClient(t *testing.T) {
 
 func TestChatClient_SendChatRequest_MissingToken(t *testing.T) {
 	client := NewChatClient("http://localhost:8080", "")
-	
+
 	messages := []ChatMessage{{Role: "user", Content: "test"}}
 	options := ChatOptions{Model: "gpt-3.5-turbo"}
-	
+
 	_, err := client.SendChatRequest(messages, options, nil)
 	if err == nil {
 		t.Error("expected error for missing token, got nil")
@@ -46,10 +46,10 @@ func TestChatClient_SendChatRequest_MissingToken(t *testing.T) {
 
 func TestChatClient_SendChatRequest_InvalidURL(t *testing.T) {
 	client := NewChatClient(":invalid-url", "token")
-	
+
 	messages := []ChatMessage{{Role: "user", Content: "test"}}
 	options := ChatOptions{Model: "gpt-3.5-turbo"}
-	
+
 	_, err := client.SendChatRequest(messages, options, nil)
 	if err == nil {
 		t.Error("expected error for invalid URL, got nil")
@@ -62,14 +62,16 @@ func TestChatClient_SendChatRequest_InvalidURL(t *testing.T) {
 func TestChatClient_SendChatRequest_APIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Internal Server Error"))
+		if _, err := w.Write([]byte("Internal Server Error")); err != nil {
+			t.Errorf("failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
-	
+
 	client := NewChatClient(server.URL, "token")
 	messages := []ChatMessage{{Role: "user", Content: "test"}}
 	options := ChatOptions{Model: "gpt-3.5-turbo"}
-	
+
 	_, err := client.SendChatRequest(messages, options, nil)
 	if err == nil {
 		t.Error("expected error for API error, got nil")
@@ -94,13 +96,13 @@ func TestChatClient_SendChatRequest_NonStreaming(t *testing.T) {
 		if ct := r.Header.Get("Content-Type"); ct != "application/json" {
 			t.Errorf("Content-Type = %q, want 'application/json'", ct)
 		}
-		
+
 		// Parse request body
 		var req ChatRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			t.Errorf("failed to decode request: %v", err)
 		}
-		
+
 		// Return valid response
 		response := ChatResponse{
 			ID:    "test-id",
@@ -111,8 +113,8 @@ func TestChatClient_SendChatRequest_NonStreaming(t *testing.T) {
 				FinishReason string      `json:"finish_reason"`
 			}{
 				{
-					Index:   0,
-					Message: ChatMessage{Role: "assistant", Content: "Hello!"},
+					Index:        0,
+					Message:      ChatMessage{Role: "assistant", Content: "Hello!"},
 					FinishReason: "stop",
 				},
 			},
@@ -126,12 +128,14 @@ func TestChatClient_SendChatRequest_NonStreaming(t *testing.T) {
 				TotalTokens:      15,
 			},
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Errorf("failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
-	
+
 	client := NewChatClient(server.URL, "token")
 	messages := []ChatMessage{{Role: "user", Content: "Hello"}}
 	options := ChatOptions{
@@ -141,12 +145,12 @@ func TestChatClient_SendChatRequest_NonStreaming(t *testing.T) {
 		UseStreaming: false,
 		VerboseMode:  false,
 	}
-	
+
 	response, err := client.SendChatRequest(messages, options, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	
+
 	if response.ID != "test-id" {
 		t.Errorf("ID = %q, want 'test-id'", response.ID)
 	}
@@ -162,7 +166,7 @@ func TestChatClient_SendChatRequest_Streaming(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
-		
+
 		// Send streaming response
 		chunks := []string{
 			`data: {"id":"test-id","object":"chat.completion.chunk","created":123,"model":"gpt-3.5-turbo","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":""}]}`,
@@ -170,16 +174,18 @@ func TestChatClient_SendChatRequest_Streaming(t *testing.T) {
 			`data: {"id":"test-id","object":"chat.completion.chunk","created":123,"model":"gpt-3.5-turbo","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
 			`data: [DONE]`,
 		}
-		
+
 		for _, chunk := range chunks {
-			w.Write([]byte(chunk + "\n"))
+			if _, err := w.Write([]byte(chunk + "\n")); err != nil {
+				t.Errorf("failed to write chunk: %v", err)
+			}
 			if f, ok := w.(http.Flusher); ok {
 				f.Flush()
 			}
 		}
 	}))
 	defer server.Close()
-	
+
 	client := NewChatClient(server.URL, "token")
 	messages := []ChatMessage{{Role: "user", Content: "Hello"}}
 	options := ChatOptions{
@@ -187,12 +193,12 @@ func TestChatClient_SendChatRequest_Streaming(t *testing.T) {
 		UseStreaming: true,
 		VerboseMode:  false,
 	}
-	
+
 	response, err := client.SendChatRequest(messages, options, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	
+
 	if response.ID != "test-id" {
 		t.Errorf("ID = %q, want 'test-id'", response.ID)
 	}
@@ -208,14 +214,16 @@ func TestChatClient_SendChatRequest_InvalidJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("invalid json"))
+		if _, err := w.Write([]byte("invalid json")); err != nil {
+			t.Errorf("failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
-	
+
 	client := NewChatClient(server.URL, "token")
 	messages := []ChatMessage{{Role: "user", Content: "test"}}
 	options := ChatOptions{Model: "gpt-3.5-turbo", UseStreaming: false}
-	
+
 	_, err := client.SendChatRequest(messages, options, nil)
 	if err == nil {
 		t.Error("expected error for invalid JSON, got nil")
@@ -232,11 +240,11 @@ func TestChatClient_SendChatRequest_EmptyStream(t *testing.T) {
 		// Empty stream
 	}))
 	defer server.Close()
-	
+
 	client := NewChatClient(server.URL, "token")
 	messages := []ChatMessage{{Role: "user", Content: "test"}}
 	options := ChatOptions{Model: "gpt-3.5-turbo", UseStreaming: true}
-	
+
 	_, err := client.SendChatRequest(messages, options, nil)
 	if err == nil {
 		t.Error("expected error for empty stream, got nil")
@@ -258,18 +266,20 @@ func TestChatClient_SendChatRequest_VerboseMode(t *testing.T) {
 				FinishReason string      `json:"finish_reason"`
 			}{{Index: 0, Message: ChatMessage{Role: "assistant", Content: "Hi"}, FinishReason: "stop"}},
 		}
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Errorf("failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
-	
+
 	client := NewChatClient(server.URL, "token")
 	messages := []ChatMessage{{Role: "user", Content: "test"}}
 	options := ChatOptions{
-		Model:       "gpt-3.5-turbo",
-		VerboseMode: true,
+		Model:        "gpt-3.5-turbo",
+		VerboseMode:  true,
 		UseStreaming: false,
 	}
-	
+
 	// This should not error, though we can't easily test the verbose output
 	_, err := client.SendChatRequest(messages, options, nil)
 	if err != nil {

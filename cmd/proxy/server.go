@@ -45,7 +45,6 @@ var (
 	serverLogLevel     string
 	pidFile            string
 	debugMode          bool
-
 )
 
 // Add this before init()
@@ -55,7 +54,6 @@ var serverCmd = &cobra.Command{
 	Long:  `Start the LLM Proxy server using the configuration from setup.`,
 	Run:   runServer,
 }
-
 
 func init() {
 	// Server command flags
@@ -236,4 +234,3 @@ func runServerForeground() {
 
 	log.Println("Server exited gracefully")
 }
-

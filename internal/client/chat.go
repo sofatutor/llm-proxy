@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -78,11 +79,11 @@ type ChatClient struct {
 
 // ChatOptions configures chat request parameters
 type ChatOptions struct {
-	Model       string
-	Temperature float64
-	MaxTokens   int
+	Model        string
+	Temperature  float64
+	MaxTokens    int
 	UseStreaming bool
-	VerboseMode bool
+	VerboseMode  bool
 }
 
 // NewChatClient creates a new chat client
@@ -136,7 +137,11 @@ func (c *ChatClient) SendChatRequest(messages []ChatMessage, options ChatOptions
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to close response body: %v\n", err)
+		}
+	}()
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
@@ -178,7 +183,9 @@ func (c *ChatClient) handleStreamingResponse(resp *http.Response, readline *read
 			choice := streamResp.Choices[0]
 			if choice.Delta.Content != "" {
 				if readline != nil && readline.Config.Stdout != nil {
-					readline.Config.Stdout.Write([]byte(choice.Delta.Content))
+					if _, err := readline.Config.Stdout.Write([]byte(choice.Delta.Content)); err != nil {
+						fmt.Fprintf(os.Stderr, "failed to write streaming content: %v\n", err)
+					}
 				} else {
 					fmt.Print(choice.Delta.Content)
 				}
@@ -218,7 +225,9 @@ func (c *ChatClient) handleStreamingResponse(resp *http.Response, readline *read
 	}
 
 	if readline != nil && readline.Config.Stdout != nil {
-		readline.Config.Stdout.Write([]byte("\n"))
+		if _, err := readline.Config.Stdout.Write([]byte("\n")); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to write newline after streaming: %v\n", err)
+		}
 	} else {
 		fmt.Println()
 	}

@@ -12,7 +12,7 @@ func GenerateSecureToken(length int) (string, error) {
 	if length <= 0 {
 		return "", fmt.Errorf("length must be positive")
 	}
-	
+
 	b := make([]byte, length)
 	_, err := rand.Read(b)
 	if err != nil {

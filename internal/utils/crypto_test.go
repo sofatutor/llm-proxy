@@ -8,8 +8,8 @@ import (
 
 func TestGenerateSecureToken(t *testing.T) {
 	tests := []struct {
-		name   string
-		length int
+		name    string
+		length  int
 		wantErr bool
 	}{
 		{"normal length", 16, false},
@@ -21,30 +21,30 @@ func TestGenerateSecureToken(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			token, err := GenerateSecureToken(tt.length)
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 				return
 			}
-			
+
 			// Check that token is hex encoded (length should be 2x the input)
 			expectedLen := tt.length * 2
 			if len(token) != expectedLen {
 				t.Errorf("token length = %d, want %d", len(token), expectedLen)
 			}
-			
+
 			// Check that token is valid hex
 			if _, err := hex.DecodeString(token); err != nil {
 				t.Errorf("token is not valid hex: %v", err)
 			}
-			
+
 			// Check that token doesn't contain invalid characters
 			if strings.ContainsAny(token, "ghijklmnopqrstuvwxyzGHIJKLMNOPQRSTUVWXYZ") {
 				t.Error("token contains non-hex characters")
@@ -60,7 +60,7 @@ func TestGenerateSecureTokenMustSucceed(t *testing.T) {
 			t.Errorf("token length = %d, want 32", len(token))
 		}
 	})
-	
+
 	t.Run("panic case", func(t *testing.T) {
 		defer func() {
 			if r := recover(); r == nil {
@@ -79,7 +79,7 @@ func TestGenerateSecureTokenUniqueness(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		
+
 		if tokens[token] {
 			t.Error("generated duplicate token")
 		}

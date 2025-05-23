@@ -80,7 +80,9 @@ func TestAPIClient_GetDashboardData(t *testing.T) {
 				{ID: "1", Name: "Test Project", CreatedAt: time.Now()},
 				{ID: "2", Name: "Another Project", CreatedAt: time.Now()},
 			}
-			json.NewEncoder(w).Encode(projects)
+			if err := json.NewEncoder(w).Encode(projects); err != nil {
+				t.Errorf("failed to encode projects: %v", err)
+			}
 		case "/manage/tokens":
 			now := time.Now().Add(time.Hour) // Future time to ensure active
 			expired := time.Now().Add(-time.Hour)
@@ -89,7 +91,9 @@ func TestAPIClient_GetDashboardData(t *testing.T) {
 				{ProjectID: "1", IsActive: true, ExpiresAt: &now, RequestCount: 10, LastUsedAt: &lastUsed},
 				{ProjectID: "2", IsActive: false, ExpiresAt: &expired, RequestCount: 5},
 			}
-			json.NewEncoder(w).Encode(tokens)
+			if err := json.NewEncoder(w).Encode(tokens); err != nil {
+				t.Errorf("failed to encode tokens: %v", err)
+			}
 		default:
 			http.NotFound(w, r)
 		}
@@ -128,7 +132,9 @@ func TestAPIClient_GetProjects(t *testing.T) {
 			{ID: "2", Name: "Project 2", CreatedAt: time.Now()},
 			{ID: "3", Name: "Project 3", CreatedAt: time.Now()},
 		}
-		json.NewEncoder(w).Encode(projects)
+		if err := json.NewEncoder(w).Encode(projects); err != nil {
+			t.Errorf("failed to encode projects: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -158,7 +164,7 @@ func TestAPIClient_GetProjects(t *testing.T) {
 	}
 
 	// Test page beyond available items
-	projects, pagination, err = client.GetProjects(ctx, 10, 2)
+	projects, _, err = client.GetProjects(ctx, 10, 2)
 	if err != nil {
 		t.Fatalf("GetProjects failed: %v", err)
 	}
@@ -171,7 +177,9 @@ func TestAPIClient_GetProject(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/manage/projects/1" {
 			project := Project{ID: "1", Name: "Test Project", CreatedAt: time.Now()}
-			json.NewEncoder(w).Encode(project)
+			if err := json.NewEncoder(w).Encode(project); err != nil {
+				t.Errorf("failed to encode project: %v", err)
+			}
 		} else {
 			http.NotFound(w, r)
 		}
@@ -213,7 +221,9 @@ func TestAPIClient_CreateProject(t *testing.T) {
 			OpenAIAPIKey: req["openai_api_key"],
 			CreatedAt:    time.Now(),
 		}
-		json.NewEncoder(w).Encode(project)
+		if err := json.NewEncoder(w).Encode(project); err != nil {
+			t.Errorf("failed to encode project: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -252,7 +262,9 @@ func TestAPIClient_UpdateProject(t *testing.T) {
 			OpenAIAPIKey: req["openai_api_key"],
 			UpdatedAt:    time.Now(),
 		}
-		json.NewEncoder(w).Encode(project)
+		if err := json.NewEncoder(w).Encode(project); err != nil {
+			t.Errorf("failed to encode project: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -298,7 +310,9 @@ func TestAPIClient_GetTokens(t *testing.T) {
 			{ProjectID: "2", IsActive: false, RequestCount: 5},
 			{ProjectID: "1", IsActive: true, RequestCount: 3},
 		}
-		json.NewEncoder(w).Encode(tokens)
+		if err := json.NewEncoder(w).Encode(tokens); err != nil {
+			t.Errorf("failed to encode tokens: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -345,7 +359,9 @@ func TestAPIClient_CreateToken(t *testing.T) {
 			Token:     "tok-abcd1234",
 			ExpiresAt: time.Now().Add(time.Duration(req["duration_hours"].(float64)) * time.Hour),
 		}
-		json.NewEncoder(w).Encode(response)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Errorf("failed to encode token create response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -367,7 +383,9 @@ func TestAPIClient_ErrorHandling(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"})
+		if err := json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"}); err != nil {
+			t.Errorf("failed to encode error response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -426,7 +444,9 @@ func TestAPIClient_RequestCreation(t *testing.T) {
 func TestAPIClient_UpdateProjectPartial(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]string
-		json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("failed to decode request: %v", err)
+		}
 
 		project := Project{ID: "1", CreatedAt: time.Now()}
 		// Only update provided fields
@@ -436,7 +456,9 @@ func TestAPIClient_UpdateProjectPartial(t *testing.T) {
 		if key, ok := req["openai_api_key"]; ok {
 			project.OpenAIAPIKey = key
 		}
-		json.NewEncoder(w).Encode(project)
+		if err := json.NewEncoder(w).Encode(project); err != nil {
+			t.Errorf("failed to encode project: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -470,7 +492,9 @@ func TestAPIClient_NetworkError(t *testing.T) {
 func TestAPIClient_InvalidJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte("invalid json"))
+		if _, err := w.Write([]byte("invalid json")); err != nil {
+			t.Errorf("failed to write invalid json: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -492,7 +516,9 @@ func TestAPIClient_DashboardDataError(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 		} else {
 			tokens := []Token{}
-			json.NewEncoder(w).Encode(tokens)
+			if err := json.NewEncoder(w).Encode(tokens); err != nil {
+				t.Errorf("failed to encode tokens: %v", err)
+			}
 		}
 	}))
 	defer server.Close()
@@ -527,7 +553,9 @@ func TestAPIClient_RequestMarshalError(t *testing.T) {
 func TestAPIClient_ErrorResponseWithoutJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("plain text error"))
+		if _, err := w.Write([]byte("plain text error")); err != nil {
+			t.Errorf("failed to write plain text error: %v", err)
+		}
 	}))
 	defer server.Close()
 

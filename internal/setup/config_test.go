@@ -74,7 +74,7 @@ func TestSetupConfig_ValidateConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.config.ValidateConfig()
-			
+
 			if tt.wantErr {
 				if err == nil {
 					t.Error("expected error, got nil")
@@ -85,7 +85,7 @@ func TestSetupConfig_ValidateConfig(t *testing.T) {
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
@@ -107,7 +107,7 @@ func TestSetupConfig_GenerateManagementToken(t *testing.T) {
 			t.Errorf("token length = %d, want 32", len(config.ManagementToken))
 		}
 	})
-	
+
 	t.Run("preserves existing token", func(t *testing.T) {
 		config := &SetupConfig{ManagementToken: "existing-token"}
 		err := config.GenerateManagementToken()
@@ -122,11 +122,11 @@ func TestSetupConfig_GenerateManagementToken(t *testing.T) {
 
 func TestSetupConfig_WriteConfigFile(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	t.Run("writes valid config", func(t *testing.T) {
 		configPath := filepath.Join(tmpDir, "test.env")
 		dbPath := filepath.Join(tmpDir, "db", "test.db")
-		
+
 		config := &SetupConfig{
 			ConfigPath:      configPath,
 			OpenAIAPIKey:    "sk-test-key",
@@ -134,23 +134,23 @@ func TestSetupConfig_WriteConfigFile(t *testing.T) {
 			DatabasePath:    dbPath,
 			ListenAddr:      ":8080",
 		}
-		
+
 		err := config.WriteConfigFile()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		
+
 		// Check that file exists
 		if _, err := os.Stat(configPath); err != nil {
 			t.Errorf("config file not created: %v", err)
 		}
-		
+
 		// Check content
 		content, err := os.ReadFile(configPath)
 		if err != nil {
 			t.Fatalf("failed to read config file: %v", err)
 		}
-		
+
 		contentStr := string(content)
 		expectedLines := []string{
 			"OPENAI_API_KEY=sk-test-key",
@@ -159,30 +159,30 @@ func TestSetupConfig_WriteConfigFile(t *testing.T) {
 			"LISTEN_ADDR=:8080",
 			"LOG_LEVEL=info",
 		}
-		
+
 		for _, line := range expectedLines {
 			if !strings.Contains(contentStr, line) {
 				t.Errorf("config file missing line: %s", line)
 			}
 		}
 	})
-	
+
 	t.Run("validates before writing", func(t *testing.T) {
 		config := &SetupConfig{
 			ConfigPath: filepath.Join(tmpDir, "invalid.env"),
 			// Missing required fields
 		}
-		
+
 		err := config.WriteConfigFile()
 		if err == nil {
 			t.Error("expected validation error, got nil")
 		}
 	})
-	
+
 	t.Run("creates directories", func(t *testing.T) {
 		configPath := filepath.Join(tmpDir, "subdir", "config", "test.env")
 		dbPath := filepath.Join(tmpDir, "subdir", "data", "test.db")
-		
+
 		config := &SetupConfig{
 			ConfigPath:      configPath,
 			OpenAIAPIKey:    "sk-test",
@@ -190,12 +190,12 @@ func TestSetupConfig_WriteConfigFile(t *testing.T) {
 			DatabasePath:    dbPath,
 			ListenAddr:      ":8080",
 		}
-		
+
 		err := config.WriteConfigFile()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		
+
 		// Check that directories were created
 		if _, err := os.Stat(filepath.Dir(configPath)); err != nil {
 			t.Error("config directory not created")
@@ -208,7 +208,7 @@ func TestSetupConfig_WriteConfigFile(t *testing.T) {
 
 func TestRunNonInteractiveSetup(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	t.Run("successful setup", func(t *testing.T) {
 		config := &SetupConfig{
 			ConfigPath:   filepath.Join(tmpDir, "success.env"),
@@ -217,29 +217,29 @@ func TestRunNonInteractiveSetup(t *testing.T) {
 			ListenAddr:   ":8080",
 			// ManagementToken left empty to test generation
 		}
-		
+
 		err := RunNonInteractiveSetup(config)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		
+
 		// Check that token was generated
 		if config.ManagementToken == "" {
 			t.Error("management token should be generated")
 		}
-		
+
 		// Check that file was written
 		if _, err := os.Stat(config.ConfigPath); err != nil {
 			t.Error("config file not created")
 		}
 	})
-	
+
 	t.Run("validation failure", func(t *testing.T) {
 		config := &SetupConfig{
 			ConfigPath: filepath.Join(tmpDir, "invalid.env"),
 			// Missing required fields
 		}
-		
+
 		err := RunNonInteractiveSetup(config)
 		if err == nil {
 			t.Error("expected error, got nil")
