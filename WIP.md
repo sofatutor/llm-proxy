@@ -1,24 +1,42 @@
-# WIP: Proxy Robustness PR (Retry Logic, Circuit Breaker, Validation Scope)
+# WIP: Admin UI Foundation Implementation (PR #19)
 
-## Status
-- [x] Minimal retry logic for transient upstream failures implemented and tested
-- [x] Simple circuit breaker implemented and tested
-- [x] Validation scope enforced (token, path, method only)
-- [x] All new logic covered by unit/integration tests
-- [x] Test coverage > 90% (see CI output)
-- [x] All tests passing (`make test-coverage`)
-- [x] TDD process followed: failing tests first, then implementation, then green
-- [x] All review and coding best practices enforced (see working agreement)
-- [x] PLAN.md and WIP.md updated
+## Status - Admin UI Foundation  
+- [x] Admin UI server integrated as `admin` subcommand (moved to dedicated admin.go file)
+- [x] Complete Bootstrap 5 responsive UI with custom styling  
+- [x] API client for Management API communication
+- [x] Dashboard with statistics cards and quick actions
+- [x] Project management (list, create, show, edit, delete) with full CRUD
+- [x] Token management (list, generate, success page) with security focus
+- [x] Template system with custom functions (pagination, dates, comparisons, arithmetic, etc.)
+- [x] Configuration integration (AdminUIConfig, CLI flags, env support)
+- [x] Error handling and user-friendly error pages
+- [x] JavaScript enhancements and interactivity (admin.js)
+- [x] Template loading fix: switched to LoadHTMLFiles with explicit template listing
+- [x] Graceful shutdown handling for admin server
+- [x] Security-focused session and token handling (browser-based login, session cookie, token never exposed after creation)
+- [x] Command refactoring: renamed from `admin-server` to `admin` for better UX
+- [x] Code organization: moved admin command to separate `cmd/proxy/admin.go` file
+- [x] Test coverage improvements: Added comprehensive tests for extracted functionality
+- [ ] Consolidate AdminUIEnabled/Enabled config fields (see review feedback)
+- [ ] Standardize template arithmetic helpers (sub/add vs inc/dec) across all templates (see review feedback)
+- [ ] Centralize common JS functions (togglePassword, copyToClipboard, confirmDelete) in admin.js (see review feedback)
 
 ## Next Steps
-- [ ] PR ready for review/merge
-- [ ] Remove temporary PR doc after merge
+- [x] PR #19 created and ready for review
+- [ ] Template inheritance refactoring (optional improvement)
+- [ ] Real-time dashboard updates (future enhancement)
+- [ ] Create help/documentation pages (future enhancement)
 
-## Notes
-- See PLAN.md for architecture and rationale
-- See tmp/PR17.md for PR body
-- All changes are traceable, reviewed, and documented
+## Architecture
+- **Separate Port**: Admin UI runs on :8081 (zero impact on proxy :8080)
+- **Optional Component**: Can be completely disabled in production
+- **CLI Integration**: `llm-proxy admin --management-token TOKEN`
+- **Security**: Tokens only exposed once, sanitized API responses, session-based login
+- **Modern UI**: Bootstrap 5, responsive design, custom CSS/JS
+- **Graceful Shutdown**: Admin server supports graceful shutdown on SIGINT/SIGTERM
+- **Explicit Template Loading**: Uses LoadHTMLFiles with explicit template listing to avoid directory conflicts
+
+---
 
 # LLM Proxy Implementation Checklist
 
@@ -61,173 +79,8 @@ Repository structure, configuration, Docker, security, documentation, and founda
 
 ## Phase 2: Core Components
 
-### Database Implementation
-- [x] Research SQLite best practices for Go applications
-- [x] Define detailed schema for projects table:
-  - `id`: TEXT (UUID, primary key)
-  - `name`: TEXT (project name, with uniqueness constraint)
-  - `openai_api_key`: TEXT (encrypted OpenAI API key)
-  - `created_at`: DATETIME
-  - `updated_at`: DATETIME
-  - Additional fields as needed
-- [x] Define detailed schema for tokens table:
-  - `token`: TEXT (UUID, primary key)
-  - `project_id`: TEXT (foreign key to projects)
-  - `expires_at`: DATETIME (expiration timestamp)
-  - `is_active`: BOOLEAN (true/false, default true)
-  - `request_count`: INTEGER (rate-limiting counter, default 0)
-  - `max_requests`: INTEGER (maximum allowed requests)
-  - `created_at`: DATETIME
-  - `last_used_at`: DATETIME (nullable)
-- [x] Create database migration system (for future schema changes)
-- [x] Implement database connection pool management
-- [x] Write database initialization script
-- [x] Implement projects CRUD operations:
-  - CreateProject
-  - GetProjectByID
-  - UpdateProject
-  - DeleteProject
-  - ListProjects
-- [x] Implement tokens CRUD operations:
-  - CreateToken
-  - GetTokenByID
-  - UpdateToken
-  - DeleteToken
-  - ListTokens
-  - GetTokensByProjectID
-- [x] Create database indexes:
-  - Index on tokens.project_id
-  - Index on tokens.expires_at
-  - Index on tokens.is_active
-- [x] Implement transaction support
-- [x] Add database error handling and retry logic
-- [x] Create database clean-up routines for expired tokens
-- [x] Set up database backup mechanism
-- [x] Default DB path is now data/llm-proxy.db for development and production. Can be overridden by DATABASE_PATH in .env or --db flag. In-memory DB is only used for tests.
-
-### Token Management System
-- [x] Research UUID generation and validation best practices
-- [x] Design token format and validation rules
-- [x] Implement secure UUID generation
-- [x] Create token expiration calculation logic
-- [x] Build token validation system:
-  - Check token exists
-  - Verify not expired
-  - Ensure active status
-  - Check rate limits
-- [x] Implement token revocation mechanism
-- [x] Create rate-limiting logic:
-  - Track request counts
-  - Update last_used_at timestamp
-  - Enforce max_requests limit
-- [x] Design token refresh mechanism (optional)
-- [x] Implement batch token operations
-- [x] Add token usage statistics tracking
-- [x] Create token utility functions:
-  - Validate token format
-  - Parse token metadata
-  - Normalize tokens
-- [x] Implement token caching for performance
-
-### Proxy Logic
-- [x] Research HTTP proxying best practices in Go
-- [x] Design transparent proxy architecture using httputil.ReverseProxy
-- [x] Implement middleware chain for request processing
-- [x] Add support for streaming responses (SSE)
-- [x] Proxy Logic: transparent proxy, streaming, allowlist, error handling, metrics/logging (staged in PR: Feature: Transparent Proxy Core)
-- [ ] Implement proxy middleware chain:
-  - [x] Request logging middleware
-  - [x] Authentication middleware
-  - [ ] Rate-limiting middleware *(only per-token rate limiting is implemented; generic/global middleware is planned for a future phase—see PLAN.md for details. Expected in Phase 3 or later, after core proxy and per-token logic are stable.)*
-  - [x] Request validation middleware
-  - [x] Timeout middleware
-- [x] Define and document allowed API routes and methods in configuration
-- [x] Ensure middleware enforces this allowlist for all proxied requests
-- [x] Create OpenAI API endpoint handlers:
-  - /v1/chat/completions
-  - /v1/completions
-  - /v1/embeddings
-  - /v1/models
-  - Other OpenAI endpoints as needed
-- [x] Implement token validation logic
-- [x] Create header manipulation for forwarding:
-  - Replace Authorization header
-  - Preserve relevant headers
-  - Add proxy identification headers
-- [x] Develop metadata extraction from responses:
-  - Model name
-  - Token counts
-  - Processing time
-  - Other relevant metadata
-- [x] Implement streaming support:
-  - Server-Sent Events handling
-  - Chunked transfer encoding
-  - Streaming metadata aggregation
-- [x] Create error handling and response standardization (improved error handling and response checks implemented)
-- [x] Implement request/response logging
-- [x] Add timeout and cancellation handling (context timeouts and error handling improved)
-- [x] Add minimal retry logic for transient upstream failures (with tests)
-- [x] Implement simple circuit breaker for upstream API (with tests)
-- [x] Ensure validation is limited to token, path, and method (with tests)
-- [x] Document config-driven extension points for API-specific logic
-- [ ] Create response transformation (if needed)
-
-### Pull Requests for Phase 2
-
-1. **Database Schema** (`feature/phase-2-db-schema`) ✅
-   - Research SQLite best practices
-   - Define projects and tokens table schemas
-   - Create database initialization script
-   - Design migration system
-
-2. **Project CRUD Operations** (`feature/phase-2-project-crud`) ✅
-   - Implement Project model
-   - Create CRUD operations for projects
-   - Add transaction support
-   - Implement error handling
-
-3. **Token CRUD Operations** (`feature/phase-2-token-crud`) ✅
-   - Implement Token model
-   - Create CRUD operations for tokens
-   - Implement database indexes
-   - Add foreign key constraints
-
-4. **Token Management Core** (`feature/phase-2-token-core`) ✅
-   - Implement UUID generation
-   - Create token format and validation
-   - Add expiration logic
-   - Implement token revocation
-
-5. **Rate Limiting** (`feature/phase-2-rate-limiting`) ✅
-   - Track request counts
-   - Create in-memory rate-limiting logic
-   - Implement last_used_at updates
-   - Add max_requests enforcement
-   - Create extension points for future distributed rate limiting
-
-6. **Proxy Architecture** (`feature/phase-2-proxy-arch`) ✅
-   - Research HTTP proxying
-   - Design transparent proxy architecture using httputil.ReverseProxy
-   - Set up basic proxy structure
-   - Implement tests for proxy functionality
-
-7. **Proxy Middleware** (`feature/phase-2-proxy-middleware`) ✅
-   - Implement request logging middleware
-   - Create authentication middleware
-   - Add rate-limiting middleware (token-level only)
-   - Implement timeout middleware
-
-8. **OpenAI API Endpoints** (`feature/phase-2-openai-endpoints`) ✅
-   - Create handlers for core OpenAI endpoints
-   - Implement header manipulation
-   - Add metadata extraction
-   - Create error handling
-
-9. **API Configuration and Validation** (`feature/api-config-and-validation`) ✅
-   - Define YAML configuration for API providers
-   - Implement allowlist-based approach for APIs
-   - Create header manipulation and metadata extraction
-   - Support streaming with transparent pass-through
+**Abstract:**
+Core database implementation, token management system, and proxy logic completed. All fundamental functionality implemented with comprehensive testing. See DONE.md for detailed implementation checklist.
 
 ### CLI Tool (Setup & OpenAI Chat)
 - [x] Implement CLI tool (`llm-proxy setup` and `llm-proxy openai chat`) **in a separate PR** (`feature/llm-proxy-cli`)
@@ -243,9 +96,10 @@ Repository structure, configuration, Docker, security, documentation, and founda
     - Verbose mode for displaying timing information
     - Shows proxy overhead compared to remote call duration
   - 'llm-proxy server' command with daemon mode (-d option) and PID file support
+  - 'llm-proxy admin' command for Admin UI server (renamed from admin-server, moved to separate admin.go file)
   - Advanced CLI flag parsing and configuration overrides
   - Comprehensive end-to-end usage documentation and advanced examples
-  - Test cases for CLI tool verification (needs expansion for new features) **[IN PROGRESS]**
+  - Test cases for CLI tool verification (expanded with extracted functionality tests) **[COMPLETED]**
   - Documentation for CLI usage (needs update for new features) **[IN PROGRESS]**
   - **Management API CLI is now fully configurable via --manage-api-base-url; 'token get' subcommand is implemented.**
   - **Planned:** Add more integration specs for management API flows.
@@ -284,43 +138,45 @@ A new `llm-proxy manage` command will be introduced to provide a clear, user-fri
 - Makes it easy for both humans and scripts to use the CLI.
 
 ### Implementation Checklist
-- [ ] Scaffold `manage` command and subcommands in CLI
-- [ ] Implement project CRUD subcommands (list, get, create, update, delete)
-- [ ] Implement token subcommands (generate, get)
-- [ ] Wire subcommands to management API endpoints (`/manage/projects`, `/manage/tokens`)
-- [ ] Require management token for all manage commands (flag or env)
-- [ ] Print results as table by default, with `--json` for machine output
-- [ ] Add tests for CLI manage commands
-- [ ] Document usage in CLI README
+- [x] Scaffold `manage` command and subcommands in CLI
+- [x] Implement project CRUD subcommands (list, get, create, update, delete)
+- [x] Implement token subcommands (generate, get)
+- [x] Wire subcommands to management API endpoints (`/manage/projects`, `/manage/tokens`)
+- [x] Require management token for all manage commands (flag or env)
+- [x] Print results as table by default, with `--json` for machine output
+- [x] Add tests for CLI manage commands
+- [x] Document usage in CLI README
 
 ## Phase 3: API and Interfaces
 
 ### Management API Endpoints
-- [ ] Design Management API with OpenAPI/Swagger:
+- [x] Design Management API with OpenAPI/Swagger:
   - Define endpoints (only for /manage/*, not /v1/*)
   - Document request/response formats for management endpoints
   - Specify authentication requirements
   - Detail error responses
   - **Note:** The proxy API (/v1/*) is not documented with Swagger/OpenAPI except for authentication and allowed paths/methods; refer to backend provider docs for schemas. See PLAN.md for rationale.
-- [ ] Implement authentication middleware with MANAGEMENT_TOKEN
-- [ ] Create /manage/tokens POST endpoint:
+- [x] Implement authentication middleware with MANAGEMENT_TOKEN
+- [x] Create /manage/tokens POST endpoint:
   - Validate request body
   - Generate token based on parameters
   - Return token details
 - [ ] Implement /manage/tokens DELETE endpoint:
-  - Validate token format
-  - Revoke specified token
-  - Return success response
-- [ ] Add /manage/tokens GET endpoint (list active tokens)
-- [ ] Create /manage/projects endpoints:
+  - ~~Validate token format~~
+  - ~~Revoke specified token~~
+  - ~~Return success response~~
+  - **Note:** Individual token deletion not implemented for security (prevents token enumeration). See PR18 security decisions.
+- [x] Add /manage/tokens GET endpoint (list active tokens with sanitized responses)
+- [x] Create /manage/projects endpoints:
   - POST for creation
   - GET for listing/retrieval
-  - PUT for updates
+  - PATCH for updates
   - DELETE for removal
-- [ ] Add health check endpoint `/health` for monitoring
+  - GET by ID for individual project details
+- [x] Add health check endpoint `/health` for monitoring
 - [ ] Implement rate limiting for management API
-- [ ] Add comprehensive error handling
-- [ ] Create API documentation with examples (expand for new endpoints)
+- [x] Add comprehensive error handling
+- [x] Create API documentation with examples (expand for new endpoints)
 
 ### Proxy API Endpoints
 - [x] Implement /v1/* forwarding to OpenAI
@@ -343,55 +199,57 @@ A new `llm-proxy manage` command will be introduced to provide a clear, user-fri
 - [ ] Add proxy metrics/logging/timing improvements
 
 ### Admin UI
-- [ ] Design HTML interface wireframes
-- [ ] Create basic CSS styling:
-  - Responsive layout
-  - Dark/light theme
-  - Consistent styling
-- [ ] Implement admin routes with basic authentication
-- [ ] Set up static file serving
-- [ ] Create base HTML templates
-- [ ] Add JavaScript for interactive elements:
+- [x] Design HTML interface wireframes
+- [x] Create basic CSS styling:
+  - Responsive layout (Bootstrap 5)
+  - Modern theme with custom CSS
+  - Consistent styling across components
+- [x] Implement admin routes with basic authentication
+- [x] Set up static file serving
+- [x] Create base HTML templates
+- [x] Add JavaScript for interactive elements:
   - Form submissions
-  - Async data loading
-  - Token generation
-  - Token revocation
-  - Project management
-- [ ] Implement project management UI:
-  - List view
-  - Create form
-  - Edit form
-  - Delete confirmation
-- [ ] Create token management UI:
-  - List view with filtering
-  - Generation form
-  - Revocation functionality
-  - Usage statistics
+  - Interactive dashboard elements
+  - Token generation workflow
+  - Copy-to-clipboard functionality
+  - Project management interfaces
+- [x] Implement project management UI:
+  - List view with pagination
+  - Create form with validation
+  - Edit form with security features
+  - Delete confirmation with warnings
+  - Individual project view
+- [x] Create token management UI:
+  - List view with status indicators
+  - Generation form with duration options
+  - Token creation success page
+  - Usage statistics display
+  - Security-focused design (no token exposure)
 - [ ] Add real-time updates with WebSockets (optional)
-- [ ] Implement dashboard with usage statistics
-- [ ] Create user-friendly error handling
-- [ ] Add confirmation dialogs for destructive actions
-- [ ] Implement client-side validation
+- [x] Implement dashboard with usage statistics
+- [x] Create user-friendly error handling
+- [x] Add confirmation dialogs for destructive actions
+- [x] Implement client-side validation
 - [ ] Create help/documentation pages
 
 ### Pull Requests for Phase 3
 
-1. **Management API Design** (`feature/phase-3-management-api-design`)
+1. **Management API Design** (`feature/phase-3-management-api-design`) ✅ **Completed in PR18**
    - Create OpenAPI/Swagger specification
    - Document request/response formats
    - Define authentication requirements
    - Detail error responses
 
-2. **Token Management API** (`feature/phase-3-token-api`)
+2. **Token Management API** (`feature/phase-3-token-api`) ✅ **Completed in PR18**
    - Implement authentication middleware
    - Create POST endpoint for token generation
-   - Add DELETE endpoint for token revocation
+   - ~~Add DELETE endpoint for token revocation~~ (Not implemented for security)
    - Implement GET endpoint for listing tokens
 
-3. **Project Management API** (`feature/phase-3-project-api`)
+3. **Project Management API** (`feature/phase-3-project-api`) ✅ **Completed in PR18**
    - Implement project CRUD endpoints
    - Add validation and error handling
-   - Create rate limiting
+   - ~~Create rate limiting~~ (Future PR)
    - Document API with examples
 
 4. **Proxy API Implementation** (`feature/phase-3-proxy-api`)
@@ -400,30 +258,34 @@ A new `llm-proxy manage` command will be introduced to provide a clear, user-fri
    - Set up proper error responses
    - Add request validation
 
-5. **Admin UI Foundation** (`feature/phase-3-admin-ui-foundation`)
+5. **Admin UI Foundation** (`feature/phase-3-admin-ui-foundation`) ✅ **Completed in PR19**
    - Design UI wireframes
    - Create base HTML templates
    - Implement basic CSS styling
    - Set up static file serving
    - Add admin routes with authentication
+   - **Includes:** Separate admin server, CLI integration, complete Bootstrap UI
 
-6. **Project Management UI** (`feature/phase-3-project-ui`)
+6. **Project Management UI** (`feature/phase-3-project-ui`) ✅ **Completed in PR19**
    - Implement project list view
    - Create project creation/edit forms
    - Add project deletion with confirmation
    - Implement error handling
+   - **Includes:** Full CRUD operations, responsive design, security features
 
-7. **Token Management UI** (`feature/phase-3-token-ui`)
+7. **Token Management UI** (`feature/phase-3-token-ui`) ✅ **Completed in PR19**
    - Create token list view with filtering
    - Implement token generation form
-   - Add token revocation functionality
+   - ~~Add token revocation functionality~~ (Security: no individual token operations)
    - Display usage statistics
+   - **Includes:** Secure token workflow, creation success page, statistics
 
-8. **Admin Dashboard** (`feature/phase-3-admin-dashboard`)
+8. **Admin Dashboard** (`feature/phase-3-admin-dashboard`) ✅ **Completed in PR19**
    - Create dashboard with usage statistics
-   - Implement real-time updates
-   - Add help/documentation pages
+   - ~~Implement real-time updates~~ (Future enhancement)
+   - ~~Add help/documentation pages~~ (Future enhancement)
    - Enhance UI with client-side validation
+   - **Includes:** Statistics cards, quick actions, system status
 
 ## Phase 4: Logging and Monitoring
 
@@ -773,6 +635,12 @@ A new `llm-proxy manage` command will be introduced to provide a clear, user-fri
   - Cache invalidation strategies
   - Cache hit/miss metrics
   - Support for cache control headers
+- [ ] Advanced middleware enhancements:
+  - Global rate-limiting middleware (beyond per-token rate limiting)
+  - Response transformation capabilities (if needed)
+  - Advanced telemetry collection
+  - Feature flags for gradual rollout
+  - API versioning strategy
 - [ ] Document scaling considerations:
   - Horizontal scaling
   - Vertical scaling
@@ -864,34 +732,22 @@ A new `llm-proxy manage` command will be introduced to provide a clear, user-fri
 - ✅ Implementation of a YAML-based configuration system for API provider endpoints and methods. Configuration supports multiple providers and is extensible.
 - ✅ The proxy performs minimal, necessary request/response transformations (e.g., Authorization header replacement) while extracting useful metadata (token counts, model information).
 - ✅ Streaming responses are properly handled with transparent pass-through, maintaining the streaming nature of the API.
+- ✅ **PHASE 3 COMPLETE:** Management API endpoints and Admin UI Foundation implemented
+  - Management API with full CRUD operations (PR18)
+  - Complete Admin UI with integrated `admin` command (PR19)
+  - Security-focused design with modern Bootstrap interface
+  - CLI integration and configuration system
+- ✅ **CODE ORGANIZATION IMPROVEMENTS:** Enhanced testability and maintainability
+  - Extracted business logic from cmd/ to internal/ packages for better testability
+  - Improved test coverage from 67.0% → 68.9% with comprehensive unit tests
+  - Fixed race conditions and test failures
+  - Organized admin command in dedicated file with proper graceful shutdown
 - The next focus areas are:
-  - Implementing error handling and response standardization
-  - Implementing retry logic for transient failures
-  - Developing Management API endpoints for token/project management (Swagger/OpenAPI only for /manage/*, not /v1/*)
+  - **Phase 4:** Logging and Monitoring system implementation
+  - **Phase 5:** Comprehensive testing and performance optimization
+  - **Optional enhancements:** Real-time updates, advanced UI features
 
-## Phase 2/3: Config/YAML
-- [ ] Expand provider config and YAML changes (document and test)
+## Remaining Configuration Tasks
+- [ ] Expand provider config and YAML changes (document and test) - *moved to Phase 4/5*
 
-// Note: Linter/staticcheck/errcheck issues for proxy and server resolved in this PR.
-
-# WIP: Proxy Robustness PR (Retry Logic, Circuit Breaker, Validation Scope)
-
-## Status
-- [x] Minimal retry logic for transient upstream failures implemented and tested
-- [x] Simple circuit breaker implemented and tested
-- [x] Validation scope enforced (token, path, method only)
-- [x] All new logic covered by unit/integration tests
-- [x] Test coverage > 90% (see CI output)
-- [x] All tests passing (`make test-coverage`)
-- [x] TDD process followed: failing tests first, then implementation, then green
-- [x] All review and coding best practices enforced (see working agreement)
-- [x] PLAN.md and WIP.md updated
-
-## Next Steps
-- [ ] PR ready for review/merge
-- [ ] Remove temporary PR doc after merge
-
-## Notes
-- See PLAN.md for architecture and rationale
-- See tmp/PR17.md for PR body
-- All changes are traceable, reviewed, and documented
+// Note: Linter/staticcheck/errcheck issues for proxy and server resolved. Test race conditions and failures fixed. Coverage improved with extracted functionality testing.

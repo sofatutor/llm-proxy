@@ -162,3 +162,63 @@ func TestTokenStoreAdapter_Basic(t *testing.T) {
 	err = adapter.IncrementTokenUsage(ctx, "notfound")
 	assert.ErrorIs(t, err, token.ErrTokenNotFound)
 }
+
+func TestTokenStoreAdapter_CreateToken(t *testing.T) {
+	store := NewMockTokenStore()
+	adapter := NewTokenStoreAdapter(store)
+	ctx := context.Background()
+
+	td := token.TokenData{Token: "test-token", ProjectID: "p1", IsActive: true, CreatedAt: time.Now()}
+	err := adapter.CreateToken(ctx, td)
+	assert.NoError(t, err)
+
+	// Verify it was created
+	got, err := adapter.GetTokenByID(ctx, "test-token")
+	assert.NoError(t, err)
+	assert.Equal(t, td.Token, got.Token)
+}
+
+func TestTokenStoreAdapter_ListTokens(t *testing.T) {
+	store := NewMockTokenStore()
+	adapter := NewTokenStoreAdapter(store)
+	ctx := context.Background()
+
+	// Add some tokens
+	td1 := token.TokenData{Token: "t1", ProjectID: "p1", IsActive: true, CreatedAt: time.Now()}
+	td2 := token.TokenData{Token: "t2", ProjectID: "p2", IsActive: true, CreatedAt: time.Now()}
+
+	err := adapter.CreateToken(ctx, td1)
+	assert.NoError(t, err)
+	err = adapter.CreateToken(ctx, td2)
+	assert.NoError(t, err)
+
+	tokens, err := adapter.ListTokens(ctx)
+	assert.NoError(t, err)
+	assert.Len(t, tokens, 2)
+}
+
+func TestTokenStoreAdapter_GetTokensByProjectID(t *testing.T) {
+	store := NewMockTokenStore()
+	adapter := NewTokenStoreAdapter(store)
+	ctx := context.Background()
+
+	// Add tokens for different projects
+	td1 := token.TokenData{Token: "t1", ProjectID: "p1", IsActive: true, CreatedAt: time.Now()}
+	td2 := token.TokenData{Token: "t2", ProjectID: "p1", IsActive: true, CreatedAt: time.Now()}
+	td3 := token.TokenData{Token: "t3", ProjectID: "p2", IsActive: true, CreatedAt: time.Now()}
+
+	err := adapter.CreateToken(ctx, td1)
+	assert.NoError(t, err)
+	err = adapter.CreateToken(ctx, td2)
+	assert.NoError(t, err)
+	err = adapter.CreateToken(ctx, td3)
+	assert.NoError(t, err)
+
+	tokens, err := adapter.GetTokensByProjectID(ctx, "p1")
+	assert.NoError(t, err)
+	assert.Len(t, tokens, 2)
+
+	for _, tk := range tokens {
+		assert.Equal(t, "p1", tk.ProjectID)
+	}
+}

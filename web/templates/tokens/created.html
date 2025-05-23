@@ -1,0 +1,201 @@
+{{ define "content" }}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="bi bi-check-circle text-success"></i>
+                Token Created Successfully
+            </h1>
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="alert alert-success border-success">
+            <h4 class="alert-heading">
+                <i class="bi bi-shield-check"></i>
+                Your Token is Ready!
+            </h4>
+            <p>Your new token has been generated successfully. Please copy it now as it will not be shown again.</p>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-key"></i>
+                    Token Details
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-4">
+                    <label class="form-label fw-bold">Generated Token:</label>
+                    <div class="input-group">
+                        <input type="text" 
+                               class="form-control font-monospace" 
+                               id="tokenValue" 
+                               value="{{ .token.Token }}" 
+                               readonly>
+                        <button class="btn btn-outline-secondary" 
+                                type="button" 
+                                onclick="copyToken()" 
+                                id="copyBtn">
+                            <i class="bi bi-clipboard"></i>
+                            Copy
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Expires:</label>
+                            <div class="text-muted">
+                                {{ .token.ExpiresAt.Format "Monday, January 2, 2006 at 3:04 PM" }}
+                            </div>
+                            <small class="text-muted">
+                                ({{ .token.ExpiresAt.Format "2006-01-02 15:04:05 MST" }})
+                            </small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Status:</label>
+                            <div>
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle"></i>
+                                    Active
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-info-circle"></i>
+                    Usage Instructions
+                </h5>
+            </div>
+            <div class="card-body">
+                <h6>Using with curl:</h6>
+                <div class="bg-dark text-light p-3 rounded mb-3">
+                    <code>curl -H "Authorization: Bearer {{ .token.Token }}" \<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;http://localhost:8080/v1/chat/completions</code>
+                    <button class="btn btn-sm btn-outline-light float-end" 
+                            onclick="copyCurl()" 
+                            style="margin-top: -5px;">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </div>
+
+                <h6>Using with OpenAI Python client:</h6>
+                <div class="bg-dark text-light p-3 rounded mb-3">
+                    <code>import openai<br>
+                    client = openai.OpenAI(<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;api_key="{{ .token.Token }}",<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;base_url="http://localhost:8080/v1"<br>
+                    )</code>
+                    <button class="btn btn-sm btn-outline-light float-end" 
+                            onclick="copyPython()" 
+                            style="margin-top: -5px;">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                </div>
+
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Security Reminder:</strong>
+                    <ul class="mb-0">
+                        <li>Store this token securely</li>
+                        <li>Never share it in public repositories</li>
+                        <li>Use environment variables in production</li>
+                        <li>This token will expire on {{ .token.ExpiresAt.Format "January 2, 2006" }}</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <a href="/tokens" class="btn btn-primary me-2">
+                <i class="bi bi-list"></i>
+                View All Tokens
+            </a>
+            <a href="/tokens/new" class="btn btn-success">
+                <i class="bi bi-plus-circle"></i>
+                Generate Another Token
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyToken() {
+    const tokenInput = document.getElementById('tokenValue');
+    const copyBtn = document.getElementById('copyBtn');
+    
+    navigator.clipboard.writeText(tokenInput.value).then(function() {
+        const originalText = copyBtn.innerHTML;
+        copyBtn.innerHTML = '<i class="bi bi-check"></i> Copied!';
+        copyBtn.classList.remove('btn-outline-secondary');
+        copyBtn.classList.add('btn-success');
+        
+        setTimeout(function() {
+            copyBtn.innerHTML = originalText;
+            copyBtn.classList.remove('btn-success');
+            copyBtn.classList.add('btn-outline-secondary');
+        }, 2000);
+    }).catch(function(err) {
+        console.error('Failed to copy: ', err);
+        // Fallback: select the text
+        tokenInput.select();
+        tokenInput.setSelectionRange(0, 99999);
+    });
+}
+
+function copyCurl() {
+    const curlCommand = `curl -H "Authorization: Bearer {{ .token.Token }}" \\
+     http://localhost:8080/v1/chat/completions`;
+    
+    navigator.clipboard.writeText(curlCommand).then(function() {
+        showCopySuccess();
+    });
+}
+
+function copyPython() {
+    const pythonCode = `import openai
+client = openai.OpenAI(
+    api_key="{{ .token.Token }}",
+    base_url="http://localhost:8080/v1"
+)`;
+    
+    navigator.clipboard.writeText(pythonCode).then(function() {
+        showCopySuccess();
+    });
+}
+
+function showCopySuccess() {
+    // Create a temporary toast notification
+    const toast = document.createElement('div');
+    toast.className = 'toast position-fixed top-0 end-0 m-3';
+    toast.style.zIndex = '1055';
+    toast.innerHTML = `
+        <div class="toast-body bg-success text-white">
+            <i class="bi bi-check-circle"></i>
+            Copied to clipboard!
+        </div>
+    `;
+    
+    document.body.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    
+    toast.addEventListener('hidden.bs.toast', function() {
+        toast.remove();
+    });
+}
+</script>
+{{ end }}

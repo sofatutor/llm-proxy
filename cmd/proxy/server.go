@@ -64,6 +64,7 @@ func init() {
 	serverCmd.Flags().StringVar(&serverLogLevel, "log-level", "", "Log level: debug, info, warn, error (overrides env var)")
 	serverCmd.Flags().StringVar(&pidFile, "pid-file", "tmp/server.pid", "PID file for daemon mode (relative to project root)")
 	serverCmd.Flags().BoolVarP(&debugMode, "debug", "v", false, "Enable debug logging (overrides log-level)")
+
 }
 
 // runServer is the main function for the server command

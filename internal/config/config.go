@@ -33,8 +33,8 @@ type Config struct {
 	EnableStreaming    bool   // Whether to enable streaming responses from APIs
 
 	// Admin UI settings
-	AdminUIEnabled bool   // Whether the admin UI is enabled
-	AdminUIPath    string // Base path for the admin UI
+	AdminUIPath string        // Base path for the admin UI
+	AdminUI     AdminUIConfig // Admin UI server configuration
 
 	// Logging
 	LogLevel  string // Log level (debug, info, warn, error)
@@ -57,6 +57,15 @@ type Config struct {
 
 	// Cleanup
 	TokenCleanupInterval time.Duration // Interval for cleaning up expired tokens
+}
+
+// AdminUIConfig holds configuration for the Admin UI server
+type AdminUIConfig struct {
+	ListenAddr      string // Address for admin UI server to listen on
+	APIBaseURL      string // Base URL of the Management API
+	ManagementToken string // Token for accessing Management API
+	Enabled         bool   // Whether Admin UI is enabled
+	TemplateDir     string // Directory for HTML templates (default: "web/templates")
 }
 
 // New creates a new configuration with values from environment variables.
@@ -87,8 +96,14 @@ func New() (*Config, error) {
 		EnableStreaming:    getEnvBool("ENABLE_STREAMING", true),
 
 		// Admin UI settings
-		AdminUIEnabled: getEnvBool("ADMIN_UI_ENABLED", true),
-		AdminUIPath:    getEnvString("ADMIN_UI_PATH", "/admin"),
+		AdminUIPath: getEnvString("ADMIN_UI_PATH", "/admin"),
+		AdminUI: AdminUIConfig{
+			ListenAddr:      getEnvString("ADMIN_UI_LISTEN_ADDR", ":8081"),
+			APIBaseURL:      getEnvString("ADMIN_UI_API_BASE_URL", "http://localhost:8080"),
+			ManagementToken: getEnvString("MANAGEMENT_TOKEN", ""),
+			Enabled:         getEnvBool("ADMIN_UI_ENABLED", true),
+			TemplateDir:     getEnvString("ADMIN_UI_TEMPLATE_DIR", "web/templates"),
+		},
 
 		// Logging defaults
 		LogLevel:  getEnvString("LOG_LEVEL", "info"),
@@ -194,4 +209,63 @@ func getEnvStringSlice(key string, defaultValue []string) []string {
 		return parts
 	}
 	return defaultValue
+}
+
+// LoadFromFile loads configuration from a file (placeholder for future YAML/JSON support)
+func LoadFromFile(path string) (*Config, error) {
+	// For now, return default config - file loading can be implemented later
+	return DefaultConfig(), nil
+}
+
+// DefaultConfig returns a configuration with default values
+func DefaultConfig() *Config {
+	return &Config{
+		// Server defaults
+		ListenAddr:        ":8080",
+		RequestTimeout:    30 * time.Second,
+		MaxRequestSize:    10 * 1024 * 1024, // 10MB
+		MaxConcurrentReqs: 100,
+
+		// Database defaults
+		DatabasePath:     "./data/llm-proxy.db",
+		DatabasePoolSize: 10,
+
+		// API Provider settings
+		APIConfigPath:      "./config/api_providers.yaml",
+		DefaultAPIProvider: "openai",
+		OpenAIAPIURL:       "https://api.openai.com",
+		EnableStreaming:    true,
+
+		// Admin UI settings
+		AdminUIPath: "/admin",
+		AdminUI: AdminUIConfig{
+			ListenAddr:      ":8081",
+			APIBaseURL:      "http://localhost:8080",
+			ManagementToken: "",
+			Enabled:         true,
+			TemplateDir:     "web/templates",
+		},
+
+		// Logging defaults
+		LogLevel:  "info",
+		LogFormat: "json",
+		LogFile:   "",
+
+		// CORS defaults
+		CORSAllowedOrigins: []string{"*"},
+		CORSAllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		CORSAllowedHeaders: []string{"Authorization", "Content-Type"},
+		CORSMaxAge:         24 * time.Hour,
+
+		// Rate limiting defaults
+		GlobalRateLimit: 100,
+		IPRateLimit:     30,
+
+		// Monitoring defaults
+		EnableMetrics: true,
+		MetricsPath:   "/metrics",
+
+		// Cleanup defaults
+		TokenCleanupInterval: time.Hour,
+	}
 }

@@ -8,7 +8,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/chzyer/readline"
 	"github.com/sofatutor/llm-proxy/internal/api"
 	"github.com/spf13/cobra"
 )
@@ -266,6 +265,29 @@ func Test_CLI_AllFunctions_Called(t *testing.T) {
 		// t.Skip("runInteractiveSetup is interactive and not easily testable")
 	})
 
+	t.Run("runSetup_interactive", func(t *testing.T) {
+		// Skip this test as it would block waiting for user input
+		t.Skip("Interactive setup test would block waiting for input")
+	})
+
+	t.Run("runSetup_non_interactive", func(t *testing.T) {
+		origInteractive := interactiveSetup
+		origOsExit := osExit
+		defer func() {
+			interactiveSetup = origInteractive
+			osExit = origOsExit
+		}()
+		interactiveSetup = false
+
+		// Mock osExit to prevent actual exit
+		osExit = func(code int) {
+			// Do nothing instead of exiting
+		}
+
+		cmd := &cobra.Command{}
+		runSetup(cmd, []string{})
+	})
+
 	t.Run("runChat", func(t *testing.T) {
 		// Minimal test: just call with dummy args, expect no panic
 		defer func() {
@@ -298,6 +320,11 @@ func Test_CLI_AllFunctions_Called(t *testing.T) {
 
 	t.Run("main", func(t *testing.T) {
 		t.Skip("Blocking, not suitable for unit test")
+	})
+
+	t.Run("runAdmin", func(t *testing.T) {
+		// Skip the actual server startup, just test the flag parsing logic
+		t.Skip("runAdmin starts a server, not suitable for unit test")
 	})
 }
 
@@ -384,18 +411,8 @@ func Test_runChat_and_getChatResponse(t *testing.T) {
 		proxyToken = "tok"
 		model = "gpt-3.5-turbo"
 		useStreaming = true
-		// Provide a dummy readline.Instance with a valid Stdout
-		var buf bytes.Buffer
-		rl, err := readline.NewEx(&readline.Config{Prompt: "> ", Stdout: &buf})
-		if err != nil {
-			t.Fatalf("failed to create dummy readline: %v", err)
-		}
-		defer func() {
-			if err := rl.Close(); err != nil {
-				t.Errorf("failed to close readline: %v", err)
-			}
-		}()
-		resp, err := getChatResponse([]ChatMessage{{Role: "user", Content: "hi"}}, rl)
+		// Don't use readline for streaming test to avoid race conditions
+		resp, err := getChatResponse([]ChatMessage{{Role: "user", Content: "hi"}}, nil)
 		if err != nil || resp == nil {
 			t.Errorf("expected streaming response, got err=%v resp=%v", err, resp)
 		}

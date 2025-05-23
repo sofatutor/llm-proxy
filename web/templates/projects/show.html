@@ -1,0 +1,235 @@
+{{ define "content" }}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="bi bi-folder"></i>
+                {{ .project.Name }}
+            </h1>
+            <div class="btn-group">
+                <a href="/projects/{{ .project.ID }}/edit" class="btn btn-primary">
+                    <i class="bi bi-pencil"></i>
+                    Edit Project
+                </a>
+                <a href="/tokens/new?project_id={{ .project.ID }}" class="btn btn-success">
+                    <i class="bi bi-key"></i>
+                    Generate Token
+                </a>
+                <a href="/projects" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i>
+                    Back to Projects
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-info-circle"></i>
+                    Project Details
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-sm-3">
+                        <strong>Name:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        {{ .project.Name }}
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-sm-3">
+                        <strong>Project ID:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <code>{{ .project.ID }}</code>
+                        <button class="btn btn-sm btn-outline-secondary ms-2" 
+                                onclick="copyToClipboard('{{ .project.ID }}')" 
+                                title="Copy to clipboard">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-sm-3">
+                        <strong>OpenAI API Key:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        <div class="input-group">
+                            <input type="password" 
+                                   class="form-control" 
+                                   id="apiKeyField" 
+                                   value="{{ .project.OpenAIAPIKey }}" 
+                                   readonly>
+                            <button class="btn btn-outline-secondary" 
+                                    type="button" 
+                                    onclick="togglePassword('apiKeyField')">
+                                <i class="bi bi-eye" id="apiKeyField_icon"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted">API key is masked for security</small>
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-sm-3">
+                        <strong>Created:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        {{ .project.CreatedAt.Format "Monday, January 2, 2006 at 3:04 PM" }}
+                        <br>
+                        <small class="text-muted">{{ .project.CreatedAt.Format "2006-01-02 15:04:05 MST" }}</small>
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-sm-3">
+                        <strong>Last Updated:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        {{ .project.UpdatedAt.Format "Monday, January 2, 2006 at 3:04 PM" }}
+                        <br>
+                        <small class="text-muted">{{ .project.UpdatedAt.Format "2006-01-02 15:04:05 MST" }}</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-lightning"></i>
+                    Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="/tokens/new?project_id={{ .project.ID }}" class="btn btn-success">
+                        <i class="bi bi-key"></i>
+                        Generate Token
+                    </a>
+                    <a href="/tokens?project_id={{ .project.ID }}" class="btn btn-outline-primary">
+                        <i class="bi bi-list"></i>
+                        View Project Tokens
+                    </a>
+                    <a href="/projects/{{ .project.ID }}/edit" class="btn btn-outline-secondary">
+                        <i class="bi bi-pencil"></i>
+                        Edit Project
+                    </a>
+                    <hr>
+                    <button type="button" 
+                            class="btn btn-outline-danger" 
+                            onclick="confirmDelete('{{ .project.ID }}', '{{ .project.Name }}')">
+                        <i class="bi bi-trash"></i>
+                        Delete Project
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-graph-up"></i>
+                    Usage Statistics
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">
+                    <i class="bi bi-info-circle"></i>
+                    Token usage statistics will be displayed here in a future update.
+                </p>
+                <div class="text-center">
+                    <a href="/tokens?project_id={{ .project.ID }}" class="btn btn-sm btn-outline-primary">
+                        View Tokens
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the project <strong id="deleteProjectName"></strong>?</p>
+                <p class="text-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    This action cannot be undone and will also delete all associated tokens.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <input type="hidden" name="_method" value="DELETE">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash"></i>
+                        Delete Project
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function togglePassword(fieldId) {
+    const field = document.getElementById(fieldId);
+    const icon = document.getElementById(fieldId + '_icon');
+    
+    if (field.type === 'password') {
+        field.type = 'text';
+        icon.className = 'bi bi-eye-slash';
+    } else {
+        field.type = 'password';
+        icon.className = 'bi bi-eye';
+    }
+}
+
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(function() {
+        // Show success message
+        const toast = document.createElement('div');
+        toast.className = 'toast position-fixed top-0 end-0 m-3';
+        toast.style.zIndex = '1055';
+        toast.innerHTML = `
+            <div class="toast-body bg-success text-white">
+                <i class="bi bi-check-circle"></i>
+                Copied to clipboard!
+            </div>
+        `;
+        
+        document.body.appendChild(toast);
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+        
+        toast.addEventListener('hidden.bs.toast', function() {
+            toast.remove();
+        });
+    }).catch(function(err) {
+        console.error('Failed to copy: ', err);
+    });
+}
+
+function confirmDelete(projectId, projectName) {
+    document.getElementById('deleteProjectName').textContent = projectName;
+    document.getElementById('deleteForm').action = '/projects/' + projectId;
+    new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+{{ end }}

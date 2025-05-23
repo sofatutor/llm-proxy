@@ -28,11 +28,11 @@ jobs:
       
       - name: Run unit tests
         if: matrix.test-type == 'unit'
-        run: go test -v -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=./internal/... ./...
+        run: go test -v -race -parallel=4 -coverprofile=coverage.txt -covermode=atomic -coverpkg=./internal/... ./...
       
       - name: Run integration tests
         if: matrix.test-type == 'integration'
-        run: go test -v -race -tags=integration -timeout=5m -run=Integration ./...
+        run: go test -v -race -parallel=4 -tags=integration -timeout=5m -run=Integration ./...
         env:
           # Ensure integration tests have clean environment
           CGO_ENABLED: 1

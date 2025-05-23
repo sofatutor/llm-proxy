@@ -262,3 +262,211 @@ func TestNew(t *testing.T) {
 		}
 	})
 }
+
+// TestEnvironmentFunctions tests remaining env helper functions
+func TestEnvironmentFunctions(t *testing.T) {
+	// Save original environment
+	originalEnv := make(map[string]string)
+	for _, env := range os.Environ() {
+		for i := 0; i < len(env); i++ {
+			if env[i] == '=' {
+				originalEnv[env[:i]] = env[i+1:]
+				break
+			}
+		}
+	}
+
+	// Restore environment after test
+	defer func() {
+		os.Clearenv()
+		for k, v := range originalEnv {
+			if err := os.Setenv(k, v); err != nil {
+				t.Fatalf("Failed to restore environment variable %s: %v", k, err)
+			}
+		}
+	}()
+
+	// Test getEnvString
+	t.Run("getEnvString", func(t *testing.T) {
+		os.Clearenv()
+
+		// Test with no env var set
+		result := getEnvString("TEST_STRING", "default")
+		if result != "default" {
+			t.Errorf("Expected default value 'default', got %s", result)
+		}
+
+		// Test with env var set
+		if err := os.Setenv("TEST_STRING", "custom"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		result = getEnvString("TEST_STRING", "default")
+		if result != "custom" {
+			t.Errorf("Expected value 'custom', got %s", result)
+		}
+	})
+
+	// Test getEnvBool
+	t.Run("getEnvBool", func(t *testing.T) {
+		os.Clearenv()
+
+		// Test with no env var set
+		result := getEnvBool("TEST_BOOL", true)
+		if result != true {
+			t.Errorf("Expected default value true, got %v", result)
+		}
+
+		// Test with valid bool env vars (only what strconv.ParseBool supports)
+		testCases := []struct {
+			value    string
+			expected bool
+		}{
+			{"true", true},
+			{"false", false},
+			{"1", true},
+			{"0", false},
+		}
+
+		for _, tc := range testCases {
+			if err := os.Setenv("TEST_BOOL", tc.value); err != nil {
+				t.Fatalf("Failed to set environment variable: %v", err)
+			}
+			result = getEnvBool("TEST_BOOL", false)
+			if result != tc.expected {
+				t.Errorf("Expected value %v for input '%s', got %v", tc.expected, tc.value, result)
+			}
+		}
+
+		// Test with invalid bool env var
+		if err := os.Setenv("TEST_BOOL", "invalid"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		result = getEnvBool("TEST_BOOL", true)
+		if result != true {
+			t.Errorf("Expected default value true for invalid input, got %v", result)
+		}
+	})
+
+	// Test getEnvInt64
+	t.Run("getEnvInt64", func(t *testing.T) {
+		os.Clearenv()
+
+		// Test with no env var set
+		result := getEnvInt64("TEST_INT64", 42)
+		if result != 42 {
+			t.Errorf("Expected default value 42, got %d", result)
+		}
+
+		// Test with valid int64 env var
+		if err := os.Setenv("TEST_INT64", "9223372036854775807"); err != nil { // max int64
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		result = getEnvInt64("TEST_INT64", 42)
+		if result != 9223372036854775807 {
+			t.Errorf("Expected value 9223372036854775807, got %d", result)
+		}
+
+		// Test with invalid int64 env var
+		if err := os.Setenv("TEST_INT64", "not-an-int"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		result = getEnvInt64("TEST_INT64", 42)
+		if result != 42 {
+			t.Errorf("Expected default value 42 for invalid input, got %d", result)
+		}
+	})
+
+	// Test getEnvDuration
+	t.Run("getEnvDuration", func(t *testing.T) {
+		os.Clearenv()
+
+		// Test with no env var set
+		defaultDuration := 30 * time.Second
+		result := getEnvDuration("TEST_DURATION", defaultDuration)
+		if result != defaultDuration {
+			t.Errorf("Expected default value %v, got %v", defaultDuration, result)
+		}
+
+		// Test with valid duration env var
+		if err := os.Setenv("TEST_DURATION", "45s"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		result = getEnvDuration("TEST_DURATION", defaultDuration)
+		if result != 45*time.Second {
+			t.Errorf("Expected value 45s, got %v", result)
+		}
+
+		// Test with different duration formats
+		testCases := []struct {
+			value    string
+			expected time.Duration
+		}{
+			{"1m", time.Minute},
+			{"2h", 2 * time.Hour},
+			{"500ms", 500 * time.Millisecond},
+		}
+
+		for _, tc := range testCases {
+			if err := os.Setenv("TEST_DURATION", tc.value); err != nil {
+				t.Fatalf("Failed to set environment variable: %v", err)
+			}
+			result = getEnvDuration("TEST_DURATION", defaultDuration)
+			if result != tc.expected {
+				t.Errorf("Expected value %v for input '%s', got %v", tc.expected, tc.value, result)
+			}
+		}
+
+		// Test with invalid duration env var
+		if err := os.Setenv("TEST_DURATION", "invalid"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		result = getEnvDuration("TEST_DURATION", defaultDuration)
+		if result != defaultDuration {
+			t.Errorf("Expected default value %v for invalid input, got %v", defaultDuration, result)
+		}
+	})
+}
+
+func TestDefaultConfig(t *testing.T) {
+	config := DefaultConfig()
+
+	// Check default values are set correctly
+	if config.ListenAddr != ":8080" {
+		t.Errorf("Expected ListenAddr to be :8080, got %s", config.ListenAddr)
+	}
+	if config.RequestTimeout != 30*time.Second {
+		t.Errorf("Expected RequestTimeout to be 30s, got %s", config.RequestTimeout)
+	}
+	if config.MaxRequestSize != 10*1024*1024 {
+		t.Errorf("Expected MaxRequestSize to be 10MB, got %d", config.MaxRequestSize)
+	}
+	if config.DatabasePath != "./data/llm-proxy.db" {
+		t.Errorf("Expected DatabasePath to be ./data/llm-proxy.db, got %s", config.DatabasePath)
+	}
+	if config.LogLevel != "info" {
+		t.Errorf("Expected LogLevel to be info, got %s", config.LogLevel)
+	}
+	if config.EnableMetrics != true {
+		t.Errorf("Expected EnableMetrics to be true, got %v", config.EnableMetrics)
+	}
+}
+
+func TestLoadFromFile(t *testing.T) {
+	// Test loading from file (currently just returns DefaultConfig)
+	config, err := LoadFromFile("any-file.yaml")
+	if err != nil {
+		t.Fatalf("Expected no error loading config file, got %v", err)
+	}
+
+	// Since LoadFromFile currently returns DefaultConfig(), check default values
+	defaultConfig := DefaultConfig()
+	if config.ListenAddr != defaultConfig.ListenAddr {
+		t.Errorf("Expected ListenAddr to be %s, got %s", defaultConfig.ListenAddr, config.ListenAddr)
+	}
+	if config.RequestTimeout != defaultConfig.RequestTimeout {
+		t.Errorf("Expected RequestTimeout to be %s, got %s", defaultConfig.RequestTimeout, config.RequestTimeout)
+	}
+	if config.MaxRequestSize != defaultConfig.MaxRequestSize {
+		t.Errorf("Expected MaxRequestSize to be %d, got %d", defaultConfig.MaxRequestSize, config.MaxRequestSize)
+	}
+}

@@ -3,8 +3,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -16,7 +14,9 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/sofatutor/llm-proxy/internal/api"
+	"github.com/sofatutor/llm-proxy/internal/setup"
 	"github.com/sofatutor/llm-proxy/internal/token"
+	"github.com/sofatutor/llm-proxy/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -183,22 +183,23 @@ func runInteractiveSetup() {
 
 // runNonInteractiveSetup performs a non-interactive setup
 func runNonInteractiveSetup() {
-	// Check if OpenAI API Key is provided
-	if openAIAPIKey == "" {
-		fmt.Println("Error: OpenAI API Key is required")
-		fmt.Println("Use --openai-key flag or run with --interactive")
+	setupCfg := &setup.SetupConfig{
+		ConfigPath:      configPath,
+		OpenAIAPIKey:    openAIAPIKey,
+		ManagementToken: managementToken,
+		DatabasePath:    databasePath,
+		ListenAddr:      listenAddr,
+	}
+
+	if err := setup.RunNonInteractiveSetup(setupCfg); err != nil {
+		fmt.Printf("Error during setup: %v\n", err)
 		osExit(1)
 	}
 
-	// Generate management token if not provided
-	if managementToken == "" {
-		// Generate a secure random token
-		managementToken = generateSecureToken(32)
-		fmt.Printf("Generated Management Token: %s\n", token.ObfuscateToken(managementToken))
-	}
-
-	// Write configuration to file
-	writeConfig()
+	// Update global variables for compatibility
+	managementToken = setupCfg.ManagementToken
+	fmt.Printf("Generated Management Token: %s\n", token.ObfuscateToken(managementToken))
+	fmt.Printf("Configuration written to %s\n", configPath)
 }
 
 // writeConfig writes the configuration to a file
@@ -244,12 +245,7 @@ func writeConfig() {
 
 // generateSecureToken generates a secure random token of the given length
 func generateSecureToken(length int) string {
-	b := make([]byte, length)
-	_, err := rand.Read(b)
-	if err != nil {
-		panic("failed to generate secure token")
-	}
-	return hex.EncodeToString(b)
+	return utils.GenerateSecureTokenMustSucceed(length)
 }
 
 // For test compatibility
@@ -284,6 +280,7 @@ func init() {
 	cobraRoot.AddCommand(setupCmd)
 	cobraRoot.AddCommand(openaiCmd)
 	cobraRoot.AddCommand(serverCmd)
+	cobraRoot.AddCommand(adminCmd)
 
 	// Manage command and subcommands
 	var manageCmd = &cobra.Command{
