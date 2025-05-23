@@ -186,7 +186,7 @@ func TestTokenStoreAdapter_ListTokens(t *testing.T) {
 	// Add some tokens
 	td1 := token.TokenData{Token: "t1", ProjectID: "p1", IsActive: true, CreatedAt: time.Now()}
 	td2 := token.TokenData{Token: "t2", ProjectID: "p2", IsActive: true, CreatedAt: time.Now()}
-	
+
 	err := adapter.CreateToken(ctx, td1)
 	assert.NoError(t, err)
 	err = adapter.CreateToken(ctx, td2)
@@ -206,7 +206,7 @@ func TestTokenStoreAdapter_GetTokensByProjectID(t *testing.T) {
 	td1 := token.TokenData{Token: "t1", ProjectID: "p1", IsActive: true, CreatedAt: time.Now()}
 	td2 := token.TokenData{Token: "t2", ProjectID: "p1", IsActive: true, CreatedAt: time.Now()}
 	td3 := token.TokenData{Token: "t3", ProjectID: "p2", IsActive: true, CreatedAt: time.Now()}
-	
+
 	err := adapter.CreateToken(ctx, td1)
 	assert.NoError(t, err)
 	err = adapter.CreateToken(ctx, td2)
@@ -217,7 +217,7 @@ func TestTokenStoreAdapter_GetTokensByProjectID(t *testing.T) {
 	tokens, err := adapter.GetTokensByProjectID(ctx, "p1")
 	assert.NoError(t, err)
 	assert.Len(t, tokens, 2)
-	
+
 	for _, tk := range tokens {
 		assert.Equal(t, "p1", tk.ProjectID)
 	}

@@ -970,16 +970,17 @@ func TestServer_Start_Coverage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
 	}
-	
+
 	// Start server in goroutine and immediately shut it down
 	go func() {
 		// This will block, so we run it in a goroutine
-		srv.Start()
+		err := srv.Start()
+		_ = err // ignore error for coverage
 	}()
-	
+
 	// Give it a moment to start
 	time.Sleep(100 * time.Millisecond)
-	
+
 	// Shut it down
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

@@ -273,12 +273,12 @@ func Test_CLI_AllFunctions_Called(t *testing.T) {
 	t.Run("runSetup_non_interactive", func(t *testing.T) {
 		origInteractive := interactiveSetup
 		origOsExit := osExit
-		defer func() { 
-			interactiveSetup = origInteractive 
+		defer func() {
+			interactiveSetup = origInteractive
 			osExit = origOsExit
 		}()
 		interactiveSetup = false
-		
+
 		// Mock osExit to prevent actual exit
 		osExit = func(code int) {
 			// Do nothing instead of exiting
