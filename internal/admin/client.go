@@ -109,7 +109,7 @@ type DashboardData struct {
 }
 
 // GetDashboardData retrieves dashboard statistics
-func (c *APIClient) GetDashboardData(ctx context.Context) (*DashboardData, error) {
+func (c *APIClient) GetDashboardData(ctx context.Context) (any, error) {
 	// For now, calculate from projects and tokens lists
 	// In the future, this could be a dedicated dashboard endpoint
 	projects, _, err := c.GetProjects(ctx, 1, 1000) // Get all projects

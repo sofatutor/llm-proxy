@@ -103,10 +103,11 @@ func TestAPIClient_GetDashboardData(t *testing.T) {
 	client := NewAPIClient(server.URL, "test-token")
 	ctx := context.Background()
 
-	data, err := client.GetDashboardData(ctx)
+	dataAny, err := client.GetDashboardData(ctx)
 	if err != nil {
 		t.Fatalf("GetDashboardData failed: %v", err)
 	}
+	data := dataAny.(*DashboardData)
 
 	if data.TotalProjects != 2 {
 		t.Errorf("TotalProjects = %d, want 2", data.TotalProjects)
@@ -568,5 +569,66 @@ func TestAPIClient_ErrorResponseWithoutJSON(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "400") {
 		t.Errorf("Expected status code in error, got: %v", err)
+	}
+}
+
+func TestAPIClient_CreateProject_Errors(t *testing.T) {
+	client := NewAPIClient("http://invalid-host", "token")
+	ctx := context.Background()
+
+	t.Run("network error", func(t *testing.T) {
+		_, err := client.CreateProject(ctx, "foo", "bar")
+		if err == nil {
+			t.Error("expected network error, got nil")
+		}
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"fail"}`))
+	}))
+	defer server.Close()
+	client2 := NewAPIClient(server.URL, "token")
+	_, err := client2.CreateProject(ctx, "foo", "bar")
+	if err == nil || !strings.Contains(err.Error(), "fail") {
+		t.Errorf("expected API error, got %v", err)
+	}
+
+	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("not json"))
+	}))
+	defer server2.Close()
+	client3 := NewAPIClient(server2.URL, "token")
+	_, err = client3.CreateProject(ctx, "foo", "bar")
+	if err == nil || !strings.Contains(err.Error(), "decode") {
+		t.Errorf("expected decode error, got %v", err)
+	}
+}
+
+func TestAPIClient_UpdateProject_Errors(t *testing.T) {
+	client := NewAPIClient("http://invalid-host", "token")
+	ctx := context.Background()
+	_, err := client.UpdateProject(ctx, "id", "foo", "bar")
+	if err == nil {
+		t.Error("expected network error, got nil")
+	}
+}
+
+func TestAPIClient_DeleteProject_Errors(t *testing.T) {
+	client := NewAPIClient("http://invalid-host", "token")
+	ctx := context.Background()
+	err := client.DeleteProject(ctx, "id")
+	if err == nil {
+		t.Error("expected network error, got nil")
+	}
+}
+
+func TestAPIClient_CreateToken_Errors(t *testing.T) {
+	client := NewAPIClient("http://invalid-host", "token")
+	ctx := context.Background()
+	_, err := client.CreateToken(ctx, "id", 1)
+	if err == nil {
+		t.Error("expected network error, got nil")
 	}
 }
