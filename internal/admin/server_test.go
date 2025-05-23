@@ -99,6 +99,24 @@ func (m *mockAPIClient) CreateToken(ctx context.Context, projectID string, durat
 	return &TokenCreateResponse{Token: "tok-1234", ExpiresAt: time.Now().Add(time.Duration(durationHours) * time.Hour)}, nil
 }
 
+func (m *mockAPIClient) GetProject(ctx context.Context, id string) (*Project, error) {
+	if m.DashboardErr != nil {
+		return nil, m.DashboardErr
+	}
+	return &Project{ID: id, Name: "Test Project"}, nil
+}
+
+func (m *mockAPIClient) UpdateProject(ctx context.Context, id, name, apiKey string) (*Project, error) {
+	if m.DashboardErr != nil {
+		return nil, m.DashboardErr
+	}
+	return &Project{ID: id, Name: name, OpenAIAPIKey: apiKey}, nil
+}
+
+func (m *mockAPIClient) DeleteProject(ctx context.Context, id string) error {
+	return m.DashboardErr
+}
+
 var _ APIClientInterface = (*mockAPIClient)(nil) // Ensure interface compliance
 
 func TestServer_HandleDashboard(t *testing.T) {
@@ -205,5 +223,89 @@ func TestServer_HandleTokensCreate(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleProjectsShow(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob("testdata/projects-show.html")
+
+	s.engine.GET("/projects/:id", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleProjectsShow(c)
+	})
+
+	req, _ := http.NewRequest("GET", "/projects/1", nil)
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleProjectsEdit(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob("testdata/projects-edit.html")
+
+	s.engine.GET("/projects/:id/edit", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleProjectsEdit(c)
+	})
+
+	req, _ := http.NewRequest("GET", "/projects/1/edit", nil)
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleProjectsUpdate(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob("testdata/projects-edit.html")
+
+	s.engine.PUT("/projects/:id", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleProjectsUpdate(c)
+	})
+
+	form := strings.NewReader("name=Updated+Project&openai_api_key=key-1234")
+	req, _ := http.NewRequest("PUT", "/projects/1", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("expected 303, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleProjectsDelete(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.DELETE("/projects/:id", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleProjectsDelete(c)
+	})
+
+	req, _ := http.NewRequest("DELETE", "/projects/1", nil)
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("expected 303, got %d", w.Code)
 	}
 }
