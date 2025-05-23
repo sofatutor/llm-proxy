@@ -56,6 +56,9 @@ type Server struct {
 	config    *config.Config
 	engine    *gin.Engine
 	apiClient *APIClient
+
+	// For testability: allow injection of token validation logic
+	ValidateTokenWithAPI func(context.Context, string) bool
 }
 
 // NewServer creates a new Admin UI server with the provided configuration.
@@ -319,8 +322,8 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 	id := c.Param("id")
 
 	var req struct {
-		Name         string `form:"name"`
-		OpenAIAPIKey string `form:"openai_api_key"`
+		Name         string `form:"name" binding:"required"`
+		OpenAIAPIKey string `form:"openai_api_key" binding:"required"`
 	}
 
 	if err := c.ShouldBind(&req); err != nil {
@@ -628,8 +631,12 @@ func (s *Server) handleLogin(c *gin.Context) {
 
 	log.Printf("Login attempt: token=%q rememberMe=%v", obfuscateToken(req.ManagementToken), req.RememberMe)
 
-	// Validate token against the Management API
-	if !s.validateTokenWithAPI(c.Request.Context(), req.ManagementToken) {
+	// Use injected or default token validation
+	validate := s.ValidateTokenWithAPI
+	if validate == nil {
+		validate = s.validateTokenWithAPI
+	}
+	if !validate(c.Request.Context(), req.ManagementToken) {
 		log.Printf("Token validation failed for token=%q", obfuscateToken(req.ManagementToken))
 		c.HTML(http.StatusUnauthorized, "login.html", gin.H{
 			"title": "Sign In",
