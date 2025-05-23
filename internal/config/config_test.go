@@ -429,7 +429,7 @@ func TestEnvironmentFunctions(t *testing.T) {
 
 func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
-	
+
 	// Check default values are set correctly
 	if config.ListenAddr != ":8080" {
 		t.Errorf("Expected ListenAddr to be :8080, got %s", config.ListenAddr)
