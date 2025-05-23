@@ -33,9 +33,8 @@ type Config struct {
 	EnableStreaming    bool   // Whether to enable streaming responses from APIs
 
 	// Admin UI settings
-	AdminUIEnabled bool          // Whether the admin UI is enabled
-	AdminUIPath    string        // Base path for the admin UI
-	AdminUI        AdminUIConfig // Admin UI server configuration
+	AdminUIPath string        // Base path for the admin UI
+	AdminUI     AdminUIConfig // Admin UI server configuration
 
 	// Logging
 	LogLevel  string // Log level (debug, info, warn, error)
@@ -97,8 +96,7 @@ func New() (*Config, error) {
 		EnableStreaming:    getEnvBool("ENABLE_STREAMING", true),
 
 		// Admin UI settings
-		AdminUIEnabled: getEnvBool("ADMIN_UI_ENABLED", true),
-		AdminUIPath:    getEnvString("ADMIN_UI_PATH", "/admin"),
+		AdminUIPath: getEnvString("ADMIN_UI_PATH", "/admin"),
 		AdminUI: AdminUIConfig{
 			ListenAddr:      getEnvString("ADMIN_UI_LISTEN_ADDR", ":8081"),
 			APIBaseURL:      getEnvString("ADMIN_UI_API_BASE_URL", "http://localhost:8080"),
@@ -239,8 +237,7 @@ func DefaultConfig() *Config {
 		EnableStreaming:    true,
 
 		// Admin UI settings
-		AdminUIEnabled: true,
-		AdminUIPath:    "/admin",
+		AdminUIPath: "/admin",
 		AdminUI: AdminUIConfig{
 			ListenAddr:      ":8081",
 			APIBaseURL:      "http://localhost:8080",

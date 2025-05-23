@@ -156,6 +156,10 @@ func getChatResponse(messages []ChatMessage, rl *readline.Instance) (*ChatRespon
 		return nil, fmt.Errorf("token is required")
 	}
 
+	if proxyURL == "" {
+		return nil, fmt.Errorf("proxy URL is required")
+	}
+
 	chatClient := client.NewChatClient(proxyURL, proxyToken)
 	options := client.ChatOptions{
 		Model:        model,

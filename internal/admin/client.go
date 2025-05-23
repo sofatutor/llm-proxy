@@ -109,7 +109,7 @@ type DashboardData struct {
 }
 
 // GetDashboardData retrieves dashboard statistics
-func (c *APIClient) GetDashboardData(ctx context.Context) (any, error) {
+func (c *APIClient) GetDashboardData(ctx context.Context) (*DashboardData, error) {
 	// For now, calculate from projects and tokens lists
 	// In the future, this could be a dedicated dashboard endpoint
 	projects, _, err := c.GetProjects(ctx, 1, 1000) // Get all projects
@@ -128,8 +128,9 @@ func (c *APIClient) GetDashboardData(ctx context.Context) (any, error) {
 	}
 
 	// Calculate active/expired tokens and request counts
+	now := time.Now()
 	for _, token := range tokens {
-		if token.IsActive && token.ExpiresAt != nil && token.ExpiresAt.After(time.Now()) {
+		if token.IsActive && token.ExpiresAt != nil && token.ExpiresAt.After(now) {
 			data.ActiveTokens++
 		} else {
 			data.ExpiredTokens++
@@ -137,12 +138,12 @@ func (c *APIClient) GetDashboardData(ctx context.Context) (any, error) {
 		data.TotalRequests += token.RequestCount
 
 		// Calculate today's requests (approximation)
-		if token.LastUsedAt != nil && token.LastUsedAt.After(time.Now().AddDate(0, 0, -1)) {
+		if token.LastUsedAt != nil && token.LastUsedAt.After(now.AddDate(0, 0, -1)) {
 			data.RequestsToday += token.RequestCount
 		}
 
 		// Calculate this week's requests (approximation)
-		if token.LastUsedAt != nil && token.LastUsedAt.After(time.Now().AddDate(0, 0, -7)) {
+		if token.LastUsedAt != nil && token.LastUsedAt.After(now.AddDate(0, 0, -7)) {
 			data.RequestsThisWeek += token.RequestCount
 		}
 	}

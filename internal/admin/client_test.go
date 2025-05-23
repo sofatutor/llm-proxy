@@ -103,11 +103,10 @@ func TestAPIClient_GetDashboardData(t *testing.T) {
 	client := NewAPIClient(server.URL, "test-token")
 	ctx := context.Background()
 
-	dataAny, err := client.GetDashboardData(ctx)
+	data, err := client.GetDashboardData(ctx)
 	if err != nil {
 		t.Fatalf("GetDashboardData failed: %v", err)
 	}
-	data := dataAny.(*DashboardData)
 
 	if data.TotalProjects != 2 {
 		t.Errorf("TotalProjects = %d, want 2", data.TotalProjects)
