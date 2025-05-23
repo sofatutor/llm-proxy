@@ -184,7 +184,7 @@ func (c *ChatClient) handleStreamingResponse(resp *http.Response, readline *read
 			if choice.Delta.Content != "" {
 				if readline != nil && readline.Config.Stdout != nil {
 					if _, err := readline.Config.Stdout.Write([]byte(choice.Delta.Content)); err != nil {
-						fmt.Fprintf(os.Stderr, "failed to write streaming content: %v\n", err)
+						return nil, fmt.Errorf("failed to write streaming content: %w", err)
 					}
 				} else {
 					fmt.Print(choice.Delta.Content)
@@ -226,7 +226,7 @@ func (c *ChatClient) handleStreamingResponse(resp *http.Response, readline *read
 
 	if readline != nil && readline.Config.Stdout != nil {
 		if _, err := readline.Config.Stdout.Write([]byte("\n")); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to write newline after streaming: %v\n", err)
+			return nil, fmt.Errorf("failed to write newline after streaming: %w", err)
 		}
 	} else {
 		fmt.Println()

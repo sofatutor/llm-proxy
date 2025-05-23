@@ -1,12 +1,17 @@
 package client
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/chzyer/readline"
 )
 
 func TestNewChatClient(t *testing.T) {
@@ -285,4 +290,82 @@ func TestChatClient_SendChatRequest_VerboseMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+}
+
+func TestHandleStreamingResponse_Errors(t *testing.T) {
+	client := NewChatClient("http://localhost", "token")
+
+	t.Run("malformed JSON in stream", func(t *testing.T) {
+		resp := &http.Response{
+			Body: io.NopCloser(bytes.NewBufferString("data: {not json}\ndata: [DONE]\n")),
+		}
+		_, err := client.handleStreamingResponse(resp, nil, false)
+		if err == nil || !strings.Contains(err.Error(), "no response received from stream") {
+			t.Errorf("expected error for no response, got %v", err)
+		}
+	})
+
+	t.Run("scanner error", func(t *testing.T) {
+		r := &errReader{err: errors.New("scanner fail")}
+		resp := &http.Response{Body: io.NopCloser(r)}
+		_, err := client.handleStreamingResponse(resp, nil, false)
+		if err == nil || !strings.Contains(err.Error(), "stream reading error") {
+			t.Errorf("expected scanner error, got %v", err)
+		}
+	})
+
+	t.Run("write error to readline.Config.Stdout", func(t *testing.T) {
+		var wrote bool
+		fakeStdout := &errWriter{err: errors.New("write fail"), wrote: &wrote}
+		fakeRL := &readline.Instance{Config: &readline.Config{Stdout: fakeStdout}}
+		// valid streaming chunk
+		chunk := `data: {"id":"id","object":"chat.completion.chunk","created":1,"model":"m","choices":[{"index":0,"delta":{"content":"hi"},"finish_reason":""}]}` + "\ndata: [DONE]\n"
+		resp := &http.Response{Body: io.NopCloser(bytes.NewBufferString(chunk))}
+		_, err := client.handleStreamingResponse(resp, fakeRL, false)
+		if err == nil || !strings.Contains(err.Error(), "failed to write streaming content") {
+			t.Errorf("expected write error, got %v", err)
+		}
+		if !wrote {
+			t.Error("expected write to be attempted")
+		}
+	})
+}
+
+type errReader struct{ err error }
+
+func (e *errReader) Read(p []byte) (int, error) { return 0, e.err }
+func (e *errReader) Close() error               { return nil }
+
+// errWriter simulates a writer that always errors
+// wrote is set to true if Write is called
+type errWriter struct {
+	err   error
+	wrote *bool
+}
+
+func (e *errWriter) Write(p []byte) (int, error) {
+	if e.wrote != nil {
+		*e.wrote = true
+	}
+	return 0, e.err
+}
+
+func TestHandleNonStreamingResponse_Errors(t *testing.T) {
+	client := NewChatClient("http://localhost", "token")
+
+	t.Run("io.ReadAll error", func(t *testing.T) {
+		resp := &http.Response{Body: &errReader{err: errors.New("read fail")}}
+		_, err := client.handleNonStreamingResponse(resp, false)
+		if err == nil || !strings.Contains(err.Error(), "failed to read response body") {
+			t.Errorf("expected read error, got %v", err)
+		}
+	})
+
+	t.Run("json.Unmarshal error", func(t *testing.T) {
+		resp := &http.Response{Body: io.NopCloser(bytes.NewBufferString("not json"))}
+		_, err := client.handleNonStreamingResponse(resp, false)
+		if err == nil || !strings.Contains(err.Error(), "failed to parse response") {
+			t.Errorf("expected parse error, got %v", err)
+		}
+	})
 }
