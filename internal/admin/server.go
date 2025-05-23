@@ -41,6 +41,7 @@ type APIClientInterface interface {
 	GetDashboardData(ctx context.Context) (any, error)
 	GetProjects(ctx context.Context, page, pageSize int) ([]Project, *Pagination, error)
 	GetTokens(ctx context.Context, projectID string, page, pageSize int) ([]Token, *Pagination, error)
+	CreateToken(ctx context.Context, projectID string, durationHours int) (*TokenCreateResponse, error)
 }
 
 // Server represents the Admin UI HTTP server.
@@ -379,7 +380,7 @@ func (s *Server) handleTokensList(c *gin.Context) {
 
 func (s *Server) handleTokensNew(c *gin.Context) {
 	// Get API client from context
-	apiClient := c.MustGet("apiClient").(*APIClient)
+	apiClient := c.MustGet("apiClient").(APIClientInterface)
 
 	projects, _, err := apiClient.GetProjects(c.Request.Context(), 1, 100)
 	if err != nil {
@@ -397,7 +398,7 @@ func (s *Server) handleTokensNew(c *gin.Context) {
 
 func (s *Server) handleTokensCreate(c *gin.Context) {
 	// Get API client from context
-	apiClient := c.MustGet("apiClient").(*APIClient)
+	apiClient := c.MustGet("apiClient").(APIClientInterface)
 
 	var req struct {
 		ProjectID     string `form:"project_id" binding:"required"`

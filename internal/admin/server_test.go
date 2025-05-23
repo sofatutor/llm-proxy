@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sofatutor/llm-proxy/internal/config"
@@ -90,6 +92,13 @@ func (m *mockAPIClient) GetTokens(ctx context.Context, projectID string, page, p
 	return []Token{{ProjectID: "1", IsActive: true}}, &Pagination{Page: page, PageSize: pageSize, TotalItems: 1, TotalPages: 1, HasNext: false, HasPrev: false}, nil
 }
 
+func (m *mockAPIClient) CreateToken(ctx context.Context, projectID string, durationHours int) (*TokenCreateResponse, error) {
+	if m.DashboardErr != nil {
+		return nil, m.DashboardErr
+	}
+	return &TokenCreateResponse{Token: "tok-1234", ExpiresAt: time.Now().Add(time.Duration(durationHours) * time.Hour)}, nil
+}
+
 var _ APIClientInterface = (*mockAPIClient)(nil) // Ensure interface compliance
 
 func TestServer_HandleDashboard(t *testing.T) {
@@ -147,6 +156,50 @@ func TestServer_HandleTokensList(t *testing.T) {
 	})
 
 	req, _ := http.NewRequest("GET", "/tokens", nil)
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleTokensNew(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob("testdata/tokens-*.html")
+
+	s.engine.GET("/tokens/new", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleTokensNew(c)
+	})
+
+	req, _ := http.NewRequest("GET", "/tokens/new", nil)
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleTokensCreate(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob("testdata/tokens-*.html")
+
+	s.engine.POST("/tokens", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleTokensCreate(c)
+	})
+
+	form := strings.NewReader("project_id=1&duration_hours=24")
+	req, _ := http.NewRequest("POST", "/tokens", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
 	s.engine.ServeHTTP(w, req)
 
