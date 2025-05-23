@@ -972,3 +972,81 @@ func TestServer_authMiddleware_NoSession(t *testing.T) {
 		t.Errorf("expected 303 redirect for missing session, got %d", w.Code)
 	}
 }
+
+func TestServer_authMiddleware_WithSession(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	cfg := &config.Config{AdminUI: config.AdminUIConfig{APIBaseURL: "http://localhost:1234"}}
+	s := &Server{engine: gin.New(), config: cfg}
+
+	// Add sessions middleware with a dummy cookie store
+	store := cookie.NewStore([]byte("secret"))
+	s.engine.Use(sessions.Sessions("mysession", store))
+	// Add auth middleware
+	s.engine.Use(s.authMiddleware())
+
+	// Add a test route
+	s.engine.GET("/protected", func(c *gin.Context) {
+		client, exists := c.Get("apiClient")
+		if !exists || client == nil {
+			c.String(http.StatusInternalServerError, "apiClient not set")
+			return
+		}
+		c.String(http.StatusOK, "ok")
+	})
+
+	// First, create a session by hitting a dummy login route
+	s.engine.GET("/set-session", func(c *gin.Context) {
+		sess := sessions.Default(c)
+		sess.Set("token", "test-token")
+		sess.Save()
+		c.String(http.StatusOK, "session set")
+	})
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "/set-session", nil)
+	s.engine.ServeHTTP(w, r)
+
+	// Extract session cookie
+	cookies := w.Result().Cookies()
+
+	// Now, make a request to the protected route with the session cookie
+	w2 := httptest.NewRecorder()
+	r2, _ := http.NewRequest("GET", "/protected", nil)
+	for _, cookie := range cookies {
+		r2.AddCookie(cookie)
+	}
+	s.engine.ServeHTTP(w2, r2)
+	if w2.Code != http.StatusOK {
+		t.Errorf("expected 200 for valid session, got %d", w2.Code)
+	}
+}
+
+func TestServer_validateTokenWithAPI(t *testing.T) {
+	// Success case: returns 200
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/manage/projects" && r.Header.Get("Authorization") == "Bearer valid-token" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer ts.Close()
+
+	s := &Server{config: &config.Config{AdminUI: config.AdminUIConfig{APIBaseURL: ts.URL}}}
+	ok := s.validateTokenWithAPI(context.Background(), "valid-token")
+	if !ok {
+		t.Error("validateTokenWithAPI should return true for 200 OK")
+	}
+
+	// Error case: returns 401
+	fail := s.validateTokenWithAPI(context.Background(), "bad-token")
+	if fail {
+		t.Error("validateTokenWithAPI should return false for non-2xx status")
+	}
+
+	// Error case: request creation fails (invalid URL)
+	s2 := &Server{config: &config.Config{AdminUI: config.AdminUIConfig{APIBaseURL: "://bad-url"}}}
+	if s2.validateTokenWithAPI(context.Background(), "any") {
+		t.Error("validateTokenWithAPI should return false for request error")
+	}
+}
