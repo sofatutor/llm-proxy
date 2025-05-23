@@ -39,7 +39,7 @@ func getSessionSecret(cfg *config.Config) []byte {
 // Only the methods needed by handlers are included
 
 type APIClientInterface interface {
-	GetDashboardData(ctx context.Context) (any, error)
+	GetDashboardData(ctx context.Context) (*DashboardData, error)
 	GetProjects(ctx context.Context, page, pageSize int) ([]Project, *Pagination, error)
 	GetTokens(ctx context.Context, projectID string, page, pageSize int) ([]Token, *Pagination, error)
 	CreateToken(ctx context.Context, projectID string, durationHours int) (*TokenCreateResponse, error)
