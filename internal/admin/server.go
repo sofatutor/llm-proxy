@@ -127,23 +127,14 @@ func (s *Server) setupRoutes() {
 	// Serve static files (CSS, JS, images)
 	s.engine.Static("/static", "./web/static")
 
-	// Load HTML templates with custom functions
+	// Load HTML templates with custom functions using glob patterns
 	s.engine.SetFuncMap(s.templateFuncs())
 	td := s.config.AdminUI.TemplateDir
-	s.engine.LoadHTMLFiles(
-		filepath.Join(td, "base.html"),
-		filepath.Join(td, "dashboard.html"),
-		filepath.Join(td, "simple-dashboard.html"),
-		filepath.Join(td, "error.html"),
-		filepath.Join(td, "login.html"),
-		filepath.Join(td, "projects-list-complete.html"),
-		filepath.Join(td, "tokens-list-complete.html"),
-		filepath.Join(td, "projects/new.html"),
-		filepath.Join(td, "projects/show.html"),
-		filepath.Join(td, "projects/edit.html"),
-		filepath.Join(td, "tokens/new.html"),
-		filepath.Join(td, "tokens/created.html"),
-	)
+
+	// Load all templates - both root level and subdirectories
+	templGlob := template.Must(template.New("").Funcs(s.templateFuncs()).ParseGlob(filepath.Join(td, "*.html")))
+	templGlob = template.Must(templGlob.ParseGlob(filepath.Join(td, "*/*.html")))
+	s.engine.SetHTMLTemplate(templGlob)
 
 	// Authentication routes (no middleware)
 	auth := s.engine.Group("/auth")
@@ -243,8 +234,9 @@ func (s *Server) handleProjectsList(c *gin.Context) {
 }
 
 func (s *Server) handleProjectsNew(c *gin.Context) {
-	c.HTML(http.StatusOK, "projects/new.html", gin.H{
-		"title": "Create Project",
+	c.HTML(http.StatusOK, "base.html", gin.H{
+		"title":    "Create Project",
+		"template": "projects/new",
 	})
 }
 
@@ -258,18 +250,20 @@ func (s *Server) handleProjectsCreate(c *gin.Context) {
 	}
 
 	if err := c.ShouldBind(&req); err != nil {
-		c.HTML(http.StatusBadRequest, "projects/new.html", gin.H{
-			"title": "Create Project",
-			"error": "Please fill in all required fields",
+		c.HTML(http.StatusBadRequest, "base.html", gin.H{
+			"title":    "Create Project",
+			"template": "projects/new",
+			"error":    "Please fill in all required fields",
 		})
 		return
 	}
 
 	project, err := apiClient.CreateProject(c.Request.Context(), req.Name, req.OpenAIAPIKey)
 	if err != nil {
-		c.HTML(http.StatusInternalServerError, "projects/new.html", gin.H{
-			"title": "Create Project",
-			"error": fmt.Sprintf("Failed to create project: %v", err),
+		c.HTML(http.StatusInternalServerError, "base.html", gin.H{
+			"title":    "Create Project",
+			"template": "projects/new",
+			"error":    fmt.Sprintf("Failed to create project: %v", err),
 		})
 		return
 	}
@@ -291,9 +285,10 @@ func (s *Server) handleProjectsShow(c *gin.Context) {
 		return
 	}
 
-	c.HTML(http.StatusOK, "projects/show.html", gin.H{
-		"title":   "Project Details",
-		"project": project,
+	c.HTML(http.StatusOK, "base.html", gin.H{
+		"title":    "Project Details",
+		"template": "projects/show",
+		"project":  project,
 	})
 }
 
@@ -311,9 +306,10 @@ func (s *Server) handleProjectsEdit(c *gin.Context) {
 		return
 	}
 
-	c.HTML(http.StatusOK, "projects/edit.html", gin.H{
-		"title":   "Edit Project",
-		"project": project,
+	c.HTML(http.StatusOK, "base.html", gin.H{
+		"title":    "Edit Project",
+		"template": "projects/edit",
+		"project":  project,
 	})
 }
 
@@ -399,8 +395,9 @@ func (s *Server) handleTokensNew(c *gin.Context) {
 		return
 	}
 
-	c.HTML(http.StatusOK, "tokens/new.html", gin.H{
+	c.HTML(http.StatusOK, "base.html", gin.H{
 		"title":    "Generate Token",
+		"template": "tokens/new",
 		"projects": projects,
 	})
 }
@@ -416,8 +413,9 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 
 	if err := c.ShouldBind(&req); err != nil {
 		projects, _, _ := apiClient.GetProjects(c.Request.Context(), 1, 100)
-		c.HTML(http.StatusBadRequest, "tokens/new.html", gin.H{
+		c.HTML(http.StatusBadRequest, "base.html", gin.H{
 			"title":    "Generate Token",
+			"template": "tokens/new",
 			"projects": projects,
 			"error":    "Please fill in all required fields correctly",
 		})
@@ -427,17 +425,19 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 	token, err := apiClient.CreateToken(c.Request.Context(), req.ProjectID, req.DurationHours)
 	if err != nil {
 		projects, _, _ := apiClient.GetProjects(c.Request.Context(), 1, 100)
-		c.HTML(http.StatusInternalServerError, "tokens/new.html", gin.H{
+		c.HTML(http.StatusInternalServerError, "base.html", gin.H{
 			"title":    "Generate Token",
+			"template": "tokens/new",
 			"projects": projects,
 			"error":    fmt.Sprintf("Failed to create token: %v", err),
 		})
 		return
 	}
 
-	c.HTML(http.StatusOK, "tokens/created.html", gin.H{
-		"title": "Token Created",
-		"token": token,
+	c.HTML(http.StatusOK, "base.html", gin.H{
+		"title":    "Token Created",
+		"template": "tokens/created",
+		"token":    token,
 	})
 }
 

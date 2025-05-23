@@ -89,7 +89,19 @@
         </div>
         {{ end }}
 
-        {{ template "content" . }}
+        {{ if eq .template "projects/new" }}
+            {{ template "projects-new" . }}
+        {{ else if eq .template "projects/show" }}
+            {{ template "projects-show" . }}
+        {{ else if eq .template "projects/edit" }}
+            {{ template "projects-edit" . }}
+        {{ else if eq .template "tokens/new" }}
+            {{ template "tokens-new" . }}
+        {{ else if eq .template "tokens/created" }}
+            {{ template "tokens-created" . }}
+        {{ else }}
+            {{ template "content" . }}
+        {{ end }}
     </div>
 
     <!-- Footer -->
