@@ -615,6 +615,30 @@ func TestAPIClient_UpdateProject_Errors(t *testing.T) {
 	if err == nil {
 		t.Error("expected network error, got nil")
 	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"fail"}`))
+	}))
+	defer server.Close()
+	client2 := NewAPIClient(server.URL, "token")
+	_, err = client2.UpdateProject(ctx, "id", "foo", "bar")
+	if err == nil || !strings.Contains(err.Error(), "fail") {
+		t.Errorf("expected API error, got %v", err)
+	}
+
+	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte("not json")); err != nil {
+			t.Errorf("failed to write not json: %v", err)
+		}
+	}))
+	defer server2.Close()
+	client3 := NewAPIClient(server2.URL, "token")
+	_, err = client3.UpdateProject(ctx, "id", "foo", "bar")
+	if err == nil || !strings.Contains(err.Error(), "decode") {
+		t.Errorf("expected decode error, got %v", err)
+	}
 }
 
 func TestAPIClient_DeleteProject_Errors(t *testing.T) {
@@ -624,6 +648,50 @@ func TestAPIClient_DeleteProject_Errors(t *testing.T) {
 	if err == nil {
 		t.Error("expected network error, got nil")
 	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"fail"}`))
+	}))
+	defer server.Close()
+	client2 := NewAPIClient(server.URL, "token")
+	err = client2.DeleteProject(ctx, "id")
+	if err == nil || !strings.Contains(err.Error(), "fail") {
+		t.Errorf("expected API error, got %v", err)
+	}
+}
+
+func TestAPIClient_GetTokens_Errors(t *testing.T) {
+	client := NewAPIClient("http://invalid-host", "token")
+	ctx := context.Background()
+	_, _, err := client.GetTokens(ctx, "id", 1, 1)
+	if err == nil {
+		t.Error("expected network error, got nil")
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"fail"}`))
+	}))
+	defer server.Close()
+	client2 := NewAPIClient(server.URL, "token")
+	_, _, err = client2.GetTokens(ctx, "id", 1, 1)
+	if err == nil || !strings.Contains(err.Error(), "fail") {
+		t.Errorf("expected API error, got %v", err)
+	}
+
+	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte("not json")); err != nil {
+			t.Errorf("failed to write not json: %v", err)
+		}
+	}))
+	defer server2.Close()
+	client3 := NewAPIClient(server2.URL, "token")
+	_, _, err = client3.GetTokens(ctx, "id", 1, 1)
+	if err == nil || !strings.Contains(err.Error(), "decode") {
+		t.Errorf("expected decode error, got %v", err)
+	}
 }
 
 func TestAPIClient_CreateToken_Errors(t *testing.T) {
@@ -632,5 +700,29 @@ func TestAPIClient_CreateToken_Errors(t *testing.T) {
 	_, err := client.CreateToken(ctx, "id", 1)
 	if err == nil {
 		t.Error("expected network error, got nil")
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"fail"}`))
+	}))
+	defer server.Close()
+	client2 := NewAPIClient(server.URL, "token")
+	_, err = client2.CreateToken(ctx, "id", 1)
+	if err == nil || !strings.Contains(err.Error(), "fail") {
+		t.Errorf("expected API error, got %v", err)
+	}
+
+	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte("not json")); err != nil {
+			t.Errorf("failed to write not json: %v", err)
+		}
+	}))
+	defer server2.Close()
+	client3 := NewAPIClient(server2.URL, "token")
+	_, err = client3.CreateToken(ctx, "id", 1)
+	if err == nil || !strings.Contains(err.Error(), "decode") {
+		t.Errorf("expected decode error, got %v", err)
 	}
 }
