@@ -954,6 +954,40 @@ func TestServer_setupRoutes_Coverage(t *testing.T) {
 	srv.setupRoutes()
 }
 
+func TestServer_Start_Coverage(t *testing.T) {
+	if _, err := os.Stat("web/templates/base.html"); err != nil {
+		t.Skip("Skipping: required template file not found")
+	}
+	cfg := &config.Config{
+		AdminUI: config.AdminUIConfig{
+			APIBaseURL:      "http://localhost:1234",
+			ManagementToken: "token",
+			ListenAddr:      ":0", // Use port 0 for automatic port assignment
+		},
+		LogLevel: "info",
+	}
+	srv, err := NewServer(cfg)
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+	
+	// Start server in goroutine and immediately shut it down
+	go func() {
+		// This will block, so we run it in a goroutine
+		srv.Start()
+	}()
+	
+	// Give it a moment to start
+	time.Sleep(100 * time.Millisecond)
+	
+	// Shut it down
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		t.Errorf("Shutdown() error = %v", err)
+	}
+}
+
 func TestServer_authMiddleware_NoSession(t *testing.T) {
 	if _, err := os.Stat("web/templates/base.html"); err != nil {
 		t.Skip("Skipping: required template file not found")

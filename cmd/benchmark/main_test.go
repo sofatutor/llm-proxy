@@ -27,8 +27,8 @@ func TestMainWithError(t *testing.T) {
 	// Save and restore os.Args and osExit
 	origArgs := os.Args
 	origExit := osExit
-	defer func() { 
-		os.Args = origArgs 
+	defer func() {
+		os.Args = origArgs
 		osExit = origExit
 	}()
 
@@ -42,7 +42,7 @@ func TestMainWithError(t *testing.T) {
 
 	// Set invalid args to trigger error
 	os.Args = []string{"llm-proxy-benchmark", "--invalid-flag"}
-	
+
 	// Capture stdout
 	old := os.Stdout
 	r, w, _ := os.Pipe()
@@ -50,11 +50,11 @@ func TestMainWithError(t *testing.T) {
 
 	main()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if !exitCalled {
@@ -81,11 +81,11 @@ func TestBenchmarkCommand(t *testing.T) {
 	os.Args = []string{"llm-proxy-benchmark", "benchmark"}
 	main()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	expected := "Benchmark command not yet implemented"
@@ -107,11 +107,11 @@ func TestRootCommandHelp(t *testing.T) {
 	os.Args = []string{"llm-proxy-benchmark"}
 	main()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if !strings.Contains(output, "CLI tool for working with the LLM Proxy") {
@@ -132,11 +132,11 @@ func TestOpenAICommand(t *testing.T) {
 	os.Args = []string{"llm-proxy-benchmark", "openai", "--help"}
 	main()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if !strings.Contains(output, "Interact with OpenAI services") {
