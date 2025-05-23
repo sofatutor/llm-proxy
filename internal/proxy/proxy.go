@@ -179,6 +179,19 @@ func (p *TransparentProxy) processRequestHeaders(req *http.Request) {
 
 // modifyResponse processes the response before returning it to the client
 func (p *TransparentProxy) modifyResponse(res *http.Response) error {
+	// Remove any upstream CORS headers to prevent conflicts
+	corsHeaders := []string{
+		"Access-Control-Allow-Origin",
+		"Access-Control-Allow-Methods",
+		"Access-Control-Allow-Headers",
+		"Access-Control-Allow-Credentials",
+		"Access-Control-Expose-Headers",
+		"Access-Control-Max-Age",
+	}
+	for _, header := range corsHeaders {
+		res.Header.Del(header)
+	}
+
 	// Add proxy headers
 	res.Header.Set("X-Proxy", "llm-proxy")
 	res.Header.Set("X-Proxy-Version", version)
@@ -188,6 +201,14 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 	if req == nil {
 		p.logger.Warn("Response has no request")
 		return nil
+	}
+
+	// Add CORS headers if the original request had an Origin header
+	if origin := req.Header.Get("Origin"); origin != "" {
+		res.Header.Set("Access-Control-Allow-Origin", "*")
+		res.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		res.Header.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With")
+		res.Header.Set("Access-Control-Expose-Headers", "X-Request-ID, X-Proxy-ID, X-LLM-Proxy-Remote-Duration, X-LLM-Proxy-Remote-Duration-Ms")
 	}
 
 	// Get project ID from context
@@ -439,19 +460,19 @@ func (p *TransparentProxy) Handler() http.Handler {
 		// Treat 502, 503, 504 as transient (including retry middleware's 502)
 		return status == http.StatusBadGateway || status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout
 	})(RetryMiddleware(2, 100*time.Millisecond)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Only set CORS headers if Origin header is present
-		if origin := r.Header.Get("Origin"); origin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With")
-		}
-
 		// Short-circuit OPTIONS requests: no auth required, respond with 204 and CORS headers
 		if r.Method == http.MethodOptions {
-			if reqHeaders := r.Header.Get("Access-Control-Request-Headers"); reqHeaders != "" {
-				w.Header().Set("Access-Control-Allow-Headers", reqHeaders)
-			} else {
-				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With")
+			// Set CORS headers for preflight requests
+			if origin := r.Header.Get("Origin"); origin != "" {
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+				if reqHeaders := r.Header.Get("Access-Control-Request-Headers"); reqHeaders != "" {
+					w.Header().Set("Access-Control-Allow-Headers", reqHeaders)
+				} else {
+					w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With")
+				}
+				w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID, X-Proxy-ID, X-LLM-Proxy-Remote-Duration, X-LLM-Proxy-Remote-Duration-Ms")
+				w.Header().Set("Access-Control-Max-Age", "86400") // 24 hours
 			}
 			w.WriteHeader(http.StatusNoContent)
 			return
