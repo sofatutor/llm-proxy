@@ -981,11 +981,21 @@ func TestServer_authMiddleware_WithSession(t *testing.T) {
 	// Add sessions middleware with a dummy cookie store
 	store := cookie.NewStore([]byte("secret"))
 	s.engine.Use(sessions.Sessions("mysession", store))
-	// Add auth middleware
-	s.engine.Use(s.authMiddleware())
 
-	// Add a test route
-	s.engine.GET("/protected", func(c *gin.Context) {
+	// Add a test route without auth middleware for setting session
+	s.engine.GET("/set-session", func(c *gin.Context) {
+		sess := sessions.Default(c)
+		sess.Set("token", "test-token")
+		if err := sess.Save(); err != nil {
+			t.Errorf("failed to save session: %v", err)
+		}
+		c.String(http.StatusOK, "session set")
+	})
+
+	// Add protected route group with auth middleware
+	protected := s.engine.Group("/")
+	protected.Use(s.authMiddleware())
+	protected.GET("/protected", func(c *gin.Context) {
 		client, exists := c.Get("apiClient")
 		if !exists || client == nil {
 			c.String(http.StatusInternalServerError, "apiClient not set")
@@ -994,20 +1004,16 @@ func TestServer_authMiddleware_WithSession(t *testing.T) {
 		c.String(http.StatusOK, "ok")
 	})
 
-	// First, create a session by hitting a dummy login route
-	s.engine.GET("/set-session", func(c *gin.Context) {
-		sess := sessions.Default(c)
-		sess.Set("token", "test-token")
-		sess.Save()
-		c.String(http.StatusOK, "session set")
-	})
-
+	// First, create a session by hitting the login route
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "/set-session", nil)
 	s.engine.ServeHTTP(w, r)
 
 	// Extract session cookie
 	cookies := w.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("no session cookie was set")
+	}
 
 	// Now, make a request to the protected route with the session cookie
 	w2 := httptest.NewRecorder()
@@ -1017,7 +1023,7 @@ func TestServer_authMiddleware_WithSession(t *testing.T) {
 	}
 	s.engine.ServeHTTP(w2, r2)
 	if w2.Code != http.StatusOK {
-		t.Errorf("expected 200 for valid session, got %d", w2.Code)
+		t.Errorf("expected 200 for valid session, got %d. Response: %s", w2.Code, w2.Body.String())
 	}
 }
 
