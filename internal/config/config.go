@@ -66,6 +66,7 @@ type AdminUIConfig struct {
 	APIBaseURL      string // Base URL of the Management API
 	ManagementToken string // Token for accessing Management API
 	Enabled         bool   // Whether Admin UI is enabled
+	TemplateDir     string // Directory for HTML templates (default: "web/templates")
 }
 
 // New creates a new configuration with values from environment variables.
@@ -103,6 +104,7 @@ func New() (*Config, error) {
 			APIBaseURL:      getEnvString("ADMIN_UI_API_BASE_URL", "http://localhost:8080"),
 			ManagementToken: getEnvString("MANAGEMENT_TOKEN", ""),
 			Enabled:         getEnvBool("ADMIN_UI_ENABLED", true),
+			TemplateDir:     getEnvString("ADMIN_UI_TEMPLATE_DIR", "web/templates"),
 		},
 
 		// Logging defaults
@@ -244,6 +246,7 @@ func DefaultConfig() *Config {
 			APIBaseURL:      "http://localhost:8080",
 			ManagementToken: "",
 			Enabled:         true,
+			TemplateDir:     "web/templates",
 		},
 
 		// Logging defaults

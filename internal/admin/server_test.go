@@ -25,15 +25,21 @@ func TestGetSessionSecret(t *testing.T) {
 	}
 }
 
-func TestNewServer_Minimal(t *testing.T) {
-	if _, err := os.Stat("web/templates/base.html"); err != nil {
-		t.Skip("Skipping: required template file not found")
+// testTemplateDir returns the correct template directory path depending on CWD
+func testTemplateDir() string {
+	if _, err := os.Stat("internal/admin/testdata/base.html"); err == nil {
+		return "internal/admin/testdata"
 	}
+	return "testdata"
+}
+
+func TestNewServer_Minimal(t *testing.T) {
 	cfg := &config.Config{
 		AdminUI: config.AdminUIConfig{
 			APIBaseURL:      "http://localhost:1234",
 			ManagementToken: "token",
 			ListenAddr:      ":0",
+			TemplateDir:     testTemplateDir(),
 		},
 		LogLevel: "info",
 	}
@@ -904,15 +910,12 @@ type fakeError struct{ msg string }
 func (e *fakeError) Error() string { return e.msg }
 
 func TestNewServer_ErrorCases(t *testing.T) {
-	if _, err := os.Stat("web/templates/base.html"); err != nil {
-		t.Skip("Skipping: required template file not found")
-	}
-	// Invalid config: missing ListenAddr
 	cfg := &config.Config{
 		AdminUI: config.AdminUIConfig{
 			APIBaseURL:      "http://localhost:1234",
 			ManagementToken: "token",
 			ListenAddr:      "",
+			TemplateDir:     testTemplateDir(),
 		},
 		LogLevel: "info",
 	}
@@ -921,12 +924,12 @@ func TestNewServer_ErrorCases(t *testing.T) {
 		t.Errorf("NewServer() with empty ListenAddr should not error, got %v", err)
 	}
 
-	// Invalid config: missing ManagementToken
 	cfg2 := &config.Config{
 		AdminUI: config.AdminUIConfig{
 			APIBaseURL:      "http://localhost:1234",
 			ManagementToken: "",
 			ListenAddr:      ":0",
+			TemplateDir:     testTemplateDir(),
 		},
 		LogLevel: "info",
 	}
@@ -937,15 +940,13 @@ func TestNewServer_ErrorCases(t *testing.T) {
 }
 
 func TestServer_Start_Error(t *testing.T) {
-	if _, err := os.Stat("web/templates/base.html"); err != nil {
-		t.Skip("Skipping: required template file not found")
-	}
 	// Start with invalid address to force error
 	cfg := &config.Config{
 		AdminUI: config.AdminUIConfig{
 			APIBaseURL:      "http://localhost:1234",
 			ManagementToken: "token",
 			ListenAddr:      "invalid:address",
+			TemplateDir:     testTemplateDir(),
 		},
 		LogLevel: "info",
 	}
@@ -961,34 +962,30 @@ func TestServer_Start_Error(t *testing.T) {
 }
 
 func TestServer_setupRoutes_Coverage(t *testing.T) {
-	if _, err := os.Stat("web/templates/base.html"); err != nil {
-		t.Skip("Skipping: required template file not found")
-	}
 	cfg := &config.Config{
 		AdminUI: config.AdminUIConfig{
 			APIBaseURL:      "http://localhost:1234",
 			ManagementToken: "token",
 			ListenAddr:      ":0",
+			TemplateDir:     testTemplateDir(),
 		},
 		LogLevel: "info",
 	}
-	srv, err := NewServer(cfg)
-	if err != nil {
-		t.Fatalf("NewServer() error = %v", err)
+	// Use a fresh gin.Engine to avoid double route registration
+	srv := &Server{
+		config: cfg,
+		engine: gin.New(),
 	}
-	// Call setupRoutes again to cover the method
 	srv.setupRoutes()
 }
 
 func TestServer_Start_Coverage(t *testing.T) {
-	if _, err := os.Stat("web/templates/base.html"); err != nil {
-		t.Skip("Skipping: required template file not found")
-	}
 	cfg := &config.Config{
 		AdminUI: config.AdminUIConfig{
 			APIBaseURL:      "http://localhost:1234",
 			ManagementToken: "token",
-			ListenAddr:      ":0", // Use port 0 for automatic port assignment
+			ListenAddr:      ":0",
+			TemplateDir:     testTemplateDir(),
 		},
 		LogLevel: "info",
 	}
@@ -1016,11 +1013,11 @@ func TestServer_Start_Coverage(t *testing.T) {
 }
 
 func TestServer_authMiddleware_NoSession(t *testing.T) {
-	if _, err := os.Stat("web/templates/base.html"); err != nil {
-		t.Skip("Skipping: required template file not found")
-	}
 	gin.SetMode(gin.TestMode)
-	s := &Server{engine: gin.New(), config: &config.Config{AdminUI: config.AdminUIConfig{APIBaseURL: "http://localhost:1234"}}}
+	s := &Server{engine: gin.New(), config: &config.Config{AdminUI: config.AdminUIConfig{APIBaseURL: "http://localhost:1234", TemplateDir: "internal/admin/testdata"}}}
+	// Add sessions middleware with a dummy cookie store
+	store := cookie.NewStore([]byte("secret"))
+	s.engine.Use(sessions.Sessions("mysession", store))
 	s.engine.Use(s.authMiddleware())
 	s.engine.GET("/protected", func(c *gin.Context) {
 		c.String(http.StatusOK, "ok")
@@ -1036,7 +1033,7 @@ func TestServer_authMiddleware_NoSession(t *testing.T) {
 
 func TestServer_authMiddleware_WithSession(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	cfg := &config.Config{AdminUI: config.AdminUIConfig{APIBaseURL: "http://localhost:1234"}}
+	cfg := &config.Config{AdminUI: config.AdminUIConfig{APIBaseURL: "http://localhost:1234", TemplateDir: "internal/admin/testdata"}}
 	s := &Server{engine: gin.New(), config: cfg}
 
 	// Add sessions middleware with a dummy cookie store
@@ -1153,4 +1150,56 @@ func TestServer_templateFuncs_EdgeCases(t *testing.T) {
 		_ = funcs["obfuscateAPIKey"].(func(string) string)("")
 		_ = funcs["obfuscateToken"].(func(string) string)("")
 	})
+}
+
+func TestServer_LoadAllTemplates_Coverage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	td := testTemplateDir()
+	// Load all templates as in production
+	s.engine.LoadHTMLFiles(
+		td+"/base.html",
+		td+"/dashboard.html",
+		td+"/simple-dashboard.html",
+		td+"/error.html",
+		td+"/login.html",
+		td+"/projects-list-complete.html",
+		td+"/tokens-list-complete.html",
+		td+"/projects/new.html",
+		td+"/projects/show.html",
+		td+"/projects/edit.html",
+		td+"/tokens/new.html",
+		td+"/tokens/created.html",
+	)
+	// Render error.html
+	s.engine.GET("/err", func(c *gin.Context) {
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{"error": "test error"})
+	})
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/err", nil)
+	s.engine.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", w.Code)
+	}
+	// Render dashboard.html
+	s.engine.GET("/dashboard", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "dashboard.html", gin.H{"title": "Dashboard"})
+	})
+	w2 := httptest.NewRecorder()
+	req2, _ := http.NewRequest("GET", "/dashboard", nil)
+	s.engine.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w2.Code)
+	}
+	// Render base.html
+	s.engine.GET("/base", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "base.html", gin.H{"title": "Base"})
+	})
+	w3 := httptest.NewRecorder()
+	req3, _ := http.NewRequest("GET", "/base", nil)
+	s.engine.ServeHTTP(w3, req3)
+	if w3.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w3.Code)
+	}
 }

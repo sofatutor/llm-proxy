@@ -9,6 +9,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -128,19 +129,20 @@ func (s *Server) setupRoutes() {
 
 	// Load HTML templates with custom functions
 	s.engine.SetFuncMap(s.templateFuncs())
+	td := s.config.AdminUI.TemplateDir
 	s.engine.LoadHTMLFiles(
-		"web/templates/base.html",
-		"web/templates/dashboard.html",
-		"web/templates/simple-dashboard.html",
-		"web/templates/error.html",
-		"web/templates/login.html",
-		"web/templates/projects-list-complete.html",
-		"web/templates/tokens-list-complete.html",
-		"web/templates/projects/new.html",
-		"web/templates/projects/show.html",
-		"web/templates/projects/edit.html",
-		"web/templates/tokens/new.html",
-		"web/templates/tokens/created.html",
+		filepath.Join(td, "base.html"),
+		filepath.Join(td, "dashboard.html"),
+		filepath.Join(td, "simple-dashboard.html"),
+		filepath.Join(td, "error.html"),
+		filepath.Join(td, "login.html"),
+		filepath.Join(td, "projects-list-complete.html"),
+		filepath.Join(td, "tokens-list-complete.html"),
+		filepath.Join(td, "projects/new.html"),
+		filepath.Join(td, "projects/show.html"),
+		filepath.Join(td, "projects/edit.html"),
+		filepath.Join(td, "tokens/new.html"),
+		filepath.Join(td, "tokens/created.html"),
 	)
 
 	// Authentication routes (no middleware)
