@@ -514,7 +514,7 @@ func TestManager_GetTokenInfo_ErrorsAndEdgeCases(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 	if info == nil || info.MaxRequests != nil || info.ExpiresAt != nil {
-		// Should be unlimited requests and no expiration
+		t.Errorf("expected unlimited requests and no expiration, got %+v", info)
 	}
 }
 

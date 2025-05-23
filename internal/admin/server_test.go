@@ -833,10 +833,7 @@ func TestServer_HandleLogin(t *testing.T) {
 
 	// Inject ValidateTokenWithAPI for test
 	s.ValidateTokenWithAPI = func(_ context.Context, token string) bool {
-		if token == "valid-token" {
-			return true
-		}
-		return false
+		return token == "valid-token"
 	}
 
 	s.engine.POST("/auth/login", func(c *gin.Context) {

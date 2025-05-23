@@ -596,7 +596,9 @@ func TestAPIClient_CreateProject_Errors(t *testing.T) {
 
 	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("not json"))
+		if _, err := w.Write([]byte("not json")); err != nil {
+			t.Errorf("failed to write not json: %v", err)
+		}
 	}))
 	defer server2.Close()
 	client3 := NewAPIClient(server2.URL, "token")
