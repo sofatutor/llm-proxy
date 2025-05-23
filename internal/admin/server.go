@@ -42,6 +42,9 @@ type APIClientInterface interface {
 	GetProjects(ctx context.Context, page, pageSize int) ([]Project, *Pagination, error)
 	GetTokens(ctx context.Context, projectID string, page, pageSize int) ([]Token, *Pagination, error)
 	CreateToken(ctx context.Context, projectID string, durationHours int) (*TokenCreateResponse, error)
+	GetProject(ctx context.Context, projectID string) (*Project, error)
+	UpdateProject(ctx context.Context, projectID string, name string, openAIAPIKey string) (*Project, error)
+	DeleteProject(ctx context.Context, projectID string) error
 }
 
 // Server represents the Admin UI HTTP server.
@@ -270,7 +273,7 @@ func (s *Server) handleProjectsCreate(c *gin.Context) {
 
 func (s *Server) handleProjectsShow(c *gin.Context) {
 	// Get API client from context
-	apiClient := c.MustGet("apiClient").(*APIClient)
+	apiClient := c.MustGet("apiClient").(APIClientInterface)
 
 	id := c.Param("id")
 
@@ -290,7 +293,7 @@ func (s *Server) handleProjectsShow(c *gin.Context) {
 
 func (s *Server) handleProjectsEdit(c *gin.Context) {
 	// Get API client from context
-	apiClient := c.MustGet("apiClient").(*APIClient)
+	apiClient := c.MustGet("apiClient").(APIClientInterface)
 
 	id := c.Param("id")
 
@@ -310,7 +313,7 @@ func (s *Server) handleProjectsEdit(c *gin.Context) {
 
 func (s *Server) handleProjectsUpdate(c *gin.Context) {
 	// Get API client from context
-	apiClient := c.MustGet("apiClient").(*APIClient)
+	apiClient := c.MustGet("apiClient").(APIClientInterface)
 
 	id := c.Param("id")
 
@@ -339,7 +342,7 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 
 func (s *Server) handleProjectsDelete(c *gin.Context) {
 	// Get API client from context
-	apiClient := c.MustGet("apiClient").(*APIClient)
+	apiClient := c.MustGet("apiClient").(APIClientInterface)
 
 	id := c.Param("id")
 
