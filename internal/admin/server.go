@@ -33,6 +33,16 @@ func getSessionSecret(cfg *config.Config) []byte {
 	return []byte(cfg.AdminUI.ManagementToken + salt)
 }
 
+// APIClientInterface abstracts the API client for testability
+//go:generate mockgen -destination=mock_api_client.go -package=admin . APIClientInterface
+// Only the methods needed by handlers are included
+
+type APIClientInterface interface {
+	GetDashboardData(ctx context.Context) (any, error)
+	GetProjects(ctx context.Context, page, pageSize int) ([]Project, *Pagination, error)
+	GetTokens(ctx context.Context, projectID string, page, pageSize int) ([]Token, *Pagination, error)
+}
+
 // Server represents the Admin UI HTTP server.
 // It provides a web interface for managing projects and tokens
 // by communicating with the Management API.
@@ -182,10 +192,10 @@ func (s *Server) setupRoutes() {
 // Dashboard handlers
 func (s *Server) handleDashboard(c *gin.Context) {
 	// Get API client from context
-	apiClient := c.MustGet("apiClient").(*APIClient)
+	apiClientIface := c.MustGet("apiClient").(APIClientInterface)
 
 	// Get dashboard data from Management API
-	dashboardData, err := apiClient.GetDashboardData(c.Request.Context())
+	dashboardData, err := apiClientIface.GetDashboardData(c.Request.Context())
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to load dashboard data: %v", err),
@@ -202,7 +212,7 @@ func (s *Server) handleDashboard(c *gin.Context) {
 // Project handlers
 func (s *Server) handleProjectsList(c *gin.Context) {
 	// Get API client from context
-	apiClient := c.MustGet("apiClient").(*APIClient)
+	apiClient := c.MustGet("apiClient").(APIClientInterface)
 
 	page := getPageFromQuery(c, 1)
 	pageSize := getPageSizeFromQuery(c, 10)
@@ -346,7 +356,7 @@ func (s *Server) handleProjectsDelete(c *gin.Context) {
 // Token handlers
 func (s *Server) handleTokensList(c *gin.Context) {
 	// Get API client from context
-	apiClient := c.MustGet("apiClient").(*APIClient)
+	apiClient := c.MustGet("apiClient").(APIClientInterface)
 
 	page := getPageFromQuery(c, 1)
 	pageSize := getPageSizeFromQuery(c, 10)
