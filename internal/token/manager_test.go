@@ -34,6 +34,38 @@ func (s *CompleteStore) ListTokens(ctx context.Context) ([]TokenData, error) {
 	return nil, nil
 }
 
+type mockManagerStore struct {
+	tokenData TokenData
+	err       error
+}
+
+func (m *mockManagerStore) GetTokenByID(ctx context.Context, tokenID string) (TokenData, error) {
+	return m.tokenData, m.err
+}
+
+// Implement other required methods as no-ops
+func (m *mockManagerStore) IncrementTokenUsage(ctx context.Context, tokenID string) error { return nil }
+func (m *mockManagerStore) ResetTokenUsage(ctx context.Context, tokenID string) error     { return nil }
+func (m *mockManagerStore) UpdateTokenLimit(ctx context.Context, tokenID string, maxRequests *int) error {
+	return nil
+}
+func (m *mockManagerStore) CreateToken(ctx context.Context, token TokenData) error { return nil }
+func (m *mockManagerStore) DeleteToken(ctx context.Context, tokenID string) error  { return nil }
+func (m *mockManagerStore) RevokeToken(ctx context.Context, tokenID string) error  { return nil }
+func (m *mockManagerStore) RevokeBatchTokens(ctx context.Context, tokenIDs []string) (int, error) {
+	return 0, nil
+}
+func (m *mockManagerStore) RevokeProjectTokens(ctx context.Context, projectID string) (int, error) {
+	return 0, nil
+}
+func (m *mockManagerStore) RevokeExpiredTokens(ctx context.Context) (int, error) { return 0, nil }
+func (m *mockManagerStore) GetTokensByProjectID(ctx context.Context, projectID string) ([]TokenData, error) {
+	return nil, nil
+}
+func (m *mockManagerStore) ListTokens(ctx context.Context) ([]TokenData, error) {
+	return nil, nil
+}
+
 func TestManager_CreateToken(t *testing.T) {
 	ctx := context.Background()
 	store := &CompleteStore{
@@ -456,5 +488,59 @@ func TestManager_StartAutomaticRevocation(t *testing.T) {
 	tok, _ = store.GetTokenUnsafe(token.Token)
 	if tok.IsActive {
 		t.Errorf("Token should be inactive after automatic revocation")
+	}
+}
+
+func TestManager_GetTokenInfo_ErrorsAndEdgeCases(t *testing.T) {
+	ctx := context.Background()
+	m := &Manager{store: &mockManagerStore{err: errors.New("not found")}, validator: NewValidator(&mockManagerStore{err: errors.New("not found")})}
+	_, err := m.GetTokenInfo(ctx, "missing")
+	if err == nil {
+		t.Error("expected error for missing token, got nil")
+	}
+
+	// Edge case: unlimited requests, no expiration
+	token := TokenData{
+		Token:        "sk-1234567890ABCDEFGHijklmn",
+		IsActive:     true,
+		RequestCount: 0,
+		MaxRequests:  nil,
+		ExpiresAt:    nil,
+		CreatedAt:    time.Now(),
+	}
+	m2 := &Manager{store: &mockManagerStore{tokenData: token}, validator: NewValidator(&mockManagerStore{tokenData: token})}
+	info, err := m2.GetTokenInfo(ctx, token.Token)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if info == nil || info.MaxRequests != nil || info.ExpiresAt != nil {
+		// Should be unlimited requests and no expiration
+	}
+}
+
+func TestManager_GetTokenStats_ErrorsAndEdgeCases(t *testing.T) {
+	ctx := context.Background()
+	m := &Manager{store: &mockManagerStore{err: errors.New("not found")}, validator: NewValidator(&mockManagerStore{err: errors.New("not found")})}
+	_, err := m.GetTokenStats(ctx, "missing")
+	if err == nil {
+		t.Error("expected error for missing token, got nil")
+	}
+
+	// Edge case: unlimited requests, no expiration
+	token := TokenData{
+		Token:        "sk-1234567890ABCDEFGHijklmn",
+		IsActive:     true,
+		RequestCount: 0,
+		MaxRequests:  nil,
+		ExpiresAt:    nil,
+		CreatedAt:    time.Now(),
+	}
+	m2 := &Manager{store: &mockManagerStore{tokenData: token}, validator: NewValidator(&mockManagerStore{tokenData: token})}
+	stats, err := m2.GetTokenStats(ctx, token.Token)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if stats == nil || stats.RemainingCount != -1 || stats.TimeRemaining != -1 {
+		t.Errorf("expected unlimited requests and no expiration, got %+v", stats)
 	}
 }
