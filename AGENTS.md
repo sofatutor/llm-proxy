@@ -4,8 +4,9 @@
 
 > **Note on Git & GitHub Management:**
 > - **Always use standard `git` and GitHub CLI (`gh`) commands for all routine git and GitHub repository management (branching, committing, pushing, PR creation, merging, etc.).**
-> - **The MCP (Multi-Channel Proxy) tools should only be used for actions or data that are not easily accessible via standard commands, such as automated retrieval of review comments on a PR, or advanced API queries.**
+> - **The MCP tools should only be used for actions or data that are not easily accessible via standard commands, such as automated retrieval of review comments on a PR, or advanced API queries.**
 > - **Do not use the MCP for basic git/GitHub operations that are well-supported by `git` or `gh`.**
+> - **Create (or owerwrite) a temporary md file as NEW_PR.md or NEW_ISSUE.md and as for review. Then use this with gh as a body-file argument. After the issue/pr is created, delete the file.
 
 This file provides essential context and rules for both human and AI contributors working in this repository. It is adapted from the core working agreement in CLAUDE.md and is the primary source of truth for agent-driven development.
 
