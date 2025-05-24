@@ -122,9 +122,12 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 - Support streaming with Server-Sent Events
 
 ### 5. Logging System
- - Implement JSON Lines local logging
-- Create asynchronous worker for external logging
-- Extract metadata from responses
+- The proxy implements a canonical local logging system (JSON Lines, local file) for compliance, debugging, and fallback.
+- **Helicone** is integrated as an optional, asynchronous observability middleware. When enabled, it forwards request/response data to Helicone for advanced analytics and dashboards.
+- All Helicone operations are performed asynchronously (in a goroutine or via a worker) to ensure minimum added latency.
+- Prometheus metrics are not implemented; Helicone serves as the main observability/analytics platform.
+- Helicone integration is opt-in and can be enabled/disabled via configuration. If disabled, only custom logging is used.
+- All core logging and metrics remain in the proxy's control; Helicone is additive, not a critical dependency.
 
 ### 6. Admin UI
 - Design HTML interface with basic CSS
@@ -256,6 +259,13 @@ docker run -d \
   llm-proxy
 ```
 
+### Container Orchestration
+Container orchestration is now split into two supported tracks:
+- [AWS ECS Deployment](docs/issues/phase-6-aws-ecs.md)
+- [Kubernetes Deployment with HELM](docs/issues/phase-6-kubernetes-helm.md)
+
+Refer to the linked issue files for detailed tasks, rationale, and acceptance criteria for each orchestration platform.
+
 ### Benchmark Tool
 ```bash
 docker run --rm llm-proxy llm-benchmark \
@@ -327,7 +337,34 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 - Planned: `llm-proxy server` will support subcommands such as `start` (with `-d` for daemon mode), `stop`, and `health` for operational control in the final version.
 
 ## Logging System
-- Add proxy metrics/logging/timing improvements (duration, request/response stats, error tracking)
+- [x] Research logging best practices
+- [x] Define comprehensive log format:
+  - Standard fields (timestamp, level, message)
+  - Request-specific fields (endpoint, method, status)
+  - Performance metrics (duration, token counts)
+  - Error details when applicable
+- [x] Implement JSON Lines local logging:
+  - Set up log file creation
+  - Implement log rotation
+  - Configure log levels
+- [x] Create log format with detailed metadata
+- [ ] **Integrate Helicone as optional, asynchronous observability middleware (replaces Prometheus, does not replace custom logging)**
+- [ ] Add configuration for enabling/disabling Helicone
+- [ ] Add tests for Helicone integration (mocked, async)
+- [ ] Document Helicone integration and fallback behavior
+- [ ] Implement asynchronous worker for external logging:
+  - Buffered sending
+  - Retry mechanism
+  - Batch processing
+  - Error handling
+- [ ] Add structured logging throughout the application
+- [ ] Implement log context propagation
+- [ ] Create log search and filtering utilities
+- [ ] Set up log aggregation for distributed deployments
+- [ ] Implement audit logging for security events
+- [ ] Create log visualization recommendations
+- [ ] Add log sampling for high-volume deployments
+- [ ] Add proxy metrics/logging/timing improvements 
 
 ## Monitoring
 - The `/health` endpoint (see API Endpoints) is used for readiness/liveness probes.
@@ -374,3 +411,9 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 
 ### References
 - See WIP.md for process and status
+
+## Rationale
+- Helicone provides advanced LLM observability and analytics with minimal integration effort.
+- All Helicone operations are async to ensure minimum latency, in line with the project's minimum latency mandate.
+- Custom logging remains canonical for compliance and fallback; Helicone is additive and optional.
+- No vendor lock-in: disabling Helicone reverts to local logging only.
