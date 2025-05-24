@@ -71,7 +71,7 @@ func (p *TransparentProxy) SetMetrics(m *ProxyMetrics) {
 // NewTransparentProxy creates a new proxy instance with an internally
 // configured logger based on the provided ProxyConfig.
 func NewTransparentProxy(config ProxyConfig, validator TokenValidator, store ProjectStore) (*TransparentProxy, error) {
-	logger, err := logging.NewLogger(config.LogLevel, config.LogFormat, config.LogFile)
+	logger, err := logging.NewLogger(config.LogLevel, config.LogFormat, config.LogFile, config.LogMaxSizeMB, config.LogMaxBackups)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize logger: %w", err)
 	}
@@ -83,7 +83,7 @@ func NewTransparentProxy(config ProxyConfig, validator TokenValidator, store Pro
 func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator, store ProjectStore, logger *zap.Logger) (*TransparentProxy, error) {
 	if logger == nil {
 		var err error
-		logger, err = logging.NewLogger(config.LogLevel, config.LogFormat, config.LogFile)
+		logger, err = logging.NewLogger(config.LogLevel, config.LogFormat, config.LogFile, config.LogMaxSizeMB, config.LogMaxBackups)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize logger: %w", err)
 		}

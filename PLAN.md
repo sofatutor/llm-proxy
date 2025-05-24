@@ -345,8 +345,8 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
   - Error details when applicable
 - [x] Implement JSON Lines local logging:
   - Set up log file creation
-  - Implement log rotation
-  - Configure log levels
+  - Implement log rotation (configurable size/backups)
+  - Configure log levels and file path
 - [x] Create log format with detailed metadata
 - [ ] **Integrate Helicone as optional, asynchronous observability middleware**
 - [ ] Add configuration for enabling/disabling Helicone

@@ -61,7 +61,7 @@ const Version = "0.1.0"
 func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.ProjectStore) (*Server, error) {
 	mux := http.NewServeMux()
 
-	logger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile)
+	logger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile, cfg.LogMaxSizeMB, cfg.LogMaxBackups)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize logger: %w", err)
 	}

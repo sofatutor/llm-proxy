@@ -26,13 +26,13 @@ flowchart TD
 - Log rotation and configuration are necessary for production readiness.
 
 ## Tasks
-- [ ] Research logging best practices for Go applications
-- [ ] Define a comprehensive log format (fields: timestamp, level, message, endpoint, method, status, duration, token counts, errors, etc.)
-- [ ] Implement JSON Lines local logging
-- [ ] Set up log file creation and rotation
-- [ ] Add configuration options for log file location, rotation policy, and log levels
-- [ ] Add basic documentation for the logging system
-- [ ] Add unit tests for logging functionality
+- [x] Research logging best practices for Go applications
+- [x] Define a comprehensive log format (fields: timestamp, level, message, endpoint, method, status, duration, token counts, errors, etc.)
+- [x] Implement JSON Lines local logging
+- [x] Set up log file creation and rotation
+- [x] Add configuration options for log file location, rotation policy, and log levels
+- [x] Add basic documentation for the logging system
+- [x] Add unit tests for logging functionality
 
 ## Acceptance Criteria
 - Local logging is implemented in JSON Lines format
