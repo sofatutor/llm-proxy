@@ -1,5 +1,6 @@
 ---
 description:
 globs:
-alwaysApply: false
+alwaysApply: true
 ---
+Use CLAUDE.md and @AGENTS.md for details
