@@ -63,6 +63,8 @@ func (p *TransparentProxy) Metrics() *ProxyMetrics {
 
 // SetMetrics overwrites the current metrics (primarily for testing).
 func (p *TransparentProxy) SetMetrics(m *ProxyMetrics) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.metrics = m
 }
 

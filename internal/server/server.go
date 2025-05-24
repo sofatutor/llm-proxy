@@ -265,6 +265,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(m); err != nil {
+		s.logger.Error("Failed to encode metrics", zap.Error(err))
 		http.Error(w, "Failed to encode metrics", http.StatusInternalServerError)
 	}
 }
