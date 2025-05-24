@@ -36,4 +36,8 @@ sequenceDiagram
 - Buffered and batched delivery is implemented and configurable
 - Retry and error handling are robust and tested
 - External logging can be enabled/disabled via configuration
-- Documentation and tests are updated accordingly 
+- Documentation and tests are updated accordingly
+
+---
+
+_Note: See [GitHub Issue #25](https://github.com/sofatutor/llm-proxy/issues/25) for the canonical checklist. All completed tasks are checked off there as well. This doc is kept in sync with the issue status._ 
