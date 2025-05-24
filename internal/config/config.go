@@ -37,9 +37,11 @@ type Config struct {
 	AdminUI     AdminUIConfig // Admin UI server configuration
 
 	// Logging
-	LogLevel  string // Log level (debug, info, warn, error)
-	LogFormat string // Log format (json, text)
-	LogFile   string // Path to log file (empty for stdout)
+	LogLevel      string // Log level (debug, info, warn, error)
+	LogFormat     string // Log format (json, text)
+	LogFile       string // Path to log file (empty for stdout)
+	LogMaxSizeMB  int    // Maximum size of a log file before rotation
+	LogMaxBackups int    // Number of rotated log files to keep
 
 	// CORS settings
 	CORSAllowedOrigins []string      // Allowed origins for CORS
@@ -106,9 +108,11 @@ func New() (*Config, error) {
 		},
 
 		// Logging defaults
-		LogLevel:  getEnvString("LOG_LEVEL", "info"),
-		LogFormat: getEnvString("LOG_FORMAT", "json"),
-		LogFile:   getEnvString("LOG_FILE", ""),
+		LogLevel:      getEnvString("LOG_LEVEL", "info"),
+		LogFormat:     getEnvString("LOG_FORMAT", "json"),
+		LogFile:       getEnvString("LOG_FILE", ""),
+		LogMaxSizeMB:  getEnvInt("LOG_MAX_SIZE_MB", 10),
+		LogMaxBackups: getEnvInt("LOG_MAX_BACKUPS", 5),
 
 		// CORS defaults
 		CORSAllowedOrigins: getEnvStringSlice("CORS_ALLOWED_ORIGINS", []string{"*"}),
@@ -247,9 +251,11 @@ func DefaultConfig() *Config {
 		},
 
 		// Logging defaults
-		LogLevel:  "info",
-		LogFormat: "json",
-		LogFile:   "",
+		LogLevel:      "info",
+		LogFormat:     "json",
+		LogFile:       "",
+		LogMaxSizeMB:  10,
+		LogMaxBackups: 5,
 
 		// CORS defaults
 		CORSAllowedOrigins: []string{"*"},

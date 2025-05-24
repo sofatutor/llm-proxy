@@ -39,6 +39,9 @@ MANAGEMENT_TOKEN=your-secure-management-token ./bin/llm-proxy
 - `LISTEN_ADDR`: Default `:8080`
 - `DATABASE_PATH`: Default `./data/llm-proxy.db`
 - `LOG_LEVEL`: Default `info`
+- `LOG_FILE`: Path to log file (stdout if empty)
+- `LOG_MAX_SIZE_MB`: Rotate log after this size in MB (default 10)
+- `LOG_MAX_BACKUPS`: Number of rotated log files to keep (default 5)
 
 See `docs/configuration.md` for all options.
 

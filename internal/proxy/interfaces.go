@@ -73,6 +73,10 @@ type ProxyConfig struct {
 	LogFormat string
 	// LogFile specifies a file path for logs (stdout if empty)
 	LogFile string
+	// LogMaxSizeMB is the maximum size of a log file before rotation
+	LogMaxSizeMB int
+	// LogMaxBackups is the number of rotated log files to keep
+	LogMaxBackups int
 
 	// SetXForwardedFor determines whether to set the X-Forwarded-For header
 	SetXForwardedFor bool

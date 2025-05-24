@@ -61,7 +61,7 @@ const Version = "0.1.0"
 func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.ProjectStore) (*Server, error) {
 	mux := http.NewServeMux()
 
-	logger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile)
+	logger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile, cfg.LogMaxSizeMB, cfg.LogMaxBackups)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize logger: %w", err)
 	}
@@ -84,19 +84,22 @@ func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.Pro
 	}
 
 	// Register routes
-	mux.HandleFunc("/health", s.handleHealth)
-	mux.HandleFunc("/ready", s.handleReady)
-	mux.HandleFunc("/live", s.handleLive)
-	mux.HandleFunc("/manage/projects", s.handleProjects)
-	mux.HandleFunc("/manage/projects/", s.managementAuthMiddleware(s.handleProjectByID))
-	mux.HandleFunc("/manage/tokens", s.managementAuthMiddleware(s.handleTokens))
+	mux.HandleFunc("/health", s.logRequestMiddleware(s.handleHealth))
+	mux.HandleFunc("/ready", s.logRequestMiddleware(s.handleReady))
+	mux.HandleFunc("/live", s.logRequestMiddleware(s.handleLive))
+	mux.HandleFunc("/manage/projects", s.logRequestMiddleware(s.handleProjects))
+	mux.HandleFunc("/manage/projects/", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleProjectByID)))
+	mux.HandleFunc("/manage/tokens", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleTokens)))
+
+	// Add catch-all handler for unmatched routes to ensure logging
+	mux.HandleFunc("/", s.logRequestMiddleware(s.handleNotFound))
 
 	if cfg.EnableMetrics {
 		path := cfg.MetricsPath
 		if path == "" {
 			path = "/metrics"
 		}
-		mux.HandleFunc(path, s.handleMetrics)
+		mux.HandleFunc(path, s.logRequestMiddleware(s.handleMetrics))
 	}
 
 	return s, nil
@@ -570,7 +573,11 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"failed to store token"}`, http.StatusInternalServerError)
 			return
 		}
-		s.logger.Info("token created", zap.String("token", tokenStr), zap.String("project_id", req.ProjectID), zap.String("request_id", requestID))
+		s.logger.Info("token created",
+			zap.String("token", token.ObfuscateToken(tokenStr)),
+			zap.String("project_id", req.ProjectID),
+			zap.String("request_id", requestID),
+		)
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"token":      tokenStr,
@@ -624,4 +631,57 @@ func getRequestID(ctx context.Context) string {
 		}
 	}
 	return uuid.New().String()
+}
+
+// logRequestMiddleware logs all incoming requests with timing information
+func (s *Server) logRequestMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		startTime := time.Now()
+		requestID := uuid.New().String()
+		ctx := context.WithValue(r.Context(), ctxKeyRequestID, requestID)
+
+		// Create a response writer that captures status code
+		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
+		s.logger.Info("request started",
+			zap.String("request_id", requestID),
+			zap.String("method", r.Method),
+			zap.String("path", r.URL.Path),
+			zap.String("remote_addr", r.RemoteAddr),
+			zap.String("user_agent", r.UserAgent()),
+		)
+
+		// Call the next handler
+		next(rw, r.WithContext(ctx))
+
+		duration := time.Since(startTime)
+		s.logger.Info("request completed",
+			zap.String("request_id", requestID),
+			zap.String("method", r.Method),
+			zap.String("path", r.URL.Path),
+			zap.Int("status_code", rw.statusCode),
+			zap.Duration("duration", duration),
+		)
+	}
+}
+
+// responseWriter wraps http.ResponseWriter to capture status code
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+// handleNotFound is a catch-all handler for unmatched routes
+func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
+	s.logger.Info("route not found",
+		zap.String("method", r.Method),
+		zap.String("path", r.URL.Path),
+		zap.String("remote_addr", r.RemoteAddr),
+	)
+	http.NotFound(w, r)
 }
