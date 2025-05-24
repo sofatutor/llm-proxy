@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/sofatutor/llm-proxy/internal/server"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
+	"golang.org/x/term"
 )
 
 // For testing
@@ -73,6 +75,10 @@ func init() {
 // runServer is the main function for the server command
 func runServer(cmd *cobra.Command, args []string) {
 	if daemonMode {
+		if serverLogFile == "" {
+			fmt.Fprintln(os.Stderr, "Error: --log-file must be specified when running in daemon mode (-d)")
+			osExit(1)
+		}
 		runServerDaemon()
 	} else {
 		runServerForeground()
@@ -82,6 +88,15 @@ func runServer(cmd *cobra.Command, args []string) {
 // runServerDaemon starts the server in daemon mode
 func runServerDaemon() {
 	fmt.Println("Starting LLM Proxy server in daemon mode...")
+
+	// Print the effective log level for daemon mode
+	if serverLogLevel != "" {
+		fmt.Printf("[daemon] Log level: %s\n", serverLogLevel)
+	} else if debugMode {
+		fmt.Println("[daemon] Log level: debug (via -v/--debug)")
+	} else {
+		fmt.Println("[daemon] Log level: info (default)")
+	}
 
 	// Get the absolute path of the current executable
 	execPath, err := os.Executable()
@@ -188,6 +203,7 @@ func runServerForeground() {
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
+	fmt.Printf("Log level: %s\n", cfg.LogLevel)
 
 	// Initialize zap logger
 	zapLogger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile, cfg.LogMaxSizeMB, cfg.LogMaxBackups)
@@ -196,7 +212,9 @@ func runServerForeground() {
 	}
 	defer func() {
 		if err := zapLogger.Sync(); err != nil {
-			log.Printf("Error syncing zap logger: %v", err)
+			if !strings.Contains(err.Error(), "inappropriate ioctl for device") {
+				log.Printf("Error syncing zap logger: %v", err)
+			}
 		}
 	}()
 
@@ -232,14 +250,22 @@ func runServerForeground() {
 		zapLogger.Fatal("Failed to initialize server", zap.Error(err))
 	}
 
+	// Log server starting before launching goroutine
+	zapLogger.Info("Server starting", zap.String("addr", cfg.ListenAddr))
+
 	go func() {
 		if err := s.Start(); err != nil && err != http.ErrServerClosed {
 			zapLogger.Fatal("Server error", zap.Error(err))
 		}
 	}()
 
-	zapLogger.Info("LLM Proxy server started", zap.String("addr", cfg.ListenAddr))
-	zapLogger.Info("Press Ctrl+C to stop")
+	// Log server started after goroutine is launched
+	zapLogger.Info("Server started", zap.String("addr", cfg.ListenAddr))
+
+	// Print interactive controls message last
+	if term.IsTerminal(int(os.Stdout.Fd())) {
+		fmt.Println("Press Ctrl+C to stop")
+	}
 
 	// Wait for interrupt signal
 	<-done
