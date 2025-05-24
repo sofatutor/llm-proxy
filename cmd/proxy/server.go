@@ -15,8 +15,10 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/sofatutor/llm-proxy/internal/database"
+	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/server"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 )
 
 // For testing
@@ -45,6 +47,7 @@ var (
 	serverLogLevel     string
 	pidFile            string
 	debugMode          bool
+	serverLogFile      string
 )
 
 // Add this before init()
@@ -64,7 +67,7 @@ func init() {
 	serverCmd.Flags().StringVar(&serverLogLevel, "log-level", "", "Log level: debug, info, warn, error (overrides env var)")
 	serverCmd.Flags().StringVar(&pidFile, "pid-file", "tmp/server.pid", "PID file for daemon mode (relative to project root)")
 	serverCmd.Flags().BoolVarP(&debugMode, "debug", "v", false, "Enable debug logging (overrides log-level)")
-
+	serverCmd.Flags().StringVar(&serverLogFile, "log-file", "", "Path to log file (overrides env var, default: stdout)")
 }
 
 // runServer is the main function for the server command
@@ -102,6 +105,9 @@ func runServerDaemon() {
 	}
 	if serverLogLevel != "" {
 		serverArgs = append(serverArgs, "--log-level", serverLogLevel)
+	}
+	if serverLogFile != "" {
+		serverArgs = append(serverArgs, "--log-file", serverLogFile)
 	}
 
 	// Set up the command
@@ -165,6 +171,11 @@ func runServerForeground() {
 			log.Fatalf("Failed to set LOG_LEVEL environment variable: %v", err)
 		}
 	}
+	if serverLogFile != "" {
+		if err := os.Setenv("LOG_FILE", serverLogFile); err != nil {
+			log.Fatalf("Failed to set LOG_FILE environment variable: %v", err)
+		}
+	}
 
 	// Set debug log level if --debug/-v or DEBUG=1 or LOG_LEVEL=debug
 	if debugMode || os.Getenv("DEBUG") == "1" || os.Getenv("LOG_LEVEL") == "debug" {
@@ -178,6 +189,13 @@ func runServerForeground() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
+	// Initialize zap logger
+	zapLogger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile, cfg.LogMaxSizeMB, cfg.LogMaxBackups)
+	if err != nil {
+		log.Fatalf("Failed to initialize logger: %v", err)
+	}
+	defer zapLogger.Sync()
+
 	// Handle graceful shutdown
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
@@ -185,7 +203,7 @@ func runServerForeground() {
 	// Make sure the database directory exists
 	dbDir := filepath.Dir(cfg.DatabasePath)
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
-		log.Fatalf("Failed to create database directory: %v", err)
+		zapLogger.Fatal("Failed to create database directory", zap.Error(err))
 	}
 
 	// Create and start the server with actual database stores (not mocks)
@@ -193,12 +211,12 @@ func runServerForeground() {
 	dbConfig.Path = cfg.DatabasePath
 	db, err := database.New(dbConfig)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		zapLogger.Fatal("Failed to connect to database", zap.Error(err))
 	}
 	if dbConfig.Path == ":memory:" {
-		log.Printf("Connected to in-memory SQLite database")
+		zapLogger.Info("Connected to in-memory SQLite database")
 	} else {
-		log.Printf("Connected to SQLite database at %s", dbConfig.Path)
+		zapLogger.Info("Connected to SQLite database", zap.String("path", dbConfig.Path))
 	}
 
 	tokenStore := database.NewDBTokenStoreAdapter(db)
@@ -207,21 +225,21 @@ func runServerForeground() {
 	// Create server
 	s, err := server.New(cfg, tokenStore, projectStore)
 	if err != nil {
-		log.Fatalf("Failed to initialize server: %v", err)
+		zapLogger.Fatal("Failed to initialize server", zap.Error(err))
 	}
 
 	go func() {
 		if err := s.Start(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+			zapLogger.Fatal("Server error", zap.Error(err))
 		}
 	}()
 
-	log.Printf("LLM Proxy server started on %s", cfg.ListenAddr)
-	log.Printf("Press Ctrl+C to stop")
+	zapLogger.Info("LLM Proxy server started", zap.String("addr", cfg.ListenAddr))
+	zapLogger.Info("Press Ctrl+C to stop")
 
 	// Wait for interrupt signal
 	<-done
-	log.Println("Server shutting down...")
+	zapLogger.Info("Server shutting down...")
 
 	// Create a deadline for graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -229,8 +247,8 @@ func runServerForeground() {
 
 	// Attempt graceful shutdown
 	if err := s.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		zapLogger.Fatal("Server forced to shutdown", zap.Error(err))
 	}
 
-	log.Println("Server exited gracefully")
+	zapLogger.Info("Server exited gracefully")
 }
