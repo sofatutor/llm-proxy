@@ -1,7 +1,19 @@
 # AWS ECS Deployment
 
 ## Summary
-Create and document AWS ECS deployment configurations for the LLM proxy. This includes ECS task definitions, service setup, secrets management, and production readiness testing. This issue can be worked on in parallel with other deployment and documentation issues.
+Document and implement deployment of the LLM proxy to AWS ECS, including containerization, task definition, service setup, and CI/CD integration.
+
+```mermaid
+flowchart TD
+    Dev["Build & Test Docker Image"]
+    Push["Push Image to ECR"]
+    TaskDef["Create/Update ECS Task Definition"]
+    Service["Update/Create ECS Service"]
+    Deploy["Deploy to ECS Cluster"]
+    Monitor["Monitor & Rollback if Needed"]
+
+    Dev --> Push --> TaskDef --> Service --> Deploy --> Monitor
+```
 
 ## Rationale
 - AWS ECS enables scalable, reliable, and managed container deployments in the AWS ecosystem.

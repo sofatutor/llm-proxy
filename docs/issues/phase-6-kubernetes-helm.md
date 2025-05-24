@@ -1,7 +1,19 @@
 # Kubernetes Deployment with HELM
 
 ## Summary
-Create and document Kubernetes deployment configurations for the LLM proxy, including HELM chart creation, secrets management, and production readiness testing. This issue can be worked on in parallel with other deployment and documentation issues.
+Document and implement deployment of the LLM proxy to Kubernetes using HELM charts, including chart creation, configuration, and CI/CD integration.
+
+```mermaid
+flowchart TD
+    Build["Build & Test Docker Image"]
+    Push["Push Image to Registry"]
+    Chart["Create/Update HELM Chart"]
+    Config["Configure Values.yaml"]
+    Install["Install/Upgrade Release"]
+    Monitor["Monitor & Rollback if Needed"]
+
+    Build --> Push --> Chart --> Config --> Install --> Monitor
+```
 
 ## Rationale
 - Kubernetes is the industry standard for scalable, portable, and reliable container orchestration.

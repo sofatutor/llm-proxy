@@ -1,7 +1,19 @@
 # Monitoring Core
 
 ## Summary
-Implement the core monitoring features for the LLM proxy. This includes health check endpoints, readiness and liveness probes, and basic system metrics. This issue is foundational for operational visibility and can be worked on in parallel with other logging and monitoring enhancements.
+Implement health check endpoints, readiness/liveness probes, and basic system metrics for the LLM proxy.
+
+```mermaid
+flowchart TD
+    Start([Proxy Startup])
+    Health["/health Endpoint"]
+    Probe["Readiness/Liveness Probe"]
+    Metrics["Collect System Metrics"]
+    Alert["Trigger Alert if Unhealthy"]
+    End([Monitored & Healthy])
+
+    Start --> Health --> Probe --> Metrics --> Alert --> End
+```
 
 ## Rationale
 - Health checks and probes are required for orchestration, deployment, and uptime monitoring.

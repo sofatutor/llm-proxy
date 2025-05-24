@@ -1,7 +1,21 @@
 # Log Integration
 
 ## Summary
-Integrate structured logging throughout the LLM proxy application. This includes propagating log context, creating utilities for log search and filtering, setting up log aggregation for distributed deployments, and implementing audit logging for security events. This issue can be worked on in parallel with other logging and monitoring enhancements.
+Integrate structured logging, context propagation, and audit logging throughout the LLM proxy application.
+
+```mermaid
+flowchart TD
+    Req([Incoming Request])
+    Ctx["Attach Context (trace, user, etc.)"]
+    Log["Structured Log Entry"]
+    Audit{"Is Security Event?"}
+    AuditLog["Write Audit Log"]
+    End([Done])
+
+    Req --> Ctx --> Log --> Audit
+    Audit -- Yes --> AuditLog --> End
+    Audit -- No --> End
+```
 
 ## Rationale
 - Structured logging enables better analysis, filtering, and correlation of logs across distributed systems.

@@ -1,7 +1,20 @@
-# External Logging
+# External Logging Worker
 
 ## Summary
-Implement the asynchronous external logging worker for the LLM proxy. This includes buffered sending, retry mechanisms, batch processing, and error handling for forwarding logs to external systems (e.g., Helicone, or other backends). This issue can be worked on in parallel with other logging and monitoring enhancements.
+Implement an asynchronous external logging worker for the LLM proxy, supporting buffered sending, retries, and error handling for third-party log backends.
+
+```mermaid
+sequenceDiagram
+    participant Proxy
+    participant Buffer
+    participant Worker
+    participant ExternalLog
+    Proxy->>Buffer: Enqueue Log Entry
+    Worker-->>Buffer: Dequeue Log Entry (batch)
+    Worker->>ExternalLog: Send Logs (async)
+    ExternalLog-->>Worker: Ack/Error
+    Worker-->>Buffer: Retry on Error
+```
 
 ## Rationale
 - Asynchronous external logging enables integration with observability platforms and log aggregation systems without blocking the main proxy path.

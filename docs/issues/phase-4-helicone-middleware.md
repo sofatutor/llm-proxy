@@ -1,7 +1,20 @@
 # Helicone Middleware Integration
 
 ## Summary
-Integrate Helicone as an optional, asynchronous observability middleware for the LLM proxy. This includes adding configuration for enabling/disabling Helicone, ensuring all Helicone operations are async and non-blocking, and updating documentation and tests. This issue can be worked on in parallel with other logging and monitoring enhancements.
+Integrate Helicone as an optional, asynchronous observability middleware for the LLM proxy. Ensure it does not replace custom logging and operates asynchronously to minimize latency.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Proxy
+    participant Helicone
+    participant LogFile
+    Client->>Proxy: API Request
+    Proxy->>LogFile: Write to Local Log (sync)
+    Proxy-->>Helicone: Forward Data (async)
+    Helicone-->>Proxy: (Async Ack/No Ack)
+    Proxy->>Client: API Response
+```
 
 ## Rationale
 - Helicone provides advanced LLM observability and analytics with minimal integration effort.

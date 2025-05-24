@@ -1,7 +1,24 @@
 # Logging System Core
 
 ## Summary
-Implement the core local logging system for the LLM proxy. This includes researching best practices, defining a comprehensive log format, implementing JSON Lines local logging, and setting up log rotation and configuration. This issue is foundational for observability and compliance, and can be worked on in parallel with other logging/monitoring enhancements.
+Implement a comprehensive local logging system for the LLM proxy, using JSON Lines format, log rotation, and error handling.
+
+```mermaid
+flowchart TD
+    Start([API Request])
+    Extract["Extract Metadata"]
+    Write["Write Log Entry (JSONL)"]
+    Rotate{"Log File Size > Limit?"}
+    RotateYes["Rotate Log File"]
+    RotateNo["Continue"]
+    Error["Handle Write Error"]
+    End([Done])
+
+    Start --> Extract --> Write --> Rotate
+    Rotate -- Yes --> RotateYes --> End
+    Rotate -- No --> RotateNo --> End
+    Write -- Error --> Error --> End
+```
 
 ## Rationale
 - Local logging is required for compliance, debugging, and as a fallback for all observability features.

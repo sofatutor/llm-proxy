@@ -1,7 +1,19 @@
-# Resource Usage Monitoring and Grafana Dashboards
+# Resource Usage Monitoring & Grafana Dashboards
 
 ## Summary
-Implement resource usage monitoring and create (optional) dashboard templates for Grafana for the LLM proxy. This issue can be worked on in parallel with other logging and monitoring enhancements.
+Implement resource usage monitoring and provide Grafana dashboard templates for the LLM proxy.
+
+```mermaid
+flowchart TD
+    Start([Proxy Running])
+    Collect["Collect Resource Metrics (CPU, Memory, etc.)"]
+    Export["Export Metrics (Prometheus, etc.)"]
+    Grafana["Grafana Dashboard"]
+    Alert["Set Up Alerts"]
+    End([Operational Visibility])
+
+    Start --> Collect --> Export --> Grafana --> Alert --> End
+```
 
 ## Rationale
 - Resource usage monitoring is important for capacity planning and operational stability.

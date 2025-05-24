@@ -3,17 +3,34 @@
 ## Summary
 Create and update developer documentation for the LLM proxy, including architecture overview, code organization, contributing guidelines, and API reference. This issue can be worked on in parallel with other documentation and deployment issues.
 
+```mermaid
+flowchart TD
+    Start([Start])
+    Arch["Create Architecture Overview"]
+    Org["Write Code Organization Guidelines"]
+    Contrib["Draft Contributing Guidelines"]
+    API["Document API Reference"]
+    Review["Review & Update Documentation"]
+    End([Complete & Up-to-date Docs])
+
+    Start --> Arch
+    Arch --> Org
+    Org --> Contrib
+    Contrib --> API
+    API --> Review
+    Review --> End
+```
+
 ## Rationale
 - Developer documentation is essential for maintainability, onboarding, and community contributions.
 - Clear architecture and code organization guides help new contributors ramp up quickly.
 
 ## Tasks
 - [ ] Create architecture overview documentation
-- [ ] Document code organization and directory structure
-- [ ] Add contributing guidelines and code review process
-- [ ] Write API reference documentation (management, proxy, admin endpoints)
-- [ ] Document testing approach and coverage policy
-- [ ] Add changelog and versioning documentation
+- [ ] Write code organization guidelines
+- [ ] Draft contributing guidelines
+- [ ] Document API reference
+- [ ] Review and update documentation for accuracy
 
 ## Acceptance Criteria
 - Developer docs are comprehensive and up to date
