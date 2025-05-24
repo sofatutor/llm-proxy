@@ -72,7 +72,12 @@
             <div class="col-12">
                 <div class="alert alert-info">
                     <i class="bi bi-info-circle"></i>
-                    Showing tokens for project: <code>{{ .projectId }}</code>
+                    Showing tokens for project: 
+                    {{ if index .projectNames .projectId }}
+                        <strong>{{ index .projectNames .projectId }}</strong>
+                    {{ else }}
+                        <code>{{ .projectId }}</code>
+                    {{ end }}
                     <a href="/tokens" class="btn btn-sm btn-outline-primary ms-2">Show All Tokens</a>
                 </div>
             </div>
@@ -88,10 +93,10 @@
                             <table class="table table-hover">
                                 <thead>
                                     <tr>
-                                        <th>Project ID</th>
+                                        <th>Project</th>
+                                        <th>Requests</th>
                                         <th>Status</th>
                                         <th>Expires</th>
-                                        <th>Requests</th>
                                         <th>Created</th>
                                         <th>Last Used</th>
                                         <th class="text-end">Actions</th>
@@ -101,7 +106,23 @@
                                     {{ range .tokens }}
                                     <tr>
                                         <td>
-                                            <code class="small">{{ .ProjectID }}</code>
+                                            {{ if index $.projectNames .ProjectID }}
+                                                {{ index $.projectNames .ProjectID }}
+                                            {{ else }}
+                                                <code class="small">{{ .ProjectID }}</code>
+                                            {{ end }}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-secondary">{{ .RequestCount }}</span>
+                                            {{ if .MaxRequests }}
+                                                {{ if gt .MaxRequests 0 }}
+                                                    / {{ .MaxRequests }}
+                                                {{ else }}
+                                                    / ∞
+                                                {{ end }}
+                                            {{ else }}
+                                                / ∞
+                                            {{ end }}
                                         </td>
                                         <td>
                                             {{ if .IsActive }}
@@ -132,24 +153,13 @@
                                         </td>
                                         <td>
                                             {{ if .ExpiresAt }}
-                                                <small class="text-muted">{{ .ExpiresAt.Format "2006-01-02 15:04" }}</small>
                                                 {{ if lt .ExpiresAt.Unix now.Unix }}
-                                                    <br><small class="text-danger">Expired</small>
+                                                    <small class="text-danger">{{ .ExpiresAt.Format "2006-01-02 15:04" }}</small>
+                                                {{ else }}
+                                                    <small class="text-muted">{{ .ExpiresAt.Format "2006-01-02 15:04" }}</small>
                                                 {{ end }}
                                             {{ else }}
                                                 <small class="text-muted">Never</small>
-                                            {{ end }}
-                                        </td>
-                                        <td>
-                                            <span class="badge bg-secondary">{{ .RequestCount }}</span>
-                                            {{ if .MaxRequests }}
-                                                {{ if gt .MaxRequests 0 }}
-                                                    / {{ .MaxRequests }}
-                                                {{ else }}
-                                                    / ∞
-                                                {{ end }}
-                                            {{ else }}
-                                                / ∞
                                             {{ end }}
                                         </td>
                                         <td>

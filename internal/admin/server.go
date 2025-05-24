@@ -5,6 +5,7 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -181,11 +182,32 @@ func (s *Server) setupRoutes() {
 
 	// Health check
 	s.engine.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
+		adminHealth := gin.H{
 			"status":    "ok",
 			"timestamp": time.Now(),
 			"service":   "admin-ui",
 			"version":   "0.1.0",
+		}
+
+		backendURL := "http://localhost:8080/health" // TODO: set to your backend's real URL
+		client := &http.Client{Timeout: 2 * time.Second}
+		backendHealth := gin.H{
+			"status": "down",
+			"error":  "Backend unavailable",
+		}
+		if resp, err := client.Get(backendURL); err == nil && resp.StatusCode == 200 {
+			var backendData map[string]interface{}
+			if err := json.NewDecoder(resp.Body).Decode(&backendData); err == nil {
+				backendHealth = backendData
+			}
+			err := resp.Body.Close()
+			if err != nil {
+				log.Printf("failed to close backend health response body: %v", err)
+			}
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"admin":   adminHealth,
+			"backend": backendHealth,
 		})
 	})
 }
@@ -204,7 +226,7 @@ func (s *Server) handleDashboard(c *gin.Context) {
 		return
 	}
 
-	c.HTML(http.StatusOK, "simple-dashboard.html", gin.H{
+	c.HTML(http.StatusOK, "dashboard.html", gin.H{
 		"title": "Dashboard",
 		"data":  dashboardData,
 	})
@@ -376,10 +398,26 @@ func (s *Server) handleTokensList(c *gin.Context) {
 		return
 	}
 
+	// Fetch all projects to create a lookup map for project names
+	projects, _, err := apiClient.GetProjects(c.Request.Context(), 1, 1000) // Get up to 1000 projects
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"error": fmt.Sprintf("Failed to load projects: %v", err),
+		})
+		return
+	}
+
+	// Create project ID to name lookup map
+	projectNames := make(map[string]string)
+	for _, project := range projects {
+		projectNames[project.ID] = project.Name
+	}
+
 	c.HTML(http.StatusOK, "tokens-list-complete.html", gin.H{
-		"tokens":     tokens,
-		"pagination": pagination,
-		"projectId":  projectID,
+		"tokens":       tokens,
+		"pagination":   pagination,
+		"projectId":    projectID,
+		"projectNames": projectNames,
 	})
 }
 
@@ -599,6 +637,9 @@ func (s *Server) templateFuncs() template.FuncMap {
 				return "****"
 			}
 			return token[:4] + "****" + token[len(token)-4:]
+		},
+		"contains": func(s, substr string) bool {
+			return strings.Contains(s, substr)
 		},
 	}
 }
