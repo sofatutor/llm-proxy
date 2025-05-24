@@ -74,6 +74,39 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 }
 
+func TestMetricsEndpoint(t *testing.T) {
+	cfg := &config.Config{
+		ListenAddr:     ":8080",
+		RequestTimeout: 30 * time.Second,
+		EnableMetrics:  true,
+		MetricsPath:    "/metrics",
+	}
+	server, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	p := &proxy.TransparentProxy{}
+	p.SetMetrics(&proxy.ProxyMetrics{RequestCount: 2, ErrorCount: 1})
+	server.proxy = p
+
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	rr := httptest.NewRecorder()
+	server.handleMetrics(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, rr.Code)
+	}
+	var resp struct {
+		UptimeSeconds float64 `json:"uptime_seconds"`
+		RequestCount  int64   `json:"request_count"`
+		ErrorCount    int64   `json:"error_count"`
+	}
+	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
+	if resp.RequestCount != 2 || resp.ErrorCount != 1 {
+		t.Errorf("unexpected metrics values: %+v", resp)
+	}
+	if resp.UptimeSeconds <= 0 {
+		t.Errorf("expected positive uptime, got %f", resp.UptimeSeconds)
+	}
+}
+
 func TestServerLifecycle(t *testing.T) {
 	// Use httptest.NewServer to start the server with the health handler
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
