@@ -2,6 +2,12 @@
 
 # Contributor & Agent Guide
 
+> **Note on Git & GitHub Management:**
+> - **Always use standard `git` and GitHub CLI (`gh`) commands for all routine git and GitHub repository management (branching, committing, pushing, PR creation, merging, etc.).**
+> - **The MCP tools should only be used for actions or data that are not easily accessible via standard commands, such as automated retrieval of review comments on a PR, or advanced API queries.**
+> - **Do not use the MCP for basic git/GitHub operations that are well-supported by `git` or `gh`.**
+> - **Create (or owerwrite) a temporary md file as NEW_PR.md or NEW_ISSUE.md and as for review. Then use this with gh as a body-file argument. After the issue/pr is created, delete the file.
+
 This file provides essential context and rules for both human and AI contributors working in this repository. It is adapted from the core working agreement in CLAUDE.md and is the primary source of truth for agent-driven development.
 
 ---
@@ -66,6 +72,8 @@ This file provides essential context and rules for both human and AI contributor
 ---
 
 ## Agent-Specific Instructions
+- **Always use `git` and `gh` for all standard git and GitHub management tasks.**
+- **Only use the MCP for actions or data not easily accessible via `git` or `gh`, such as automated retrieval of review comments on a PR, or advanced API queries.**
 - Always explore relevant context in the current issue doc, PLAN.md, and CLAUDE.md before making changes.
 - Prefer small, reviewable increments and document every step in the relevant issue doc.
 - When in doubt, update documentation and ask for clarification in PRs.
