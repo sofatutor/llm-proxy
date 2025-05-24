@@ -54,10 +54,24 @@ type ProxyMetrics struct {
 	mu                sync.Mutex
 }
 
+// Metrics returns a pointer to the current proxy metrics.
+func (p *TransparentProxy) Metrics() *ProxyMetrics {
+	p.metrics.mu.Lock()
+	defer p.metrics.mu.Unlock()
+	return p.metrics
+}
+
+// SetMetrics overwrites the current metrics (primarily for testing).
+func (p *TransparentProxy) SetMetrics(m *ProxyMetrics) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.metrics = m
+}
+
 // NewTransparentProxy creates a new proxy instance with an internally
 // configured logger based on the provided ProxyConfig.
 func NewTransparentProxy(config ProxyConfig, validator TokenValidator, store ProjectStore) (*TransparentProxy, error) {
-	logger, err := logging.NewLogger(config.LogLevel, config.LogFormat, config.LogFile)
+	logger, err := logging.NewLogger(config.LogLevel, config.LogFormat, config.LogFile, config.LogMaxSizeMB, config.LogMaxBackups)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize logger: %w", err)
 	}
@@ -69,7 +83,7 @@ func NewTransparentProxy(config ProxyConfig, validator TokenValidator, store Pro
 func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator, store ProjectStore, logger *zap.Logger) (*TransparentProxy, error) {
 	if logger == nil {
 		var err error
-		logger, err = logging.NewLogger(config.LogLevel, config.LogFormat, config.LogFile)
+		logger, err = logging.NewLogger(config.LogLevel, config.LogFormat, config.LogFile, config.LogMaxSizeMB, config.LogMaxBackups)
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize logger: %w", err)
 		}
@@ -136,6 +150,21 @@ func (p *TransparentProxy) director(req *http.Request) {
 		zap.String("method", req.Method),
 		zap.String("path", req.URL.Path),
 		zap.String("project_id", req.Header.Get("X-Proxy-ID")))
+
+	// Verbose upstream request logging
+	if !p.logger.Core().Enabled(zap.DebugLevel) {
+		return
+	}
+	headers := make(map[string][]string)
+	for k, v := range req.Header {
+		headers[k] = v
+	}
+	p.logger.Debug("Upstream request",
+		zap.String("request_id", requestID),
+		zap.String("method", req.Method),
+		zap.String("url", req.URL.String()),
+		zap.Any("headers", headers),
+	)
 }
 
 // processRequestHeaders handles the manipulation of request headers
@@ -388,9 +417,16 @@ func (p *TransparentProxy) errorHandler(w http.ResponseWriter, r *http.Request, 
 func (p *TransparentProxy) handleValidationError(w http.ResponseWriter, err error) {
 	// Try to get request ID from context if available
 	var requestID string
+	var obfuscatedToken string
 	if w != nil {
 		if req, ok := w.(interface{ Request() *http.Request }); ok && req.Request() != nil {
 			requestID, _ = req.Request().Context().Value(ctxKeyRequestID).(string)
+			// Try to get the token from the Authorization header
+			authHeader := req.Request().Header.Get("Authorization")
+			if len(authHeader) > 7 && strings.HasPrefix(authHeader, "Bearer ") {
+				tok := strings.TrimSpace(authHeader[7:])
+				obfuscatedToken = token.ObfuscateToken(tok)
+			}
 		}
 	}
 
@@ -432,7 +468,9 @@ func (p *TransparentProxy) handleValidationError(w http.ResponseWriter, err erro
 
 	p.logger.Error("Validation error",
 		zap.String("request_id", requestID),
-		zap.Error(err))
+		zap.Error(err),
+		zap.String("token", obfuscatedToken),
+	)
 }
 
 // createTransport creates an HTTP transport with appropriate settings
@@ -671,6 +709,13 @@ func (p *TransparentProxy) LoggingMiddleware() Middleware {
 func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Ensure request_id is set in context as the very first step
+			requestID, ok := r.Context().Value(ctxKeyRequestID).(string)
+			if !ok || requestID == "" {
+				requestID = uuid.New().String()
+				r = r.WithContext(context.WithValue(r.Context(), ctxKeyRequestID, requestID))
+			}
+
 			// --- Validation Scope: Only token, path, and method are validated here ---
 			// Do not add API-specific validation or transformation logic here.
 

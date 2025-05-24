@@ -20,14 +20,19 @@ flowchart TD
 - Basic system metrics provide insight into the health and performance of the proxy.
 
 ## Tasks
-- [ ] Implement a /health endpoint for health checks
-- [ ] Add readiness and liveness probes for deployment environments (e.g., Kubernetes)
-- [ ] Implement basic system metrics (e.g., uptime, request counts, error rates)
-- [ ] Document health check and monitoring endpoints
-- [ ] Add tests for health checks and probes
+- [x] Implement a /health endpoint for health checks
+- [x] Add readiness and liveness probes for deployment environments (e.g., Kubernetes)
+- [x] Implement basic system metrics (e.g., uptime, request counts, error rates)
+- [x] Document health check and monitoring endpoints
+- [x] Add tests for health checks and probes
 
 ## Acceptance Criteria
 - /health endpoint is available and returns status, timestamp, and version
 - Readiness and liveness probes are implemented and documented
 - Basic system metrics are available and tested
-- Documentation and tests are updated accordingly 
+- Documentation and tests are updated accordingly
+
+Implemented in code:
+- `/health` returns JSON status, timestamp and version.
+- `/ready` and `/live` endpoints return 200 for orchestration probes.
+- `/metrics` exposes uptime, request count and error count in JSON.

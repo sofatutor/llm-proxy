@@ -22,18 +22,22 @@ sequenceDiagram
 - Retry and error handling are required for robustness in production environments.
 
 ## Tasks
-- [ ] Design the architecture for the asynchronous external logging worker
-- [ ] Implement buffered sending of logs to external systems
-- [ ] Add batch processing for efficient log delivery
-- [ ] Implement retry logic for failed log deliveries
-- [ ] Add error handling and fallback to local logging if external delivery fails
-- [ ] Add configuration options for enabling/disabling external logging, buffer size, batch size, and retry policy
-- [ ] Add unit tests for the external logging worker
-- [ ] Document the external logging system and configuration
+ - [x] Design the architecture for the asynchronous external logging worker
+ - [x] Implement buffered sending of logs to external systems
+ - [x] Add batch processing for efficient log delivery
+- [x] Implement retry logic for failed log deliveries
+- [x] Add error handling and fallback to local logging if external delivery fails
+- [x] Add configuration options for enabling/disabling external logging, buffer size, batch size, and retry policy
+- [x] Add unit tests for the external logging worker
+- [x] Document the external logging system and configuration (see internal/logging/README.md for details)
 
 ## Acceptance Criteria
 - Logs can be sent asynchronously to external systems without blocking the main proxy path
 - Buffered and batched delivery is implemented and configurable
 - Retry and error handling are robust and tested
 - External logging can be enabled/disabled via configuration
-- Documentation and tests are updated accordingly 
+- Documentation and tests are updated accordingly
+
+---
+
+_Note: See [GitHub Issue #25](https://github.com/sofatutor/llm-proxy/issues/25) for the canonical checklist. All completed tasks are checked off there as well. This doc is kept in sync with the issue status._ 

@@ -33,6 +33,8 @@ type Server struct {
 	tokenStore   token.TokenStore
 	projectStore proxy.ProjectStore
 	logger       *zap.Logger
+	proxy        *proxy.TransparentProxy
+	metrics      Metrics
 }
 
 // HealthResponse is the response body for the health check endpoint.
@@ -41,6 +43,13 @@ type HealthResponse struct {
 	Status    string    `json:"status"`    // Service status, "ok" for a healthy system
 	Timestamp time.Time `json:"timestamp"` // Current server time
 	Version   string    `json:"version"`   // Application version number
+}
+
+// Metrics holds runtime metrics for the server.
+type Metrics struct {
+	StartTime    time.Time
+	RequestCount int64
+	ErrorCount   int64
 }
 
 // Version is the application version, following semantic versioning.
@@ -52,16 +61,19 @@ const Version = "0.1.0"
 func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.ProjectStore) (*Server, error) {
 	mux := http.NewServeMux()
 
-	logger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile)
+	logger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile, cfg.LogMaxSizeMB, cfg.LogMaxBackups)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize logger: %w", err)
 	}
+
+	metrics := Metrics{StartTime: time.Now()}
 
 	s := &Server{
 		config:       cfg,
 		tokenStore:   tokenStore,
 		projectStore: projectStore,
 		logger:       logger,
+		metrics:      metrics,
 		server: &http.Server{
 			Addr:         cfg.ListenAddr,
 			Handler:      mux,
@@ -72,10 +84,23 @@ func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.Pro
 	}
 
 	// Register routes
-	mux.HandleFunc("/health", s.handleHealth)
-	mux.HandleFunc("/manage/projects", s.handleProjects)
-	mux.HandleFunc("/manage/projects/", s.managementAuthMiddleware(s.handleProjectByID))
-	mux.HandleFunc("/manage/tokens", s.managementAuthMiddleware(s.handleTokens))
+	mux.HandleFunc("/health", s.logRequestMiddleware(s.handleHealth))
+	mux.HandleFunc("/ready", s.logRequestMiddleware(s.handleReady))
+	mux.HandleFunc("/live", s.logRequestMiddleware(s.handleLive))
+	mux.HandleFunc("/manage/projects", s.logRequestMiddleware(s.handleProjects))
+	mux.HandleFunc("/manage/projects/", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleProjectByID)))
+	mux.HandleFunc("/manage/tokens", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleTokens)))
+
+	// Add catch-all handler for unmatched routes to ensure logging
+	mux.HandleFunc("/", s.logRequestMiddleware(s.handleNotFound))
+
+	if cfg.EnableMetrics {
+		path := cfg.MetricsPath
+		if path == "" {
+			path = "/metrics"
+		}
+		mux.HandleFunc(path, s.logRequestMiddleware(s.handleMetrics))
+	}
 
 	return s, nil
 }
@@ -171,6 +196,7 @@ func (s *Server) initializeAPIRoutes() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize proxy: %w", err)
 	}
+	s.proxy = proxyHandler
 
 	// Register proxy routes
 	s.server.Handler.(*http.ServeMux).Handle("/v1/", proxyHandler.Handler())
@@ -211,6 +237,40 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Status code 200 OK is set implicitly when the response is written successfully
+}
+
+// handleReady is used for readiness probes.
+func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ready"))
+}
+
+// handleLive is used for liveness probes.
+func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("alive"))
+}
+
+// handleMetrics returns basic runtime metrics in JSON format.
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	m := struct {
+		UptimeSeconds float64 `json:"uptime_seconds"`
+		RequestCount  int64   `json:"request_count"`
+		ErrorCount    int64   `json:"error_count"`
+	}{
+		UptimeSeconds: time.Since(s.metrics.StartTime).Seconds(),
+	}
+	if s.proxy != nil {
+		pm := s.proxy.Metrics()
+		m.RequestCount = pm.RequestCount
+		m.ErrorCount = pm.ErrorCount
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(m); err != nil {
+		s.logger.Error("Failed to encode metrics", zap.Error(err))
+		http.Error(w, "Failed to encode metrics", http.StatusInternalServerError)
+	}
 }
 
 // managementAuthMiddleware checks the management token in the Authorization header
@@ -513,7 +573,11 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"failed to store token"}`, http.StatusInternalServerError)
 			return
 		}
-		s.logger.Info("token created", zap.String("token", tokenStr), zap.String("project_id", req.ProjectID), zap.String("request_id", requestID))
+		s.logger.Info("token created",
+			zap.String("token", token.ObfuscateToken(tokenStr)),
+			zap.String("project_id", req.ProjectID),
+			zap.String("request_id", requestID),
+		)
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"token":      tokenStr,
@@ -567,4 +631,57 @@ func getRequestID(ctx context.Context) string {
 		}
 	}
 	return uuid.New().String()
+}
+
+// logRequestMiddleware logs all incoming requests with timing information
+func (s *Server) logRequestMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		startTime := time.Now()
+		requestID := uuid.New().String()
+		ctx := context.WithValue(r.Context(), ctxKeyRequestID, requestID)
+
+		// Create a response writer that captures status code
+		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
+		s.logger.Info("request started",
+			zap.String("request_id", requestID),
+			zap.String("method", r.Method),
+			zap.String("path", r.URL.Path),
+			zap.String("remote_addr", r.RemoteAddr),
+			zap.String("user_agent", r.UserAgent()),
+		)
+
+		// Call the next handler
+		next(rw, r.WithContext(ctx))
+
+		duration := time.Since(startTime)
+		s.logger.Info("request completed",
+			zap.String("request_id", requestID),
+			zap.String("method", r.Method),
+			zap.String("path", r.URL.Path),
+			zap.Int("status_code", rw.statusCode),
+			zap.Duration("duration", duration),
+		)
+	}
+}
+
+// responseWriter wraps http.ResponseWriter to capture status code
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+// handleNotFound is a catch-all handler for unmatched routes
+func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
+	s.logger.Info("route not found",
+		zap.String("method", r.Method),
+		zap.String("path", r.URL.Path),
+		zap.String("remote_addr", r.RemoteAddr),
+	)
+	http.NotFound(w, r)
 }

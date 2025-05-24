@@ -53,7 +53,8 @@ This file provides essential context and rules for both human and AI contributor
   - All review comments must be addressed in code or docs before merging.
   - For performance/architecture feedback, implement the solution immediately (do not defer).
 - **CI Monitoring and Enforcement:**
-  - After any push to the repository, you **must** use `gh run list` to view the latest GitHub Actions runs for your commit/branch.
+  - After any push to the repository, you **must** sleep a few seconds and use `gh run list` to view the latest GitHub Actions runs for your commit/branch.
+  - Retry if not, but once you spotted an active job run, attach to it using `watch`.
   - Use `gh run watch <run-id>` to monitor the status of each CI job (Lint, Build, Test, etc.) until completion.
   - **It is mandatory to wait for all CI jobs to complete and to fix any CI failures before proceeding with further work, review, or merging.**
   - No code is merged unless all CI checks pass for the latest commit.
