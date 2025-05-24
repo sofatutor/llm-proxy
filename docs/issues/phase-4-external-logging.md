@@ -25,10 +25,10 @@ sequenceDiagram
  - [x] Design the architecture for the asynchronous external logging worker
  - [x] Implement buffered sending of logs to external systems
  - [x] Add batch processing for efficient log delivery
-- [ ] Implement retry logic for failed log deliveries
-- [ ] Add error handling and fallback to local logging if external delivery fails
-- [ ] Add configuration options for enabling/disabling external logging, buffer size, batch size, and retry policy
-- [ ] Add unit tests for the external logging worker
+- [x] Implement retry logic for failed log deliveries
+- [x] Add error handling and fallback to local logging if external delivery fails
+- [x] Add configuration options for enabling/disabling external logging, buffer size, batch size, and retry policy
+- [x] Add unit tests for the external logging worker
 - [ ] Document the external logging system and configuration
 
 ## Acceptance Criteria
