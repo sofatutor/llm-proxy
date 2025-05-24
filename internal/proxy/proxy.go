@@ -54,6 +54,18 @@ type ProxyMetrics struct {
 	mu                sync.Mutex
 }
 
+// Metrics returns a copy of the current proxy metrics.
+func (p *TransparentProxy) Metrics() ProxyMetrics {
+	p.metrics.mu.Lock()
+	defer p.metrics.mu.Unlock()
+	return *p.metrics
+}
+
+// SetMetrics overwrites the current metrics (primarily for testing).
+func (p *TransparentProxy) SetMetrics(m ProxyMetrics) {
+	p.metrics = &m
+}
+
 // NewTransparentProxy creates a new proxy instance with an internally
 // configured logger based on the provided ProxyConfig.
 func NewTransparentProxy(config ProxyConfig, validator TokenValidator, store ProjectStore) (*TransparentProxy, error) {

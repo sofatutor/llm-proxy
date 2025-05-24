@@ -33,6 +33,8 @@ type Server struct {
 	tokenStore   token.TokenStore
 	projectStore proxy.ProjectStore
 	logger       *zap.Logger
+	proxy        *proxy.TransparentProxy
+	metrics      Metrics
 }
 
 // HealthResponse is the response body for the health check endpoint.
@@ -41,6 +43,13 @@ type HealthResponse struct {
 	Status    string    `json:"status"`    // Service status, "ok" for a healthy system
 	Timestamp time.Time `json:"timestamp"` // Current server time
 	Version   string    `json:"version"`   // Application version number
+}
+
+// Metrics holds runtime metrics for the server.
+type Metrics struct {
+	StartTime    time.Time
+	RequestCount int64
+	ErrorCount   int64
 }
 
 // Version is the application version, following semantic versioning.
@@ -57,11 +66,14 @@ func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.Pro
 		return nil, fmt.Errorf("failed to initialize logger: %w", err)
 	}
 
+	metrics := Metrics{StartTime: time.Now()}
+
 	s := &Server{
 		config:       cfg,
 		tokenStore:   tokenStore,
 		projectStore: projectStore,
 		logger:       logger,
+		metrics:      metrics,
 		server: &http.Server{
 			Addr:         cfg.ListenAddr,
 			Handler:      mux,
@@ -73,9 +85,19 @@ func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.Pro
 
 	// Register routes
 	mux.HandleFunc("/health", s.handleHealth)
+	mux.HandleFunc("/ready", s.handleReady)
+	mux.HandleFunc("/live", s.handleLive)
 	mux.HandleFunc("/manage/projects", s.handleProjects)
 	mux.HandleFunc("/manage/projects/", s.managementAuthMiddleware(s.handleProjectByID))
 	mux.HandleFunc("/manage/tokens", s.managementAuthMiddleware(s.handleTokens))
+
+	if cfg.EnableMetrics {
+		path := cfg.MetricsPath
+		if path == "" {
+			path = "/metrics"
+		}
+		mux.HandleFunc(path, s.handleMetrics)
+	}
 
 	return s, nil
 }
@@ -171,6 +193,7 @@ func (s *Server) initializeAPIRoutes() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize proxy: %w", err)
 	}
+	s.proxy = proxyHandler
 
 	// Register proxy routes
 	s.server.Handler.(*http.ServeMux).Handle("/v1/", proxyHandler.Handler())
@@ -211,6 +234,39 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Status code 200 OK is set implicitly when the response is written successfully
+}
+
+// handleReady is used for readiness probes.
+func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ready"))
+}
+
+// handleLive is used for liveness probes.
+func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("alive"))
+}
+
+// handleMetrics returns basic runtime metrics in JSON format.
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	m := struct {
+		UptimeSeconds float64 `json:"uptime_seconds"`
+		RequestCount  int64   `json:"request_count"`
+		ErrorCount    int64   `json:"error_count"`
+	}{
+		UptimeSeconds: time.Since(s.metrics.StartTime).Seconds(),
+	}
+	if s.proxy != nil {
+		pm := s.proxy.Metrics()
+		m.RequestCount = pm.RequestCount
+		m.ErrorCount = pm.ErrorCount
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(m); err != nil {
+		http.Error(w, "Failed to encode metrics", http.StatusInternalServerError)
+	}
 }
 
 // managementAuthMiddleware checks the management token in the Authorization header
