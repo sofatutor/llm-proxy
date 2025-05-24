@@ -194,7 +194,11 @@ func runServerForeground() {
 	if err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}
-	defer zapLogger.Sync()
+	defer func() {
+		if err := zapLogger.Sync(); err != nil {
+			log.Printf("Error syncing zap logger: %v", err)
+		}
+	}()
 
 	// Handle graceful shutdown
 	done := make(chan os.Signal, 1)
