@@ -349,14 +349,13 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
   - Configure log levels
 - [x] Create log format with detailed metadata
 - [ ] **Integrate Helicone as optional, asynchronous observability middleware (replaces Prometheus, does not replace custom logging)**
+  <!-- Helicone integration is for observability/analytics and is opt-in, async, and does not replace the core local logging system. -->
 - [ ] Add configuration for enabling/disabling Helicone
 - [ ] Add tests for Helicone integration (mocked, async)
 - [ ] Document Helicone integration and fallback behavior
 - [ ] Implement asynchronous worker for external logging:
+  <!-- External logging refers to sending logs to third-party systems (e.g., ELK, Loki, etc.) via a background worker, separate from Helicone. -->
   - Buffered sending
-  - Retry mechanism
-  - Batch processing
-  - Error handling
 - [ ] Add structured logging throughout the application
 - [ ] Implement log context propagation
 - [ ] Create log search and filtering utilities
