@@ -31,6 +31,7 @@ flowchart TD
 - [ ] Draft contributing guidelines
 - [ ] Document API reference
 - [ ] Review and update documentation for accuracy
+- [ ] Draft testing guidelines
 
 ## Acceptance Criteria
 - Developer docs are comprehensive and up to date
