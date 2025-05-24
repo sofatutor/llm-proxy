@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // System Status: Auto-update server time and backend status
     const serverTimeSpan = document.getElementById('server-time');
+    const backendStatus = document.getElementById('backend-status');
     let serverTime = null;
     function updateBackendStatus() {
         fetch('/health', {cache: 'no-store'})
@@ -80,7 +81,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const formatted = `${serverTime.getFullYear()}-${pad(serverTime.getMonth()+1)}-${pad(serverTime.getDate())} ${pad(serverTime.getHours())}:${pad(serverTime.getMinutes())}:${pad(serverTime.getSeconds())}`;
         serverTimeSpan.textContent = formatted;
     }
-    const backendStatus = document.getElementById('backend-status');
     if (backendStatus) {
         updateBackendStatus();
         setInterval(updateBackendStatus, 10000);
