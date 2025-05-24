@@ -7,11 +7,12 @@ import (
 )
 
 type rotateWriter struct {
-	path       string
-	maxSize    int64
-	maxBackups int
-	mu         sync.Mutex
-	file       *os.File
+	path        string
+	maxSize     int64
+	maxBackups  int
+	mu          sync.Mutex
+	file        *os.File
+	currentSize int64 // Track current file size in memory
 }
 
 func newRotateWriter(path string, maxSize int64, maxBackups int) (*rotateWriter, error) {
@@ -34,6 +35,12 @@ func (rw *rotateWriter) open() error {
 		return err
 	}
 	rw.file = f
+	// Update currentSize to match the file's actual size
+	fi, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	rw.currentSize = fi.Size()
 	return nil
 }
 
@@ -45,29 +52,41 @@ func (rw *rotateWriter) Write(p []byte) (int, error) {
 			return 0, err
 		}
 	}
-	fi, err := rw.file.Stat()
-	if err == nil && fi.Size()+int64(len(p)) > rw.maxSize {
+	if rw.currentSize+int64(len(p)) > rw.maxSize {
 		errClose := rw.file.Close()
 		if errClose != nil {
 			return 0, errClose
 		}
-		rw.rotate()
+		if err := rw.rotate(); err != nil {
+			// Log the error, but continue to try to open a new file
+			fmt.Printf("log rotation error: %v\n", err)
+		}
 		if err := rw.open(); err != nil {
 			return 0, err
 		}
 	}
-	return rw.file.Write(p)
+	n, err := rw.file.Write(p)
+	rw.currentSize += int64(n)
+	return n, err
 }
 
-func (rw *rotateWriter) rotate() {
+func (rw *rotateWriter) rotate() error {
+	var rotateErr error
 	for i := rw.maxBackups - 1; i >= 1; i-- {
 		old := fmt.Sprintf("%s.%d", rw.path, i)
 		new := fmt.Sprintf("%s.%d", rw.path, i+1)
 		if _, err := os.Stat(old); err == nil {
-			_ = os.Rename(old, new)
+			if err := os.Rename(old, new); err != nil {
+				fmt.Printf("log rotation rename error: %v\n", err)
+				rotateErr = err
+			}
 		}
 	}
-	_ = os.Rename(rw.path, fmt.Sprintf("%s.1", rw.path))
+	if err := os.Rename(rw.path, fmt.Sprintf("%s.1", rw.path)); err != nil {
+		fmt.Printf("log rotation rename error: %v\n", err)
+		rotateErr = err
+	}
+	return rotateErr
 }
 
 func (rw *rotateWriter) Sync() error {
