@@ -414,3 +414,14 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 - All Helicone operations are async to ensure minimum latency, in line with the project's minimum latency mandate.
 - Custom logging remains canonical for compliance and fallback; Helicone is additive and optional.
 - No vendor lock-in: disabling Helicone reverts to local logging only.
+
+## Release Plan
+
+- Releases are managed via **GitHub Releases**. Each release is tagged using [Semantic Versioning](https://semver.org/) (e.g., v1.2.3).
+- Docker images are built and published to **GitHub Container Registry (GHCR)** on every tagged release (see `.github/workflows/docker.yml`).
+- The release workflow is automated: pushing a new tag (e.g., `v1.2.3`) triggers the build and publish process for both binaries and Docker images.
+- A dedicated CLI command (e.g., `llm-proxy release draft`) will be provided to help draft new releases, generate changelogs, and automate operational chores (e.g., version bumping, tagging, and pushing tags).
+- Release notes are generated from merged PRs and issue files, ensuring traceability and transparency.
+- All release artifacts (binaries, Docker images, changelogs) are attached to the GitHub Release.
+- The release process is documented in `/docs/release.md` (to be created).
+- All major release, versioning, and operational automation issues are tracked in `docs/issues/` (see: SecOps, Docker, operational, and CLI automation issues).
