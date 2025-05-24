@@ -8,7 +8,8 @@ This file provides essential context and rules for both human and AI contributor
 
 ## Repository Structure & Focus
 - **Work in the `internal/`, `cmd/`, and root-level config/docs files.**
-- **WIP.md** and **PLAN.md** are always up to date and must be referenced for project status and architecture.
+- **docs/issues/** markdown files are the primary source for project status, progress, and workflow. Each major task or feature is tracked as a self-contained issue doc.
+- **PLAN.md** is always up to date and must be referenced for project architecture and objectives.
 - **CLAUDE.md** contains the canonical working agreement; this file summarizes and adapts it for agent use.
 
 ---
@@ -40,8 +41,8 @@ This file provides essential context and rules for both human and AI contributor
   - Keep code DRY, simple, and maintainable.
   - No TODOs left unresolved in code or docs.
 - **Documentation:**
-  - Update `WIP.md` and `PLAN.md` with every significant change.
-  - Document rationale for changes and workflow updates.
+  - Update the relevant issue doc in docs/issues/ with every significant change.
+  - Document rationale for changes and workflow updates in the issue doc.
 - **Review process:**
   - All review comments must be addressed in code or docs before merging.
   - For performance/architecture feedback, implement the solution immediately (do not defer).
@@ -51,21 +52,22 @@ This file provides essential context and rules for both human and AI contributor
 ## PR Instructions
 - **Title format:** `[<area>] <Short Description>` (e.g., `[proxy] Add streaming support`)
 - **Description:**
-  - Reference related checklist items in `WIP.md` and `PLAN.md`.
+  - Reference related checklist items in the relevant issue doc and PLAN.md.
   - Summarize what changed, why, and how it was validated.
   - Note any new or updated tests and coverage impact.
+  - Note which issue doc is being addressed.
 - **Checklist before merging:**
   - [ ] All tests pass (`make test`)
   - [ ] All linters pass (`make lint`)
   - [ ] Coverage is 90%+
-  - [ ] WIP.md and PLAN.md are current
+  - [ ] Issue doc and PLAN.md are current
   - [ ] No unresolved TODOs or review comments
 
 ---
 
 ## Agent-Specific Instructions
-- Always explore relevant context in `WIP.md`, `PLAN.md`, and `CLAUDE.md` before making changes.
-- Prefer small, reviewable increments and document every step in `WIP.md`.
+- Always explore relevant context in the current issue doc, PLAN.md, and CLAUDE.md before making changes.
+- Prefer small, reviewable increments and document every step in the relevant issue doc.
 - When in doubt, update documentation and ask for clarification in PRs.
 - Respect the most nested AGENTS.md if present in subfolders.
 

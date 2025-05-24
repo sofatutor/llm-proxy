@@ -1,5 +1,7 @@
 # WIP: Admin UI Foundation Implementation (PR #19)
 
+> **Note:** All detailed development tasks for Phases 4–7 are now tracked in individual issue files in `docs/issues/`. This WIP.md will serve as a high-level status and index. All future development, tracking, and progress updates will be managed via the issue files. Please refer to the linked issues for detailed tasks, rationale, and acceptance criteria.
+
 ## Status - Admin UI Foundation  
 - [x] Admin UI server integrated as `admin` subcommand (moved to dedicated admin.go file)
 - [x] Complete Bootstrap 5 responsive UI with custom styling  
@@ -288,416 +290,46 @@ A new `llm-proxy manage` command will be introduced to provide a clear, user-fri
    - **Includes:** Statistics cards, quick actions, system status
 
 ## Phase 4: Logging and Monitoring
-
-### Logging System
-- [ ] Research logging best practices
-- [ ] Define comprehensive log format:
-  - Standard fields (timestamp, level, message)
-  - Request-specific fields (endpoint, method, status)
-  - Performance metrics (duration, token counts)
-  - Error details when applicable
-- [ ] Implement JSON Lines local logging:
-  - Set up log file creation
-  - Implement log rotation
-  - Configure log levels
-- [ ] Create log format with detailed metadata
-- [ ] Implement asynchronous worker for external logging:
-  - Buffered sending
-  - Retry mechanism
-  - Batch processing
-  - Error handling
-- [ ] Add structured logging throughout the application
-- [ ] Implement log context propagation
-- [ ] Create log search and filtering utilities
-- [ ] Set up log aggregation for distributed deployments
-- [ ] Implement audit logging for security events
-- [ ] Create log visualization recommendations
-- [ ] Add log sampling for high-volume deployments
-- [ ] Add proxy metrics/logging/timing improvements 
-
-### Monitoring System
-- [ ] Implement health check endpoints
-- [ ] Create readiness and liveness probes
-- [ ] Add Prometheus metrics endpoints:
-  - Request counts
-  - Error rates
-  - Response times
-  - Token usage statistics
-  - System metrics
-- [ ] Set up distributed tracing (optional)
-- [ ] Implement alerting recommendations
-- [ ] Create dashboards templates for Grafana
-- [ ] Add performance benchmark endpoints
-- [ ] Implement resource usage monitoring
-
-### Pull Requests for Phase 4
-
-1. **Logging System Core** (`feature/phase-4-logging-core`)
-   - Research logging best practices
-   - Define comprehensive log format
-   - Implement JSON Lines local logging
-   - Set up log rotation and configuration
-
-2. **External Logging** (`feature/phase-4-external-logging`)
-   - Implement asynchronous worker
-   - Add buffered sending with retries
-   - Create batch processing
-   - Add error handling
-
-3. **Log Integration** (`feature/phase-4-log-integration`)
-   - Add structured logging throughout application
-   - Implement log context propagation
-   - Create log search/filtering utilities
-   - Add audit logging for security events
-
-4. **Monitoring Core** (`feature/phase-4-monitoring-core`)
-   - Implement health check endpoints
-   - Create readiness and liveness probes
-   - Add basic system metrics
-   - Set up monitoring infrastructure
-
-5. **Prometheus Integration** (`feature/phase-4-prometheus`)
-   - Add Prometheus metrics endpoints
-   - Implement custom metrics for key functionality
-   - Create Grafana dashboard templates
-   - Add documentation for monitoring
+- [Logging System Core](docs/issues/phase-4-logging-core.md)
+- [External Logging](docs/issues/phase-4-external-logging.md)
+- [Log Integration](docs/issues/phase-4-log-integration.md)
+- [Monitoring Core](docs/issues/phase-4-monitoring-core.md)
+- [Helicone Middleware Integration](docs/issues/phase-4-helicone-middleware.md)
+- [Log Sampling and Visualization](docs/issues/phase-4-log-sampling-visualization.md)
+- [Alerting, Tracing, and Performance Benchmarks](docs/issues/phase-4-alerting-tracing-benchmarks.md)
+- [Resource Usage Monitoring and Grafana Dashboards](docs/issues/phase-4-resource-usage-grafana.md)
 
 ## Phase 5: Testing and Performance
-
-### Unit Testing
-- [ ] Set up testing framework and utilities
-- [ ] Create mock implementations for external dependencies
-- [ ] Write tests for database operations:
-  - Project CRUD tests
-  - Token CRUD tests
-  - Error handling tests
-  - Transaction tests
-- [ ] Implement token management tests:
-  - Generation tests
-  - Validation tests
-  - Expiration tests
-  - Rate-limiting tests
-- [ ] Create proxy request tests:
-  - Authentication tests
-  - Forwarding tests
-  - Error handling tests
-  - Streaming tests
-- [ ] Write logging system tests
-- [ ] Implement admin UI tests:
-  - Route tests
-  - Authentication tests
-  - View rendering tests
-- [ ] Add API endpoint tests:
-  - Management API tests
-  - Proxy API tests
-- [ ] Create integration tests for end-to-end flows
-- [ ] Implement performance tests:
-  - Throughput tests
-  - Latency tests
-  - Concurrency tests
-- [ ] Add security tests:
-  - Authentication bypass tests
-  - Token validation tests
-  - Error information leakage tests
-- [ ] Implement test coverage reporting
-- [ ] Create continuous integration pipeline
-
-### Benchmark Tool
-- [ ] Design benchmark architecture
-- [ ] Implement CLI with flag parsing:
-  - Target URL
-  - Endpoint selection
-  - Token specification
-  - Request count
-  - Concurrency level
-  - Timeout settings
-  - Output format
-- [ ] Add concurrent request handling:
-  - Worker pool
-  - Request generation
-  - Response parsing
-- [ ] Create performance metrics collection:
-  - Latency statistics
-  - Throughput
-  - Error rates
-  - Connection statistics
-- [ ] Implement result reporting:
-  - Console output
-  - JSON output
-  - CSV output
-  - Visualization options
-- [ ] Add comparison features
-- [ ] Create benchmark profiles for different scenarios
-- [ ] Implement progress reporting
-- [ ] Add customizable request templates
-- [ ] Create documentation with examples
-- [ ] Refactor and expand benchmark tool, add setup logic, restore tests
-
-### Pull Requests for Phase 5
-
-1. **Testing Framework** (`feature/phase-5-testing-framework`)
-   - Set up testing framework and utilities
-   - Create mock implementations
-   - Add test helpers and fixtures
-   - Implement test coverage reporting
-
-2. **Database Tests** (`feature/phase-5-database-tests`)
-   - Write project CRUD tests
-   - Implement token CRUD tests
-   - Add error handling tests
-   - Create transaction tests
-
-3. **Token Management Tests** (`feature/phase-5-token-tests`)
-   - Implement generation tests
-   - Add validation tests
-   - Create expiration tests
-   - Write rate-limiting tests
-
-4. **Proxy and API Tests** (`feature/phase-5-proxy-tests`)
-   - Create proxy authentication tests
-   - Add forwarding tests
-   - Implement streaming tests
-   - Write API endpoint tests
-
-5. **UI and Integration Tests** (`feature/phase-5-ui-tests`)
-   - Implement admin UI tests
-   - Create integration tests
-   - Add security tests
-   - Set up CI pipeline for tests
-
-6. **Benchmark Tool Core** (`feature/phase-5-benchmark-core`)
-   - Design benchmark architecture
-   - Implement CLI with flag parsing
-   - Add concurrent request handling
-   - Create initial request generators
-
-7. **Benchmark Metrics** (`feature/phase-5-benchmark-metrics`)
-   - Implement performance metrics collection
-   - Create result reporting formats
-   - Add comparison features
-   - Create visualization options
-
-8. **Benchmark Scenarios** (`feature/phase-5-benchmark-scenarios`)
-   - Implement standard benchmark profiles
-   - Add progress reporting
-   - Create customizable request templates
-   - Write documentation with examples
+- [Testing Framework](docs/issues/phase-5-testing-framework.md)
+- [Database Tests](docs/issues/phase-5-database-tests.md)
+- [Token Management Tests](docs/issues/phase-5-token-tests.md)
+- [Proxy and API Tests](docs/issues/phase-5-proxy-tests.md)
+- [UI and Integration Tests](docs/issues/phase-5-ui-tests.md)
+- [Benchmark Tool Core](docs/issues/phase-5-benchmark-core.md)
+- [Benchmark Metrics](docs/issues/phase-5-benchmark-metrics.md)
+- [Benchmark Scenarios](docs/issues/phase-5-benchmark-scenarios.md)
 
 ## Phase 6: Deployment and Documentation
-
-### Containerization
-- [ ] Research Docker best practices for Go applications
-- [ ] Create multi-stage Dockerfile
-- [ ] Configure volumes for data persistence:
-  - Database volume
-  - Logs volume
-  - Configuration volume
-- [ ] Set up environment variables:
-  - Configuration options
-  - Secrets management
-  - Defaults and validation
-- [ ] Create Docker Compose file:
-  - Proxy service
-  - Optional monitoring services
-  - Network configuration
-- [ ] Test container functionality:
-  - Build process
-  - Configuration loading
-  - Data persistence
-  - Performance
-- [ ] Implement container health checks
-- [ ] Add Docker-specific documentation
-- [ ] Create container orchestration examples:
-  - Kubernetes
-  - Docker Swarm
-  - Simple compose
-- [ ] Implement secrets management
-- [ ] Add container security best practices
-
-### Documentation
-- [ ] Update README with comprehensive instructions
-- [ ] Create installation guide:
-  - From source
-  - Using Docker
-  - Using pre-built binaries
-- [ ] Write user documentation:
-  - Configuration options
-  - Token management
-  - Admin UI usage
-  - API reference
-- [ ] Create developer documentation:
-  - Architecture overview
-  - Code organization
-  - Contributing guidelines
-  - Testing approach
-- [ ] Document API endpoints:
-  - OpenAPI/Swagger specs
-  - Example requests/responses
-  - Authentication requirements
-  - Error handling
-- [ ] Document deployment options:
-  - Docker
-  - Bare metal
-  - Cloud providers
-- [ ] Add security considerations:
-  - Token security
-  - API key management
-  - Network security
-  - Data protection
-- [ ] Create troubleshooting guide
-- [ ] Add performance tuning recommendations
-- [ ] Implement godoc-based code documentation
-- [ ] Create changelog and versioning document
-
-### Pull Requests for Phase 6
-
-1. **Docker Optimization** (`feature/phase-6-docker-optimization`)
-   - Optimize multi-stage Dockerfile
-   - Improve volume configuration
-   - Add container health checks
-   - Implement security best practices
-
-2. **Container Orchestration** (`feature/phase-6-container-orchestration`)
-   - Create Kubernetes configurations
-   - Add Docker Swarm examples
-   - Implement secrets management
-   - Test deployment options
-
-3. **User Documentation** (`feature/phase-6-user-docs`)
-   - Update README with comprehensive instructions
-   - Create installation guide
-   - Write user documentation
-   - Add troubleshooting guide
-
-4. **Developer Documentation** (`feature/phase-6-dev-docs`)
-   - Create architecture documentation
-   - Document code organization
-   - Add contributing guidelines
-   - Write API reference
-
-5. **Security Documentation** (`feature/phase-6-security-docs`)
-   - Document security considerations
-   - Add API key management guidance
-   - Create network security recommendations
-   - Document data protection measures
+- [Docker Optimization](docs/issues/phase-6-docker-optimization.md)
+- [Container Orchestration](docs/issues/phase-6-container-orchestration.md)
+- [User Documentation](docs/issues/phase-6-user-docs.md)
+- [Developer Documentation](docs/issues/phase-6-dev-docs.md)
+- [Security Documentation](docs/issues/phase-6-security-docs.md)
 
 ## Phase 7: Optimization and Production Readiness
+- [Performance Profiling](docs/issues/phase-7-performance-profiling.md)
+- [Concurrency Optimization](docs/issues/phase-7-concurrency.md)
+- [Database Optimization](docs/issues/phase-7-db-optimization.md)
+- [Memory and CPU Optimization](docs/issues/phase-7-memory-cpu.md)
+- [HTTPS and Security](docs/issues/phase-7-https.md)
+- [Operational Features](docs/issues/phase-7-operational.md)
+- [Scaling Support](docs/issues/phase-7-scaling.md)
 
-### Performance Optimization
-- [ ] Profile application to identify bottlenecks
-- [ ] Use goroutines for concurrency:
-  - Request handling
-  - Background tasks
-  - Cleanup operations
-- [ ] Implement connection pooling:
-  - Database connections
-  - HTTP client connections
-- [ ] Optimize database queries:
-  - Indexes
-  - Query optimization
-  - Prepared statements
-  - Connection management
-- [ ] Profile and optimize bottlenecks:
-  - Memory usage
-  - CPU usage
-  - I/O operations
-  - Network operations
-- [ ] Implement caching where appropriate:
-  - Token validation results
-  - Frequent database queries
-  - API responses
-- [ ] Optimize logging performance
-- [ ] Reduce memory allocations
-- [ ] Improve startup time
-- [ ] Optimize for container environments
+---
 
-### Production Enhancements
-- [ ] Add HTTPS support:
-  - TLS configuration
-  - Certificate management
-  - HTTP/2 support
-- [ ] Implement token cleanup job:
-  - Schedule configuration
-  - Cleanup logic
-  - Reporting
-- [ ] Add monitoring endpoints for Prometheus:
-  - Custom metrics
-  - Alert configurations
-  - Dashboard templates
-- [ ] Implement distributed rate limiting:
-  - Redis-backed rate limiting
-  - Consistent behavior across multiple instances
-  - Failover mechanisms
-  - Performance optimization
-- [ ] Implement request caching system:
-  - Redis-backed response cache
-  - Configurable TTL for different endpoints
-  - Cache invalidation strategies
-  - Cache hit/miss metrics
-  - Support for cache control headers
-- [ ] Advanced middleware enhancements:
-  - Global rate-limiting middleware (beyond per-token rate limiting)
-  - Response transformation capabilities (if needed)
-  - Advanced telemetry collection
-  - Feature flags for gradual rollout
-  - API versioning strategy
-- [ ] Document scaling considerations:
-  - Horizontal scaling
-  - Vertical scaling
-  - Database scaling
-  - Load balancing
-- [ ] Implement graceful shutdown
-- [ ] Add support for multiple OpenAI API keys (load balancing)
-- [ ] Create production checklist
-- [ ] Implement rate limiting across instances
-- [ ] Add DDoS protection recommendations
-- [ ] Create backup and restore procedures
-- [ ] Document disaster recovery process
-- [ ] Implement zero-downtime deployment strategy
+**All future development, tracking, and progress updates will be managed via the above issue files.**
 
-### Pull Requests for Phase 7
-
-1. **Performance Profiling** (`feature/phase-7-performance-profiling`)
-   - Profile application to identify bottlenecks
-   - Create benchmark baselines
-   - Document performance issues
-   - Plan optimization strategy
-
-2. **Concurrency Optimization** (`feature/phase-7-concurrency`)
-   - Optimize goroutine usage
-   - Implement connection pooling
-   - Add worker pools where appropriate
-   - Improve resource utilization
-
-3. **Database Optimization** (`feature/phase-7-db-optimization`)
-   - Optimize database queries
-   - Improve index usage
-   - Add query caching where appropriate
-   - Optimize connection management
-
-4. **Memory and CPU Optimization** (`feature/phase-7-memory-cpu`)
-   - Reduce memory allocations
-   - Optimize CPU-intensive operations
-   - Improve startup time
-   - Fine-tune for container environments
-
-5. **HTTPS and Security** (`feature/phase-7-https`)
-   - Add HTTPS support
-   - Implement TLS configuration
-   - Add HTTP/2 support
-   - Enhance security features
-
-6. **Operational Features** (`feature/phase-7-operational`)
-   - Implement token cleanup job
-   - Add graceful shutdown
-   - Create backup/restore procedures
-   - Document disaster recovery
-
-7. **Scaling Support** (`feature/phase-7-scaling`)
-   - Implement load balancing for API keys
-   - Add distributed rate limiting
-   - Document scaling considerations
-   - Create zero-downtime deployment strategy
+For any new features, enhancements, or bug fixes, please create a new issue file in `docs/issues/` and link it here if needed.
 
 ## Dependencies
 
