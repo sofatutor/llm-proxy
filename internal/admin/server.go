@@ -200,7 +200,10 @@ func (s *Server) setupRoutes() {
 			if err := json.NewDecoder(resp.Body).Decode(&backendData); err == nil {
 				backendHealth = backendData
 			}
-			resp.Body.Close()
+			err := resp.Body.Close()
+			if err != nil {
+				log.Printf("failed to close backend health response body: %v", err)
+			}
 		}
 		c.JSON(http.StatusOK, gin.H{
 			"admin":   adminHealth,
