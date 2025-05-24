@@ -47,7 +47,10 @@ func (rw *rotateWriter) Write(p []byte) (int, error) {
 	}
 	fi, err := rw.file.Stat()
 	if err == nil && fi.Size()+int64(len(p)) > rw.maxSize {
-		rw.file.Close()
+		errClose := rw.file.Close()
+		if errClose != nil {
+			return 0, errClose
+		}
 		rw.rotate()
 		if err := rw.open(); err != nil {
 			return 0, err
