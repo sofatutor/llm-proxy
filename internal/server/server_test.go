@@ -84,7 +84,7 @@ func TestMetricsEndpoint(t *testing.T) {
 	server, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
 	require.NoError(t, err)
 	p := &proxy.TransparentProxy{}
-	p.SetMetrics(proxy.ProxyMetrics{RequestCount: 2, ErrorCount: 1})
+	p.SetMetrics(&proxy.ProxyMetrics{RequestCount: 2, ErrorCount: 1})
 	server.proxy = p
 
 	req := httptest.NewRequest("GET", "/metrics", nil)

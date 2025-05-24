@@ -54,16 +54,16 @@ type ProxyMetrics struct {
 	mu                sync.Mutex
 }
 
-// Metrics returns a copy of the current proxy metrics.
-func (p *TransparentProxy) Metrics() ProxyMetrics {
+// Metrics returns a pointer to the current proxy metrics.
+func (p *TransparentProxy) Metrics() *ProxyMetrics {
 	p.metrics.mu.Lock()
 	defer p.metrics.mu.Unlock()
-	return *p.metrics
+	return p.metrics
 }
 
 // SetMetrics overwrites the current metrics (primarily for testing).
-func (p *TransparentProxy) SetMetrics(m ProxyMetrics) {
-	p.metrics = &m
+func (p *TransparentProxy) SetMetrics(m *ProxyMetrics) {
+	p.metrics = m
 }
 
 // NewTransparentProxy creates a new proxy instance with an internally
