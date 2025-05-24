@@ -44,9 +44,12 @@ type Config struct {
 	LogMaxBackups int    // Number of rotated log files to keep
 
 	// External logging
-	ExternalLoggingEnabled    bool // Enable asynchronous external logging
-	ExternalLoggingBufferSize int  // Buffer size for external log queue
-	ExternalLoggingBatchSize  int  // Batch size for sending logs
+	ExternalLoggingEnabled         bool          // Enable asynchronous external logging
+	ExternalLoggingBufferSize      int           // Buffer size for external log queue
+	ExternalLoggingBatchSize       int           // Batch size for sending logs
+	ExternalLoggingRetryInterval   time.Duration // Interval between retry attempts
+	ExternalLoggingMaxRetries      int           // Maximum number of retry attempts
+	ExternalLoggingFallbackToLocal bool          // Fallback to local logging if external delivery fails
 
 	// CORS settings
 	CORSAllowedOrigins []string      // Allowed origins for CORS
@@ -119,9 +122,12 @@ func New() (*Config, error) {
 		LogMaxSizeMB:  getEnvInt("LOG_MAX_SIZE_MB", 10),
 		LogMaxBackups: getEnvInt("LOG_MAX_BACKUPS", 5),
 
-		ExternalLoggingEnabled:    getEnvBool("EXTERNAL_LOGGING_ENABLED", false),
-		ExternalLoggingBufferSize: getEnvInt("EXTERNAL_LOGGING_BUFFER_SIZE", 100),
-		ExternalLoggingBatchSize:  getEnvInt("EXTERNAL_LOGGING_BATCH_SIZE", 10),
+		ExternalLoggingEnabled:         getEnvBool("EXTERNAL_LOGGING_ENABLED", false),
+		ExternalLoggingBufferSize:      getEnvInt("EXTERNAL_LOGGING_BUFFER_SIZE", 100),
+		ExternalLoggingBatchSize:       getEnvInt("EXTERNAL_LOGGING_BATCH_SIZE", 10),
+		ExternalLoggingRetryInterval:   getEnvDuration("EXTERNAL_LOGGING_RETRY_INTERVAL", 5*time.Second),
+		ExternalLoggingMaxRetries:      getEnvInt("EXTERNAL_LOGGING_MAX_RETRIES", 3),
+		ExternalLoggingFallbackToLocal: getEnvBool("EXTERNAL_LOGGING_FALLBACK_TO_LOCAL", true),
 
 		// CORS defaults
 		CORSAllowedOrigins: getEnvStringSlice("CORS_ALLOWED_ORIGINS", []string{"*"}),
@@ -266,9 +272,12 @@ func DefaultConfig() *Config {
 		LogMaxSizeMB:  10,
 		LogMaxBackups: 5,
 
-		ExternalLoggingEnabled:    false,
-		ExternalLoggingBufferSize: 100,
-		ExternalLoggingBatchSize:  10,
+		ExternalLoggingEnabled:         false,
+		ExternalLoggingBufferSize:      100,
+		ExternalLoggingBatchSize:       10,
+		ExternalLoggingRetryInterval:   5 * time.Second,
+		ExternalLoggingMaxRetries:      3,
+		ExternalLoggingFallbackToLocal: true,
 
 		// CORS defaults
 		CORSAllowedOrigins: []string{"*"},

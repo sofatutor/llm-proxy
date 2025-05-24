@@ -20,12 +20,18 @@ type ExternalLogger struct {
 	sender        Sender
 	stop          chan struct{}
 	wg            sync.WaitGroup
+	// Retry/fallback
+	retryInterval   time.Duration
+	maxRetries      int
+	fallbackToLocal bool
+	localFallback   func([][]byte) // Called with batch if fallback is needed
 }
 
 // NewExternalLogger creates a new ExternalLogger. If enabled is false, the
 // logger is effectively disabled. bufferSize and batchSize must be >0;
 // flushInterval controls how often batches are flushed if not full.
-func NewExternalLogger(enabled bool, bufferSize, batchSize int, flushInterval time.Duration, sender Sender) *ExternalLogger {
+// retryInterval and maxRetries control retry policy. fallbackToLocal enables fallback.
+func NewExternalLogger(enabled bool, bufferSize, batchSize int, flushInterval, retryInterval time.Duration, maxRetries int, fallbackToLocal bool, sender Sender, localFallback func([][]byte)) *ExternalLogger {
 	if bufferSize <= 0 {
 		bufferSize = 100
 	}
@@ -35,13 +41,23 @@ func NewExternalLogger(enabled bool, bufferSize, batchSize int, flushInterval ti
 	if flushInterval <= 0 {
 		flushInterval = time.Second
 	}
+	if retryInterval <= 0 {
+		retryInterval = 5 * time.Second
+	}
+	if maxRetries < 0 {
+		maxRetries = 3
+	}
 	el := &ExternalLogger{
-		enabled:       enabled,
-		buffer:        make(chan []byte, bufferSize),
-		batchSize:     batchSize,
-		flushInterval: flushInterval,
-		sender:        sender,
-		stop:          make(chan struct{}),
+		enabled:         enabled,
+		buffer:          make(chan []byte, bufferSize),
+		batchSize:       batchSize,
+		flushInterval:   flushInterval,
+		sender:          sender,
+		stop:            make(chan struct{}),
+		retryInterval:   retryInterval,
+		maxRetries:      maxRetries,
+		fallbackToLocal: fallbackToLocal,
+		localFallback:   localFallback,
 	}
 	if enabled && sender != nil {
 		el.wg.Add(1)
@@ -84,7 +100,18 @@ func (l *ExternalLogger) run() {
 		if len(batch) == 0 {
 			return
 		}
-		_ = l.sender.Send(context.Background(), batch)
+		var err error
+		for attempt := 0; attempt <= l.maxRetries; attempt++ {
+			err = l.sender.Send(context.Background(), batch)
+			if err == nil {
+				break
+			}
+			time.Sleep(l.retryInterval)
+		}
+		if err != nil && l.fallbackToLocal && l.localFallback != nil {
+			// Fallback to local logging
+			l.localFallback(batch)
+		}
 		batch = batch[:0]
 	}
 
