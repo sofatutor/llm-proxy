@@ -58,8 +58,8 @@ func (rw *rotateWriter) Write(p []byte) (int, error) {
 			return 0, errClose
 		}
 		if err := rw.rotate(); err != nil {
-			// Log the error, but continue to try to open a new file
-			fmt.Printf("log rotation error: %v\n", err)
+			// Return the error to the caller
+			return 0, err
 		}
 		if err := rw.open(); err != nil {
 			return 0, err
