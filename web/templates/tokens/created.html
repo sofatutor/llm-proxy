@@ -81,32 +81,52 @@
                 </h5>
             </div>
             <div class="card-body">
-                <h6>Using with curl:</h6>
-                <div class="bg-dark text-light p-3 rounded mb-3">
-                    <code>curl -H "Authorization: Bearer {{ .token.Token }}" \<br>
-                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;http://localhost:8080/v1/chat/completions</code>
-                    <button class="btn btn-sm btn-outline-light float-end" 
-                            onclick="copyCurl()" 
-                            style="margin-top: -5px;">
-                        <i class="bi bi-clipboard"></i>
-                    </button>
+                <ul class="nav nav-tabs mb-3" id="usageTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="curl-tab" data-bs-toggle="tab" data-bs-target="#curl" type="button" role="tab" aria-controls="curl" aria-selected="true">curl</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="python-tab" data-bs-toggle="tab" data-bs-target="#python" type="button" role="tab" aria-controls="python" aria-selected="false">Python</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="node-tab" data-bs-toggle="tab" data-bs-target="#node" type="button" role="tab" aria-controls="node" aria-selected="false">Node.js</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="ruby-tab" data-bs-toggle="tab" data-bs-target="#ruby" type="button" role="tab" aria-controls="ruby" aria-selected="false">Ruby</button>
+                    </li>
+                </ul>
+                <div class="tab-content" id="usageTabContent">
+                    <div class="tab-pane fade show active position-relative" id="curl" role="tabpanel" aria-labelledby="curl-tab">
+                        <pre class="bg-dark text-light rounded p-3 mb-0"><code class="language-bash">curl -H "Authorization: Bearer {{ .token.Token }}" \
+  http://localhost:8080/v1/chat/completions</code></pre>
+                        <button class="btn btn-sm btn-outline-light position-absolute top-0 end-0 m-2" onclick="copyUsage('curl')"><i class="bi bi-clipboard"></i></button>
+                    </div>
+                    <div class="tab-pane fade position-relative" id="python" role="tabpanel" aria-labelledby="python-tab">
+                        <pre class="bg-dark text-light rounded p-3 mb-0"><code class="language-python">import openai
+client = openai.OpenAI(
+    api_key="{{ .token.Token }}",
+    base_url="http://localhost:8080/v1"
+)</code></pre>
+                        <button class="btn btn-sm btn-outline-light position-absolute top-0 end-0 m-2" onclick="copyUsage('python')"><i class="bi bi-clipboard"></i></button>
+                    </div>
+                    <div class="tab-pane fade position-relative" id="node" role="tabpanel" aria-labelledby="node-tab">
+                        <pre class="bg-dark text-light rounded p-3 mb-0"><code class="language-javascript">const openai = require('openai');
+const client = new openai.OpenAI({
+  apiKey: '{{ .token.Token }}',
+  baseURL: 'http://localhost:8080/v1',
+});</code></pre>
+                        <button class="btn btn-sm btn-outline-light position-absolute top-0 end-0 m-2" onclick="copyUsage('node')"><i class="bi bi-clipboard"></i></button>
+                    </div>
+                    <div class="tab-pane fade position-relative" id="ruby" role="tabpanel" aria-labelledby="ruby-tab">
+                        <pre class="bg-dark text-light rounded p-3 mb-0"><code class="language-ruby">require 'openai'
+client = OpenAI::Client.new(
+  access_token: '{{ .token.Token }}',
+  uri_base: 'http://localhost:8080/v1'
+)</code></pre>
+                        <button class="btn btn-sm btn-outline-light position-absolute top-0 end-0 m-2" onclick="copyUsage('ruby')"><i class="bi bi-clipboard"></i></button>
+                    </div>
                 </div>
-
-                <h6>Using with OpenAI Python client:</h6>
-                <div class="bg-dark text-light p-3 rounded mb-3">
-                    <code>import openai<br>
-                    client = openai.OpenAI(<br>
-                    &nbsp;&nbsp;&nbsp;&nbsp;api_key="{{ .token.Token }}",<br>
-                    &nbsp;&nbsp;&nbsp;&nbsp;base_url="http://localhost:8080/v1"<br>
-                    )</code>
-                    <button class="btn btn-sm btn-outline-light float-end" 
-                            onclick="copyPython()" 
-                            style="margin-top: -5px;">
-                        <i class="bi bi-clipboard"></i>
-                    </button>
-                </div>
-
-                <div class="alert alert-warning">
+                <div class="alert alert-warning mt-4">
                     <i class="bi bi-exclamation-triangle"></i>
                     <strong>Security Reminder:</strong>
                     <ul class="mb-0">
@@ -132,6 +152,14 @@
     </div>
 </div>
 
+<!-- Prism.js for syntax highlighting -->
+<link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-javascript.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-ruby.min.js"></script>
+
 <script>
 function copyToken() {
     const tokenInput = document.getElementById('tokenValue');
@@ -156,23 +184,18 @@ function copyToken() {
     });
 }
 
-function copyCurl() {
-    const curlCommand = `curl -H "Authorization: Bearer {{ .token.Token }}" \\
-     http://localhost:8080/v1/chat/completions`;
-    
-    navigator.clipboard.writeText(curlCommand).then(function() {
-        showCopySuccess();
-    });
-}
-
-function copyPython() {
-    const pythonCode = `import openai
-client = openai.OpenAI(
-    api_key="{{ .token.Token }}",
-    base_url="http://localhost:8080/v1"
-)`;
-    
-    navigator.clipboard.writeText(pythonCode).then(function() {
+function copyUsage(lang) {
+    let code = '';
+    if (lang === 'curl') {
+        code = `curl -H "Authorization: Bearer {{ .token.Token }}" \\n  http://localhost:8080/v1/chat/completions`;
+    } else if (lang === 'python') {
+        code = `import openai\nclient = openai.OpenAI(\n    api_key=\"{{ .token.Token }}\",\n    base_url=\"http://localhost:8080/v1\"\n)`;
+    } else if (lang === 'node') {
+        code = `const openai = require('openai');\nconst client = new openai.OpenAI({\n  apiKey: '{{ .token.Token }}',\n  baseURL: 'http://localhost:8080/v1',\n});`;
+    } else if (lang === 'ruby') {
+        code = `require 'openai'\nclient = OpenAI::Client.new(\n  access_token: '{{ .token.Token }}',\n  uri_base: 'http://localhost:8080/v1'\n)`;
+    }
+    navigator.clipboard.writeText(code).then(function() {
         showCopySuccess();
     });
 }

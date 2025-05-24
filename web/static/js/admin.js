@@ -44,6 +44,55 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.location.pathname === '/dashboard') {
         setInterval(refreshDashboard, 30000);
     }
+
+    // System Status: Auto-update server time and backend status
+    const serverTimeSpan = document.getElementById('server-time');
+    let serverTime = null;
+    function updateBackendStatus() {
+        fetch('/health', {cache: 'no-store'})
+            .then(r => r.json())
+            .then(data => {
+                const backend = data.backend || {};
+                if (backend.status && backend.status.toLowerCase() === 'ok') {
+                    backendStatus.classList.remove('text-danger');
+                    backendStatus.classList.add('text-success');
+                    backendStatus.innerHTML = '<i class="bi bi-check-circle"></i> Backend: Online';
+                } else {
+                    backendStatus.classList.remove('text-success');
+                    backendStatus.classList.add('text-danger');
+                    backendStatus.innerHTML = '<i class="bi bi-x-circle"></i> Backend: Offline';
+                }
+                if (backend.timestamp && serverTimeSpan) {
+                    serverTime = new Date(backend.timestamp);
+                    updateServerTimeDisplay();
+                }
+            })
+            .catch(() => {
+                backendStatus.classList.remove('text-success');
+                backendStatus.classList.add('text-danger');
+                backendStatus.innerHTML = '<i class="bi bi-x-circle"></i> Backend: Offline';
+            });
+    }
+    function updateServerTimeDisplay() {
+        if (!serverTimeSpan || !serverTime) return;
+        // Format as YYYY-MM-DD HH:mm:ss
+        const pad = n => n.toString().padStart(2, '0');
+        const formatted = `${serverTime.getFullYear()}-${pad(serverTime.getMonth()+1)}-${pad(serverTime.getDate())} ${pad(serverTime.getHours())}:${pad(serverTime.getMinutes())}:${pad(serverTime.getSeconds())}`;
+        serverTimeSpan.textContent = formatted;
+    }
+    const backendStatus = document.getElementById('backend-status');
+    if (backendStatus) {
+        updateBackendStatus();
+        setInterval(updateBackendStatus, 10000);
+    }
+    if (serverTimeSpan) {
+        setInterval(() => {
+            if (serverTime) {
+                serverTime.setSeconds(serverTime.getSeconds() + 1);
+                updateServerTimeDisplay();
+            }
+        }, 1000);
+    }
 });
 
 // Dashboard refresh functionality

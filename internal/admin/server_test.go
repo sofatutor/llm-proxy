@@ -138,7 +138,7 @@ func TestServer_HandleDashboard(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/simple-dashboard.html") // Use dummy template
+	s.engine.LoadHTMLGlob("testdata/dashboard.html") // Use dummy template
 
 	s.engine.GET("/dashboard", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{DashboardData: &DashboardData{TotalProjects: 1, TotalTokens: 2, ActiveTokens: 1, ExpiredTokens: 0, TotalRequests: 10, RequestsToday: 5, RequestsThisWeek: 7}}
@@ -159,7 +159,7 @@ func TestServer_HandleDashboard_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/simple-dashboard.html")
+	s.engine.LoadHTMLGlob("testdata/dashboard.html")
 
 	s.engine.GET("/dashboard", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{DashboardErr: errFake}
@@ -1161,7 +1161,7 @@ func TestServer_LoadAllTemplates_Coverage(t *testing.T) {
 	s.engine.LoadHTMLFiles(
 		td+"/base.html",
 		td+"/dashboard.html",
-		td+"/simple-dashboard.html",
+		td+"/dashboard.html",
 		td+"/error.html",
 		td+"/login.html",
 		td+"/projects-list-complete.html",
