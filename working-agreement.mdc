@@ -1,6 +1,6 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: true
 ---
-Use CLAUDE.md and @AGENTS.md for details
+Load CLAUDE.md and AGENTS.md for details on our working agreement.
