@@ -29,7 +29,7 @@ sequenceDiagram
 - [x] Add error handling and fallback to local logging if external delivery fails
 - [x] Add configuration options for enabling/disabling external logging, buffer size, batch size, and retry policy
 - [x] Add unit tests for the external logging worker
-- [ ] Document the external logging system and configuration
+- [x] Document the external logging system and configuration (see internal/logging/README.md for details)
 
 ## Acceptance Criteria
 - Logs can be sent asynchronously to external systems without blocking the main proxy path
