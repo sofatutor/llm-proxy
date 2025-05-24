@@ -6,4 +6,4 @@ This package implements structured logging for the application:
 - Log levels and filtering
 - Request/response logging
 - Audit logging and security events
-- External logging integration
+- External logging integration with an asynchronous worker

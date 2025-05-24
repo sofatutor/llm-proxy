@@ -22,9 +22,9 @@ sequenceDiagram
 - Retry and error handling are required for robustness in production environments.
 
 ## Tasks
-- [ ] Design the architecture for the asynchronous external logging worker
-- [ ] Implement buffered sending of logs to external systems
-- [ ] Add batch processing for efficient log delivery
+ - [x] Design the architecture for the asynchronous external logging worker
+ - [x] Implement buffered sending of logs to external systems
+ - [x] Add batch processing for efficient log delivery
 - [ ] Implement retry logic for failed log deliveries
 - [ ] Add error handling and fallback to local logging if external delivery fails
 - [ ] Add configuration options for enabling/disabling external logging, buffer size, batch size, and retry policy

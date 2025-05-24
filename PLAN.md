@@ -352,8 +352,9 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 - [ ] Add configuration for enabling/disabling Helicone
 - [ ] Add tests for Helicone integration (mocked, async)
 - [ ] Document Helicone integration and fallback behavior
-- [ ] Implement asynchronous worker for external logging:
+ - [x] Implement asynchronous worker for external logging:
   - Buffered sending
+  - Batch processing
 - [ ] Add structured logging throughout the application
 - [ ] Implement log context propagation
 - [ ] Create log search and filtering utilities

@@ -43,6 +43,11 @@ type Config struct {
 	LogMaxSizeMB  int    // Maximum size of a log file before rotation
 	LogMaxBackups int    // Number of rotated log files to keep
 
+	// External logging
+	ExternalLoggingEnabled    bool // Enable asynchronous external logging
+	ExternalLoggingBufferSize int  // Buffer size for external log queue
+	ExternalLoggingBatchSize  int  // Batch size for sending logs
+
 	// CORS settings
 	CORSAllowedOrigins []string      // Allowed origins for CORS
 	CORSAllowedMethods []string      // Allowed methods for CORS
@@ -113,6 +118,10 @@ func New() (*Config, error) {
 		LogFile:       getEnvString("LOG_FILE", ""),
 		LogMaxSizeMB:  getEnvInt("LOG_MAX_SIZE_MB", 10),
 		LogMaxBackups: getEnvInt("LOG_MAX_BACKUPS", 5),
+
+		ExternalLoggingEnabled:    getEnvBool("EXTERNAL_LOGGING_ENABLED", false),
+		ExternalLoggingBufferSize: getEnvInt("EXTERNAL_LOGGING_BUFFER_SIZE", 100),
+		ExternalLoggingBatchSize:  getEnvInt("EXTERNAL_LOGGING_BATCH_SIZE", 10),
 
 		// CORS defaults
 		CORSAllowedOrigins: getEnvStringSlice("CORS_ALLOWED_ORIGINS", []string{"*"}),
@@ -256,6 +265,10 @@ func DefaultConfig() *Config {
 		LogFile:       "",
 		LogMaxSizeMB:  10,
 		LogMaxBackups: 5,
+
+		ExternalLoggingEnabled:    false,
+		ExternalLoggingBufferSize: 100,
+		ExternalLoggingBatchSize:  10,
 
 		// CORS defaults
 		CORSAllowedOrigins: []string{"*"},
