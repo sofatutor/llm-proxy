@@ -357,7 +357,7 @@ func TestAPIClient_CreateToken(t *testing.T) {
 
 		response := TokenCreateResponse{
 			Token:     "tok-abcd1234",
-			ExpiresAt: time.Now().Add(time.Duration(req["duration_hours"].(float64)) * time.Hour),
+			ExpiresAt: time.Now().Add(time.Duration(req["duration_minutes"].(float64)) * time.Minute),
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Errorf("failed to encode token create response: %v", err)

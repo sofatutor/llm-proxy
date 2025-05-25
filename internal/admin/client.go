@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -304,24 +305,22 @@ func (c *APIClient) GetTokens(ctx context.Context, projectID string, page, pageS
 	return tokens, pagination, nil
 }
 
-// CreateToken creates a new token
-func (c *APIClient) CreateToken(ctx context.Context, projectID string, durationHours int) (*TokenCreateResponse, error) {
-	payload := map[string]any{
-		"project_id":     projectID,
-		"duration_hours": durationHours,
+// CreateToken creates a new token for a project with a given duration in minutes
+func (c *APIClient) CreateToken(ctx context.Context, projectID string, durationMinutes int) (*TokenCreateResponse, error) {
+	payload := map[string]interface{}{
+		"project_id":       projectID,
+		"duration_minutes": durationMinutes,
 	}
-
+	// Use newRequest and doRequest for consistent error handling
 	req, err := c.newRequest(ctx, "POST", "/manage/tokens", payload)
 	if err != nil {
 		return nil, err
 	}
-
-	var token TokenCreateResponse
-	if err := c.doRequest(req, &token); err != nil {
+	var result TokenCreateResponse
+	if err := c.doRequest(req, &result); err != nil {
 		return nil, err
 	}
-
-	return &token, nil
+	return &result, nil
 }
 
 // newRequest creates a new HTTP request with authentication
@@ -358,8 +357,11 @@ func (c *APIClient) doRequest(req *http.Request, result any) error {
 		return fmt.Errorf("request failed: %w", err)
 	}
 	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			fmt.Printf("Error closing response body: %v\n", err)
+		err := resp.Body.Close()
+		if err != nil {
+			// Log or handle the error as appropriate
+			// For now, just log to standard error
+			fmt.Fprintf(os.Stderr, "failed to close response body: %v\n", err)
 		}
 	}()
 

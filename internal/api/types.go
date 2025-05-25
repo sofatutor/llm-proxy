@@ -20,8 +20,8 @@ type ProjectCreateResponse struct {
 
 // TokenCreateRequest is the request body for creating a token.
 type TokenCreateRequest struct {
-	ProjectID     string `json:"project_id"`
-	DurationHours int    `json:"duration_hours"`
+	ProjectID       string `json:"project_id"`
+	DurationMinutes int    `json:"duration_minutes"`
 }
 
 // TokenCreateResponse is the response body for a created token.
