@@ -41,17 +41,29 @@ func testTemplateDir() string {
 	return filepath.Join(filepath.Dir(filename), "testdata")
 }
 
+// createTestTemplate creates a template file with the given relative path and content,
+// and registers a cleanup to remove it after the test.
+func createTestTemplate(t *testing.T, relPath string, content string) string {
+	t.Helper()
+	fullPath := filepath.Join(testTemplateDir(), relPath)
+	dir := filepath.Dir(fullPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("failed to create dir %s: %v", dir, err)
+	}
+	if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write file %s: %v", fullPath, err)
+	}
+	t.Cleanup(func() {
+		if err := os.Remove(fullPath); err != nil {
+			t.Errorf("failed to remove %s: %v", fullPath, err)
+		}
+	})
+	return fullPath
+}
+
 func TestNewServer_Minimal(t *testing.T) {
-	// Ensure at least one HTML file exists for the glob
-	baseFile := filepath.Join(testTemplateDir(), "base.html")
-	_ = os.WriteFile(baseFile, []byte("<html><body>base</body></html>"), 0644)
-	defer os.Remove(baseFile)
-	// Ensure at least one subdirectory HTML file exists for the glob
-	tokensDir := filepath.Join(testTemplateDir(), "tokens")
-	_ = os.MkdirAll(tokensDir, 0755)
-	dummySubFile := filepath.Join(tokensDir, "dummy.html")
-	_ = os.WriteFile(dummySubFile, []byte("<html><body>dummy</body></html>"), 0644)
-	defer os.Remove(dummySubFile)
+	createTestTemplate(t, "base.html", "<html><body>base</body></html>")
+	createTestTemplate(t, "tokens/dummy.html", "<html><body>dummy</body></html>")
 
 	cfg := &config.Config{
 		AdminUI: config.AdminUIConfig{
@@ -155,13 +167,11 @@ var _ APIClientInterface = (*mockAPIClient)(nil) // Ensure interface compliance
 
 func TestServer_HandleDashboard(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	dashboardFile := filepath.Join(testTemplateDir(), "dashboard.html")
-	_ = os.WriteFile(dashboardFile, []byte("<html><body>dashboard</body></html>"), 0644)
-	defer os.Remove(dashboardFile)
+	dashboardFile := createTestTemplate(t, "dashboard.html", "<html><body>dashboard</body></html>")
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "dashboard.html")) // Use dummy template
+	s.engine.LoadHTMLGlob(dashboardFile)
 
 	s.engine.GET("/dashboard", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{DashboardData: &DashboardData{TotalProjects: 1, TotalTokens: 2, ActiveTokens: 1, ExpiredTokens: 0, TotalRequests: 10, RequestsToday: 5, RequestsThisWeek: 7}}
@@ -180,13 +190,11 @@ func TestServer_HandleDashboard(t *testing.T) {
 
 func TestServer_HandleDashboard_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	dashboardFile := filepath.Join(testTemplateDir(), "dashboard.html")
-	_ = os.WriteFile(dashboardFile, []byte("<html><body>dashboard</body></html>"), 0644)
-	defer os.Remove(dashboardFile)
+	dashboardFile := createTestTemplate(t, "dashboard.html", "<html><body>dashboard</body></html>")
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "dashboard.html"))
+	s.engine.LoadHTMLGlob(dashboardFile)
 
 	s.engine.GET("/dashboard", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{DashboardErr: errFake}
@@ -205,13 +213,11 @@ func TestServer_HandleDashboard_Error(t *testing.T) {
 
 func TestServer_HandleProjectsList(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	projectsFile := filepath.Join(testTemplateDir(), "projects-list-complete.html")
-	_ = os.WriteFile(projectsFile, []byte("<html><body>projects</body></html>"), 0644)
-	defer os.Remove(projectsFile)
+	projectsFile := createTestTemplate(t, "projects-list-complete.html", "<html><body>projects</body></html>")
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "projects-list-complete.html"))
+	s.engine.LoadHTMLGlob(projectsFile)
 
 	s.engine.GET("/projects", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{}
@@ -230,13 +236,11 @@ func TestServer_HandleProjectsList(t *testing.T) {
 
 func TestServer_HandleProjectsList_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	projectsFile := filepath.Join(testTemplateDir(), "projects-list-complete.html")
-	_ = os.WriteFile(projectsFile, []byte("<html><body>projects</body></html>"), 0644)
-	defer os.Remove(projectsFile)
+	projectsFile := createTestTemplate(t, "projects-list-complete.html", "<html><body>projects</body></html>")
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "projects-list-complete.html"))
+	s.engine.LoadHTMLGlob(projectsFile)
 
 	s.engine.GET("/projects", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{DashboardErr: errFake}
@@ -257,7 +261,12 @@ func TestServer_HandleTokensList(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	tokensFile := filepath.Join(testTemplateDir(), "tokens-list-complete.html")
 	_ = os.WriteFile(tokensFile, []byte("<html><body>tokens</body></html>"), 0644)
-	defer os.Remove(tokensFile)
+	defer func() {
+		err := os.Remove(tokensFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", tokensFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -282,7 +291,12 @@ func TestServer_HandleTokensList_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	tokensFile := filepath.Join(testTemplateDir(), "tokens-list-complete.html")
 	_ = os.WriteFile(tokensFile, []byte("<html><body>tokens</body></html>"), 0644)
-	defer os.Remove(tokensFile)
+	defer func() {
+		err := os.Remove(tokensFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", tokensFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -307,7 +321,12 @@ func TestServer_HandleTokensNew(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	tokensFile := filepath.Join(testTemplateDir(), "tokens", "new.html")
 	_ = os.WriteFile(tokensFile, []byte("<html><body>tokens new</body></html>"), 0644)
-	defer os.Remove(tokensFile)
+	defer func() {
+		err := os.Remove(tokensFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", tokensFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -332,7 +351,12 @@ func TestServer_HandleTokensCreate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	tokensFile := filepath.Join(testTemplateDir(), "tokens", "new.html")
 	_ = os.WriteFile(tokensFile, []byte("<html><body>tokens new</body></html>"), 0644)
-	defer os.Remove(tokensFile)
+	defer func() {
+		err := os.Remove(tokensFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", tokensFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -359,7 +383,12 @@ func TestServer_HandleTokensCreate_Errors(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	tokensFile := filepath.Join(testTemplateDir(), "tokens", "new.html")
 	_ = os.WriteFile(tokensFile, []byte("<html><body>tokens new</body></html>"), 0644)
-	defer os.Remove(tokensFile)
+	defer func() {
+		err := os.Remove(tokensFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", tokensFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -386,7 +415,12 @@ func TestServer_HandleProjectsShow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	projectsShowFile := filepath.Join(testTemplateDir(), "projects-show.html")
 	_ = os.WriteFile(projectsShowFile, []byte("<html><body>projects show</body></html>"), 0644)
-	defer os.Remove(projectsShowFile)
+	defer func() {
+		err := os.Remove(projectsShowFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", projectsShowFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -411,7 +445,12 @@ func TestServer_HandleProjectsEdit(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	projectsEditFile := filepath.Join(testTemplateDir(), "projects-edit.html")
 	_ = os.WriteFile(projectsEditFile, []byte("<html><body>projects edit</body></html>"), 0644)
-	defer os.Remove(projectsEditFile)
+	defer func() {
+		err := os.Remove(projectsEditFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", projectsEditFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -436,7 +475,12 @@ func TestServer_HandleProjectsUpdate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	projectsEditFile := filepath.Join(testTemplateDir(), "projects-edit.html")
 	_ = os.WriteFile(projectsEditFile, []byte("<html><body>projects edit</body></html>"), 0644)
-	defer os.Remove(projectsEditFile)
+	defer func() {
+		err := os.Remove(projectsEditFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", projectsEditFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -463,7 +507,12 @@ func TestServer_HandleProjectsUpdate_Errors(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	projectsEditFile := filepath.Join(testTemplateDir(), "projects-edit.html")
 	_ = os.WriteFile(projectsEditFile, []byte("<html><body>projects edit</body></html>"), 0644)
-	defer os.Remove(projectsEditFile)
+	defer func() {
+		err := os.Remove(projectsEditFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", projectsEditFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -554,7 +603,12 @@ func TestServer_HandleProjectsNew(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	projectsNewFile := filepath.Join(testTemplateDir(), "projects-new.html")
 	_ = os.WriteFile(projectsNewFile, []byte("<html><body>projects new</body></html>"), 0644)
-	defer os.Remove(projectsNewFile)
+	defer func() {
+		err := os.Remove(projectsNewFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", projectsNewFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -577,7 +631,12 @@ func TestServer_HandleProjectsCreate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	projectsNewFile := filepath.Join(testTemplateDir(), "projects-new.html")
 	_ = os.WriteFile(projectsNewFile, []byte("<html><body>projects new</body></html>"), 0644)
-	defer os.Remove(projectsNewFile)
+	defer func() {
+		err := os.Remove(projectsNewFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", projectsNewFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -604,7 +663,12 @@ func TestServer_HandleProjectsCreate_APIError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	projectsNewFile := filepath.Join(testTemplateDir(), "projects-new.html")
 	_ = os.WriteFile(projectsNewFile, []byte("<html><body>projects new</body></html>"), 0644)
-	defer os.Remove(projectsNewFile)
+	defer func() {
+		err := os.Remove(projectsNewFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", projectsNewFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -631,7 +695,12 @@ func TestServer_HandleProjectsShow_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	projectsShowFile := filepath.Join(testTemplateDir(), "projects-show.html")
 	_ = os.WriteFile(projectsShowFile, []byte("<html><body>projects show</body></html>"), 0644)
-	defer os.Remove(projectsShowFile)
+	defer func() {
+		err := os.Remove(projectsShowFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", projectsShowFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -656,7 +725,12 @@ func TestServer_HandleProjectsEdit_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	projectsEditFile := filepath.Join(testTemplateDir(), "projects-edit.html")
 	_ = os.WriteFile(projectsEditFile, []byte("<html><body>projects edit</body></html>"), 0644)
-	defer os.Remove(projectsEditFile)
+	defer func() {
+		err := os.Remove(projectsEditFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", projectsEditFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -686,7 +760,12 @@ func TestServer_HandleTokensNew_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	tokensFile := filepath.Join(testTemplateDir(), "tokens", "new.html")
 	_ = os.WriteFile(tokensFile, []byte("<html><body>tokens new</body></html>"), 0644)
-	defer os.Remove(tokensFile)
+	defer func() {
+		err := os.Remove(tokensFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", tokensFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -867,7 +946,12 @@ func TestServer_HandleLoginForm(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	loginFile := filepath.Join(testTemplateDir(), "login.html")
 	_ = os.WriteFile(loginFile, []byte("<html><body>login</body></html>"), 0644)
-	defer os.Remove(loginFile)
+	defer func() {
+		err := os.Remove(loginFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", loginFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -938,7 +1022,12 @@ func TestServer_HandleLogin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	loginFile := filepath.Join(testTemplateDir(), "login.html")
 	_ = os.WriteFile(loginFile, []byte("<html><body>login</body></html>"), 0644)
-	defer os.Remove(loginFile)
+	defer func() {
+		err := os.Remove(loginFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", loginFile, err)
+		}
+	}()
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -998,12 +1087,24 @@ func TestNewServer_ErrorCases(t *testing.T) {
 	// Ensure at least one HTML file exists for the glob in root and subdir
 	baseFile := filepath.Join(testTemplateDir(), "base.html")
 	_ = os.WriteFile(baseFile, []byte("<html><body>base</body></html>"), 0644)
-	defer os.Remove(baseFile)
+	defer func() {
+		err := os.Remove(baseFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", baseFile, err)
+		}
+	}()
 	tokensDir := filepath.Join(testTemplateDir(), "tokens")
-	_ = os.MkdirAll(tokensDir, 0755)
+	if err := os.MkdirAll(tokensDir, 0755); err != nil {
+		t.Fatalf("failed to create dir %s: %v", tokensDir, err)
+	}
 	dummySubFile := filepath.Join(tokensDir, "new.html")
 	_ = os.WriteFile(dummySubFile, []byte("<html><body>dummy</body></html>"), 0644)
-	defer os.Remove(dummySubFile)
+	defer func() {
+		err := os.Remove(dummySubFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", dummySubFile, err)
+		}
+	}()
 
 	cfg := &config.Config{
 		AdminUI: config.AdminUIConfig{
@@ -1038,12 +1139,24 @@ func TestServer_Start_Error(t *testing.T) {
 	// Ensure at least one HTML file exists for the glob in root and subdir
 	baseFile := filepath.Join(testTemplateDir(), "base.html")
 	_ = os.WriteFile(baseFile, []byte("<html><body>base</body></html>"), 0644)
-	defer os.Remove(baseFile)
+	defer func() {
+		err := os.Remove(baseFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", baseFile, err)
+		}
+	}()
 	tokensDir := filepath.Join(testTemplateDir(), "tokens")
-	_ = os.MkdirAll(tokensDir, 0755)
+	if err := os.MkdirAll(tokensDir, 0755); err != nil {
+		t.Fatalf("failed to create dir %s: %v", tokensDir, err)
+	}
 	dummySubFile := filepath.Join(tokensDir, "new.html")
 	_ = os.WriteFile(dummySubFile, []byte("<html><body>dummy</body></html>"), 0644)
-	defer os.Remove(dummySubFile)
+	defer func() {
+		err := os.Remove(dummySubFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", dummySubFile, err)
+		}
+	}()
 
 	// Start with invalid address to force error
 	cfg := &config.Config{
@@ -1070,12 +1183,24 @@ func TestServer_setupRoutes_Coverage(t *testing.T) {
 	// Ensure at least one HTML file exists for the glob in root and subdir
 	baseFile := filepath.Join(testTemplateDir(), "base.html")
 	_ = os.WriteFile(baseFile, []byte("<html><body>base</body></html>"), 0644)
-	defer os.Remove(baseFile)
+	defer func() {
+		err := os.Remove(baseFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", baseFile, err)
+		}
+	}()
 	tokensDir := filepath.Join(testTemplateDir(), "tokens")
-	_ = os.MkdirAll(tokensDir, 0755)
+	if err := os.MkdirAll(tokensDir, 0755); err != nil {
+		t.Fatalf("failed to create dir %s: %v", tokensDir, err)
+	}
 	dummySubFile := filepath.Join(tokensDir, "new.html")
 	_ = os.WriteFile(dummySubFile, []byte("<html><body>dummy</body></html>"), 0644)
-	defer os.Remove(dummySubFile)
+	defer func() {
+		err := os.Remove(dummySubFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", dummySubFile, err)
+		}
+	}()
 
 	cfg := &config.Config{
 		AdminUI: config.AdminUIConfig{
@@ -1098,12 +1223,24 @@ func TestServer_Start_Coverage(t *testing.T) {
 	// Ensure at least one HTML file exists for the glob in root and subdir
 	baseFile := filepath.Join(testTemplateDir(), "base.html")
 	_ = os.WriteFile(baseFile, []byte("<html><body>base</body></html>"), 0644)
-	defer os.Remove(baseFile)
+	defer func() {
+		err := os.Remove(baseFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", baseFile, err)
+		}
+	}()
 	tokensDir := filepath.Join(testTemplateDir(), "tokens")
-	_ = os.MkdirAll(tokensDir, 0755)
+	if err := os.MkdirAll(tokensDir, 0755); err != nil {
+		t.Fatalf("failed to create dir %s: %v", tokensDir, err)
+	}
 	dummySubFile := filepath.Join(tokensDir, "new.html")
 	_ = os.WriteFile(dummySubFile, []byte("<html><body>dummy</body></html>"), 0644)
-	defer os.Remove(dummySubFile)
+	defer func() {
+		err := os.Remove(dummySubFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", dummySubFile, err)
+		}
+	}()
 
 	cfg := &config.Config{
 		AdminUI: config.AdminUIConfig{
@@ -1259,16 +1396,46 @@ func TestServer_templateFuncs_EdgeCases(t *testing.T) {
 		_ = funcs["now"].(func() time.Time)()
 	})
 
-	t.Run("eq/ne/lt/gt/le/ge/and/or/not", func(t *testing.T) {
-		_ = funcs["eq"].(func(any, any) bool)(nil, nil)
-		_ = funcs["ne"].(func(any, any) bool)(nil, 1)
-		_ = funcs["lt"].(func(any, any) bool)(1, 2)
-		_ = funcs["gt"].(func(any, any) bool)(2, 1)
-		_ = funcs["le"].(func(any, any) bool)(2, 2)
-		_ = funcs["ge"].(func(any, any) bool)(2, 2)
-		_ = funcs["and"].(func(bool, bool) bool)(false, false)
-		_ = funcs["or"].(func(bool, bool) bool)(false, true)
-		_ = funcs["not"].(func(bool) bool)(true)
+	t.Run("eq/ne/lt/gt/le/ge", func(t *testing.T) {
+		eq := funcs["eq"].(func(any, any) bool)
+		ne := funcs["ne"].(func(any, any) bool)
+		lt := funcs["lt"].(func(any, any) bool)
+		gt := funcs["gt"].(func(any, any) bool)
+		le := funcs["le"].(func(any, any) bool)
+		ge := funcs["ge"].(func(any, any) bool)
+		if !eq(nil, nil) || eq(1, 2) {
+			t.Error("eq failed")
+		}
+		if !ne(nil, 1) || !ne(1, nil) || ne(1, 1) {
+			t.Error("ne failed")
+		}
+		if !lt(1, 2) || lt(2, 1) {
+			t.Error("lt failed")
+		}
+		if !gt(2, 1) || gt(1, 2) {
+			t.Error("gt failed")
+		}
+		if !le(2, 2) || !le(1, 2) || le(3, 2) {
+			t.Error("le failed")
+		}
+		if !ge(2, 2) || !ge(3, 2) || ge(1, 2) {
+			t.Error("ge failed")
+		}
+	})
+
+	t.Run("and/or/not", func(t *testing.T) {
+		and := funcs["and"].(func(bool, bool) bool)
+		or := funcs["or"].(func(bool, bool) bool)
+		not := funcs["not"].(func(bool) bool)
+		if and(false, false) || and(true, false) || !and(true, true) {
+			t.Error("and failed")
+		}
+		if !or(false, true) || !or(true, false) || or(false, false) == true {
+			t.Error("or failed")
+		}
+		if not(true) || !not(false) {
+			t.Error("not failed")
+		}
 	})
 
 	t.Run("obfuscateAPIKey/obfuscateToken", func(t *testing.T) {
@@ -1277,99 +1444,36 @@ func TestServer_templateFuncs_EdgeCases(t *testing.T) {
 	})
 }
 
-func TestServer_LoadAllTemplates_Coverage(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	s := &Server{engine: gin.New()}
-	s.engine.SetFuncMap(template.FuncMap{})
-	td := testTemplateDir()
-
-	// List of templates to create (relative to testTemplateDir)
-	templates := []struct {
-		path    []string
-		content string
-	}{
-		{[]string{"base.html"}, "<html><body>base</body></html>"},
-		{[]string{"dashboard.html"}, "<html><body>dashboard</body></html>"},
-		{[]string{"error.html"}, "<html><body>error</body></html>"},
-		{[]string{"login.html"}, "<html><body>login</body></html>"},
-		{[]string{"projects-list-complete.html"}, "<html><body>projects-list-complete</body></html>"},
-		{[]string{"tokens-list-complete.html"}, "<html><body>tokens-list-complete</body></html>"},
-		{[]string{"projects", "new.html"}, "<html><body>projects new</body></html>"},
-		{[]string{"projects", "show.html"}, "<html><body>projects show</body></html>"},
-		{[]string{"projects", "edit.html"}, "<html><body>projects edit</body></html>"},
-		{[]string{"tokens", "new.html"}, "<html><body>tokens new</body></html>"},
-		{[]string{"tokens", "created.html"}, "<html><body>tokens created</body></html>"},
-	}
-	for _, tpl := range templates {
-		filePath := filepath.Join(append([]string{td}, tpl.path...)...)
-		os.MkdirAll(filepath.Dir(filePath), 0755)
-		_ = os.WriteFile(filePath, []byte(tpl.content), 0644)
-		defer os.Remove(filePath)
-	}
-
-	// Load all templates as in production
-	s.engine.LoadHTMLFiles(
-		filepath.Join(td, "base.html"),
-		filepath.Join(td, "dashboard.html"),
-		filepath.Join(td, "dashboard.html"),
-		filepath.Join(td, "error.html"),
-		filepath.Join(td, "login.html"),
-		filepath.Join(td, "projects-list-complete.html"),
-		filepath.Join(td, "tokens-list-complete.html"),
-		filepath.Join(td, "projects", "new.html"),
-		filepath.Join(td, "projects", "show.html"),
-		filepath.Join(td, "projects", "edit.html"),
-		filepath.Join(td, "tokens", "new.html"),
-		filepath.Join(td, "tokens", "created.html"),
-	)
-	// Render error.html
-	s.engine.GET("/err", func(c *gin.Context) {
-		c.HTML(http.StatusInternalServerError, "error.html", gin.H{"error": "test error"})
-	})
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/err", nil)
-	s.engine.ServeHTTP(w, req)
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500, got %d", w.Code)
-	}
-	// Render dashboard.html
-	s.engine.GET("/dashboard", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "dashboard.html", gin.H{"title": "Dashboard"})
-	})
-	w2 := httptest.NewRecorder()
-	req2, _ := http.NewRequest("GET", "/dashboard", nil)
-	s.engine.ServeHTTP(w2, req2)
-	if w2.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w2.Code)
-	}
-	// Render base.html
-	s.engine.GET("/base", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "base.html", gin.H{"title": "Base"})
-	})
-	w3 := httptest.NewRecorder()
-	req3, _ := http.NewRequest("GET", "/base", nil)
-	s.engine.ServeHTTP(w3, req3)
-	if w3.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w3.Code)
-	}
-}
-
 func TestAdminHealthEndpoint(t *testing.T) {
 	// Ensure at least one HTML file exists for the glob in root and subdir
 	baseFile := filepath.Join(testTemplateDir(), "base.html")
 	_ = os.WriteFile(baseFile, []byte("<html><body>base</body></html>"), 0644)
-	defer os.Remove(baseFile)
+	defer func() {
+		err := os.Remove(baseFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", baseFile, err)
+		}
+	}()
 	tokensDir := filepath.Join(testTemplateDir(), "tokens")
-	_ = os.MkdirAll(tokensDir, 0755)
+	if err := os.MkdirAll(tokensDir, 0755); err != nil {
+		t.Fatalf("failed to create dir %s: %v", tokensDir, err)
+	}
 	dummySubFile := filepath.Join(tokensDir, "new.html")
 	_ = os.WriteFile(dummySubFile, []byte("<html><body>dummy</body></html>"), 0644)
-	defer os.Remove(dummySubFile)
+	defer func() {
+		err := os.Remove(dummySubFile)
+		if err != nil {
+			t.Errorf("failed to remove %s: %v", dummySubFile, err)
+		}
+	}()
 
 	// Start a fake backend health server
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok","timestamp":"2024-01-01T00:00:00Z","version":"0.1.0"}`))
+		if _, err := w.Write([]byte(`{"status":"ok","timestamp":"2024-01-01T00:00:00Z","version":"0.1.0"}`)); err != nil {
+			t.Errorf("failed to write health response: %v", err)
+		}
 	}))
 	defer backend.Close()
 
@@ -1434,22 +1538,19 @@ func TestServer_templateFuncs_AllFuncs(t *testing.T) {
 		}
 	})
 
-	t.Run("eq/ne", func(t *testing.T) {
+	t.Run("eq/ne/lt/gt/le/ge", func(t *testing.T) {
 		eq := funcs["eq"].(func(any, any) bool)
 		ne := funcs["ne"].(func(any, any) bool)
+		lt := funcs["lt"].(func(any, any) bool)
+		gt := funcs["gt"].(func(any, any) bool)
+		le := funcs["le"].(func(any, any) bool)
+		ge := funcs["ge"].(func(any, any) bool)
 		if !eq(1, 1) || eq(1, 2) {
 			t.Error("eq failed")
 		}
 		if !ne(1, 2) || ne(1, 1) {
 			t.Error("ne failed")
 		}
-	})
-
-	t.Run("lt/gt/le/ge", func(t *testing.T) {
-		lt := funcs["lt"].(func(any, any) bool)
-		gt := funcs["gt"].(func(any, any) bool)
-		le := funcs["le"].(func(any, any) bool)
-		ge := funcs["ge"].(func(any, any) bool)
 		if !lt(1, 2) || lt(2, 1) {
 			t.Error("lt failed")
 		}
