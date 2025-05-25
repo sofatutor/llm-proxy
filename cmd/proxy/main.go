@@ -856,7 +856,6 @@ func init() {
 						sampleResponse = r.response
 					}
 					first = false
-					latencies = append(latencies, r.latency)
 					if r.upstreamLat > 0 {
 						upstreamLatencies = append(upstreamLatencies, r.upstreamLat)
 					}
