@@ -38,7 +38,7 @@ func TestChatClient_SendChatRequest_MissingToken(t *testing.T) {
 	client := NewChatClient("http://localhost:8080", "")
 
 	messages := []ChatMessage{{Role: "user", Content: "test"}}
-	options := ChatOptions{Model: "gpt-3.5-turbo"}
+	options := ChatOptions{Model: "gpt-4.1-mini"}
 
 	_, err := client.SendChatRequest(messages, options, nil)
 	if err == nil {
@@ -53,7 +53,7 @@ func TestChatClient_SendChatRequest_InvalidURL(t *testing.T) {
 	client := NewChatClient(":invalid-url", "token")
 
 	messages := []ChatMessage{{Role: "user", Content: "test"}}
-	options := ChatOptions{Model: "gpt-3.5-turbo"}
+	options := ChatOptions{Model: "gpt-4.1-mini"}
 
 	_, err := client.SendChatRequest(messages, options, nil)
 	if err == nil {
@@ -75,7 +75,7 @@ func TestChatClient_SendChatRequest_APIError(t *testing.T) {
 
 	client := NewChatClient(server.URL, "token")
 	messages := []ChatMessage{{Role: "user", Content: "test"}}
-	options := ChatOptions{Model: "gpt-3.5-turbo"}
+	options := ChatOptions{Model: "gpt-4.1-mini"}
 
 	_, err := client.SendChatRequest(messages, options, nil)
 	if err == nil {
@@ -111,7 +111,7 @@ func TestChatClient_SendChatRequest_NonStreaming(t *testing.T) {
 		// Return valid response
 		response := ChatResponse{
 			ID:    "test-id",
-			Model: "gpt-3.5-turbo",
+			Model: "gpt-4.1-mini",
 			Choices: []struct {
 				Index        int         `json:"index"`
 				Message      ChatMessage `json:"message"`
@@ -144,7 +144,7 @@ func TestChatClient_SendChatRequest_NonStreaming(t *testing.T) {
 	client := NewChatClient(server.URL, "token")
 	messages := []ChatMessage{{Role: "user", Content: "Hello"}}
 	options := ChatOptions{
-		Model:        "gpt-3.5-turbo",
+		Model:        "gpt-4.1-mini",
 		Temperature:  0.7,
 		MaxTokens:    100,
 		UseStreaming: false,
@@ -174,9 +174,9 @@ func TestChatClient_SendChatRequest_Streaming(t *testing.T) {
 
 		// Send streaming response
 		chunks := []string{
-			`data: {"id":"test-id","object":"chat.completion.chunk","created":123,"model":"gpt-3.5-turbo","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":""}]}`,
-			`data: {"id":"test-id","object":"chat.completion.chunk","created":123,"model":"gpt-3.5-turbo","choices":[{"index":0,"delta":{"content":" there!"},"finish_reason":""}]}`,
-			`data: {"id":"test-id","object":"chat.completion.chunk","created":123,"model":"gpt-3.5-turbo","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
+			`data: {"id":"test-id","object":"chat.completion.chunk","created":123,"model":"gpt-4.1-mini","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"},"finish_reason":""}]}`,
+			`data: {"id":"test-id","object":"chat.completion.chunk","created":123,"model":"gpt-4.1-mini","choices":[{"index":0,"delta":{"content":" there!"},"finish_reason":""}]}`,
+			`data: {"id":"test-id","object":"chat.completion.chunk","created":123,"model":"gpt-4.1-mini","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}`,
 			`data: [DONE]`,
 		}
 
@@ -194,7 +194,7 @@ func TestChatClient_SendChatRequest_Streaming(t *testing.T) {
 	client := NewChatClient(server.URL, "token")
 	messages := []ChatMessage{{Role: "user", Content: "Hello"}}
 	options := ChatOptions{
-		Model:        "gpt-3.5-turbo",
+		Model:        "gpt-4.1-mini",
 		UseStreaming: true,
 		VerboseMode:  false,
 	}
@@ -227,7 +227,7 @@ func TestChatClient_SendChatRequest_InvalidJSON(t *testing.T) {
 
 	client := NewChatClient(server.URL, "token")
 	messages := []ChatMessage{{Role: "user", Content: "test"}}
-	options := ChatOptions{Model: "gpt-3.5-turbo", UseStreaming: false}
+	options := ChatOptions{Model: "gpt-4.1-mini", UseStreaming: false}
 
 	_, err := client.SendChatRequest(messages, options, nil)
 	if err == nil {
@@ -248,7 +248,7 @@ func TestChatClient_SendChatRequest_EmptyStream(t *testing.T) {
 
 	client := NewChatClient(server.URL, "token")
 	messages := []ChatMessage{{Role: "user", Content: "test"}}
-	options := ChatOptions{Model: "gpt-3.5-turbo", UseStreaming: true}
+	options := ChatOptions{Model: "gpt-4.1-mini", UseStreaming: true}
 
 	_, err := client.SendChatRequest(messages, options, nil)
 	if err == nil {
@@ -264,7 +264,7 @@ func TestChatClient_SendChatRequest_VerboseMode(t *testing.T) {
 		// Return simple response
 		response := ChatResponse{
 			ID:    "test",
-			Model: "gpt-3.5-turbo",
+			Model: "gpt-4.1-mini",
 			Choices: []struct {
 				Index        int         `json:"index"`
 				Message      ChatMessage `json:"message"`
@@ -280,7 +280,7 @@ func TestChatClient_SendChatRequest_VerboseMode(t *testing.T) {
 	client := NewChatClient(server.URL, "token")
 	messages := []ChatMessage{{Role: "user", Content: "test"}}
 	options := ChatOptions{
-		Model:        "gpt-3.5-turbo",
+		Model:        "gpt-4.1-mini",
 		VerboseMode:  true,
 		UseStreaming: false,
 	}

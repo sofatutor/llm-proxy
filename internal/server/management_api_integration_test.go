@@ -113,7 +113,7 @@ func TestManagementAPI_Integration(t *testing.T) {
 	resp.Body.Close()
 
 	// 5. Create Token
-	tokReq := map[string]interface{}{"project_id": projID, "duration_hours": 24}
+	tokReq := map[string]interface{}{"project_id": projID, "duration_minutes": 60 * 24}
 	tokBody, _ := json.Marshal(tokReq)
 	req, _ = http.NewRequest("POST", ts.URL+"/manage/tokens", bytes.NewReader(tokBody))
 	for k, v := range headers {

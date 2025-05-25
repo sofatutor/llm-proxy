@@ -55,6 +55,9 @@ type Metrics struct {
 // Version is the application version, following semantic versioning.
 const Version = "0.1.0"
 
+// maxDurationMinutes is the maximum allowed duration for a token (365 days)
+const maxDurationMinutes = 525600
+
 // New creates a new HTTP server with the provided configuration and store implementations.
 // It initializes the server with appropriate timeouts and registers all necessary route handlers.
 // The server is not started until the Start method is called.
@@ -532,17 +535,30 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		var req struct {
-			ProjectID     string `json:"project_id"`
-			DurationHours int    `json:"duration_hours"`
+			ProjectID       string `json:"project_id"`
+			DurationMinutes int    `json:"duration_minutes"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			s.logger.Error("invalid token create request body", zap.Error(err), zap.String("request_id", requestID))
 			http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 			return
 		}
-		if req.ProjectID == "" || req.DurationHours <= 0 {
-			s.logger.Error("missing required fields for token create", zap.String("project_id", req.ProjectID), zap.Int("duration_hours", req.DurationHours), zap.String("request_id", requestID))
-			http.Error(w, `{"error":"project_id and duration_hours are required"}`, http.StatusBadRequest)
+		var duration time.Duration
+		if req.DurationMinutes > 0 {
+			if req.DurationMinutes > maxDurationMinutes {
+				s.logger.Error("duration_minutes exceeds maximum allowed", zap.Int("duration_minutes", req.DurationMinutes), zap.String("request_id", requestID))
+				http.Error(w, `{"error":"duration_minutes exceeds maximum allowed"}`, http.StatusBadRequest)
+				return
+			}
+			duration = time.Duration(req.DurationMinutes) * time.Minute
+		} else {
+			s.logger.Error("missing required fields for token create", zap.String("project_id", req.ProjectID), zap.Int("duration_minutes", req.DurationMinutes), zap.String("request_id", requestID))
+			http.Error(w, `{"error":"project_id and duration_minutes are required"}`, http.StatusBadRequest)
+			return
+		}
+		if req.ProjectID == "" {
+			s.logger.Error("missing project_id for token create", zap.String("request_id", requestID))
+			http.Error(w, `{"error":"project_id is required"}`, http.StatusBadRequest)
 			return
 		}
 		// Check project exists
@@ -553,7 +569,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Generate token
-		tokenStr, expiresAt, _, err := token.NewTokenGenerator().GenerateWithOptions(time.Duration(req.DurationHours)*time.Hour, nil)
+		tokenStr, expiresAt, _, err := token.NewTokenGenerator().GenerateWithOptions(duration, nil)
 		if err != nil {
 			s.logger.Error("failed to generate token", zap.Error(err), zap.String("request_id", requestID))
 			http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
@@ -674,6 +690,13 @@ type responseWriter struct {
 func (rw *responseWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)
+}
+
+// Add Flush forwarding for streaming support
+func (rw *responseWriter) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 // handleNotFound is a catch-all handler for unmatched routes

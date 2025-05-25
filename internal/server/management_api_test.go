@@ -441,8 +441,8 @@ func TestHandleTokens(t *testing.T) {
 
 	t.Run("POST_Token_Success", func(t *testing.T) {
 		reqBody := map[string]interface{}{
-			"project_id":     "project-1",
-			"duration_hours": 24,
+			"project_id":       "project-1",
+			"duration_minutes": 60 * 24,
 		}
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest("POST", "/manage/tokens", bytes.NewReader(body))
@@ -465,7 +465,7 @@ func TestHandleTokens(t *testing.T) {
 	t.Run("POST_Token_InvalidRequest", func(t *testing.T) {
 		reqBody := map[string]interface{}{
 			"project_id": "project-1",
-			// Missing duration_hours
+			// Missing duration_minutes
 		}
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest("POST", "/manage/tokens", bytes.NewReader(body))
@@ -480,8 +480,8 @@ func TestHandleTokens(t *testing.T) {
 
 	t.Run("POST_Token_ProjectNotFound", func(t *testing.T) {
 		reqBody := map[string]interface{}{
-			"project_id":     "non-existent-project",
-			"duration_hours": 24,
+			"project_id":       "non-existent-project",
+			"duration_minutes": 60 * 24,
 		}
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest("POST", "/manage/tokens", bytes.NewReader(body))
@@ -787,7 +787,7 @@ func TestHandleTokens_MissingFields(t *testing.T) {
 func TestHandleTokens_ProjectNotFound(t *testing.T) {
 	server, _, projectStore := setupServerAndMocks(t)
 	projectStore.On("GetProjectByID", mock.Anything, "notfound").Return(proxy.Project{}, errors.New("not found"))
-	body, _ := json.Marshal(map[string]interface{}{"project_id": "notfound", "duration_hours": 1})
+	body, _ := json.Marshal(map[string]interface{}{"project_id": "notfound", "duration_minutes": 1})
 	req := httptest.NewRequest("POST", "/manage/tokens", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer test_management_token")
 	w := httptest.NewRecorder()
@@ -800,7 +800,7 @@ func TestHandleTokens_TokenStoreError(t *testing.T) {
 	server, tokenStore, projectStore := setupServerAndMocks(t)
 	projectStore.On("GetProjectByID", mock.Anything, "pid").Return(proxy.Project{ID: "pid"}, nil)
 	tokenStore.On("CreateToken", mock.Anything, mock.AnythingOfType("token.TokenData")).Return(errors.New("db error"))
-	body, _ := json.Marshal(map[string]interface{}{"project_id": "pid", "duration_hours": 1})
+	body, _ := json.Marshal(map[string]interface{}{"project_id": "pid", "duration_minutes": 1})
 	req := httptest.NewRequest("POST", "/manage/tokens", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer test_management_token")
 	w := httptest.NewRecorder()

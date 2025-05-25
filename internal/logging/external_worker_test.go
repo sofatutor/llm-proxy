@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -40,6 +41,19 @@ func (f *failSender) Send(ctx context.Context, batch [][]byte) error {
 		strs[i] = string(b)
 	}
 	f.calls = append(f.calls, strs)
+	return nil
+}
+
+type mockSender struct {
+	sendCount int32
+	fail      bool
+}
+
+func (m *mockSender) Send(ctx context.Context, batch [][]byte) error {
+	atomic.AddInt32(&m.sendCount, 1)
+	if m.fail {
+		return context.DeadlineExceeded
+	}
 	return nil
 }
 
@@ -105,4 +119,49 @@ func TestExternalLogger_RetryAndFallback(t *testing.T) {
 	assert.GreaterOrEqual(t, len(fallbackBatches), 2)
 	assert.Contains(t, fallbackBatches, "x")
 	assert.Contains(t, fallbackBatches, "y")
+}
+
+func TestExternalLogger_BasicLogAndFlush(t *testing.T) {
+	sender := &mockSender{}
+	var fallbackCalled int32
+	logger := NewExternalLogger(true, 5, 2, 10*time.Millisecond, 1*time.Millisecond, 1, false, sender, func(batch [][]byte) {
+		atomic.AddInt32(&fallbackCalled, 1)
+	})
+	logger.Log([]byte("entry1"))
+	logger.Log([]byte("entry2")) // triggers flush by batch size
+	time.Sleep(20 * time.Millisecond)
+	logger.Close()
+	if atomic.LoadInt32(&sender.sendCount) == 0 {
+		t.Error("expected sender.Send to be called")
+	}
+	if fallbackCalled != 0 {
+		t.Error("fallback should not be called on success")
+	}
+}
+
+func TestExternalLogger_FlushOnIntervalAndFallback(t *testing.T) {
+	sender := &mockSender{fail: true}
+	var fallbackCalled int32
+	logger := NewExternalLogger(true, 5, 3, 10*time.Millisecond, 1*time.Millisecond, 1, true, sender, func(batch [][]byte) {
+		atomic.AddInt32(&fallbackCalled, 1)
+	})
+	logger.Log([]byte("entry1"))
+	logger.Log([]byte("entry2"))
+	time.Sleep(20 * time.Millisecond) // flush by interval
+	logger.Close()
+	if fallbackCalled == 0 {
+		t.Error("expected fallback to be called on send failure")
+	}
+}
+
+func TestExternalLogger_DisabledAndBufferFull(t *testing.T) {
+	sender := &mockSender{}
+	logger := NewExternalLogger(false, 1, 1, 10*time.Millisecond, 1*time.Millisecond, 1, false, sender, nil)
+	logger.Log([]byte("entry1")) // should be dropped
+	logger.Close()
+	// No panic, nothing sent
+	logger2 := NewExternalLogger(true, 1, 2, 10*time.Millisecond, 1*time.Millisecond, 1, false, sender, nil)
+	logger2.Log([]byte("entry1"))
+	logger2.Log([]byte("entry2")) // buffer full, should drop
+	logger2.Close()
 }

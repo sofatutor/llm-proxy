@@ -19,6 +19,9 @@ type Config struct {
 	MaxRequestSize    int64         // Maximum size of incoming requests in bytes
 	MaxConcurrentReqs int           // Maximum number of concurrent requests
 
+	// Environment
+	APIEnv string // API environment: 'production', 'development', 'test'
+
 	// Database configuration
 	DatabasePath     string // Path to the SQLite database file
 	DatabasePoolSize int    // Number of connections in the database pool
@@ -91,6 +94,9 @@ func New() (*Config, error) {
 		RequestTimeout:    getEnvDuration("REQUEST_TIMEOUT", 30*time.Second),
 		MaxRequestSize:    getEnvInt64("MAX_REQUEST_SIZE", 10*1024*1024), // 10MB
 		MaxConcurrentReqs: getEnvInt("MAX_CONCURRENT_REQUESTS", 100),
+
+		// Environment
+		APIEnv: getEnvString("API_ENV", "development"),
 
 		// Database defaults
 		DatabasePath:     getEnvString("DATABASE_PATH", "./data/llm-proxy.db"),
@@ -244,6 +250,9 @@ func DefaultConfig() *Config {
 		RequestTimeout:    30 * time.Second,
 		MaxRequestSize:    10 * 1024 * 1024, // 10MB
 		MaxConcurrentReqs: 100,
+
+		// Environment
+		APIEnv: "development",
 
 		// Database defaults
 		DatabasePath:     "./data/llm-proxy.db",

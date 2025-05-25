@@ -353,7 +353,7 @@ func Test_runChat_and_getChatResponse(t *testing.T) {
 	t.Run("getChatResponse invalid proxy URL", func(t *testing.T) {
 		proxyURL = ":bad-url"
 		proxyToken = "tok"
-		model = "gpt-3.5-turbo"
+		model = "gpt-4.1-mini"
 		useStreaming = false
 		resp, err := getChatResponse([]ChatMessage{{Role: "user", Content: "hi"}}, nil)
 		if err == nil || resp != nil {
@@ -372,7 +372,7 @@ func Test_runChat_and_getChatResponse(t *testing.T) {
 		defer ts.Close()
 		proxyURL = ts.URL
 		proxyToken = "tok"
-		model = "gpt-3.5-turbo"
+		model = "gpt-4.1-mini"
 		useStreaming = false
 		resp, err := getChatResponse([]ChatMessage{{Role: "user", Content: "hi"}}, nil)
 		if err == nil || resp != nil {
@@ -390,7 +390,7 @@ func Test_runChat_and_getChatResponse(t *testing.T) {
 		defer ts.Close()
 		proxyURL = ts.URL
 		proxyToken = "tok"
-		model = "gpt-3.5-turbo"
+		model = "gpt-4.1-mini"
 		useStreaming = false
 		resp, err := getChatResponse([]ChatMessage{{Role: "user", Content: "hi"}}, nil)
 		if err == nil || resp != nil {
@@ -402,14 +402,14 @@ func Test_runChat_and_getChatResponse(t *testing.T) {
 		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(200)
-			if _, err := w.Write([]byte("data: {\"id\":\"abc\",\"object\":\"chat.completion\",\"created\":123,\"model\":\"gpt-3.5-turbo\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}\n\n")); err != nil {
+			if _, err := w.Write([]byte("data: {\"id\":\"abc\",\"object\":\"chat.completion\",\"created\":123,\"model\":\"gpt-4.1-mini\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}\n\n")); err != nil {
 				t.Errorf("failed to write: %v", err)
 			}
 		}))
 		defer ts.Close()
 		proxyURL = ts.URL
 		proxyToken = "tok"
-		model = "gpt-3.5-turbo"
+		model = "gpt-4.1-mini"
 		useStreaming = true
 		// Don't use readline for streaming test to avoid race conditions
 		resp, err := getChatResponse([]ChatMessage{{Role: "user", Content: "hi"}}, nil)
@@ -422,7 +422,7 @@ func Test_runChat_and_getChatResponse(t *testing.T) {
 		// Return a valid ChatResponse JSON
 		respObj := ChatResponse{
 			ID:    "id",
-			Model: "gpt-3.5-turbo",
+			Model: "gpt-4.1-mini",
 			Choices: []struct {
 				Index        int         `json:"index"`
 				Message      ChatMessage `json:"message"`
@@ -441,7 +441,7 @@ func Test_runChat_and_getChatResponse(t *testing.T) {
 		defer ts.Close()
 		proxyURL = ts.URL
 		proxyToken = "tok"
-		model = "gpt-3.5-turbo"
+		model = "gpt-4.1-mini"
 		useStreaming = false
 		resp, err := getChatResponse([]ChatMessage{{Role: "user", Content: "hi"}}, nil)
 		if err != nil || resp == nil {

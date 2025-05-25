@@ -167,14 +167,14 @@ func runInteractiveSetup() {
 		}
 
 		// Get token duration
-		fmt.Printf("Token duration in hours [%d]: ", tokenDuration)
+		fmt.Printf("Token duration in minutes [%d]: ", tokenDuration)
 		input, _ = reader.ReadString('\n')
 		input = strings.TrimSpace(input)
 		if input != "" {
-			if duration, err := time.ParseDuration(input + "h"); err == nil {
-				tokenDuration = int(duration.Hours())
+			if duration, err := time.ParseDuration(input + "m"); err == nil {
+				tokenDuration = int(duration.Minutes())
 			} else if duration, err := time.ParseDuration(input); err == nil {
-				tokenDuration = int(duration.Hours())
+				tokenDuration = int(duration.Minutes())
 			} else if val, err := fmt.Sscanf(input, "%d", &tokenDuration); err != nil || val != 1 {
 				fmt.Println("Invalid duration format. Using default value.")
 			}
@@ -580,16 +580,16 @@ func init() {
 				return fmt.Errorf("--project-id is required")
 			}
 
-			// Get duration (default 24)
+			// Get duration (default 1440 = 24h)
 			duration, _ := cmd.Flags().GetInt("duration")
 			if duration <= 0 {
-				duration = 24
+				duration = 1440
 			}
 
 			// Prepare request
 			body := map[string]interface{}{
-				"project_id":     projectID,
-				"duration_hours": duration,
+				"project_id":       projectID,
+				"duration_minutes": duration,
 			}
 			jsonBody, _ := json.Marshal(body)
 			url := manageAPIBaseURL + "/manage/tokens"
@@ -642,7 +642,7 @@ func init() {
 
 	tokenGenerateCmd.Flags().String("management-token", "", "Management token (overrides env)")
 	tokenGenerateCmd.Flags().String("project-id", "", "Project ID (required)")
-	tokenGenerateCmd.Flags().Int("duration", 24, "Token duration in hours (default 24)")
+	tokenGenerateCmd.Flags().Int("duration", 1440, "Token duration in minutes (default 1440 = 24h)")
 	tokenGenerateCmd.Flags().Bool("json", false, "Output as JSON")
 
 	// Register project subcommands

@@ -43,7 +43,7 @@ type APIClientInterface interface {
 	GetDashboardData(ctx context.Context) (*DashboardData, error)
 	GetProjects(ctx context.Context, page, pageSize int) ([]Project, *Pagination, error)
 	GetTokens(ctx context.Context, projectID string, page, pageSize int) ([]Token, *Pagination, error)
-	CreateToken(ctx context.Context, projectID string, durationHours int) (*TokenCreateResponse, error)
+	CreateToken(ctx context.Context, projectID string, durationMinutes int) (*TokenCreateResponse, error)
 	GetProject(ctx context.Context, projectID string) (*Project, error)
 	UpdateProject(ctx context.Context, projectID string, name string, openAIAPIKey string) (*Project, error)
 	DeleteProject(ctx context.Context, projectID string) error
@@ -189,7 +189,13 @@ func (s *Server) setupRoutes() {
 			"version":   "0.1.0",
 		}
 
-		backendURL := "http://localhost:8080/health" // TODO: set to your backend's real URL
+		backendURL := s.config.AdminUI.APIBaseURL
+		if backendURL == "" {
+			backendURL = "http://localhost:8080"
+		}
+		if !strings.HasSuffix(backendURL, "/health") {
+			backendURL = strings.TrimRight(backendURL, "/") + "/health"
+		}
 		client := &http.Client{Timeout: 2 * time.Second}
 		backendHealth := gin.H{
 			"status": "down",
@@ -445,8 +451,8 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 	apiClient := c.MustGet("apiClient").(APIClientInterface)
 
 	var req struct {
-		ProjectID     string `form:"project_id" binding:"required"`
-		DurationHours int    `form:"duration_hours" binding:"required,min=1,max=8760"` // Max 1 year
+		ProjectID       string `form:"project_id" binding:"required"`
+		DurationMinutes int    `form:"duration_minutes" binding:"required,min=1,max=525600"`
 	}
 
 	if err := c.ShouldBind(&req); err != nil {
@@ -460,7 +466,7 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 		return
 	}
 
-	token, err := apiClient.CreateToken(c.Request.Context(), req.ProjectID, req.DurationHours)
+	token, err := apiClient.CreateToken(c.Request.Context(), req.ProjectID, req.DurationMinutes)
 	if err != nil {
 		projects, _, _ := apiClient.GetProjects(c.Request.Context(), 1, 100)
 		c.HTML(http.StatusInternalServerError, "base.html", gin.H{

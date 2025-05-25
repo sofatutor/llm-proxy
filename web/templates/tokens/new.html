@@ -40,21 +40,34 @@
                     </div>
 
                     <div class="mb-3">
-                        <label for="duration_hours" class="form-label">
-                            Duration (Hours) <span class="text-danger">*</span>
+                        <label for="duration_minutes" class="form-label">
+                            Duration <span class="text-danger">*</span>
                         </label>
-                        <select class="form-select" id="duration_hours" name="duration_hours" required>
-                            <option value="1">1 Hour</option>
-                            <option value="6">6 Hours</option>
-                            <option value="12">12 Hours</option>
-                            <option value="24" selected>1 Day (24 Hours)</option>
-                            <option value="72">3 Days (72 Hours)</option>
-                            <option value="168">1 Week (168 Hours)</option>
-                            <option value="720">1 Month (30 Days)</option>
-                            <option value="8760">1 Year (365 Days)</option>
+                        <select class="form-select" id="duration_minutes" name="duration_minutes" required>
+                            <optgroup label="Minutes">
+                                <option value="5">5 Minutes</option>
+                                <option value="10">10 Minutes</option>
+                                <option value="15" selected>15 Minutes (default)</option>
+                                <option value="30">30 Minutes</option>
+                            </optgroup>
+                            <optgroup label="Hours">
+                                <option value="60">1 Hour</option>
+                                <option value="120">2 Hours</option>
+                                <option value="180">3 Hours</option>
+                                <option value="360">6 Hours</option>
+                                <option value="720">12 Hours</option>
+                            </optgroup>
+                            <optgroup label="Days">
+                                <option value="1440">1 Day</option>
+                                <option value="2880">2 Days</option>
+                                <option value="4320">3 Days</option>
+                                <option value="10080">7 Days</option>
+                                <option value="43200">30 Days</option>
+                                <option value="525600">365 Days</option>
+                            </optgroup>
                         </select>
                         <div class="form-text">
-                            How long should this token remain valid?
+                            How long should this token remain valid? Short-lived tokens are more secure.
                         </div>
                     </div>
 
