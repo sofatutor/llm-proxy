@@ -213,7 +213,7 @@ func runServerForeground() {
 	fmt.Printf("Log level: %s\n", cfg.LogLevel)
 
 	// Initialize zap logger
-	zapLogger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile, cfg.LogMaxSizeMB, cfg.LogMaxBackups)
+	zapLogger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile)
 	if err != nil {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}
