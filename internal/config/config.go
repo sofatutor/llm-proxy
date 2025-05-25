@@ -40,11 +40,9 @@ type Config struct {
 	AdminUI     AdminUIConfig // Admin UI server configuration
 
 	// Logging
-	LogLevel      string // Log level (debug, info, warn, error)
-	LogFormat     string // Log format (json, text)
-	LogFile       string // Path to log file (empty for stdout)
-	LogMaxSizeMB  int    // Maximum size of a log file before rotation
-	LogMaxBackups int    // Number of rotated log files to keep
+	LogLevel  string // Log level (debug, info, warn, error)
+	LogFormat string // Log format (json, text)
+	LogFile   string // Path to log file (empty for stdout)
 
 	// External logging
 	ExternalLoggingEnabled         bool          // Enable asynchronous external logging
@@ -122,11 +120,9 @@ func New() (*Config, error) {
 		},
 
 		// Logging defaults
-		LogLevel:      getEnvString("LOG_LEVEL", "info"),
-		LogFormat:     getEnvString("LOG_FORMAT", "json"),
-		LogFile:       getEnvString("LOG_FILE", ""),
-		LogMaxSizeMB:  getEnvInt("LOG_MAX_SIZE_MB", 10),
-		LogMaxBackups: getEnvInt("LOG_MAX_BACKUPS", 5),
+		LogLevel:  getEnvString("LOG_LEVEL", "info"),
+		LogFormat: getEnvString("LOG_FORMAT", "json"),
+		LogFile:   getEnvString("LOG_FILE", ""),
 
 		ExternalLoggingEnabled:         getEnvBool("EXTERNAL_LOGGING_ENABLED", false),
 		ExternalLoggingBufferSize:      getEnvInt("EXTERNAL_LOGGING_BUFFER_SIZE", 100),
@@ -275,11 +271,9 @@ func DefaultConfig() *Config {
 		},
 
 		// Logging defaults
-		LogLevel:      "info",
-		LogFormat:     "json",
-		LogFile:       "",
-		LogMaxSizeMB:  10,
-		LogMaxBackups: 5,
+		LogLevel:  "info",
+		LogFormat: "json",
+		LogFile:   "",
 
 		ExternalLoggingEnabled:         false,
 		ExternalLoggingBufferSize:      100,
