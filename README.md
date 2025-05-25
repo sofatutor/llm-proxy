@@ -8,7 +8,7 @@ A transparent, secure proxy for OpenAI's API with token management, rate limitin
 - **Project-based Access Control**
 - **Admin UI**: Web interface for management
 - **Comprehensive Logging**
-- **Async Observability Middleware**
+- **Async Instrumentation Middleware**: Non-blocking, streaming-capable instrumentation for all API calls. See [docs/instrumentation.md](docs/instrumentation.md) for advanced usage and extension.
 - **Prometheus Monitoring**
 - **SQLite Storage**
 - **Docker Deployment**
@@ -43,10 +43,10 @@ MANAGEMENT_TOKEN=your-secure-management-token ./bin/llm-proxy
 - `LOG_FILE`: Path to log file (stdout if empty)
 - `LOG_MAX_SIZE_MB`: Rotate log after this size in MB (default 10)
 - `LOG_MAX_BACKUPS`: Number of rotated log files to keep (default 5)
-- `OBSERVABILITY_ENABLED`: Enable async observability middleware (default false)
-- `OBSERVABILITY_BUFFER_SIZE`: Event buffer size (default 100)
+- `OBSERVABILITY_ENABLED`: Enable async instrumentation middleware (default false)
+- `OBSERVABILITY_BUFFER_SIZE`: Event buffer size for instrumentation events (default 100)
 
-See `docs/configuration.md` for all options.
+See `docs/configuration.md` and [docs/instrumentation.md](docs/instrumentation.md) for all options and advanced usage.
 
 ### Advanced Example
 ```yaml

@@ -1,7 +1,7 @@
 # Async Event Bus (Redis/In-Memory Backend)
 
 ## Summary
-Develop an asynchronous event bus component to buffer, batch, and deliver observability events from the middleware to one or more downstream consumers. Support both in-memory and Redis backends for flexibility and scalability.
+Develop an asynchronous event bus component to buffer, batch, and deliver instrumentation events from the middleware to one or more downstream consumers. Support both in-memory and Redis backends for flexibility and scalability.
 
 ## Rationale
 - Decouples event production from event consumption.

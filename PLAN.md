@@ -426,7 +426,7 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 
 - `cmd/proxy/`: Main CLI for the LLM Proxy. Contains all user/server commands (setup, server, openai chat, benchmark, etc.), tests, and documentation for the main CLI.
 - `internal/`: Shared logic, server, config, token, database, etc.
-- `internal/middleware/async_observability.go`: Middleware emits events to the event bus
+- `internal/middleware/instrumentation.go`: Instrumentation middleware emits events to the event bus
 - `internal/eventbus/`: In-memory/redis bus
 - `internal/dispatcher/`: File, Helicone, CloudWatch backends
 - `cmd/event-dispatcher/`: CLI for running dispatcher
@@ -464,7 +464,7 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 
 ## Rationale
 - All backend API instrumentation is now handled via a generic async event bus and dispatcher(s) architecture.
-- Generic async observability middleware implemented with in-memory event bus.
+- Generic instrumentation middleware implemented with in-memory event bus.
 - zap logger is reserved for application-level logs only.
 - This ensures minimum latency, maximum extensibility, and a clean separation of concerns.
 

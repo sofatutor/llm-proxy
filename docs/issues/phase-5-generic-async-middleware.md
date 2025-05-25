@@ -1,10 +1,10 @@
-# Generic Asynchronous Observability Middleware (Streaming-Ready)
+# Generic Instrumentation Middleware (Streaming-Ready)
 
 ## Summary
-Implement a generic, asynchronous observability middleware for the LLM proxy. The middleware must support both standard and streaming HTTP responses, capturing and forwarding events without blocking the main request/response path.
+Implement a generic, asynchronous instrumentation middleware for the LLM proxy. The middleware must support both standard and streaming HTTP responses, capturing and forwarding events without blocking the main request/response path.
 
 ## Rationale
-- Decouples observability from business logic and proxy latency.
+- Decouples instrumentation from business logic and proxy latency.
 - Supports both streaming and non-streaming LLM APIs.
 - Enables flexible downstream event handling (file, bus, cloud, etc.).
 
@@ -26,4 +26,8 @@ Implement a generic, asynchronous observability middleware for the LLM proxy. Th
 - Middleware is fully async and streaming-capable
 - No impact on proxy latency
 - All events are captured and forwarded to the event bus
-- Tests and documentation are complete 
+- Tests and documentation are complete
+
+---
+
+See [docs/instrumentation.md](../instrumentation.md) for usage and extension details. 
