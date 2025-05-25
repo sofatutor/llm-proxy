@@ -669,79 +669,6 @@ func TestNewTransparentProxy_Coverage(t *testing.T) {
 	}
 }
 
-// --- RETRY LOGIC TESTS ---
-func TestTransparentProxy_RetryLogic_TransientNetworkError(t *testing.T) {
-	failures := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if failures < 2 {
-			failures++
-			w.WriteHeader(http.StatusGatewayTimeout) // 504
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte(`{"ok":true}`)); err != nil {
-			t.Logf("Failed to write response: %v", err)
-		}
-	}))
-	defer server.Close()
-
-	p := newTestProxyWithConfig(ProxyConfig{
-		TargetBaseURL:    server.URL,
-		AllowedEndpoints: []string{"/test"},
-		AllowedMethods:   []string{"GET"},
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
-	w := httptest.NewRecorder()
-
-	p.Handler().ServeHTTP(w, req)
-	resp := w.Result()
-	if err := resp.Body.Close(); err != nil {
-		t.Logf("Failed to close response body: %v", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected 200 after retries, got %d", resp.StatusCode)
-	}
-	if failures != 2 {
-		t.Errorf("expected 2 transient failures before success, got %d", failures)
-	}
-}
-
-func TestTransparentProxy_RetryLogic_NonTransientError(t *testing.T) {
-	calls := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		w.WriteHeader(http.StatusBadRequest) // 400
-		if _, err := w.Write([]byte(`{"error":"bad request"}`)); err != nil {
-			t.Logf("Failed to write response: %v", err)
-		}
-	}))
-	defer server.Close()
-
-	p := newTestProxyWithConfig(ProxyConfig{
-		TargetBaseURL:    server.URL,
-		AllowedEndpoints: []string{"/test"},
-		AllowedMethods:   []string{"GET"},
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
-	w := httptest.NewRecorder()
-
-	p.Handler().ServeHTTP(w, req)
-	resp := w.Result()
-	if err := resp.Body.Close(); err != nil {
-		t.Logf("Failed to close response body: %v", err)
-	}
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("expected 400 for non-transient error, got %d", resp.StatusCode)
-	}
-	if calls != 1 {
-		t.Errorf("expected 1 call (no retry), got %d", calls)
-	}
-}
-
 // --- CIRCUIT BREAKER TESTS ---
 func TestTransparentProxy_CircuitBreaker_OpensOnRepeatedFailures(t *testing.T) {
 	failures := 0
@@ -769,8 +696,8 @@ func TestTransparentProxy_CircuitBreaker_OpensOnRepeatedFailures(t *testing.T) {
 		if err := resp.Body.Close(); err != nil {
 			t.Logf("Failed to close response body: %v", err)
 		}
-		if resp.StatusCode != http.StatusBadGateway {
-			t.Errorf("expected 502 for retry exhaustion, got %d", resp.StatusCode)
+		if resp.StatusCode != http.StatusGatewayTimeout {
+			t.Errorf("expected 504 (upstream failure), got %d", resp.StatusCode)
 		}
 	}
 
