@@ -242,7 +242,6 @@
 ## WIP: Proxy Robustness PR (Retry Logic, Circuit Breaker, Validation Scope) - COMPLETED
 
 ### Status
-- [x] Minimal retry logic for transient upstream failures implemented and tested
 - [x] Simple circuit breaker implemented and tested
 - [x] Validation scope enforced (token, path, method only)
 - [x] All new logic covered by unit/integration tests
@@ -362,7 +361,6 @@
 - [x] Create error handling and response standardization
 - [x] Implement request/response logging
 - [x] Add timeout and cancellation handling
-- [x] Add minimal retry logic for transient upstream failures (with tests)
 - [x] Implement simple circuit breaker for upstream API (with tests)
 - [x] Ensure validation is limited to token, path, and method (with tests)
 - [x] Document config-driven extension points for API-specific logic
