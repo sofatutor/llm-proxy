@@ -189,7 +189,13 @@ func (s *Server) setupRoutes() {
 			"version":   "0.1.0",
 		}
 
-		backendURL := "http://localhost:8080/health" // TODO: set to your backend's real URL
+		backendURL := s.config.AdminUI.APIBaseURL
+		if backendURL == "" {
+			backendURL = "http://localhost:8080"
+		}
+		if !strings.HasSuffix(backendURL, "/health") {
+			backendURL = strings.TrimRight(backendURL, "/") + "/health"
+		}
 		client := &http.Client{Timeout: 2 * time.Second}
 		backendHealth := gin.H{
 			"status": "down",
