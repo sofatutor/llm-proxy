@@ -56,10 +56,14 @@ This document outlines the implementation plan for a transparent proxy for OpenA
    - CRUD operations for each entity
    - Indexes for fast lookups
 
-4. **Logging System**
-   - Local JSON Lines file (`api_logs.jsonl`)
-   - Asynchronous worker for external JSON backends
-   - Metadata extraction from OpenAI responses
+4. **Observability & Logging System**
+   - All backend API instrumentation (OpenAI log events, traces, token usage, etc.) is handled via a generic **async event bus** and **dispatcher(s)**.
+   - The proxy/middleware emits events to the event bus; one or more dispatcher services subscribe and deliver events to their respective backends (file, Helicone, CloudWatch, etc.).
+   - Synchronous file logging is replaced by a file dispatcher service (run as a CLI with `--service file`).
+   - The event bus supports in-memory and Redis backends for flexibility and scalability.
+   - All event delivery is non-blocking and batched, with retry and health checks.
+   - **zap logger** is used exclusively for application-level logs (errors, startup, admin actions, etc.).
+   - This separation ensures minimum latency and maximum extensibility.
 
 5. **Proxy Logic**
    - Token validation
@@ -79,6 +83,19 @@ This document outlines the implementation plan for a transparent proxy for OpenA
    - CLI with flag parsing
    - Concurrent request handling
    - Metrics calculation and reporting
+
+### Observability & Logging System (Details)
+
+| Log Type                | Mechanism                        | Blocking? | Extensible? | Example Backend(s)         |
+|-------------------------|----------------------------------|-----------|-------------|----------------------------|
+| App logs (errors, etc.) | zap logger                       | No        | N/A         | stdout, file, syslog       |
+| API instrumentation     | async event bus + dispatcher(s)  | No        | Yes         | file, Helicone, CloudWatch |
+
+- All API instrumentation events are emitted to the event bus.
+- Dispatchers (file, Helicone, CloudWatch, etc.) are pluggable and run as separate CLI services.
+- File logging is now handled by the file dispatcher, not synchronously in the proxy.
+- The event bus supports batching, retries, and multiple subscribers.
+- This architecture enables local-first, cloud-ready observability with zero blocking I/O in the request path.
 
 ### Database Schema
 - **projects**
@@ -121,13 +138,16 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 - Add metadata parsing for non-streaming responses
 - Support streaming with Server-Sent Events
 
-### 5. Logging System
-- The proxy implements a canonical local logging system (JSON Lines, local file) for compliance, debugging, and fallback.
-- **Helicone** is integrated as an optional, asynchronous observability middleware. When enabled, it forwards request/response data to Helicone for advanced analytics and dashboards.
-- All Helicone operations are performed asynchronously (in a goroutine or via a worker) to ensure minimum added latency.
-- Prometheus metrics are not implemented; Helicone serves as the main observability/analytics platform.
-- Helicone integration is opt-in and can be enabled/disabled via configuration. If disabled, only custom logging is used.
-- All core logging and metrics remain in the proxy's control; Helicone is additive, not a critical dependency.
+### 5. Observability & Logging System
+- Implement async event bus (in-memory and Redis backends)
+- Refactor middleware to emit all API instrumentation events to the event bus
+- Implement dispatcher CLI with pluggable backends (file, Helicone, CloudWatch, etc.)
+- File logging is handled by the file dispatcher (run as a CLI with `--service file`)
+- All event delivery is async, batched, and non-blocking
+- zap logger remains for app-level logs only
+- Add configuration for enabling/disabling dispatchers and event bus backends
+- Write tests for event bus, dispatcher(s), and integration
+- Document the new observability pipeline and extension points
 
 ### 6. Admin UI
 - Design HTML interface with basic CSS
@@ -348,13 +368,14 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
   - Implement log rotation (configurable size/backups)
   - Configure log levels and file path
 - [x] Create log format with detailed metadata
-- [ ] **Integrate Helicone as optional, asynchronous observability middleware**
-- [ ] Add configuration for enabling/disabling Helicone
-- [ ] Add tests for Helicone integration (mocked, async)
-- [ ] Document Helicone integration and fallback behavior
- - [x] Implement asynchronous worker for external logging:
+- [x] Implement asynchronous worker for external logging:
   - Buffered sending
   - Batch processing
+- [ ] **Refactor all backend API instrumentation to use the async event bus and dispatcher(s) architecture**
+- [ ] Implement file dispatcher as the default backend for local logging
+- [ ] Add configuration for enabling/disabling dispatchers and event bus backends
+- [ ] Add tests for event bus, dispatcher(s), and integration
+- [ ] Document the new observability pipeline and extension points
 - [ ] Add structured logging throughout the application
 - [ ] Implement log context propagation
 - [ ] Create log search and filtering utilities
@@ -377,6 +398,10 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 
 - `cmd/proxy/`: Main CLI for the LLM Proxy. Contains all user/server commands (setup, server, openai chat, benchmark, etc.), tests, and documentation for the main CLI.
 - `internal/`: Shared logic, server, config, token, database, etc.
+- `internal/middleware/async_observability.go`: Middleware emits events to the event bus
+- `internal/eventbus/`: In-memory/redis bus
+- `internal/dispatcher/`: File, Helicone, CloudWatch backends
+- `cmd/event-dispatcher/`: CLI for running dispatcher
 
 **Rationale:**
 - Follows Go best practices and Single Responsibility Principle (SRP).
@@ -410,10 +435,9 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 - See WIP.md for process and status
 
 ## Rationale
-- Helicone provides advanced LLM observability and analytics with minimal integration effort.
-- All Helicone operations are async to ensure minimum latency, in line with the project's minimum latency mandate.
-- Custom logging remains canonical for compliance and fallback; Helicone is additive and optional.
-- No vendor lock-in: disabling Helicone reverts to local logging only.
+- All backend API instrumentation is now handled via a generic async event bus and dispatcher(s) architecture.
+- zap logger is reserved for application-level logs only.
+- This ensures minimum latency, maximum extensibility, and a clean separation of concerns.
 
 ## Release Plan
 
