@@ -121,7 +121,29 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 - **PostgreSQL** is recommended for production deployments requiring high concurrency, advanced features, or distributed/cloud-native scaling. 
 - The codebase and schema/migrations should be designed to support both SQLite and PostgreSQL, enabling a smooth migration path as needed.
 
+## Phases Overview
+
+| Phase | Focus                        | Key Topics/Files                                      |
+|-------|------------------------------|-------------------------------------------------------|
+| 5     | Core Features                | Proxy, logging, admin, token mgmt, core tests         |
+| 6     | Production Readiness         | Docs, refactoring, optimization, security, CI/CD      |
+| 7     | Production & Post-Production | Scaling, sec-ops, dev-ops, advanced monitoring, HTTPS |
+
+_Optional/experimental features (e.g., alerting, tracing, benchmarks) are tracked in `docs/issues/optional/` and may be promoted to a main phase as needed._
+
 ## Implementation Steps
+
+### Phase 5: Core Features
+- Implement proxy logic, logging/observability, admin UI, token management, database, and core tests.
+- See: `phase-5-generic-async-middleware.md`, `phase-5-async-event-bus.md`, `phase-5-event-dispatcher-service.md`, `phase-5-log-integration.md`, `phase-5-ui-tests.md`, etc.
+
+### Phase 6: Production Readiness
+- Complete documentation, refactoring, optimization, security, CI/CD, and containerization.
+- See: `phase-6-dev-docs.md`, `phase-6-user-docs.md`, `phase-6-docker-optimization.md`, `phase-6-container-orchestration.md`, `phase-6-aws-ecs.md`, `phase-6-kubernetes-helm.md`, `phase-6-security-docs.md`, `phase-6-header-whitelist-per-token.md`, `phase-6-resource-usage-grafana.md`, etc.
+
+### Phase 7: Production & Post-Production
+- Focus on scaling, sec-ops, dev-ops, advanced monitoring, HTTPS, and release planning.
+- See: `phase-7-https.md`, `phase-7-scaling.md`, `phase-7-performance-profiling.md`, `phase-7-memory-cpu.md`, `phase-7-db-optimization.md`, `phase-7-concurrency.md`, `phase-7-release-plan.md`, `phase-7-secops-automation.md`, `phase-7-operational.md`, `phase-7-aws-eventbridge-connector.md`, etc.
 
 ### 1. Project Setup
 - Initialize Go module with dependencies (Go 1.23)
@@ -404,7 +426,7 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 
 - `cmd/proxy/`: Main CLI for the LLM Proxy. Contains all user/server commands (setup, server, openai chat, benchmark, etc.), tests, and documentation for the main CLI.
 - `internal/`: Shared logic, server, config, token, database, etc.
-- `internal/middleware/async_observability.go`: Middleware emits events to the event bus
+- `internal/middleware/instrumentation.go`: Instrumentation middleware emits events to the event bus
 - `internal/eventbus/`: In-memory/redis bus
 - `internal/dispatcher/`: File, Helicone, CloudWatch backends
 - `cmd/event-dispatcher/`: CLI for running dispatcher
@@ -442,6 +464,7 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 
 ## Rationale
 - All backend API instrumentation is now handled via a generic async event bus and dispatcher(s) architecture.
+- Generic instrumentation middleware implemented with in-memory event bus.
 - zap logger is reserved for application-level logs only.
 - This ensures minimum latency, maximum extensibility, and a clean separation of concerns.
 

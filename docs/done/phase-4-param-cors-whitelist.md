@@ -57,4 +57,3 @@ apis:
 ## Status
 - [x] Implemented in proxy and config
 - [x] Documented here
-- [ ] Announced to all integrators 

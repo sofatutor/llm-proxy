@@ -22,7 +22,7 @@ import (
 
 // MockTokenStore with methods that return testable results
 type MockTokenStoreExtended struct {
-	mock.Mock
+	*mock.Mock
 	tokens []token.TokenData
 }
 
@@ -56,7 +56,7 @@ func (m *MockTokenStoreExtended) ListTokens(ctx context.Context) ([]token.TokenD
 
 // MockProjectStore with methods that return testable results
 type MockProjectStoreExtended struct {
-	mock.Mock
+	*mock.Mock
 	projects []proxy.Project
 }
 
@@ -94,8 +94,8 @@ func (m *MockProjectStoreExtended) DeleteProject(ctx context.Context, id string)
 }
 
 func setupServerAndMocks(t *testing.T) (*Server, *MockTokenStoreExtended, *MockProjectStoreExtended) {
-	tokenStore := new(MockTokenStoreExtended)
-	projectStore := new(MockProjectStoreExtended)
+	tokenStore := &MockTokenStoreExtended{Mock: &mock.Mock{}}
+	projectStore := &MockProjectStoreExtended{Mock: &mock.Mock{}}
 
 	cfg := &config.Config{
 		ListenAddr:      ":8080",

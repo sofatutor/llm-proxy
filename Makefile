@@ -1,4 +1,4 @@
-.PHONY: all build test test-coverage lint clean tools dev-setup db-setup run docker swag test-benchmark
+.PHONY: all build test test-coverage lint clean tools dev-setup db-setup run docker swag test-benchmark coverage
 
 # Go parameters
 GOCMD=go
@@ -75,4 +75,8 @@ fmt:
 # Set up SQLite database
 db-setup:
 	mkdir -p ./data
-	cat ./scripts/schema.sql | sqlite3 ./data/llm-proxy.db 
+	cat ./scripts/schema.sql | sqlite3 ./data/llm-proxy.db
+
+coverage:
+	go test -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html 
