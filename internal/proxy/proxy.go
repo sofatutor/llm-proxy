@@ -809,10 +809,12 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 								if !found {
 									w.WriteHeader(http.StatusBadRequest)
 									w.Header().Set("Content-Type", "application/json")
-									json.NewEncoder(w).Encode(ErrorResponse{
+									if err := json.NewEncoder(w).Encode(ErrorResponse{
 										Error: fmt.Sprintf("Parameter '%s' value '%s' is not allowed. Allowed patterns: %v", param, valStr, allowed),
 										Code:  "param_not_allowed",
-									})
+									}); err != nil {
+										p.logger.Error("Failed to encode error response", zap.Error(err))
+									}
 									return
 								}
 							}
@@ -837,10 +839,12 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 				if origin == "" {
 					w.WriteHeader(http.StatusBadRequest)
 					w.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(w).Encode(ErrorResponse{
+					if err := json.NewEncoder(w).Encode(ErrorResponse{
 						Error: "Origin header required",
 						Code:  "origin_required",
-					})
+					}); err != nil {
+						p.logger.Error("Failed to encode error response", zap.Error(err))
+					}
 					return
 				}
 				if len(p.config.AllowedOrigins) > 0 {
@@ -854,10 +858,12 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 					if !allowed {
 						w.WriteHeader(http.StatusForbidden)
 						w.Header().Set("Content-Type", "application/json")
-						json.NewEncoder(w).Encode(ErrorResponse{
+						if err := json.NewEncoder(w).Encode(ErrorResponse{
 							Error: "Origin not allowed",
 							Code:  "origin_not_allowed",
-						})
+						}); err != nil {
+							p.logger.Error("Failed to encode error response", zap.Error(err))
+						}
 						return
 					}
 				}
@@ -872,10 +878,12 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 				if !allowed {
 					w.WriteHeader(http.StatusForbidden)
 					w.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(w).Encode(ErrorResponse{
+					if err := json.NewEncoder(w).Encode(ErrorResponse{
 						Error: "Origin not allowed",
 						Code:  "origin_not_allowed",
-					})
+					}); err != nil {
+						p.logger.Error("Failed to encode error response", zap.Error(err))
+					}
 					return
 				}
 			}
