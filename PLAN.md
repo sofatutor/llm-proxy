@@ -58,8 +58,14 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 
 4. **Observability & Logging System**
    - All backend API instrumentation (OpenAI log events, traces, token usage, etc.) is handled via a generic **async event bus** and **dispatcher(s)**.
-   - The proxy/middleware emits events to the event bus; one or more dispatcher services subscribe and deliver events to their respective backends (file, Helicone, CloudWatch, etc.).
+   - The proxy/middleware emits events to the event bus; one or more dispatcher services subscribe and deliver events to their respective backends (file, Helicone, Lunary, AWS EventBridge, etc.).
    - Synchronous file logging is replaced by a file dispatcher service (run as a CLI with `--service file`).
+   - **Error Handling & Retry Strategies:**
+     - The event bus and all dispatchers must implement robust error handling and retry logic.
+     - On delivery failure, events should be retried with exponential backoff (configurable max attempts and intervals).
+     - If delivery repeatedly fails, events should be sent to a dead-letter queue or fallback mechanism (e.g., local file, alerting, or persistent storage).
+     - All errors, retries, and failures must be logged and exposed via metrics for monitoring and alerting.
+     - The system should be resilient to transient network or backend outages, ensuring no data loss and eventual delivery where possible.
    - The event bus supports in-memory and Redis backends for flexibility and scalability.
    - All event delivery is non-blocking and batched, with retry and health checks.
    - **zap logger** is used exclusively for application-level logs (errors, startup, admin actions, etc.).
