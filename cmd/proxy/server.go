@@ -50,6 +50,7 @@ var (
 	pidFile            string
 	debugMode          bool
 	serverLogFile      string
+	serverConfigPath   string
 )
 
 // Add this before init()
@@ -70,6 +71,7 @@ func init() {
 	serverCmd.Flags().StringVar(&pidFile, "pid-file", "tmp/server.pid", "PID file for daemon mode (relative to project root)")
 	serverCmd.Flags().BoolVarP(&debugMode, "debug", "v", false, "Enable debug logging (overrides log-level)")
 	serverCmd.Flags().StringVar(&serverLogFile, "log-file", "", "Path to log file (overrides env var, default: stdout)")
+	serverCmd.Flags().StringVarP(&serverConfigPath, "config", "c", "", "Path to YAML config file for API providers (overrides API_CONFIG_PATH env var)")
 }
 
 // runServer is the main function for the server command
@@ -189,6 +191,11 @@ func runServerForeground() {
 	if serverLogFile != "" {
 		if err := os.Setenv("LOG_FILE", serverLogFile); err != nil {
 			log.Fatalf("Failed to set LOG_FILE environment variable: %v", err)
+		}
+	}
+	if serverConfigPath != "" {
+		if err := os.Setenv("API_CONFIG_PATH", serverConfigPath); err != nil {
+			log.Fatalf("Failed to set API_CONFIG_PATH environment variable: %v", err)
 		}
 	}
 
