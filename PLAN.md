@@ -268,7 +268,7 @@ Refer to the linked issue files for detailed tasks, rationale, and acceptance cr
 
 ### Benchmark Tool
 ```bash
-docker run --rm llm-proxy llm-benchmark \
+docker run --rm llm-proxy benchmark \
   --base-url=http://host.docker.internal:8080 \
   --endpoint=/v1/chat/completions \
   --token=<withering-token> \

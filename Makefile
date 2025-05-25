@@ -12,7 +12,6 @@ GOLINT=golangci-lint
 # Binary names
 BINDIR=bin
 PROXY_BINARY=$(BINDIR)/llm-proxy
-BENCHMARK_BINARY=$(BINDIR)/llm-benchmark
 
 all: test build
 
@@ -47,7 +46,6 @@ lint:
 clean:
 	$(GOCLEAN)
 	rm -f $(PROXY_BINARY)
-	rm -f $(BENCHMARK_BINARY)
 
 run: build
 	./$(PROXY_BINARY)
