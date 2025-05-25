@@ -15,12 +15,12 @@ Implement a generic, asynchronous observability middleware for the LLM proxy. Th
 - Extensible: supports custom event schemas.
 
 ## Tasks
-- [ ] Design middleware interface and event schema
-- [ ] Implement async buffering for streaming responses
-- [ ] Integrate with event bus for downstream dispatch
-- [ ] Add configuration for enable/disable
-- [ ] Write tests for streaming and non-streaming cases
-- [ ] Document usage and extension points
+- [x] Design middleware interface and event schema
+- [x] Implement async buffering for streaming responses
+- [x] Integrate with event bus for downstream dispatch
+- [x] Add configuration for enable/disable
+- [x] Write tests for streaming and non-streaming cases
+- [x] Document usage and extension points
 
 ## Acceptance Criteria
 - Middleware is fully async and streaming-capable

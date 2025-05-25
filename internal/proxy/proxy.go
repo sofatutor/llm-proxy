@@ -18,6 +18,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sofatutor/llm-proxy/internal/logging"
+	"github.com/sofatutor/llm-proxy/internal/middleware"
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"go.uber.org/zap"
 )
@@ -45,6 +46,7 @@ type TransparentProxy struct {
 	shuttingDown         bool
 	mu                   sync.RWMutex
 	allowedMethodsHeader string // cached comma-separated allowed methods
+	obsMiddleware        *middleware.ObservabilityMiddleware
 }
 
 // ProxyMetrics tracks proxy usage statistics
@@ -77,6 +79,15 @@ func NewTransparentProxy(config ProxyConfig, validator TokenValidator, store Pro
 		return nil, fmt.Errorf("failed to initialize logger: %w", err)
 	}
 	return NewTransparentProxyWithLogger(config, validator, store, logger)
+}
+
+// NewTransparentProxyWithObservability creates a new proxy with observability middleware.
+func NewTransparentProxyWithObservability(config ProxyConfig, validator TokenValidator, store ProjectStore, obsCfg middleware.ObservabilityConfig) (*TransparentProxy, error) {
+	logger, err := logging.NewLogger(config.LogLevel, config.LogFormat, config.LogFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize logger: %w", err)
+	}
+	return NewTransparentProxyWithLoggerAndObservability(config, validator, store, logger, obsCfg)
 }
 
 // NewTransparentProxyWithLogger allows providing a custom logger. If logger is nil
@@ -117,6 +128,16 @@ func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator,
 	proxy.proxy = reverseProxy
 
 	return proxy, nil
+}
+
+// NewTransparentProxyWithLoggerAndObservability creates a proxy with observability middleware using an existing logger.
+func NewTransparentProxyWithLoggerAndObservability(config ProxyConfig, validator TokenValidator, store ProjectStore, logger *zap.Logger, obsCfg middleware.ObservabilityConfig) (*TransparentProxy, error) {
+	p, err := NewTransparentProxyWithLogger(config, validator, store, logger)
+	if err != nil {
+		return nil, err
+	}
+	p.obsMiddleware = middleware.NewObservabilityMiddleware(obsCfg, logger)
+	return p, nil
 }
 
 // director is the Director function for the reverse proxy
@@ -508,11 +529,7 @@ func (p *TransparentProxy) createTransport() *http.Transport {
 
 // Handler returns the HTTP handler for the proxy
 func (p *TransparentProxy) Handler() http.Handler {
-	// Middleware: ValidateRequestMiddleware first, then CircuitBreaker
-	return p.ValidateRequestMiddleware()(CircuitBreakerMiddleware(5, 30*time.Second, func(status int) bool {
-		// Treat 502, 503, 504 as transient
-		return status == http.StatusBadGateway || status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout
-	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	baseHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Short-circuit OPTIONS requests: no auth required, respond with 204 and CORS headers
 		if r.Method == http.MethodOptions {
 			// Set CORS headers for preflight requests
@@ -627,7 +644,18 @@ func (p *TransparentProxy) Handler() http.Handler {
 		}
 
 		p.proxy.ServeHTTP(rw, r)
-	})))
+	})
+
+	var handler http.Handler = baseHandler
+	handler = p.ValidateRequestMiddleware()(handler)
+	if p.obsMiddleware != nil {
+		handler = p.obsMiddleware.Middleware()(handler)
+	}
+	handler = CircuitBreakerMiddleware(5, 30*time.Second, func(status int) bool {
+		return status == http.StatusBadGateway || status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout
+	})(handler)
+
+	return handler
 }
 
 type timingResponseWriter struct {

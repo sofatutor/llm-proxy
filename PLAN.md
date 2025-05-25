@@ -442,6 +442,7 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 
 ## Rationale
 - All backend API instrumentation is now handled via a generic async event bus and dispatcher(s) architecture.
+- Generic async observability middleware implemented with in-memory event bus.
 - zap logger is reserved for application-level logs only.
 - This ensures minimum latency, maximum extensibility, and a clean separation of concerns.
 

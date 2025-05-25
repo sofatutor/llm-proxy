@@ -52,6 +52,10 @@ type Config struct {
 	ExternalLoggingMaxRetries      int           // Maximum number of retry attempts
 	ExternalLoggingFallbackToLocal bool          // Fallback to local logging if external delivery fails
 
+	// Observability middleware
+	ObservabilityEnabled    bool // Enable async observability middleware
+	ObservabilityBufferSize int  // Buffer size for in-memory event bus
+
 	// CORS settings
 	CORSAllowedOrigins []string      // Allowed origins for CORS
 	CORSAllowedMethods []string      // Allowed methods for CORS
@@ -130,6 +134,9 @@ func New() (*Config, error) {
 		ExternalLoggingRetryInterval:   getEnvDuration("EXTERNAL_LOGGING_RETRY_INTERVAL", 5*time.Second),
 		ExternalLoggingMaxRetries:      getEnvInt("EXTERNAL_LOGGING_MAX_RETRIES", 3),
 		ExternalLoggingFallbackToLocal: getEnvBool("EXTERNAL_LOGGING_FALLBACK_TO_LOCAL", true),
+
+		ObservabilityEnabled:    getEnvBool("OBSERVABILITY_ENABLED", false),
+		ObservabilityBufferSize: getEnvInt("OBSERVABILITY_BUFFER_SIZE", 100),
 
 		// CORS defaults
 		CORSAllowedOrigins: getEnvStringSlice("CORS_ALLOWED_ORIGINS", []string{"*"}),
@@ -281,6 +288,9 @@ func DefaultConfig() *Config {
 		ExternalLoggingRetryInterval:   5 * time.Second,
 		ExternalLoggingMaxRetries:      3,
 		ExternalLoggingFallbackToLocal: true,
+
+		ObservabilityEnabled:    false,
+		ObservabilityBufferSize: 100,
 
 		// CORS defaults
 		CORSAllowedOrigins: []string{"*"},
