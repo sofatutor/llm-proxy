@@ -12,52 +12,38 @@ apis:
     allowed_endpoints:
       # Chat completions
       - /v1/chat/completions
-      
       # Completions
       - /v1/completions
-      
       # Embeddings
       - /v1/embeddings
-      
       # Models
       - /v1/models
-      
       # Edits
       - /v1/edits
-      
       # Fine-tuning
-      - /v1/fine-tunes
-      - /v1/fine_tuning
-      
+      # - /v1/fine-tunes
+      # - /v1/fine_tuning
       # Files
       - /v1/files
-      
       # Images
       - /v1/images/generations
       - /v1/images/edits
       - /v1/images/variations
-      
       # Audio
       - /v1/audio/speech
       - /v1/audio/transcriptions
       - /v1/audio/translations
-      
       # Moderations
       - /v1/moderations
-
-      # Threads
+      # Assistants
       - /v1/threads
-
-      # Messages
       - /v1/messages
-
-      # Runs
       - /v1/runs
     
     allowed_methods:
       - GET
       - POST
-      - DELETE
+      # - DELETE
       - OPTIONS
     
     # Timeout settings in seconds
@@ -65,12 +51,31 @@ apis:
       request: 120s
       response_header: 30s
       idle_connection: 90s
-      flush_interval: 100ms
+      flush_interval: 10ms
     
     # Connection settings
     connection:
       max_idle_conns: 100
       max_idle_conns_per_host: 20
+
+    param_whitelist:
+      model:
+        - gpt-4o
+        - gpt-4o-*
+        - gpt-4.1
+        - gpt-4.1-*
+        - o4-mini
+        - omni-moderation-*
+        - text-embedding-3-small
+
+    allowed_origins:
+      - https://www.sofatutor.com
+      - http://localhost:4000
+      - https://pr-15854-sofabuddy-preview-sofatutor.vercel.app
+
+    # For additional security, you can add required headers here
+    # required_headers:
+    #   - origin # will be validated against allowed_origins
 
   # Anthropic API configuration
   anthropic:
@@ -84,7 +89,7 @@ apis:
       request: 120s
       response_header: 30s
       idle_connection: 90s
-      flush_interval: 100ms
+      flush_interval: 10ms
     connection:
       max_idle_conns: 100
       max_idle_conns_per_host: 20

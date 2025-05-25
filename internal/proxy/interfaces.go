@@ -80,6 +80,15 @@ type ProxyConfig struct {
 
 	// SetXForwardedFor determines whether to set the X-Forwarded-For header
 	SetXForwardedFor bool
+
+	// ParamWhitelist is a map of parameter names to allowed values
+	ParamWhitelist map[string][]string
+
+	// AllowedOrigins is a list of allowed CORS origins for this provider
+	AllowedOrigins []string
+
+	// RequiredHeaders is a list of required request headers (case-insensitive)
+	RequiredHeaders []string
 }
 
 // Validate checks that the ProxyConfig is valid and returns an error if not.
