@@ -1256,3 +1256,116 @@ func TestAdminHealthEndpoint(t *testing.T) {
 	assert.Equal(t, "ok", admin["status"])
 	assert.Equal(t, "ok", backendStatus["status"])
 }
+
+func TestServer_templateFuncs_AllFuncs(t *testing.T) {
+	s := &Server{}
+	funcs := s.templateFuncs()
+
+	t.Run("add/sub/inc/dec/seq", func(t *testing.T) {
+		add := funcs["add"].(func(int, int) int)
+		sub := funcs["sub"].(func(int, int) int)
+		inc := funcs["inc"].(func(int) int)
+		dec := funcs["dec"].(func(int) int)
+		seq := funcs["seq"].(func(int, int) []int)
+		if add(2, 3) != 5 {
+			t.Error("add failed")
+		}
+		if sub(5, 2) != 3 {
+			t.Error("sub failed")
+		}
+		if inc(7) != 8 {
+			t.Error("inc failed")
+		}
+		if dec(7) != 6 {
+			t.Error("dec failed")
+		}
+		if got := seq(2, 4); len(got) != 3 || got[0] != 2 || got[2] != 4 {
+			t.Errorf("seq failed: %v", got)
+		}
+	})
+
+	t.Run("now", func(t *testing.T) {
+		now := funcs["now"].(func() time.Time)
+		if time.Since(now()) > time.Second {
+			t.Error("now not close to current time")
+		}
+	})
+
+	t.Run("eq/ne", func(t *testing.T) {
+		eq := funcs["eq"].(func(any, any) bool)
+		ne := funcs["ne"].(func(any, any) bool)
+		if !eq(1, 1) || eq(1, 2) {
+			t.Error("eq failed")
+		}
+		if !ne(1, 2) || ne(1, 1) {
+			t.Error("ne failed")
+		}
+	})
+
+	t.Run("lt/gt/le/ge", func(t *testing.T) {
+		lt := funcs["lt"].(func(any, any) bool)
+		gt := funcs["gt"].(func(any, any) bool)
+		le := funcs["le"].(func(any, any) bool)
+		ge := funcs["ge"].(func(any, any) bool)
+		if !lt(1, 2) || lt(2, 1) {
+			t.Error("lt failed")
+		}
+		if !gt(2, 1) || gt(1, 2) {
+			t.Error("gt failed")
+		}
+		if !le(2, 2) || !le(1, 2) || le(3, 2) {
+			t.Error("le failed")
+		}
+		if !ge(2, 2) || !ge(3, 2) || ge(1, 2) {
+			t.Error("ge failed")
+		}
+	})
+
+	t.Run("and/or/not", func(t *testing.T) {
+		and := funcs["and"].(func(bool, bool) bool)
+		or := funcs["or"].(func(bool, bool) bool)
+		not := funcs["not"].(func(bool) bool)
+		if !and(true, true) || and(true, false) {
+			t.Error("and failed")
+		}
+		if !or(true, false) || or(false, false) {
+			t.Error("or failed")
+		}
+		if !not(false) || not(true) {
+			t.Error("not failed")
+		}
+	})
+
+	t.Run("obfuscateAPIKey", func(t *testing.T) {
+		obf := funcs["obfuscateAPIKey"].(func(string) string)
+		if obf("1234567890123456") != "12345678...3456" {
+			t.Error("obfuscateAPIKey long failed")
+		}
+		if obf("abcd") != "****" {
+			t.Error("obfuscateAPIKey short failed")
+		}
+		if obf("abcdefghij") != "ab********" {
+			t.Error("obfuscateAPIKey med failed")
+		}
+	})
+
+	t.Run("obfuscateToken", func(t *testing.T) {
+		obf := funcs["obfuscateToken"].(func(string) string)
+		if obf("1234567890abcdef") != "1234****cdef" {
+			t.Error("obfuscateToken long failed")
+		}
+		if obf("1234567") != "****" {
+			t.Error("obfuscateToken short failed")
+		}
+	})
+
+	t.Run("contains", func(t *testing.T) {
+		contains := funcs["contains"].(func(string, string) bool)
+		if !contains("hello world", "world") {
+			t.Error("contains failed")
+		}
+		if contains("hello", "bye") {
+			t.Error("contains false positive")
+		}
+	})
+}
