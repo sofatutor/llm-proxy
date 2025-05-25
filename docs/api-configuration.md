@@ -59,6 +59,46 @@ Each API provider has the following configuration options:
 - `connection`: Connection pool settings
   - `max_idle_conns`: Maximum number of idle connections
   - `max_idle_conns_per_host`: Maximum number of idle connections per host
+- `param_whitelist`: (optional) Restrict allowed values for specific request parameters (e.g., model). Supports glob patterns (e.g., `gpt-4.1-*`).
+- `allowed_origins`: (optional) Restrict allowed CORS origins for API requests. Only requests from these origins will be accepted.
+- `required_headers`: (optional) Require specific headers (e.g., `Origin`) for requests to be accepted.
+
+##### Example with Advanced Options
+
+```yaml
+apis:
+  openai:
+    base_url: https://api.openai.com
+    allowed_endpoints:
+      - /v1/chat/completions
+      - /v1/completions
+    allowed_methods:
+      - POST
+    param_whitelist:
+      model:
+        - gpt-4o
+        - gpt-4.1-*
+    allowed_origins:
+      - https://www.sofatutor.com
+      - http://localhost:4000
+    required_headers:
+      - origin
+    timeouts:
+      request: 60s
+      response_header: 30s
+      idle_connection: 90s
+      flush_interval: 100ms
+    connection:
+      max_idle_conns: 100
+      max_idle_conns_per_host: 20
+```
+
+**param_whitelist**: Use this to restrict which models or other parameters can be used in requests. If a request specifies a value not in the whitelist, it will be rejected with a 400 error.
+
+**allowed_origins**: Use this to enforce CORS policies. Only requests from these origins will be accepted. If not set, all origins are allowed by default.
+
+**required_headers**: Use this to require headers like `Origin` for all requests. If a required header is missing, the request will be rejected with a 400 error.
+- **If `origin` is listed in `required_headers`, the proxy will also check `allowed_origins` and block requests with an Origin header not in the allowed list.**
 
 ## Security Considerations
 
