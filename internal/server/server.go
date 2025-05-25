@@ -55,6 +55,9 @@ type Metrics struct {
 // Version is the application version, following semantic versioning.
 const Version = "0.1.0"
 
+// maxDurationMinutes is the maximum allowed duration for a token (365 days)
+const maxDurationMinutes = 525600
+
 // New creates a new HTTP server with the provided configuration and store implementations.
 // It initializes the server with appropriate timeouts and registers all necessary route handlers.
 // The server is not started until the Start method is called.
@@ -542,7 +545,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		}
 		var duration time.Duration
 		if req.DurationMinutes > 0 {
-			if req.DurationMinutes > 525600 {
+			if req.DurationMinutes > maxDurationMinutes {
 				s.logger.Error("duration_minutes exceeds maximum allowed", zap.Int("duration_minutes", req.DurationMinutes), zap.String("request_id", requestID))
 				http.Error(w, `{"error":"duration_minutes exceeds maximum allowed"}`, http.StatusBadRequest)
 				return
