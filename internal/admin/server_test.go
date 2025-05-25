@@ -2,10 +2,12 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +16,8 @@ import (
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetSessionSecret(t *testing.T) {
@@ -25,12 +29,25 @@ func TestGetSessionSecret(t *testing.T) {
 	}
 }
 
-// testTemplateDir returns the correct template directory path depending on CWD
+// testTemplateDir returns the absolute path to the test template directory, relative to the project root
 func testTemplateDir() string {
-	if _, err := os.Stat("internal/admin/testdata/base.html"); err == nil {
-		return "internal/admin/testdata"
+	wd, err := os.Getwd()
+	if err != nil {
+		panic(err)
 	}
-	return "testdata"
+	// Walk up until we find go.mod (project root)
+	root := wd
+	for {
+		if _, err := os.Stat(filepath.Join(root, "go.mod")); err == nil {
+			break
+		}
+		parent := filepath.Dir(root)
+		if parent == root {
+			panic("could not find project root (go.mod)")
+		}
+		root = parent
+	}
+	return filepath.Join(root, "internal", "admin", "testdata")
 }
 
 func TestNewServer_Minimal(t *testing.T) {
@@ -138,7 +155,7 @@ func TestServer_HandleDashboard(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/dashboard.html") // Use dummy template
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/dashboard.html") // Use dummy template
 
 	s.engine.GET("/dashboard", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{DashboardData: &DashboardData{TotalProjects: 1, TotalTokens: 2, ActiveTokens: 1, ExpiredTokens: 0, TotalRequests: 10, RequestsToday: 5, RequestsThisWeek: 7}}
@@ -159,7 +176,7 @@ func TestServer_HandleDashboard_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/dashboard.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/dashboard.html")
 
 	s.engine.GET("/dashboard", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{DashboardErr: errFake}
@@ -180,7 +197,7 @@ func TestServer_HandleProjectsList(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/projects-list-complete.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/projects-list-complete.html")
 
 	s.engine.GET("/projects", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{}
@@ -201,7 +218,7 @@ func TestServer_HandleProjectsList_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/projects-list-complete.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/projects-list-complete.html")
 
 	s.engine.GET("/projects", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{DashboardErr: errFake}
@@ -222,7 +239,7 @@ func TestServer_HandleTokensList(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/tokens-list-complete.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/tokens-list-complete.html")
 
 	s.engine.GET("/tokens", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{}
@@ -243,7 +260,7 @@ func TestServer_HandleTokensList_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/tokens-list-complete.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/tokens-list-complete.html")
 
 	s.engine.GET("/tokens", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{DashboardErr: errFake}
@@ -264,7 +281,7 @@ func TestServer_HandleTokensNew(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/tokens-*.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/tokens-*.html")
 
 	s.engine.GET("/tokens/new", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{}
@@ -285,7 +302,7 @@ func TestServer_HandleTokensCreate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/tokens-*.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/tokens-*.html")
 
 	s.engine.POST("/tokens", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{}
@@ -308,7 +325,7 @@ func TestServer_HandleTokensCreate_Errors(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/tokens-*.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/tokens-*.html")
 
 	s.engine.POST("/tokens", func(c *gin.Context) {
 		client := &mockAPIClient{DashboardErr: errFake}
@@ -339,7 +356,7 @@ func TestServer_HandleProjectsShow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/projects-show.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/projects-show.html")
 
 	s.engine.GET("/projects/:id", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{}
@@ -360,7 +377,7 @@ func TestServer_HandleProjectsEdit(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/projects-edit.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/projects-edit.html")
 
 	s.engine.GET("/projects/:id/edit", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{}
@@ -381,7 +398,7 @@ func TestServer_HandleProjectsUpdate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/projects-edit.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/projects-edit.html")
 
 	s.engine.PUT("/projects/:id", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{}
@@ -404,7 +421,7 @@ func TestServer_HandleProjectsUpdate_Errors(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/projects-edit.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/projects-edit.html")
 
 	s.engine.PUT("/projects/:id", func(c *gin.Context) {
 		client := &mockAPIClient{DashboardErr: errFake}
@@ -491,7 +508,7 @@ func TestServer_HandleProjectsNew(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/projects-new.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/projects-new.html")
 
 	s.engine.GET("/projects/new", func(c *gin.Context) {
 		s.handleProjectsNew(c)
@@ -510,7 +527,7 @@ func TestServer_HandleProjectsCreate(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/projects-new.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/projects-new.html")
 
 	s.engine.POST("/projects", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{}
@@ -543,7 +560,7 @@ func TestServer_HandleProjectsCreate_APIError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/projects-new.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/projects-new.html")
 
 	s.engine.POST("/projects", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{DashboardErr: errFake}
@@ -566,7 +583,7 @@ func TestServer_HandleProjectsShow_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/projects-show.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/projects-show.html")
 
 	s.engine.GET("/projects/:id", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{DashboardErr: errFake}
@@ -587,7 +604,7 @@ func TestServer_HandleProjectsEdit_NotFound(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/projects-edit.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/projects-edit.html")
 
 	s.engine.GET("/projects/:id/edit", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{DashboardErr: errFake}
@@ -613,7 +630,7 @@ func TestServer_HandleTokensNew_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/tokens-new.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/tokens-new.html")
 
 	s.engine.GET("/tokens/new", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{DashboardErr: errFake}
@@ -790,7 +807,7 @@ func TestServer_HandleLoginForm(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/login.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/login.html")
 
 	s.engine.GET("/auth/login", func(c *gin.Context) {
 		s.handleLoginForm(c)
@@ -857,7 +874,7 @@ func TestServer_HandleLogin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob("testdata/login.html")
+	s.engine.LoadHTMLGlob(testTemplateDir() + "/login.html")
 
 	// Add sessions middleware with a dummy cookie store
 	store := cookie.NewStore([]byte("secret"))
@@ -1159,18 +1176,18 @@ func TestServer_LoadAllTemplates_Coverage(t *testing.T) {
 	td := testTemplateDir()
 	// Load all templates as in production
 	s.engine.LoadHTMLFiles(
-		td+"/base.html",
-		td+"/dashboard.html",
-		td+"/dashboard.html",
-		td+"/error.html",
-		td+"/login.html",
-		td+"/projects-list-complete.html",
-		td+"/tokens-list-complete.html",
-		td+"/projects/new.html",
-		td+"/projects/show.html",
-		td+"/projects/edit.html",
-		td+"/tokens/new.html",
-		td+"/tokens/created.html",
+		filepath.Join(td, "base.html"),
+		filepath.Join(td, "dashboard.html"),
+		filepath.Join(td, "dashboard.html"),
+		filepath.Join(td, "error.html"),
+		filepath.Join(td, "login.html"),
+		filepath.Join(td, "projects-list-complete.html"),
+		filepath.Join(td, "tokens-list-complete.html"),
+		filepath.Join(td, "projects/new.html"),
+		filepath.Join(td, "projects/show.html"),
+		filepath.Join(td, "projects/edit.html"),
+		filepath.Join(td, "tokens/new.html"),
+		filepath.Join(td, "tokens/created.html"),
 	)
 	// Render error.html
 	s.engine.GET("/err", func(c *gin.Context) {
@@ -1202,4 +1219,40 @@ func TestServer_LoadAllTemplates_Coverage(t *testing.T) {
 	if w3.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w3.Code)
 	}
+}
+
+func TestAdminHealthEndpoint(t *testing.T) {
+	// Start a fake backend health server
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok","timestamp":"2024-01-01T00:00:00Z","version":"0.1.0"}`))
+	}))
+	defer backend.Close()
+
+	cfg := &config.Config{
+		AdminUI: config.AdminUIConfig{
+			ListenAddr:      "127.0.0.1:0",
+			TemplateDir:     testTemplateDir(),
+			APIBaseURL:      backend.URL,
+			ManagementToken: "test-token",
+		},
+	}
+	server, err := NewServer(cfg)
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/health", nil)
+	server.engine.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]interface{}
+	err = json.Unmarshal(w.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	admin, ok := resp["admin"].(map[string]interface{})
+	require.True(t, ok)
+	backendStatus, ok := resp["backend"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "ok", admin["status"])
+	assert.Equal(t, "ok", backendStatus["status"])
 }
