@@ -1,4 +1,4 @@
-.PHONY: all build test test-coverage lint clean tools dev-setup db-setup run docker swag
+.PHONY: all build test test-coverage lint clean tools dev-setup db-setup run docker swag test-benchmark
 
 # Go parameters
 GOCMD=go
@@ -18,7 +18,6 @@ all: test build
 
 build: | $(BINDIR)
 	$(GOBUILD) -o $(PROXY_BINARY) ./cmd/proxy
-	$(GOBUILD) -o $(BENCHMARK_BINARY) ./cmd/benchmark
 
 $(BINDIR):
 	@mkdir -p $(BINDIR)

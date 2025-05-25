@@ -5,11 +5,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -256,6 +260,7 @@ var benchmarkCmd *cobra.Command
 func init() {
 	// Initialize root command
 	cobraRoot := &cobra.Command{Use: "llm-proxy"}
+	rootCmd = cobraRoot // Ensure rootCmd is initialized before any AddCommand calls
 
 	// Register setup command flags
 	setupCmd.Flags().StringVar(&configPath, "config", ".env", "Path to the configuration file")
@@ -654,18 +659,400 @@ func init() {
 	benchmarkCmd = &cobra.Command{
 		Use:   "benchmark",
 		Short: "Run benchmarks against the LLM Proxy",
-		Long:  `Benchmark performance metrics including latency, throughput, and errors.`,
+		Long:  `Benchmark performance metrics including latency, throughput, and errors. Optionally send a JSON body with --json. Latency is measured using X-REQUEST-START, X-UPSTREAM-REQUEST-START, and X-UPSTREAM-REQUEST-STOP headers for precise breakdowns (see documentation).`,
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("Benchmark command not yet implemented")
+			baseURL, _ := cmd.Flags().GetString("base-url")
+			endpoint, _ := cmd.Flags().GetString("endpoint")
+			token, _ := cmd.Flags().GetString("token")
+			totalRequests, _ := cmd.Flags().GetInt("requests")
+			concurrency, _ := cmd.Flags().GetInt("concurrency")
+			jsonBody, _ := cmd.Flags().GetString("json")
+			debug, _ := cmd.Flags().GetBool("debug")
+
+			if baseURL == "" || endpoint == "" || token == "" || totalRequests <= 0 || concurrency <= 0 {
+				fmt.Println("Missing required flags or invalid values. Use --base-url, --endpoint, --token, --requests, --concurrency.")
+				osExit(1)
+			}
+
+			type result struct {
+				latency     time.Duration
+				err         error
+				errMsg      string
+				response    string
+				statusCode  int
+				headers     http.Header
+				upstreamLat time.Duration
+				proxyLat    time.Duration
+			}
+			results := make(chan result, totalRequests)
+			start := time.Now()
+
+			var wg sync.WaitGroup
+			requestsPerWorker := totalRequests / concurrency
+			extra := totalRequests % concurrency
+
+			var (
+				progressMu              sync.Mutex
+				sent, completed, failed int
+			)
+
+			statusCounts := make(map[int]int)
+			statusSamples := make(map[int]struct {
+				response string
+				headers  http.Header
+				errMsg   string
+			})
+
+			var latencies []time.Duration
+			var upstreamLatencies []time.Duration
+			var proxyLatencies []time.Duration
+
+			for i := 0; i < concurrency; i++ {
+				wg.Add(1)
+				workerID := i + 1
+				count := requestsPerWorker
+				if i < extra {
+					count++
+				}
+				go func(id, n int) {
+					defer wg.Done()
+					for j := 0; j < n; j++ {
+						progressMu.Lock()
+						sent++
+						fmt.Printf("\rRequests sent: %d, completed: %d, failed: %d", sent, completed, failed)
+						progressMu.Unlock()
+						requestStart := time.Now()
+						requestStartNs := requestStart.UnixNano()
+						var bodyReader io.Reader
+						if jsonBody != "" {
+							bodyReader = strings.NewReader(jsonBody)
+						} else {
+							bodyReader = nil
+						}
+						req, _ := http.NewRequest("POST", baseURL+endpoint, bodyReader)
+						req.Header.Set("Authorization", "Bearer "+token)
+						if jsonBody != "" {
+							req.Header.Set("Content-Type", "application/json")
+						}
+						// Add X-REQUEST-START header
+						req.Header.Set("X-REQUEST-START", fmt.Sprintf("%d", requestStartNs))
+						client := &http.Client{Timeout: 10 * time.Second}
+						resp, err := client.Do(req)
+						responseEnd := time.Now()
+						lat := responseEnd.Sub(requestStart)
+						var respBody string
+						statusCode := 0
+						var upstreamLat, proxyLat time.Duration
+						var headers http.Header
+						var errMsg string
+						if err == nil && resp != nil {
+							statusCode = resp.StatusCode
+							b, _ := io.ReadAll(resp.Body)
+							respBody = string(b)
+							_ = resp.Body.Close()
+							headers = resp.Header.Clone()
+							// Parse new latency headers (all as int64 nanoseconds)
+							var reqStart, upStart, upStop int64
+							if v := resp.Request.Header.Get("X-REQUEST-START"); v != "" {
+								reqStart, _ = strconv.ParseInt(v, 10, 64)
+							} else {
+								reqStart = requestStartNs // fallback to local
+							}
+							if v := resp.Header.Get("X-UPSTREAM-REQUEST-START"); v != "" {
+								if val, err := strconv.ParseInt(v, 10, 64); err == nil {
+									upStart = val
+								}
+							}
+							if v := resp.Header.Get("X-UPSTREAM-REQUEST-STOP"); v != "" {
+								if val, err := strconv.ParseInt(v, 10, 64); err == nil {
+									upStop = val
+								}
+							}
+							if upStart > 0 && upStop > 0 && reqStart > 0 {
+								upstreamLat = time.Duration(upStop - upStart)
+								proxyLat = time.Duration((upStart - reqStart) + (responseEnd.UnixNano() - upStop))
+							} else {
+								upstreamLat = 0
+								proxyLat = 0
+							}
+						} else {
+							errMsg = err.Error()
+						}
+						results <- result{latency: lat, err: err, errMsg: errMsg, response: respBody, statusCode: statusCode, headers: headers, upstreamLat: upstreamLat, proxyLat: proxyLat}
+						progressMu.Lock()
+						if err != nil || statusCode < 200 || statusCode >= 300 {
+							failed++
+						}
+						completed++
+						fmt.Printf("\rRequests sent: %d, completed: %d, failed: %d", sent, completed, failed)
+						progressMu.Unlock()
+						if err == nil && statusCode >= 200 && statusCode < 300 {
+							latencies = append(latencies, lat)
+							if upstreamLat > 0 {
+								upstreamLatencies = append(upstreamLatencies, upstreamLat)
+							}
+							if proxyLat > 0 {
+								proxyLatencies = append(proxyLatencies, proxyLat)
+							}
+						}
+					}
+				}(workerID, count)
+			}
+			wg.Wait()
+			close(results)
+			totalTime := time.Since(start)
+
+			// Aggregate results
+			var (
+				success                                          int
+				totalLatency                                     time.Duration
+				minLatency, maxLatency                           time.Duration
+				first                                            = true
+				sampleResponse                                   string
+				totalUpstreamLat, minUpstreamLat, maxUpstreamLat time.Duration
+				totalProxyLat, minProxyLat, maxProxyLat          time.Duration
+				upstreamLatCount, proxyLatCount                  int
+			)
+			for r := range results {
+				isSuccess := r.err == nil && r.statusCode >= 200 && r.statusCode < 300
+				statusCounts[r.statusCode]++
+				if _, ok := statusSamples[r.statusCode]; !ok {
+					statusSamples[r.statusCode] = struct {
+						response string
+						headers  http.Header
+						errMsg   string
+					}{r.response, r.headers, r.errMsg}
+				}
+				if isSuccess {
+					success++
+					totalLatency += r.latency
+					if first || r.latency < minLatency {
+						minLatency = r.latency
+					}
+					if first || r.latency > maxLatency {
+						maxLatency = r.latency
+					}
+					if r.upstreamLat > 0 {
+						totalUpstreamLat += r.upstreamLat
+						if upstreamLatCount == 0 || r.upstreamLat < minUpstreamLat {
+							minUpstreamLat = r.upstreamLat
+						}
+						if upstreamLatCount == 0 || r.upstreamLat > maxUpstreamLat {
+							maxUpstreamLat = r.upstreamLat
+						}
+						upstreamLatCount++
+					}
+					if r.proxyLat > 0 {
+						totalProxyLat += r.proxyLat
+						if proxyLatCount == 0 || r.proxyLat < minProxyLat {
+							minProxyLat = r.proxyLat
+						}
+						if proxyLatCount == 0 || r.proxyLat > maxProxyLat {
+							maxProxyLat = r.proxyLat
+						}
+						proxyLatCount++
+					}
+					if sampleResponse == "" && r.response != "" {
+						sampleResponse = r.response
+					}
+					first = false
+					latencies = append(latencies, r.latency)
+					if r.upstreamLat > 0 {
+						upstreamLatencies = append(upstreamLatencies, r.upstreamLat)
+					}
+					if r.proxyLat > 0 {
+						proxyLatencies = append(proxyLatencies, r.proxyLat)
+					}
+				}
+			}
+			avgLatency := time.Duration(0)
+			if success > 0 {
+				avgLatency = totalLatency / time.Duration(success)
+			}
+			requestsPerSec := float64(totalRequests) / totalTime.Seconds()
+			avgUpstreamLat := time.Duration(0)
+			if upstreamLatCount > 0 {
+				avgUpstreamLat = totalUpstreamLat / time.Duration(upstreamLatCount)
+			}
+			avgProxyLat := time.Duration(0)
+			if proxyLatCount > 0 {
+				avgProxyLat = totalProxyLat / time.Duration(proxyLatCount)
+			}
+
+			// Calculate p90 latency
+			p90Latency := time.Duration(0)
+			if len(latencies) > 0 {
+				sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
+				idx := int(float64(len(latencies))*0.9) - 1
+				if idx < 0 {
+					idx = 0
+				}
+				p90Latency = latencies[idx]
+			}
+			upstreamP90 := time.Duration(0)
+			if len(upstreamLatencies) > 0 {
+				sort.Slice(upstreamLatencies, func(i, j int) bool { return upstreamLatencies[i] < upstreamLatencies[j] })
+				idx := int(float64(len(upstreamLatencies))*0.9) - 1
+				if idx < 0 {
+					idx = 0
+				}
+				upstreamP90 = upstreamLatencies[idx]
+			}
+			proxyP90 := time.Duration(0)
+			if len(proxyLatencies) > 0 {
+				sort.Slice(proxyLatencies, func(i, j int) bool { return proxyLatencies[i] < proxyLatencies[j] })
+				idx := int(float64(len(proxyLatencies))*0.9) - 1
+				if idx < 0 {
+					idx = 0
+				}
+				proxyP90 = proxyLatencies[idx]
+			}
+
+			// Calculate p90 mean (trimmed mean) for overall, upstream, and proxy latencies
+			p90Mean := time.Duration(0)
+			if len(latencies) > 0 {
+				p90Idx := int(float64(len(latencies)) * 0.9)
+				if p90Idx < 1 {
+					p90Idx = 1
+				}
+				trimmed := latencies[:p90Idx]
+				var sum time.Duration
+				for _, v := range trimmed {
+					sum += v
+				}
+				p90Mean = sum / time.Duration(len(trimmed))
+			}
+			upstreamP90Mean := time.Duration(0)
+			if len(upstreamLatencies) > 0 {
+				p90Idx := int(float64(len(upstreamLatencies)) * 0.9)
+				if p90Idx < 1 {
+					p90Idx = 1
+				}
+				trimmed := upstreamLatencies[:p90Idx]
+				var sum time.Duration
+				for _, v := range trimmed {
+					sum += v
+				}
+				upstreamP90Mean = sum / time.Duration(len(trimmed))
+			}
+			proxyP90Mean := time.Duration(0)
+			if len(proxyLatencies) > 0 {
+				p90Idx := int(float64(len(proxyLatencies)) * 0.9)
+				if p90Idx < 1 {
+					p90Idx = 1
+				}
+				trimmed := proxyLatencies[:p90Idx]
+				var sum time.Duration
+				for _, v := range trimmed {
+					sum += v
+				}
+				proxyP90Mean = sum / time.Duration(len(trimmed))
+			}
+
+			// Helper to format durations nicely
+			formatDuration := func(d time.Duration) string {
+				if d == 0 {
+					return "0"
+				}
+				if d >= time.Second {
+					return fmt.Sprintf("%.3fs", d.Seconds())
+				} else if d >= time.Millisecond {
+					return fmt.Sprintf("%.3fms", float64(d)/float64(time.Millisecond))
+				} else if d >= time.Microsecond {
+					return fmt.Sprintf("%.3fµs", float64(d)/float64(time.Microsecond))
+				}
+				return fmt.Sprintf("%dns", d.Nanoseconds())
+			}
+
+			// Table-like summary output
+			tableWidth := 50
+			border := "+" + strings.Repeat("-", tableWidth-2) + "+"
+			fmt.Println("\n" + border)
+			fmt.Printf("| %-21s | %-22d |\n", "Total requests", totalRequests)
+			fmt.Printf("| %-21s | %-22d |\n", "Concurrency", concurrency)
+			fmt.Printf("| %-21s | %-22.2f |\n", "Duration (s)", totalTime.Seconds())
+			fmt.Printf("| %-21s | %-22d |\n", "Success", success)
+			fmt.Printf("| %-21s | %-22d |\n", "Failed", failed)
+			fmt.Printf("| %-21s | %-22.2f |\n", "Requests/sec", requestsPerSec)
+			fmt.Printf("| %-21s | %-22s |\n", "Avg latency", formatDuration(avgLatency))
+			fmt.Printf("| %-21s | %-22s |\n", "Min latency", formatDuration(minLatency))
+			fmt.Printf("| %-21s | %-22s |\n", "Max latency", formatDuration(maxLatency))
+			fmt.Printf("| %-21s | %-22s |\n", "p90 latency", formatDuration(p90Latency))
+			fmt.Printf("| %-21s | %-22s |\n", "p90 mean latency", formatDuration(p90Mean))
+			if success > 0 {
+				if upstreamLatCount > 0 {
+					fmt.Printf("| %-21s | %-22s |\n", "Upstream latency avg", formatDuration(avgUpstreamLat))
+					fmt.Printf("| %-21s | %-22s |\n", "Upstream latency min", formatDuration(minUpstreamLat))
+					fmt.Printf("| %-21s | %-22s |\n", "Upstream latency max", formatDuration(maxUpstreamLat))
+					fmt.Printf("| %-21s | %-22s |\n", "Upstream latency p90", formatDuration(upstreamP90))
+					fmt.Printf("| %-21s | %-22s |\n", "Upstream latency p90 mean", formatDuration(upstreamP90Mean))
+				} else {
+					fmt.Printf("| %-21s | %-22s |\n", "Upstream latency", "N/A")
+				}
+				if proxyLatCount > 0 {
+					fmt.Printf("| %-21s | %-22s |\n", "Proxy latency avg", formatDuration(avgProxyLat))
+					fmt.Printf("| %-21s | %-22s |\n", "Proxy latency min", formatDuration(minProxyLat))
+					fmt.Printf("| %-21s | %-22s |\n", "Proxy latency max", formatDuration(maxProxyLat))
+					fmt.Printf("| %-21s | %-22s |\n", "Proxy latency p90", formatDuration(proxyP90))
+					fmt.Printf("| %-21s | %-22s |\n", "Proxy latency p90 mean", formatDuration(proxyP90Mean))
+				} else {
+					fmt.Printf("| %-21s | %-22s |\n", "Proxy latency", "N/A")
+				}
+			}
+			fmt.Println(border)
+			// Add header for response code requests
+			fmt.Printf("| %-21s%26s|\n", "Response code", "")
+			// Print status codes as normal rows at the end of the main table
+			for code, count := range statusCounts {
+				if code == 0 {
+					fmt.Printf("| %-21s | %-22d |\n", "Network error", count)
+				} else {
+					fmt.Printf("| %-21s | %-22d |\n", fmt.Sprintf("%d", code), count)
+				}
+			}
+			fmt.Println(border)
+
+			// Print sample responses in debug mode
+			if debug {
+				// Print a sample for each status code
+				fmt.Println("\nSample responses by status code:")
+				for code, sample := range statusSamples {
+					if code == 0 {
+						fmt.Println("\nNETWORK ERROR:")
+						if sample.errMsg != "" {
+							fmt.Printf("Error: %s\n", sample.errMsg)
+						} else {
+							fmt.Println("<no error message>")
+						}
+					} else {
+						fmt.Printf("\nStatus %d:\n", code)
+						if sample.response != "" {
+							fmt.Printf("Response body: %s\n", sample.response)
+						} else {
+							fmt.Println("Response body: <empty body>")
+						}
+						if sample.headers != nil {
+							fmt.Println("Response headers:")
+							for k, v := range sample.headers {
+								fmt.Printf("  %s: %s\n", k, strings.Join(v, ", "))
+							}
+						}
+					}
+				}
+			}
 		},
 	}
-	cobraRoot.AddCommand(benchmarkCmd)
+	benchmarkCmd.Flags().String("base-url", "", "Base URL of the LLM Proxy (required)")
+	benchmarkCmd.Flags().String("endpoint", "", "API endpoint to benchmark (required)")
+	benchmarkCmd.Flags().String("token", "", "Token for authentication (required)")
+	benchmarkCmd.Flags().IntP("requests", "r", 1, "Total number of requests to send (required)")
+	benchmarkCmd.Flags().IntP("concurrency", "c", 1, "Number of concurrent workers (required)")
+	benchmarkCmd.Flags().String("json", "", "Optional JSON string to use as the POST body for each request")
+	benchmarkCmd.Flags().Bool("debug", false, "Show detailed sample response and headers")
+	rootCmd.AddCommand(benchmarkCmd)
 
 	// Add persistent flag for management API base URL
 	cobraRoot.PersistentFlags().StringVar(&manageAPIBaseURL, "manage-api-base-url", "http://localhost:8080", "Base URL for management API (default: http://localhost:8080)")
-
-	// For test compatibility, define rootCmd as alias
-	rootCmd = cobraRoot
 }
 
 func main() {

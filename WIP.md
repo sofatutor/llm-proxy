@@ -383,3 +383,13 @@ For any new features, enhancements, or bug fixes, please create a new issue file
 - [ ] Expand provider config and YAML changes (document and test) - *moved to Phase 4/5*
 
 // Note: Linter/staticcheck/errcheck issues for proxy and server resolved. Test race conditions and failures fixed. Coverage improved with extracted functionality testing.
+
+## 2025-05-24: Benchmark Tool Core Implemented
+- Implemented the core architecture for the benchmark tool in `cmd/benchmark`.
+- CLI now supports required flags: `--base-url`, `--endpoint`, `--token`, `--requests`, `--concurrency`.
+- Added concurrent request handling with worker pool logic.
+- Implemented initial request generator for supported endpoints.
+- Added and updated tests for CLI, concurrency, and request generation (TDD followed).
+- Integrated `make test-benchmark` for targeted test runs.
+- All tests passing (`make test-benchmark`).
+- Updated process and rationale per working agreement.

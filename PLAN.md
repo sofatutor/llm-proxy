@@ -143,7 +143,7 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 
 ### 8. Benchmark Tool
 - Implement CLI with flag parsing
-- Add concurrent request handling
+- [x] Benchmark tool core (CLI, concurrency, request generation, tests, Makefile integration) implemented and tested. See WIP.md for details.
 - Calculate and report performance metrics
 
 ### 9. Containerization

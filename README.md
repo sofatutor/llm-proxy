@@ -45,6 +45,23 @@ MANAGEMENT_TOKEN=your-secure-management-token ./bin/llm-proxy
 
 See `docs/configuration.md` for all options.
 
+### Advanced Example
+```yaml
+apis:
+  openai:
+    param_whitelist:
+      model:
+        - gpt-4o
+        - gpt-4.1-*
+    allowed_origins:
+      - https://www.sofatutor.com
+      - http://localhost:4000
+    required_headers:
+      - origin
+```
+
+See `docs/issues/phase-7-param-cors-whitelist.md` for advanced configuration and rationale.
+
 ## Main API Endpoints
 
 ### Management API
