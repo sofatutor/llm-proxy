@@ -93,14 +93,6 @@ func (w *captureResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return nil, nil, fmt.Errorf("hijack not supported")
 }
 
-func (w *captureResponseWriter) CloseNotify() <-chan bool {
-	if cn, ok := w.ResponseWriter.(http.CloseNotifier); ok {
-		return cn.CloseNotify()
-	}
-	ch := make(chan bool, 1)
-	return ch
-}
-
 func (w *captureResponseWriter) Push(target string, opts *http.PushOptions) error {
 	if p, ok := w.ResponseWriter.(http.Pusher); ok {
 		return p.Push(target, opts)
