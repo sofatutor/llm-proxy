@@ -14,7 +14,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/logging"
+	"github.com/sofatutor/llm-proxy/internal/middleware"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"go.uber.org/zap"
@@ -195,7 +197,14 @@ func (s *Server) initializeAPIRoutes() error {
 	// (No more creation of mock stores or test data here)
 	tokenValidator := token.NewValidator(s.tokenStore)
 	cachedValidator := token.NewCachedValidator(tokenValidator)
-	proxyHandler, err := proxy.NewTransparentProxyWithLogger(*proxyConfig, cachedValidator, s.projectStore, s.logger)
+
+	var bus eventbus.EventBus
+	if s.config.ObservabilityEnabled {
+		bus = eventbus.NewInMemoryEventBus(s.config.ObservabilityBufferSize)
+	}
+	obsCfg := middleware.ObservabilityConfig{Enabled: s.config.ObservabilityEnabled, EventBus: bus}
+
+	proxyHandler, err := proxy.NewTransparentProxyWithLoggerAndObservability(*proxyConfig, cachedValidator, s.projectStore, s.logger, obsCfg)
 	if err != nil {
 		return fmt.Errorf("failed to initialize proxy: %w", err)
 	}
