@@ -787,25 +787,19 @@ func init() {
 						fmt.Printf("\rRequests sent: %d, completed: %d, failed: %d", sent, completed, failed)
 						progressMu.Unlock()
 						if err == nil && statusCode >= 200 && statusCode < 300 {
-							results <- result{latency: lat, upstreamLat: upstreamLat, proxyLat: proxyLat}
+							latencies = append(latencies, lat)
+							if upstreamLat > 0 {
+								upstreamLatencies = append(upstreamLatencies, upstreamLat)
+							}
+							if proxyLat > 0 {
+								proxyLatencies = append(proxyLatencies, proxyLat)
+							}
 						}
 					}
 				}(workerID, count)
 			}
 			wg.Wait()
 			close(results)
-			// Aggregate latencies from results
-			for res := range results {
-				if res.err == nil && res.statusCode >= 200 && res.statusCode < 300 {
-					latencies = append(latencies, res.latency)
-					if res.upstreamLat > 0 {
-						upstreamLatencies = append(upstreamLatencies, res.upstreamLat)
-					}
-					if res.proxyLat > 0 {
-						proxyLatencies = append(proxyLatencies, res.proxyLat)
-					}
-				}
-			}
 			totalTime := time.Since(start)
 
 			// Aggregate results
