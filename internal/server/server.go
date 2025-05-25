@@ -64,7 +64,7 @@ const maxDurationMinutes = 525600
 func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.ProjectStore) (*Server, error) {
 	mux := http.NewServeMux()
 
-	logger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile, cfg.LogMaxSizeMB, cfg.LogMaxBackups)
+	logger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize logger: %w", err)
 	}

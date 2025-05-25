@@ -11,9 +11,7 @@ import (
 // NewLogger creates a zap.Logger with the specified level, format, and optional file output.
 // level can be debug, info, warn, or error. format can be json or console.
 // If filePath is empty, logs are written to stdout.
-// maxSizeMB and maxBackups control log rotation when a file path is provided.
-// If zero, reasonable defaults are used.
-func NewLogger(level, format, filePath string, maxSizeMB, maxBackups int) (*zap.Logger, error) {
+func NewLogger(level, format, filePath string) (*zap.Logger, error) {
 	var lvl zapcore.Level
 	switch strings.ToLower(level) {
 	case "debug":
@@ -49,11 +47,11 @@ func NewLogger(level, format, filePath string, maxSizeMB, maxBackups int) (*zap.
 
 	var ws = zapcore.AddSync(os.Stdout)
 	if filePath != "" {
-		w, err := newRotateWriter(filePath, int64(maxSizeMB)*1024*1024, maxBackups)
+		f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
 			return nil, err
 		}
-		ws = w
+		ws = f
 	}
 
 	core := zapcore.NewCore(encoder, ws, lvl)
