@@ -29,6 +29,10 @@ type APIProviderConfig struct {
 	Timeouts TimeoutConfig `yaml:"timeouts"`
 	// Connection settings
 	Connection ConnectionConfig `yaml:"connection"`
+	// ParamWhitelist is a map of parameter names to allowed values
+	ParamWhitelist  map[string][]string `yaml:"param_whitelist"`
+	AllowedOrigins  []string            `yaml:"allowed_origins"`
+	RequiredHeaders []string            `yaml:"required_headers"`
 }
 
 // TimeoutConfig contains timeout settings for the proxy
@@ -124,6 +128,9 @@ func (c *APIConfig) GetProxyConfigForAPI(apiName string) (*ProxyConfig, error) {
 		IdleConnTimeout:       apiConfig.Timeouts.IdleConnection,
 		MaxIdleConns:          apiConfig.Connection.MaxIdleConns,
 		MaxIdleConnsPerHost:   apiConfig.Connection.MaxIdleConnsPerHost,
+		ParamWhitelist:        apiConfig.ParamWhitelist,
+		AllowedOrigins:        apiConfig.AllowedOrigins,
+		RequiredHeaders:       apiConfig.RequiredHeaders,
 	}
 
 	return &proxyConfig, nil

@@ -593,6 +593,206 @@ func TestValidateRequestMiddleware_EndpointNotAllowed(t *testing.T) {
 	assert.Equal(t, "Endpoint not found", resp["error"])
 }
 
+func TestValidateRequestMiddleware_ParamWhitelist(t *testing.T) {
+	proxy := newTestProxyWithConfig(ProxyConfig{
+		AllowedMethods:   []string{"POST"},
+		AllowedEndpoints: []string{"/v1/completions"},
+		ParamWhitelist: map[string][]string{
+			"model": {"gpt-4o", "gpt-4.1-*", "text-embedding-3-small"},
+		},
+	})
+	ts := httptest.NewServer(proxy.Handler())
+	defer ts.Close()
+
+	t.Run("Allowed exact value", func(t *testing.T) {
+		body := `{"model": "gpt-4o"}`
+		req, _ := http.NewRequest("POST", ts.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.NotEqual(t, http.StatusBadRequest, resp.StatusCode, "Allowed value should not be rejected")
+		_ = resp.Body.Close()
+	})
+
+	t.Run("Allowed glob value", func(t *testing.T) {
+		body := `{"model": "gpt-4.1-1106-preview"}`
+		req, _ := http.NewRequest("POST", ts.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.NotEqual(t, http.StatusBadRequest, resp.StatusCode, "Glob-matched value should not be rejected")
+		_ = resp.Body.Close()
+	})
+
+	t.Run("Disallowed value", func(t *testing.T) {
+		body := `{"model": "gpt-3.5-turbo"}`
+		req, _ := http.NewRequest("POST", ts.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Disallowed value should be rejected")
+		var respBody map[string]interface{}
+		_ = json.NewDecoder(resp.Body).Decode(&respBody)
+		_ = resp.Body.Close()
+		assert.Equal(t, "param_not_allowed", respBody["code"])
+		assert.Contains(t, respBody["error"], "model")
+	})
+
+	t.Run("Missing parameter (should pass)", func(t *testing.T) {
+		body := `{"prompt": "hi"}`
+		req, _ := http.NewRequest("POST", ts.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.NotEqual(t, http.StatusBadRequest, resp.StatusCode, "Missing param should not be rejected")
+		_ = resp.Body.Close()
+	})
+}
+
+func TestValidateRequestMiddleware_CORSOriginValidation(t *testing.T) {
+	proxy := newTestProxyWithConfig(ProxyConfig{
+		AllowedMethods:   []string{"POST"},
+		AllowedEndpoints: []string{"/v1/completions"},
+		AllowedOrigins:   []string{"https://allowed.com"},
+		RequiredHeaders:  []string{"origin"},
+	})
+	ts := httptest.NewServer(proxy.Handler())
+	defer ts.Close()
+
+	t.Run("Missing Origin header (required)", func(t *testing.T) {
+		body := `{"prompt": "hi"}`
+		req, _ := http.NewRequest("POST", ts.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		var respBody map[string]interface{}
+		_ = json.NewDecoder(resp.Body).Decode(&respBody)
+		_ = resp.Body.Close()
+		assert.Equal(t, "origin_required", respBody["code"])
+	})
+
+	t.Run("Origin present but not allowed (required)", func(t *testing.T) {
+		body := `{"prompt": "hi"}`
+		req, _ := http.NewRequest("POST", ts.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		req.Header.Set("Origin", "https://not-allowed.com")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+		var respBody map[string]interface{}
+		_ = json.NewDecoder(resp.Body).Decode(&respBody)
+		_ = resp.Body.Close()
+		assert.Equal(t, "origin_not_allowed", respBody["code"])
+	})
+
+	t.Run("Origin present and allowed (required)", func(t *testing.T) {
+		body := `{"prompt": "hi"}`
+		req, _ := http.NewRequest("POST", ts.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		req.Header.Set("Origin", "https://allowed.com")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.NotEqual(t, http.StatusBadRequest, resp.StatusCode)
+		assert.NotEqual(t, http.StatusForbidden, resp.StatusCode)
+		_ = resp.Body.Close()
+	})
+
+	// Now test with RequiredHeaders not including 'origin'
+	proxy2 := newTestProxyWithConfig(ProxyConfig{
+		AllowedMethods:   []string{"POST"},
+		AllowedEndpoints: []string{"/v1/completions"},
+		AllowedOrigins:   []string{"https://allowed.com"},
+		RequiredHeaders:  []string{},
+	})
+	ts2 := httptest.NewServer(proxy2.Handler())
+	defer ts2.Close()
+
+	t.Run("Origin present but not allowed (not required)", func(t *testing.T) {
+		body := `{"prompt": "hi"}`
+		req, _ := http.NewRequest("POST", ts2.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		req.Header.Set("Origin", "https://not-allowed.com")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+		var respBody map[string]interface{}
+		_ = json.NewDecoder(resp.Body).Decode(&respBody)
+		_ = resp.Body.Close()
+		assert.Equal(t, "origin_not_allowed", respBody["code"])
+	})
+
+	t.Run("Origin present and allowed (not required)", func(t *testing.T) {
+		body := `{"prompt": "hi"}`
+		req, _ := http.NewRequest("POST", ts2.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		req.Header.Set("Origin", "https://allowed.com")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.NotEqual(t, http.StatusBadRequest, resp.StatusCode)
+		assert.NotEqual(t, http.StatusForbidden, resp.StatusCode)
+		_ = resp.Body.Close()
+	})
+}
+
+func TestValidateRequestMiddleware_OPTIONSPreflightCORS(t *testing.T) {
+	proxy := newTestProxyWithConfig(ProxyConfig{
+		AllowedMethods:   []string{"POST", "OPTIONS"},
+		AllowedEndpoints: []string{"/v1/completions"},
+	})
+	ts := httptest.NewServer(proxy.Handler())
+	defer ts.Close()
+
+	t.Run("OPTIONS with Origin and Access-Control-Request-Headers", func(t *testing.T) {
+		req, _ := http.NewRequest("OPTIONS", ts.URL+"/v1/completions", nil)
+		req.Header.Set("Origin", "https://allowed.com")
+		req.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+		assert.Equal(t, "*", resp.Header.Get("Access-Control-Allow-Origin"))
+		assert.Contains(t, resp.Header.Get("Access-Control-Allow-Methods"), "OPTIONS")
+		assert.Contains(t, resp.Header.Get("Access-Control-Allow-Headers"), "Authorization")
+		assert.Contains(t, resp.Header.Get("Access-Control-Allow-Headers"), "Content-Type")
+		assert.NotEmpty(t, resp.Header.Get("Access-Control-Expose-Headers"))
+		assert.Equal(t, "86400", resp.Header.Get("Access-Control-Max-Age"))
+		_ = resp.Body.Close()
+	})
+
+	t.Run("OPTIONS with Origin but no Access-Control-Request-Headers", func(t *testing.T) {
+		req, _ := http.NewRequest("OPTIONS", ts.URL+"/v1/completions", nil)
+		req.Header.Set("Origin", "https://allowed.com")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+		assert.Equal(t, "*", resp.Header.Get("Access-Control-Allow-Origin"))
+		assert.Contains(t, resp.Header.Get("Access-Control-Allow-Headers"), "Authorization")
+		assert.Contains(t, resp.Header.Get("Access-Control-Allow-Headers"), "Content-Type")
+		assert.NotEmpty(t, resp.Header.Get("Access-Control-Expose-Headers"))
+		assert.Equal(t, "86400", resp.Header.Get("Access-Control-Max-Age"))
+		_ = resp.Body.Close()
+	})
+
+	t.Run("OPTIONS without Origin", func(t *testing.T) {
+		req, _ := http.NewRequest("OPTIONS", ts.URL+"/v1/completions", nil)
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+		// Should not set CORS headers if no Origin
+		assert.Empty(t, resp.Header.Get("Access-Control-Allow-Origin"))
+		_ = resp.Body.Close()
+	})
+}
+
 func TestModifyResponse_NonStreamingErrorIncrementsErrorCount(t *testing.T) {
 	p := &TransparentProxy{metrics: &ProxyMetrics{}, logger: zap.NewNop()}
 	res := &http.Response{
@@ -669,79 +869,6 @@ func TestNewTransparentProxy_Coverage(t *testing.T) {
 	}
 }
 
-// --- RETRY LOGIC TESTS ---
-func TestTransparentProxy_RetryLogic_TransientNetworkError(t *testing.T) {
-	failures := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if failures < 2 {
-			failures++
-			w.WriteHeader(http.StatusGatewayTimeout) // 504
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte(`{"ok":true}`)); err != nil {
-			t.Logf("Failed to write response: %v", err)
-		}
-	}))
-	defer server.Close()
-
-	p := newTestProxyWithConfig(ProxyConfig{
-		TargetBaseURL:    server.URL,
-		AllowedEndpoints: []string{"/test"},
-		AllowedMethods:   []string{"GET"},
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
-	w := httptest.NewRecorder()
-
-	p.Handler().ServeHTTP(w, req)
-	resp := w.Result()
-	if err := resp.Body.Close(); err != nil {
-		t.Logf("Failed to close response body: %v", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected 200 after retries, got %d", resp.StatusCode)
-	}
-	if failures != 2 {
-		t.Errorf("expected 2 transient failures before success, got %d", failures)
-	}
-}
-
-func TestTransparentProxy_RetryLogic_NonTransientError(t *testing.T) {
-	calls := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		w.WriteHeader(http.StatusBadRequest) // 400
-		if _, err := w.Write([]byte(`{"error":"bad request"}`)); err != nil {
-			t.Logf("Failed to write response: %v", err)
-		}
-	}))
-	defer server.Close()
-
-	p := newTestProxyWithConfig(ProxyConfig{
-		TargetBaseURL:    server.URL,
-		AllowedEndpoints: []string{"/test"},
-		AllowedMethods:   []string{"GET"},
-	})
-
-	req := httptest.NewRequest("GET", "/test", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
-	w := httptest.NewRecorder()
-
-	p.Handler().ServeHTTP(w, req)
-	resp := w.Result()
-	if err := resp.Body.Close(); err != nil {
-		t.Logf("Failed to close response body: %v", err)
-	}
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("expected 400 for non-transient error, got %d", resp.StatusCode)
-	}
-	if calls != 1 {
-		t.Errorf("expected 1 call (no retry), got %d", calls)
-	}
-}
-
 // --- CIRCUIT BREAKER TESTS ---
 func TestTransparentProxy_CircuitBreaker_OpensOnRepeatedFailures(t *testing.T) {
 	failures := 0
@@ -769,8 +896,8 @@ func TestTransparentProxy_CircuitBreaker_OpensOnRepeatedFailures(t *testing.T) {
 		if err := resp.Body.Close(); err != nil {
 			t.Logf("Failed to close response body: %v", err)
 		}
-		if resp.StatusCode != http.StatusBadGateway {
-			t.Errorf("expected 502 for retry exhaustion, got %d", resp.StatusCode)
+		if resp.StatusCode != http.StatusGatewayTimeout {
+			t.Errorf("expected 504 (upstream failure), got %d", resp.StatusCode)
 		}
 	}
 
@@ -1000,4 +1127,63 @@ func TestSetTimingHeaders(t *testing.T) {
 	if res.Header.Get("X-Proxy-Final-Response-At") == "" {
 		t.Errorf("X-Proxy-Final-Response-At header not set")
 	}
+}
+
+func TestTransparentProxy_MetricsAndSetMetrics(t *testing.T) {
+	p := &TransparentProxy{metrics: &ProxyMetrics{RequestCount: 42, ErrorCount: 7}}
+	m := p.Metrics()
+	assert.Equal(t, int64(42), m.RequestCount)
+	assert.Equal(t, int64(7), m.ErrorCount)
+
+	newMetrics := &ProxyMetrics{RequestCount: 100, ErrorCount: 1}
+	p.SetMetrics(newMetrics)
+	assert.Equal(t, newMetrics, p.metrics)
+}
+
+func TestTransparentProxy_createTransport(t *testing.T) {
+	p := &TransparentProxy{config: ProxyConfig{MaxIdleConns: 10, MaxIdleConnsPerHost: 2, IdleConnTimeout: 5 * time.Second, ResponseHeaderTimeout: 3 * time.Second}}
+	tr := p.createTransport()
+	assert.Equal(t, 10, tr.MaxIdleConns)
+	assert.Equal(t, 2, tr.MaxIdleConnsPerHost)
+	assert.Equal(t, 5*time.Second, tr.IdleConnTimeout)
+	assert.Equal(t, 3*time.Second, tr.ResponseHeaderTimeout)
+	assert.True(t, tr.ForceAttemptHTTP2)
+}
+
+// testFlusher is a test helper that implements http.Flusher and tracks if Flush was called
+var testFlushed bool
+
+type testFlusher struct{ http.ResponseWriter }
+
+func (f *testFlusher) Flush() { testFlushed = true }
+
+func TestResponseRecorder_Flush(t *testing.T) {
+	testFlushed = false
+	rec := &responseRecorder{ResponseWriter: &testFlusher{httptest.NewRecorder()}}
+	rec.Flush()
+	assert.True(t, testFlushed, "Flush should call underlying Flusher")
+}
+
+func TestIsEndpointAllowed_EdgeCases(t *testing.T) {
+	p := &TransparentProxy{config: ProxyConfig{}}
+	// No allowed endpoints: allow all
+	assert.True(t, p.isEndpointAllowed("/foo"))
+	p.config.AllowedEndpoints = []string{"/v1/foo"}
+	assert.True(t, p.isEndpointAllowed("/v1/foo"))
+	assert.True(t, p.isEndpointAllowed("/v1/foo/extra")) // prefix match
+	assert.False(t, p.isEndpointAllowed("/v1/bar"))
+}
+
+func TestIsMethodAllowed_EdgeCases(t *testing.T) {
+	p := &TransparentProxy{config: ProxyConfig{}}
+	// No allowed methods: allow all
+	assert.True(t, p.isMethodAllowed("GET"))
+	assert.True(t, p.isMethodAllowed("POST"))
+	p.config.AllowedMethods = []string{"GET", "POST"}
+	assert.True(t, p.isMethodAllowed("GET"))
+	assert.True(t, p.isMethodAllowed("POST"))
+	assert.False(t, p.isMethodAllowed("DELETE"))
+	// Case insensitivity
+	p.config.AllowedMethods = []string{"get"}
+	assert.True(t, p.isMethodAllowed("GET"))
 }

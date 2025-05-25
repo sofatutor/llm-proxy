@@ -61,6 +61,13 @@ apis:
       max_idle_conns: 100        # Maximum idle connections
       max_idle_conns_per_host: 20 # Maximum idle connections per host
 
+    # CORS and header validation
+    allowed_origins:
+      - https://www.example.com
+      - http://localhost:3000
+    required_headers:
+      - origin  # Require Origin header for all requests (enforces allowed_origins for all clients)
+
   # Anthropic API configuration
   anthropic:
     base_url: https://api.anthropic.com

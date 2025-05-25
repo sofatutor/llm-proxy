@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -165,6 +166,10 @@ func (p *TransparentProxy) director(req *http.Request) {
 		zap.String("url", req.URL.String()),
 		zap.Any("headers", headers),
 	)
+
+	// --- PATCH: Add X-UPSTREAM-REQUEST-START header ---
+	upstreamStart := time.Now().UnixNano()
+	req.Header.Set("X-UPSTREAM-REQUEST-START", fmt.Sprintf("%d", upstreamStart))
 }
 
 // processRequestHeaders handles the manipulation of request headers
@@ -233,11 +238,14 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 	}
 
 	// Add CORS headers if the original request had an Origin header
-	if origin := req.Header.Get("Origin"); origin != "" {
-		res.Header.Set("Access-Control-Allow-Origin", "*")
-		res.Header.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		res.Header.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With")
-		res.Header.Set("Access-Control-Expose-Headers", "X-Request-ID, X-Proxy-ID, X-LLM-Proxy-Remote-Duration, X-LLM-Proxy-Remote-Duration-Ms")
+	origin := req.Header.Get("Origin")
+	if origin != "" && len(p.config.AllowedOrigins) > 0 {
+		for _, o := range p.config.AllowedOrigins {
+			if o == origin {
+				res.Header.Set("Access-Control-Allow-Origin", origin)
+				break
+			}
+		}
 	}
 
 	// Get project ID from context
@@ -276,6 +284,13 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 		p.metrics.ErrorCount++
 	}
 	p.metrics.mu.Unlock()
+
+	// --- PATCH: Copy X-UPSTREAM-REQUEST-START from request to response ---
+	if res.Request != nil {
+		if v := res.Request.Header.Get("X-UPSTREAM-REQUEST-START"); v != "" {
+			res.Header.Set("X-UPSTREAM-REQUEST-START", v)
+		}
+	}
 
 	return nil
 }
@@ -493,11 +508,11 @@ func (p *TransparentProxy) createTransport() *http.Transport {
 
 // Handler returns the HTTP handler for the proxy
 func (p *TransparentProxy) Handler() http.Handler {
-	// Reorder middleware: ValidateRequestMiddleware first, then CircuitBreaker, then Retry
+	// Middleware: ValidateRequestMiddleware first, then CircuitBreaker
 	return p.ValidateRequestMiddleware()(CircuitBreakerMiddleware(5, 30*time.Second, func(status int) bool {
-		// Treat 502, 503, 504 as transient (including retry middleware's 502)
+		// Treat 502, 503, 504 as transient
 		return status == http.StatusBadGateway || status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout
-	})(RetryMiddleware(2, 100*time.Millisecond)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Short-circuit OPTIONS requests: no auth required, respond with 204 and CORS headers
 		if r.Method == http.MethodOptions {
 			// Set CORS headers for preflight requests
@@ -580,6 +595,10 @@ func (p *TransparentProxy) Handler() http.Handler {
 				zap.String("method", req.Method),
 				zap.String("path", req.URL.Path),
 				zap.String("project_id", req.Header.Get("X-Proxy-ID")))
+
+			// --- PATCH: Add X-UPSTREAM-REQUEST-START header ---
+			upstreamStart := time.Now().UnixNano()
+			req.Header.Set("X-UPSTREAM-REQUEST-START", fmt.Sprintf("%d", upstreamStart))
 		}
 
 		p.proxy.ModifyResponse = func(res *http.Response) error {
@@ -594,6 +613,11 @@ func (p *TransparentProxy) Handler() http.Handler {
 				res.Header.Set("X-Request-ID", requestID)
 			}
 			logProxyTimings(p.logger, res.Request.Context())
+
+			// --- PATCH: Add X-UPSTREAM-REQUEST-STOP header ---
+			upstreamStop := time.Now().UnixNano()
+			res.Header.Set("X-UPSTREAM-REQUEST-STOP", fmt.Sprintf("%d", upstreamStop))
+
 			return p.modifyResponse(res)
 		}
 
@@ -603,7 +627,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 		}
 
 		p.proxy.ServeHTTP(rw, r)
-	}))))
+	})))
 }
 
 type timingResponseWriter struct {
@@ -753,6 +777,118 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 
 			// --- End of validation scope ---
 
+			// --- Begin param whitelist validation ---
+			if r.Method == http.MethodPost && len(p.config.ParamWhitelist) > 0 && r.Header.Get("Content-Type") == "application/json" {
+				// Read and buffer the body for validation and later proxying
+				var bodyBytes []byte
+				if r.Body != nil {
+					bodyBytes, _ = io.ReadAll(r.Body)
+				}
+				if len(bodyBytes) > 0 {
+					var bodyMap map[string]interface{}
+					if err := json.Unmarshal(bodyBytes, &bodyMap); err == nil {
+						for param, allowed := range p.config.ParamWhitelist {
+							if val, ok := bodyMap[param]; ok {
+								valStr := ""
+								switch v := val.(type) {
+								case string:
+									valStr = v
+								case float64:
+									valStr = fmt.Sprintf("%v", v)
+								default:
+									valStr = fmt.Sprintf("%v", v)
+								}
+								found := false
+								// Support glob expressions in allowed values
+								for _, allowedVal := range allowed {
+									if ok, _ := path.Match(allowedVal, valStr); ok {
+										found = true
+										break
+									}
+								}
+								if !found {
+									w.WriteHeader(http.StatusBadRequest)
+									w.Header().Set("Content-Type", "application/json")
+									if err := json.NewEncoder(w).Encode(ErrorResponse{
+										Error: fmt.Sprintf("Parameter '%s' value '%s' is not allowed. Allowed patterns: %v", param, valStr, allowed),
+										Code:  "param_not_allowed",
+									}); err != nil {
+										p.logger.Error("Failed to encode error response", zap.Error(err))
+									}
+									return
+								}
+							}
+						}
+					}
+					// Restore the body for downstream handlers
+					r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+				}
+			}
+			// --- End param whitelist validation ---
+
+			// --- Begin CORS origin validation ---
+			origin := r.Header.Get("Origin")
+			originRequired := false
+			for _, h := range p.config.RequiredHeaders {
+				if strings.EqualFold(h, "origin") {
+					originRequired = true
+					break
+				}
+			}
+			if originRequired {
+				if origin == "" {
+					w.WriteHeader(http.StatusBadRequest)
+					w.Header().Set("Content-Type", "application/json")
+					if err := json.NewEncoder(w).Encode(ErrorResponse{
+						Error: "Origin header required",
+						Code:  "origin_required",
+					}); err != nil {
+						p.logger.Error("Failed to encode error response", zap.Error(err))
+					}
+					return
+				}
+				if len(p.config.AllowedOrigins) > 0 {
+					allowed := false
+					for _, o := range p.config.AllowedOrigins {
+						if o == origin {
+							allowed = true
+							break
+						}
+					}
+					if !allowed {
+						w.WriteHeader(http.StatusForbidden)
+						w.Header().Set("Content-Type", "application/json")
+						if err := json.NewEncoder(w).Encode(ErrorResponse{
+							Error: "Origin not allowed",
+							Code:  "origin_not_allowed",
+						}); err != nil {
+							p.logger.Error("Failed to encode error response", zap.Error(err))
+						}
+						return
+					}
+				}
+			} else if origin != "" && len(p.config.AllowedOrigins) > 0 {
+				allowed := false
+				for _, o := range p.config.AllowedOrigins {
+					if o == origin {
+						allowed = true
+						break
+					}
+				}
+				if !allowed {
+					w.WriteHeader(http.StatusForbidden)
+					w.Header().Set("Content-Type", "application/json")
+					if err := json.NewEncoder(w).Encode(ErrorResponse{
+						Error: "Origin not allowed",
+						Code:  "origin_not_allowed",
+					}); err != nil {
+						p.logger.Error("Failed to encode error response", zap.Error(err))
+					}
+					return
+				}
+			}
+			// --- End CORS origin validation ---
+
 			// Continue to next middleware
 			next.ServeHTTP(w, r)
 		})
@@ -861,6 +997,13 @@ type responseRecorder struct {
 func (r *responseRecorder) WriteHeader(statusCode int) {
 	r.statusCode = statusCode
 	r.ResponseWriter.WriteHeader(statusCode)
+}
+
+// Add Flush forwarding for streaming support
+func (r *responseRecorder) Flush() {
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 // extractTokenFromHeader extracts a token from an authorization header

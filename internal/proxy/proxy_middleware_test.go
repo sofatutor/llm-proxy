@@ -344,45 +344,6 @@ func TestChainMiddleware(t *testing.T) {
 	}, calls)
 }
 
-// --- RETRY MIDDLEWARE TESTS ---
-func TestRetryMiddleware_RetriesOnTransientError(t *testing.T) {
-	var callCount int
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
-		if callCount < 3 {
-			w.WriteHeader(http.StatusGatewayTimeout) // 504
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	})
-	mw := RetryMiddleware(2, 1*time.Millisecond)
-	rec := httptest.NewRecorder()
-	mw(h).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
-	if callCount != 3 {
-		t.Errorf("expected 3 calls (2 retries), got %d", callCount)
-	}
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200 after retries, got %d", rec.Code)
-	}
-}
-
-func TestRetryMiddleware_DoesNotRetryOnPermanentError(t *testing.T) {
-	var callCount int
-	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		callCount++
-		w.WriteHeader(http.StatusBadRequest) // 400
-	})
-	mw := RetryMiddleware(2, 1*time.Millisecond)
-	rec := httptest.NewRecorder()
-	mw(h).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
-	if callCount != 1 {
-		t.Errorf("expected 1 call (no retry), got %d", callCount)
-	}
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("expected 400, got %d", rec.Code)
-	}
-}
-
 // --- CIRCUIT BREAKER MIDDLEWARE TESTS ---
 func TestCircuitBreakerMiddleware_OpensOnFailures(t *testing.T) {
 	var callCount int
