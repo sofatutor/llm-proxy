@@ -1128,3 +1128,62 @@ func TestSetTimingHeaders(t *testing.T) {
 		t.Errorf("X-Proxy-Final-Response-At header not set")
 	}
 }
+
+func TestTransparentProxy_MetricsAndSetMetrics(t *testing.T) {
+	p := &TransparentProxy{metrics: &ProxyMetrics{RequestCount: 42, ErrorCount: 7}}
+	m := p.Metrics()
+	assert.Equal(t, int64(42), m.RequestCount)
+	assert.Equal(t, int64(7), m.ErrorCount)
+
+	newMetrics := &ProxyMetrics{RequestCount: 100, ErrorCount: 1}
+	p.SetMetrics(newMetrics)
+	assert.Equal(t, newMetrics, p.metrics)
+}
+
+func TestTransparentProxy_createTransport(t *testing.T) {
+	p := &TransparentProxy{config: ProxyConfig{MaxIdleConns: 10, MaxIdleConnsPerHost: 2, IdleConnTimeout: 5 * time.Second, ResponseHeaderTimeout: 3 * time.Second}}
+	tr := p.createTransport()
+	assert.Equal(t, 10, tr.MaxIdleConns)
+	assert.Equal(t, 2, tr.MaxIdleConnsPerHost)
+	assert.Equal(t, 5*time.Second, tr.IdleConnTimeout)
+	assert.Equal(t, 3*time.Second, tr.ResponseHeaderTimeout)
+	assert.True(t, tr.ForceAttemptHTTP2)
+}
+
+// testFlusher is a test helper that implements http.Flusher and tracks if Flush was called
+var testFlushed bool
+
+type testFlusher struct{ http.ResponseWriter }
+
+func (f *testFlusher) Flush() { testFlushed = true }
+
+func TestResponseRecorder_Flush(t *testing.T) {
+	testFlushed = false
+	rec := &responseRecorder{ResponseWriter: &testFlusher{httptest.NewRecorder()}}
+	rec.Flush()
+	assert.True(t, testFlushed, "Flush should call underlying Flusher")
+}
+
+func TestIsEndpointAllowed_EdgeCases(t *testing.T) {
+	p := &TransparentProxy{config: ProxyConfig{}}
+	// No allowed endpoints: allow all
+	assert.True(t, p.isEndpointAllowed("/foo"))
+	p.config.AllowedEndpoints = []string{"/v1/foo"}
+	assert.True(t, p.isEndpointAllowed("/v1/foo"))
+	assert.True(t, p.isEndpointAllowed("/v1/foo/extra")) // prefix match
+	assert.False(t, p.isEndpointAllowed("/v1/bar"))
+}
+
+func TestIsMethodAllowed_EdgeCases(t *testing.T) {
+	p := &TransparentProxy{config: ProxyConfig{}}
+	// No allowed methods: allow all
+	assert.True(t, p.isMethodAllowed("GET"))
+	assert.True(t, p.isMethodAllowed("POST"))
+	p.config.AllowedMethods = []string{"GET", "POST"}
+	assert.True(t, p.isMethodAllowed("GET"))
+	assert.True(t, p.isMethodAllowed("POST"))
+	assert.False(t, p.isMethodAllowed("DELETE"))
+	// Case insensitivity
+	p.config.AllowedMethods = []string{"get"}
+	assert.True(t, p.isMethodAllowed("GET"))
+}
