@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,7 +13,11 @@ func TestRotateWriter_BasicWriteAndRotate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create rotateWriter: %v", err)
 	}
-	defer rw.file.Close()
+	defer func() {
+		if err := rw.file.Close(); err != nil {
+			t.Errorf("failed to close file: %v", err)
+		}
+	}()
 
 	// Write below maxSize
 	msg := []byte("hello world\n")
@@ -28,8 +31,7 @@ func TestRotateWriter_BasicWriteAndRotate(t *testing.T) {
 	for i := range big {
 		big[i] = 'x'
 	}
-	n, err = rw.Write(big)
-	if err != nil {
+	if _, err := rw.Write(big); err != nil {
 		t.Errorf("Write() after rotation error: %v", err)
 	}
 	// Should have .1 backup
@@ -45,13 +47,19 @@ func TestRotateWriter_SyncAndOpenErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create rotateWriter: %v", err)
 	}
-	defer rw.file.Close()
+	defer func() {
+		if rw.file != nil {
+			_ = rw.file.Close()
+		}
+	}()
 	// Sync should succeed
 	if err := rw.Sync(); err != nil {
 		t.Errorf("Sync() error: %v", err)
 	}
 	// Close file and test Sync on closed file
-	rw.file.Close()
+	if err := rw.file.Close(); err != nil {
+		t.Errorf("failed to close file: %v", err)
+	}
 	rw.file = nil
 	if err := rw.Sync(); err != nil {
 		t.Errorf("Sync() on nil file error: %v", err)
@@ -61,14 +69,22 @@ func TestRotateWriter_SyncAndOpenErrors(t *testing.T) {
 func TestRotateWriter_RotateErrors(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "test.log")
-	_ = ioutil.WriteFile(logPath, []byte("test"), 0644)
+	if err := os.WriteFile(logPath, []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
 	rw, err := newRotateWriter(logPath, 10, 1)
 	if err != nil {
 		t.Fatalf("failed to create rotateWriter: %v", err)
 	}
-	defer rw.file.Close()
+	defer func() {
+		if err := rw.file.Close(); err != nil {
+			t.Errorf("failed to close file: %v", err)
+		}
+	}()
 	// Remove file to cause rename error
-	os.Remove(logPath)
-	err = rw.rotate()
+	if err := os.Remove(logPath); err != nil {
+		t.Logf("failed to remove %s: %v", logPath, err)
+	}
+	_ = rw.rotate()
 	// Should not panic, may return error
 }
