@@ -137,7 +137,7 @@ llm-proxy manage token generate --project-id <project-id> --duration 24 --manage
 - `--json` — Output results as JSON (optional)
 
 ## Project Structure
-- `/cmd` — Entrypoints (`proxy`, `benchmark`)
+- `/cmd` — Entrypoints (`proxy`)
 - `/internal` — Core logic (token, database, proxy, admin, logging)
 - `/api` — OpenAPI specs
 - `/web` — Admin UI static assets

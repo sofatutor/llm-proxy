@@ -375,14 +375,13 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 
 ## Project Directory Structure (Updated)
 
-- `cmd/proxy/`: Main CLI for the LLM Proxy. Contains all user/server commands (setup, server, openai chat, etc.), tests, and documentation for the main CLI.
-- `cmd/benchmark/`: Reserved for benchmarking tools only. Contains only benchmark-specific code (or a placeholder if not yet implemented).
+- `cmd/proxy/`: Main CLI for the LLM Proxy. Contains all user/server commands (setup, server, openai chat, benchmark, etc.), tests, and documentation for the main CLI.
 - `internal/`: Shared logic, server, config, token, database, etc.
 
 **Rationale:**
 - Follows Go best practices and Single Responsibility Principle (SRP).
 - Avoids code duplication and confusion about command ownership.
-- Ensures all user/server/management logic is in one place (`cmd/proxy/`), while benchmarks are isolated.
+- Ensures all user/server/management/benchmark logic is in one place (`cmd/proxy/`).
 
 - In-memory DB is only used for tests
 

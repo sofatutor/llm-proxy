@@ -46,7 +46,7 @@ llm-proxy openai chat --token YOUR_PROXY_TOKEN
 Options:
 - `--proxy`: LLM Proxy URL (default: `http://localhost:8080`)
 - `--token`: LLM Proxy token (required)
-- `--model`: Model to use (default: `gpt-3.5-turbo`)
+- `--model`: Model to use (default: `gpt-4.1-mini`)
 - `--temperature`: Temperature for generation (default: `0.7`)
 - `--max-tokens`: Maximum tokens to generate (default: `0` - no limit)
 - `--system`: System prompt (default: `You are a helpful assistant.`)
@@ -230,7 +230,7 @@ curl -X POST http://localhost:8080/manage/tokens \
 
 ```bash
 # Start a chat session using the proxy token
-./llm-proxy openai chat --token PROXY_TOKEN --model gpt-3.5-turbo
+./llm-proxy openai chat --token PROXY_TOKEN --model gpt-4.1-mini
 
 # For a more customized chat experience
 ./llm-proxy openai chat --token PROXY_TOKEN \
@@ -249,7 +249,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Authorization: Bearer PROXY_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gpt-3.5-turbo",
+    "model": "gpt-4.1-mini",
     "messages": [
       {"role": "system", "content": "You are a helpful assistant."},
       {"role": "user", "content": "Hello, how are you?"}
@@ -272,7 +272,7 @@ kill $(cat /tmp/llm-proxy.pid)
 To run tests:
 
 ```bash
-go test ./cmd/benchmark
+go test ./cmd/proxy
 ```
 
 ## Notes
@@ -285,8 +285,8 @@ go test ./cmd/benchmark
 
 ## Benchmark Tool
 
-To build the benchmark tool separately:
+To run the benchmark tool, use the CLI command:
 
 ```bash
-go build -o llm-benchmark ./cmd/benchmark
+llm-proxy benchmark --base-url ... --endpoint ... --token ... --requests ... --concurrency ...
 ```

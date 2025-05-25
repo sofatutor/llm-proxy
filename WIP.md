@@ -385,7 +385,7 @@ For any new features, enhancements, or bug fixes, please create a new issue file
 // Note: Linter/staticcheck/errcheck issues for proxy and server resolved. Test race conditions and failures fixed. Coverage improved with extracted functionality testing.
 
 ## 2025-05-24: Benchmark Tool Core Implemented
-- Implemented the core architecture for the benchmark tool in `cmd/benchmark`.
+- Implemented the core architecture for the benchmark tool in `cmd/proxy`.
 - CLI now supports required flags: `--base-url`, `--endpoint`, `--token`, `--requests`, `--concurrency`.
 - Added concurrent request handling with worker pool logic.
 - Implemented initial request generator for supported endpoints.
