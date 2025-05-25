@@ -593,6 +593,66 @@ func TestValidateRequestMiddleware_EndpointNotAllowed(t *testing.T) {
 	assert.Equal(t, "Endpoint not found", resp["error"])
 }
 
+func TestValidateRequestMiddleware_ParamWhitelist(t *testing.T) {
+	proxy := newTestProxyWithConfig(ProxyConfig{
+		AllowedMethods:   []string{"POST"},
+		AllowedEndpoints: []string{"/v1/completions"},
+		ParamWhitelist: map[string][]string{
+			"model": {"gpt-4o", "gpt-4.1-*", "text-embedding-3-small"},
+		},
+	})
+	ts := httptest.NewServer(proxy.Handler())
+	defer ts.Close()
+
+	t.Run("Allowed exact value", func(t *testing.T) {
+		body := `{"model": "gpt-4o"}`
+		req, _ := http.NewRequest("POST", ts.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.NotEqual(t, http.StatusBadRequest, resp.StatusCode, "Allowed value should not be rejected")
+		_ = resp.Body.Close()
+	})
+
+	t.Run("Allowed glob value", func(t *testing.T) {
+		body := `{"model": "gpt-4.1-1106-preview"}`
+		req, _ := http.NewRequest("POST", ts.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.NotEqual(t, http.StatusBadRequest, resp.StatusCode, "Glob-matched value should not be rejected")
+		_ = resp.Body.Close()
+	})
+
+	t.Run("Disallowed value", func(t *testing.T) {
+		body := `{"model": "gpt-3.5-turbo"}`
+		req, _ := http.NewRequest("POST", ts.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, "Disallowed value should be rejected")
+		var respBody map[string]interface{}
+		_ = json.NewDecoder(resp.Body).Decode(&respBody)
+		_ = resp.Body.Close()
+		assert.Equal(t, "param_not_allowed", respBody["code"])
+		assert.Contains(t, respBody["error"], "model")
+	})
+
+	t.Run("Missing parameter (should pass)", func(t *testing.T) {
+		body := `{"prompt": "hi"}`
+		req, _ := http.NewRequest("POST", ts.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.NotEqual(t, http.StatusBadRequest, resp.StatusCode, "Missing param should not be rejected")
+		_ = resp.Body.Close()
+	})
+}
+
 func TestModifyResponse_NonStreamingErrorIncrementsErrorCount(t *testing.T) {
 	p := &TransparentProxy{metrics: &ProxyMetrics{}, logger: zap.NewNop()}
 	res := &http.Response{
