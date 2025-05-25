@@ -39,7 +39,7 @@ func init() {
 	// Chat command flags
 	chatCmd.Flags().StringVar(&proxyURL, "proxy", "http://localhost:8080", "LLM Proxy URL")
 	chatCmd.Flags().StringVar(&proxyToken, "token", "", "LLM Proxy token")
-	chatCmd.Flags().StringVar(&model, "model", "gpt-3.5-turbo", "Model to use")
+	chatCmd.Flags().StringVar(&model, "model", "gpt-4.1-mini", "Model to use")
 	chatCmd.Flags().Float64Var(&temperature, "temperature", 0.7, "Temperature for generation")
 	chatCmd.Flags().IntVar(&maxTokens, "max-tokens", 0, "Maximum tokens to generate (0 = no limit)")
 	chatCmd.Flags().StringVar(&systemPrompt, "system", "You are a helpful assistant.", "System prompt")
