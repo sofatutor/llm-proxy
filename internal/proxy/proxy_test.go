@@ -653,6 +653,146 @@ func TestValidateRequestMiddleware_ParamWhitelist(t *testing.T) {
 	})
 }
 
+func TestValidateRequestMiddleware_CORSOriginValidation(t *testing.T) {
+	proxy := newTestProxyWithConfig(ProxyConfig{
+		AllowedMethods:   []string{"POST"},
+		AllowedEndpoints: []string{"/v1/completions"},
+		AllowedOrigins:   []string{"https://allowed.com"},
+		RequiredHeaders:  []string{"origin"},
+	})
+	ts := httptest.NewServer(proxy.Handler())
+	defer ts.Close()
+
+	t.Run("Missing Origin header (required)", func(t *testing.T) {
+		body := `{"prompt": "hi"}`
+		req, _ := http.NewRequest("POST", ts.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		var respBody map[string]interface{}
+		_ = json.NewDecoder(resp.Body).Decode(&respBody)
+		_ = resp.Body.Close()
+		assert.Equal(t, "origin_required", respBody["code"])
+	})
+
+	t.Run("Origin present but not allowed (required)", func(t *testing.T) {
+		body := `{"prompt": "hi"}`
+		req, _ := http.NewRequest("POST", ts.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		req.Header.Set("Origin", "https://not-allowed.com")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+		var respBody map[string]interface{}
+		_ = json.NewDecoder(resp.Body).Decode(&respBody)
+		_ = resp.Body.Close()
+		assert.Equal(t, "origin_not_allowed", respBody["code"])
+	})
+
+	t.Run("Origin present and allowed (required)", func(t *testing.T) {
+		body := `{"prompt": "hi"}`
+		req, _ := http.NewRequest("POST", ts.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		req.Header.Set("Origin", "https://allowed.com")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.NotEqual(t, http.StatusBadRequest, resp.StatusCode)
+		assert.NotEqual(t, http.StatusForbidden, resp.StatusCode)
+		_ = resp.Body.Close()
+	})
+
+	// Now test with RequiredHeaders not including 'origin'
+	proxy2 := newTestProxyWithConfig(ProxyConfig{
+		AllowedMethods:   []string{"POST"},
+		AllowedEndpoints: []string{"/v1/completions"},
+		AllowedOrigins:   []string{"https://allowed.com"},
+		RequiredHeaders:  []string{},
+	})
+	ts2 := httptest.NewServer(proxy2.Handler())
+	defer ts2.Close()
+
+	t.Run("Origin present but not allowed (not required)", func(t *testing.T) {
+		body := `{"prompt": "hi"}`
+		req, _ := http.NewRequest("POST", ts2.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		req.Header.Set("Origin", "https://not-allowed.com")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+		var respBody map[string]interface{}
+		_ = json.NewDecoder(resp.Body).Decode(&respBody)
+		_ = resp.Body.Close()
+		assert.Equal(t, "origin_not_allowed", respBody["code"])
+	})
+
+	t.Run("Origin present and allowed (not required)", func(t *testing.T) {
+		body := `{"prompt": "hi"}`
+		req, _ := http.NewRequest("POST", ts2.URL+"/v1/completions", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer valid-token")
+		req.Header.Set("Origin", "https://allowed.com")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.NotEqual(t, http.StatusBadRequest, resp.StatusCode)
+		assert.NotEqual(t, http.StatusForbidden, resp.StatusCode)
+		_ = resp.Body.Close()
+	})
+}
+
+func TestValidateRequestMiddleware_OPTIONSPreflightCORS(t *testing.T) {
+	proxy := newTestProxyWithConfig(ProxyConfig{
+		AllowedMethods:   []string{"POST", "OPTIONS"},
+		AllowedEndpoints: []string{"/v1/completions"},
+	})
+	ts := httptest.NewServer(proxy.Handler())
+	defer ts.Close()
+
+	t.Run("OPTIONS with Origin and Access-Control-Request-Headers", func(t *testing.T) {
+		req, _ := http.NewRequest("OPTIONS", ts.URL+"/v1/completions", nil)
+		req.Header.Set("Origin", "https://allowed.com")
+		req.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+		assert.Equal(t, "*", resp.Header.Get("Access-Control-Allow-Origin"))
+		assert.Contains(t, resp.Header.Get("Access-Control-Allow-Methods"), "OPTIONS")
+		assert.Contains(t, resp.Header.Get("Access-Control-Allow-Headers"), "Authorization")
+		assert.Contains(t, resp.Header.Get("Access-Control-Allow-Headers"), "Content-Type")
+		assert.NotEmpty(t, resp.Header.Get("Access-Control-Expose-Headers"))
+		assert.Equal(t, "86400", resp.Header.Get("Access-Control-Max-Age"))
+		_ = resp.Body.Close()
+	})
+
+	t.Run("OPTIONS with Origin but no Access-Control-Request-Headers", func(t *testing.T) {
+		req, _ := http.NewRequest("OPTIONS", ts.URL+"/v1/completions", nil)
+		req.Header.Set("Origin", "https://allowed.com")
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+		assert.Equal(t, "*", resp.Header.Get("Access-Control-Allow-Origin"))
+		assert.Contains(t, resp.Header.Get("Access-Control-Allow-Headers"), "Authorization")
+		assert.Contains(t, resp.Header.Get("Access-Control-Allow-Headers"), "Content-Type")
+		assert.NotEmpty(t, resp.Header.Get("Access-Control-Expose-Headers"))
+		assert.Equal(t, "86400", resp.Header.Get("Access-Control-Max-Age"))
+		_ = resp.Body.Close()
+	})
+
+	t.Run("OPTIONS without Origin", func(t *testing.T) {
+		req, _ := http.NewRequest("OPTIONS", ts.URL+"/v1/completions", nil)
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+		// Should not set CORS headers if no Origin
+		assert.Empty(t, resp.Header.Get("Access-Control-Allow-Origin"))
+		_ = resp.Body.Close()
+	})
+}
+
 func TestModifyResponse_NonStreamingErrorIncrementsErrorCount(t *testing.T) {
 	p := &TransparentProxy{metrics: &ProxyMetrics{}, logger: zap.NewNop()}
 	res := &http.Response{
