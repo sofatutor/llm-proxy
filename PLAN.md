@@ -162,7 +162,7 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 ### Token Management (`/manage/tokens`)
 - **Authentication**: `Authorization: Bearer <MANAGEMENT_TOKEN>`
 - **POST**: Generate a token
-  - Request: `{"project_id": "<uuid>", "duration_hours": <int>}`
+  - Request: `{"project_id": "<uuid>", "duration_minutes": <int>}`
   - Response: `{"token": "<uuid>", "expires_at": "<iso8601>"}`
 - **DELETE**: Revoke a token
   - Request: `{"token": "<uuid>"}`
@@ -201,7 +201,7 @@ This document outlines the implementation plan for a transparent proxy for OpenA
   - Auth: `Authorization: Bearer <MANAGEMENT_TOKEN>`
   - Request/response formats:
     - **POST**: Generate a token
-      - Request: `{"project_id": "<uuid>", "duration_hours": <int>}`
+      - Request: `{"project_id": "<uuid>", "duration_minutes": <int>}`
       - Response: `{"token": "<uuid>", "expires_at": "<iso8601>"}`
     - **GET**: Retrieve tokens
       - Request: None

@@ -222,7 +222,7 @@ curl -X POST http://localhost:8080/manage/projects \
 curl -X POST http://localhost:8080/manage/tokens \
   -H "Authorization: Bearer MANAGEMENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"project_id": "PROJECT_ID", "duration_hours": 24}'
+  -d '{"project_id": "PROJECT_ID", "duration_minutes": 1440}'
 # Note the token from the response
 ```
 
