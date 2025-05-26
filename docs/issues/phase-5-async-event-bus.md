@@ -16,16 +16,16 @@ Develop an asynchronous event bus component to buffer, batch, and deliver instru
 - Metrics and health checks
 
 ## Tasks
-- [ ] Design event bus interface and backend abstraction
-- [ ] Implement in-memory backend
-- [ ] Implement Redis backend
-- [ ] Add batching, retry, and health check logic
-- [ ] Support multiple subscribers/dispatchers
-- [ ] Write tests for both backends
-- [ ] Document configuration and usage
+- [x] Design event bus interface and backend abstraction
+- [x] Implement in-memory backend
+- [x] Implement Redis backend
+- [x] Add batching, retry, and health check logic
+- [x] Support multiple subscribers/dispatchers
+- [x] Write tests for both backends
+- [x] Document configuration and usage
 
 ## Acceptance Criteria
 - Event bus works with both in-memory and Redis
 - Supports multiple subscribers
 - Reliable, async delivery with batching and retries
-- Tests and documentation are complete 
+- Tests and documentation are complete
