@@ -4,8 +4,6 @@ name: "Copilot Setup Steps"
 on: workflow_dispatch
 
 env:
-  # Copilot Agent Firewall Configuration
-  # Allow access to GitHub documentation and APIs
   COPILOT_AGENT_FIREWALL_ALLOW_LIST_ADDITIONS: "https://docs.github.com,https://api.github.com,https://raw.githubusercontent.com"
   
   # Development Environment Variables
