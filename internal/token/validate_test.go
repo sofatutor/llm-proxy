@@ -78,6 +78,35 @@ func (m *MockTokenStore) AddToken(tokenID string, data TokenData) {
 	m.tokens[tokenID] = data
 }
 
+func (m *MockTokenStore) CreateToken(ctx context.Context, td TokenData) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.tokens[td.Token] = td
+	return nil
+}
+
+func (m *MockTokenStore) GetTokensByProjectID(ctx context.Context, projectID string) ([]TokenData, error) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	var tokens []TokenData
+	for _, t := range m.tokens {
+		if t.ProjectID == projectID {
+			tokens = append(tokens, t)
+		}
+	}
+	return tokens, nil
+}
+
+func (m *MockTokenStore) ListTokens(ctx context.Context) ([]TokenData, error) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	tokens := make([]TokenData, 0, len(m.tokens))
+	for _, t := range m.tokens {
+		tokens = append(tokens, t)
+	}
+	return tokens, nil
+}
+
 func TestTokenDataIsValid(t *testing.T) {
 	now := time.Now()
 	future := now.Add(1 * time.Hour)
