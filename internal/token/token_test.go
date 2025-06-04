@@ -152,6 +152,28 @@ func TestDecodeToken(t *testing.T) {
 	}
 }
 
+func TestDecodeToken_EdgeCases(t *testing.T) {
+	valid, _ := GenerateToken()
+	tests := []struct {
+		name    string
+		token   string
+		wantErr bool
+	}{
+		{"missing prefix", "notasktoken", true},
+		{"invalid base64", "sk-!@#$%^&*()", true},
+		{"invalid uuid bytes", "sk-AAAAAAAAAA", true}, // not a valid UUID (too short)
+		{"valid token", valid, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := DecodeToken(tt.token)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("DecodeToken() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestTokenGeneration_Multiple(t *testing.T) {
 	// Generate multiple tokens and ensure they're all unique
 	tokenCount := 100

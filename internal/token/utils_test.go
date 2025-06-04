@@ -261,6 +261,36 @@ func TestGenerateRandomKey(t *testing.T) {
 	}
 }
 
+func TestGenerateRandomKey_EdgeCases(t *testing.T) {
+	key, err := GenerateRandomKey(0)
+	if err != nil {
+		t.Fatalf("GenerateRandomKey(0) error: %v", err)
+	}
+	if len(key) < MinTokenLength {
+		t.Errorf("key too short: %d", len(key))
+	}
+
+	key2, err := GenerateRandomKey(32)
+	if err != nil {
+		t.Fatalf("GenerateRandomKey(32) error: %v", err)
+	}
+	if len(key2) != 32 {
+		t.Errorf("key length: got %d, want 32", len(key2))
+	}
+
+	set := map[string]struct{}{key: {}, key2: {}}
+	for i := 0; i < 10; i++ {
+		k, err := GenerateRandomKey(24)
+		if err != nil {
+			t.Fatalf("GenerateRandomKey(24) error: %v", err)
+		}
+		if _, exists := set[k]; exists {
+			t.Errorf("duplicate key generated: %s", k)
+		}
+		set[k] = struct{}{}
+	}
+}
+
 func TestTruncateToken(t *testing.T) {
 	validToken, _ := GenerateToken()
 	showChars := 4
@@ -540,6 +570,29 @@ func TestFormatTokenInfo(t *testing.T) {
 	for _, part := range expectedParts {
 		if !strings.Contains(formatted, part) {
 			t.Errorf("FormatTokenInfo() does not contain expected part: %s", part)
+		}
+	}
+}
+
+func TestFormatTokenInfo_EdgeCases(t *testing.T) {
+	now := time.Now()
+	future := now.Add(time.Hour)
+	past := now.Add(-time.Hour)
+	max := 2
+
+	tokens := []TokenData{
+		{Token: "sk-abc", ProjectID: "p", ExpiresAt: nil, IsActive: true, RequestCount: 0, MaxRequests: nil, CreatedAt: now, LastUsedAt: nil},
+		{Token: "sk-def", ProjectID: "p", ExpiresAt: &future, IsActive: false, RequestCount: 0, MaxRequests: &max, CreatedAt: now, LastUsedAt: nil},
+		{Token: "sk-ghi", ProjectID: "p", ExpiresAt: &past, IsActive: true, RequestCount: 0, MaxRequests: &max, CreatedAt: now, LastUsedAt: nil},
+		{Token: "sk-jkl", ProjectID: "p", ExpiresAt: &future, IsActive: true, RequestCount: 2, MaxRequests: &max, CreatedAt: now, LastUsedAt: nil},
+	}
+	for _, td := range tokens {
+		out := FormatTokenInfo(td)
+		if out == "" {
+			t.Errorf("FormatTokenInfo() returned empty string for %+v", td)
+		}
+		if !strings.Contains(out, "Token: ") {
+			t.Errorf("FormatTokenInfo() missing Token: for %+v", td)
 		}
 	}
 }
