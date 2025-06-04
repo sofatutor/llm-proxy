@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/stretchr/testify/assert"
@@ -528,3 +529,58 @@ func TestHandleProjects_And_CreateProject_EdgeCases(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 	})
 }
+
+func TestLogRequestMiddleware(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: 1 * time.Second}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	called := false
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusTeapot)
+		w.Write([]byte("ok"))
+	})
+	mw := srv.logRequestMiddleware(h)
+	req := httptest.NewRequest("GET", "/test", nil)
+	rr := httptest.NewRecorder()
+	mw.ServeHTTP(rr, req)
+	if !called {
+		t.Error("handler was not called by logRequestMiddleware")
+	}
+	if rr.Code != http.StatusTeapot {
+		t.Errorf("expected status %d, got %d", http.StatusTeapot, rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "ok") {
+		t.Errorf("expected body to contain 'ok', got %q", rr.Body.String())
+	}
+}
+
+func TestHandleNotFound_WriteHeader_Flush_EventBus(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: 1 * time.Second}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/notfound", nil)
+	srv.handleNotFound(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", rr.Code)
+	}
+
+	// Initialize event bus for the test
+	srv.eventBus = &mockEventBus{}
+	if srv.EventBus() == nil {
+		t.Error("EventBus() returned nil")
+	}
+}
+
+// mockEventBus implements the eventbus.EventBus interface for testing
+type mockEventBus struct{}
+
+func (m *mockEventBus) Publish(ctx context.Context, evt eventbus.Event) {}
+func (m *mockEventBus) Subscribe() <-chan eventbus.Event {
+	ch := make(chan eventbus.Event)
+	close(ch)
+	return ch
+}
+func (m *mockEventBus) Stop() {}
