@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 	"github.com/sofatutor/llm-proxy/internal/api"
 	"github.com/sofatutor/llm-proxy/internal/dispatcher"
 	"github.com/sofatutor/llm-proxy/internal/dispatcher/plugins"
@@ -29,6 +30,20 @@ import (
 	"github.com/sofatutor/llm-proxy/internal/utils"
 	"github.com/spf13/cobra"
 )
+
+// redisClientAdapter adapts go-redis client to the eventbus.RedisClient interface
+type redisClientAdapter struct {
+	client *redis.Client
+}
+
+func (r *redisClientAdapter) LPush(ctx context.Context, key string, values ...interface{}) error {
+	return r.client.LPush(ctx, key, values...).Err()
+}
+
+func (r *redisClientAdapter) BRPop(ctx context.Context, timeout time.Duration, keys ...string) ([]string, error) {
+	result := r.client.BRPop(ctx, timeout, keys...)
+	return result.Val(), result.Err()
+}
 
 // Command line flags
 var (
@@ -282,11 +297,13 @@ func runDispatcher(cmd *cobra.Command, args []string) error {
 	var bus eventbus.EventBus
 	switch eventBusType {
 	case "redis":
-		redisBus, err := eventbus.NewRedisEventBus(redisURL, "llm-proxy-events", "dispatchers")
+		opt, err := redis.ParseURL(redisURL)
 		if err != nil {
-			return fmt.Errorf("failed to create Redis event bus: %w", err)
+			return fmt.Errorf("failed to parse Redis URL: %w", err)
 		}
-		bus = redisBus
+		redisClient := redis.NewClient(opt)
+		adapter := &redisClientAdapter{client: redisClient}
+		bus = eventbus.NewRedisEventBus(adapter, "llm-proxy-events")
 		log.Printf("Using Redis event bus: %s", redisURL)
 	case "memory":
 		bus = eventbus.NewInMemoryEventBus(100)

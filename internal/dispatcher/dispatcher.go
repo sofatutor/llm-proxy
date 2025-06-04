@@ -88,6 +88,8 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 // Stop gracefully stops the dispatcher.
 func (d *Dispatcher) Stop() {
 	close(d.stopCh)
+	d.wg.Wait()
+	d.eventBus.Stop()
 }
 
 // worker processes events from the event channel.

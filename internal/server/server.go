@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/logging"
@@ -25,6 +26,20 @@ import (
 type ctxKey string
 
 const ctxKeyRequestID ctxKey = "request_id"
+
+// redisClientAdapter adapts go-redis client to the eventbus.RedisClient interface
+type redisClientAdapter struct {
+	client *redis.Client
+}
+
+func (r *redisClientAdapter) LPush(ctx context.Context, key string, values ...interface{}) error {
+	return r.client.LPush(ctx, key, values...).Err()
+}
+
+func (r *redisClientAdapter) BRPop(ctx context.Context, timeout time.Duration, keys ...string) ([]string, error) {
+	result := r.client.BRPop(ctx, timeout, keys...)
+	return result.Val(), result.Err()
+}
 
 // Server represents the HTTP server for the LLM Proxy.
 // It encapsulates the underlying http.Server along with application configuration
@@ -202,16 +217,15 @@ func (s *Server) initializeAPIRoutes() error {
 	if s.config.ObservabilityEnabled {
 		switch s.config.ObservabilityBackend {
 		case "redis":
-			redisBus, err := eventbus.NewRedisEventBus(
-				s.config.ObservabilityRedisURL,
-				"llm-proxy-events",
-				"dispatchers",
-			)
+			opt, err := redis.ParseURL(s.config.ObservabilityRedisURL)
 			if err != nil {
-				s.logger.Warn("Failed to initialize Redis event bus, falling back to in-memory",
+				s.logger.Warn("Failed to parse Redis URL, falling back to in-memory",
 					zap.Error(err))
 				bus = eventbus.NewInMemoryEventBus(s.config.ObservabilityBufferSize)
 			} else {
+				redisClient := redis.NewClient(opt)
+				adapter := &redisClientAdapter{client: redisClient}
+				redisBus := eventbus.NewRedisEventBus(adapter, "llm-proxy-events")
 				bus = redisBus
 				s.logger.Info("Using Redis event bus",
 					zap.String("url", s.config.ObservabilityRedisURL))

@@ -3,12 +3,9 @@ package eventbus
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/redis/go-redis/v9"
 )
 
 // Event represents an observability event emitted by the proxy.
@@ -26,166 +23,239 @@ type Event struct {
 type EventBus interface {
 	Publish(ctx context.Context, evt Event)
 	Subscribe() <-chan Event
+	Stop()
 }
 
-// InMemoryEventBus is a basic EventBus implementation backed by a buffered channel.
+type busStats struct {
+	published int
+	dropped   int
+}
+
+// InMemoryEventBus is an EventBus implementation backed by a buffered channel and
+// fan-out broadcasting to multiple subscribers. Events are dispatched
+// asynchronously to avoid blocking the request path.
 type InMemoryEventBus struct {
-	ch   chan Event
-	once sync.Once
+	bufferSize    int
+	ch            chan Event
+	subsMu        sync.RWMutex
+	subscribers   []chan Event
+	stopCh        chan struct{}
+	wg            sync.WaitGroup
+	retryInterval time.Duration
+	maxRetries    int
+
+	statsMu sync.Mutex
+	stats   busStats
 }
 
 // NewInMemoryEventBus creates a new in-memory event bus with the given buffer size.
 func NewInMemoryEventBus(bufferSize int) *InMemoryEventBus {
-	return &InMemoryEventBus{ch: make(chan Event, bufferSize)}
+	b := &InMemoryEventBus{
+		bufferSize:    bufferSize,
+		ch:            make(chan Event, bufferSize),
+		stopCh:        make(chan struct{}),
+		retryInterval: 10 * time.Millisecond,
+		maxRetries:    3,
+	}
+	b.wg.Add(1)
+	go b.loop()
+	return b
 }
 
 // Publish sends an event to the bus without blocking if the buffer is full.
 func (b *InMemoryEventBus) Publish(ctx context.Context, evt Event) {
 	select {
 	case b.ch <- evt:
+		b.statsMu.Lock()
+		b.stats.published++
+		b.statsMu.Unlock()
 	default:
-		// drop event if buffer is full
+		b.statsMu.Lock()
+		b.stats.dropped++
+		b.statsMu.Unlock()
 	}
 }
 
 // Subscribe returns a channel that receives events published to the bus.
-// Multiple subscribers can read from the same channel.
+// Each subscriber receives all events.
 func (b *InMemoryEventBus) Subscribe() <-chan Event {
-	b.once.Do(func() {
-		// ensure channel is created
-		if b.ch == nil {
-			b.ch = make(chan Event, 1)
-		}
-	})
-	return b.ch
+	sub := make(chan Event, b.bufferSize)
+	b.subsMu.Lock()
+	b.subscribers = append(b.subscribers, sub)
+	b.subsMu.Unlock()
+	return sub
 }
 
-// RedisEventBus is an EventBus implementation backed by Redis streams.
+func (b *InMemoryEventBus) loop() {
+	defer b.wg.Done()
+	for {
+		select {
+		case evt := <-b.ch:
+			b.dispatch(evt)
+		case <-b.stopCh:
+			b.subsMu.Lock()
+			for _, sub := range b.subscribers {
+				close(sub)
+			}
+			b.subscribers = nil
+			b.subsMu.Unlock()
+			return
+		}
+	}
+}
+
+func (b *InMemoryEventBus) dispatch(evt Event) {
+	b.subsMu.RLock()
+	subs := append([]chan Event(nil), b.subscribers...)
+	b.subsMu.RUnlock()
+	for _, sub := range subs {
+		sent := false
+		for i := 0; i <= b.maxRetries; i++ {
+			select {
+			case sub <- evt:
+				sent = true
+			default:
+				time.Sleep(b.retryInterval * time.Duration(i+1))
+			}
+			if sent {
+				break
+			}
+		}
+	}
+}
+
+// Stop gracefully stops the event bus and closes all subscriber channels.
+func (b *InMemoryEventBus) Stop() {
+	close(b.stopCh)
+	b.wg.Wait()
+}
+
+// Stats returns the number of published and dropped events.
+func (b *InMemoryEventBus) Stats() (published, dropped int) {
+	b.statsMu.Lock()
+	defer b.statsMu.Unlock()
+	return b.stats.published, b.stats.dropped
+}
+
+// RedisClient defines the minimal operations required by the RedisEventBus.
+type RedisClient interface {
+	LPush(ctx context.Context, key string, values ...interface{}) error
+	BRPop(ctx context.Context, timeout time.Duration, keys ...string) ([]string, error)
+}
+
+// RedisEventBus is a Redis-backed EventBus implementation. Events are encoded as
+// JSON and pushed to a Redis list. A background goroutine pops events and
+// broadcasts them to subscribers.
 type RedisEventBus struct {
-	client    *redis.Client
-	streamKey string
-	groupName string
+	client        RedisClient
+	key           string
+	subsMu        sync.RWMutex
+	subscribers   []chan Event
+	stopCh        chan struct{}
+	wg            sync.WaitGroup
+	retryInterval time.Duration
+	maxRetries    int
+
+	statsMu sync.Mutex
+	stats   busStats
 }
 
 // NewRedisEventBus creates a new Redis-backed event bus.
-func NewRedisEventBus(redisURL, streamKey, groupName string) (*RedisEventBus, error) {
-	opt, err := redis.ParseURL(redisURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse Redis URL: %w", err)
+func NewRedisEventBus(client RedisClient, key string) *RedisEventBus {
+	b := &RedisEventBus{
+		client:        client,
+		key:           key,
+		stopCh:        make(chan struct{}),
+		retryInterval: 10 * time.Millisecond,
+		maxRetries:    3,
 	}
-
-	client := redis.NewClient(opt)
-
-	// Test connection
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
-	}
-
-	bus := &RedisEventBus{
-		client:    client,
-		streamKey: streamKey,
-		groupName: groupName,
-	}
-
-	// Create consumer group if it doesn't exist
-	if err := bus.ensureConsumerGroup(ctx); err != nil {
-		return nil, fmt.Errorf("failed to ensure consumer group: %w", err)
-	}
-
-	return bus, nil
+	b.wg.Add(1)
+	go b.loop()
+	return b
 }
 
-// ensureConsumerGroup creates the consumer group if it doesn't exist.
-func (b *RedisEventBus) ensureConsumerGroup(ctx context.Context) error {
-	// Try to create the consumer group, ignore error if it already exists
-	err := b.client.XGroupCreate(ctx, b.streamKey, b.groupName, "$").Err()
-	if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
-		return err
-	}
-	return nil
-}
-
-// Publish sends an event to the Redis stream.
+// Publish pushes the event JSON to the Redis list.
 func (b *RedisEventBus) Publish(ctx context.Context, evt Event) {
 	data, err := json.Marshal(evt)
 	if err != nil {
-		// Drop event if marshaling fails
 		return
 	}
-
-	args := &redis.XAddArgs{
-		Stream: b.streamKey,
-		Values: map[string]interface{}{
-			"event": string(data),
-		},
+	if err := b.client.LPush(ctx, b.key, data); err != nil {
+		b.statsMu.Lock()
+		b.stats.dropped++
+		b.statsMu.Unlock()
+		return
 	}
-
-	// Non-blocking publish - if it fails, drop the event
-	b.client.XAdd(ctx, args)
+	b.statsMu.Lock()
+	b.stats.published++
+	b.statsMu.Unlock()
 }
 
-// Subscribe returns a channel that receives events from the Redis stream.
+// Subscribe returns a channel that receives events popped from Redis.
 func (b *RedisEventBus) Subscribe() <-chan Event {
-	ch := make(chan Event, 10)
+	sub := make(chan Event, 1)
+	b.subsMu.Lock()
+	b.subscribers = append(b.subscribers, sub)
+	b.subsMu.Unlock()
+	return sub
+}
 
-	go func() {
-		defer close(ch)
-
-		consumerName := fmt.Sprintf("consumer-%d", time.Now().UnixNano())
-
-		for {
-			ctx := context.Background()
-
-			// Read from the consumer group
-			streams, err := b.client.XReadGroup(ctx, &redis.XReadGroupArgs{
-				Group:    b.groupName,
-				Consumer: consumerName,
-				Streams:  []string{b.streamKey, ">"},
-				Count:    10,
-				Block:    time.Second,
-			}).Result()
-
-			if err != nil {
-				if err == redis.Nil {
-					continue // No new messages
-				}
-				// Log error and continue
+func (b *RedisEventBus) loop() {
+	defer b.wg.Done()
+	for {
+		select {
+		case <-b.stopCh:
+			b.subsMu.Lock()
+			for _, sub := range b.subscribers {
+				close(sub)
+			}
+			b.subscribers = nil
+			b.subsMu.Unlock()
+			return
+		default:
+			res, err := b.client.BRPop(context.Background(), time.Second, b.key)
+			if err != nil || len(res) == 0 {
 				continue
 			}
-
-			for _, stream := range streams {
-				for _, message := range stream.Messages {
-					if eventData, ok := message.Values["event"].(string); ok {
-						var evt Event
-						if err := json.Unmarshal([]byte(eventData), &evt); err == nil {
-							select {
-							case ch <- evt:
-								// Acknowledge the message
-								b.client.XAck(ctx, b.streamKey, b.groupName, message.ID)
-							default:
-								// Channel is full, acknowledge and drop
-								b.client.XAck(ctx, b.streamKey, b.groupName, message.ID)
-							}
-						} else {
-							// Acknowledge malformed message
-							b.client.XAck(ctx, b.streamKey, b.groupName, message.ID)
-						}
-					} else {
-						// Acknowledge message with unexpected format
-						b.client.XAck(ctx, b.streamKey, b.groupName, message.ID)
-					}
+			for _, item := range res {
+				var evt Event
+				if err := json.Unmarshal([]byte(item), &evt); err == nil {
+					b.dispatch(evt)
 				}
 			}
 		}
-	}()
-
-	return ch
+	}
 }
 
-// Close cleans up the Redis connection.
-func (b *RedisEventBus) Close() error {
-	return b.client.Close()
+func (b *RedisEventBus) dispatch(evt Event) {
+	b.subsMu.RLock()
+	subs := append([]chan Event(nil), b.subscribers...)
+	b.subsMu.RUnlock()
+	for _, sub := range subs {
+		sent := false
+		for i := 0; i <= b.maxRetries; i++ {
+			select {
+			case sub <- evt:
+				sent = true
+			default:
+				time.Sleep(b.retryInterval * time.Duration(i+1))
+			}
+			if sent {
+				break
+			}
+		}
+	}
+}
+
+// Stop gracefully stops the event bus and closes all subscriber channels.
+func (b *RedisEventBus) Stop() {
+	close(b.stopCh)
+	b.wg.Wait()
+}
+
+// Stats returns the number of published and dropped events.
+func (b *RedisEventBus) Stats() (published, dropped int) {
+	b.statsMu.Lock()
+	defer b.statsMu.Unlock()
+	return b.stats.published, b.stats.dropped
 }
