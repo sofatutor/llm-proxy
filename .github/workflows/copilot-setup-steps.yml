@@ -6,7 +6,7 @@ on: workflow_dispatch
 env:
   GITHUB_PERSONAL_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   # Development Environment Variables
-  GO_VERSION: '1.23.9'
+  GO_VERSION: '1.23'
   # Cache Configuration
   CACHE_KEY_PREFIX: copilot-agent
 
@@ -26,12 +26,12 @@ jobs:
     # If you do not check out your code, Copilot will do this for you.
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0  # Full history for comprehensive analysis
       
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v4
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -143,12 +143,6 @@ jobs:
           echo "### 🔧 Available Tools" >> $GITHUB_STEP_SUMMARY
           echo "- golangci-lint: $(golangci-lint version 2>/dev/null | head -1 || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
           echo "- swag: $(swag --version 2>/dev/null || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📊 Project Health" >> $GITHUB_STEP_SUMMARY
-          echo "- Build: $([[ $BUILD_STATUS -eq 0 ]] && echo '✅ Successful' || echo '❌ Failed')" >> $GITHUB_STEP_SUMMARY
-          echo "- Lint: $([[ $LINT_STATUS -eq 0 ]] && echo '✅ Passed' || echo '❌ Failed')" >> $GITHUB_STEP_SUMMARY
-          echo "- Tests: $([[ $TEST_STATUS -eq 0 ]] && echo '✅ All passing' || echo '❌ Some failing')" >> $GITHUB_STEP_SUMMARY
-          echo "- Format: $([[ $FORMAT_STATUS -eq 0 ]] && echo '✅ Consistent' || echo '❌ Issues found')" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🚀 Ready for Development" >> $GITHUB_STEP_SUMMARY
           echo "The environment is now configured for GitHub Copilot Agent with:" >> $GITHUB_STEP_SUMMARY
