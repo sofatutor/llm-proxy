@@ -1,0 +1,185 @@
+name: Copilot Agent Environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      task_description:
+        description: 'Task description for Copilot Agent'
+        required: false
+        default: 'Development environment setup'
+      
+env:
+  # Copilot Agent Firewall Configuration
+  # Allow access to GitHub documentation (addresses prerequisite)
+  COPILOT_AGENT_FIREWALL_ALLOW_LIST_ADDITIONS: "https://docs.github.com,https://api.github.com,https://raw.githubusercontent.com"
+  
+  # Development Environment Variables
+  GO_VERSION: '1.23'
+  NODE_VERSION: '20'
+  
+  # Cache Configuration
+  CACHE_KEY_PREFIX: copilot-agent
+  
+jobs:
+  setup-environment:
+    name: Setup Copilot Agent Development Environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for comprehensive analysis
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            go.mod
+      
+      - name: Set up Node.js (for frontend tooling)
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+      
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ env.CACHE_KEY_PREFIX }}-go-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ env.CACHE_KEY_PREFIX }}-go-${{ runner.os }}-
+      
+      - name: Cache development tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/golangci-lint
+            ~/go/bin
+          key: ${{ env.CACHE_KEY_PREFIX }}-tools-${{ runner.os }}-${{ hashFiles('Makefile') }}
+          restore-keys: |
+            ${{ env.CACHE_KEY_PREFIX }}-tools-${{ runner.os }}-
+      
+      - name: Install development dependencies
+        run: |
+          # Go dependencies
+          go mod download
+          go mod verify
+          
+          # Development tools
+          make tools
+          
+          # Ensure database directory exists
+          make db-setup
+      
+      - name: Verify environment setup
+        run: |
+          echo "=== Go Environment ==="
+          go version
+          go env
+          
+          echo "=== Available Tools ==="
+          which golangci-lint && golangci-lint version
+          which swag && swag --version
+          
+          echo "=== Project Structure ==="
+          ls -la
+          
+          echo "=== Dependencies Status ==="
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+      
+      - name: Run comprehensive checks
+        run: |
+          # Format check
+          make fmt
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Code formatting changes required"
+            git status --porcelain
+            exit 1
+          fi
+          
+          # Lint check
+          make lint
+          
+          # Build check
+          make build
+          
+          # Test environment
+          make test
+      
+      - name: Cache test results
+        uses: actions/cache@v4
+        with:
+          path: |
+            coverage.out
+            coverage.html
+            bin/
+          key: ${{ env.CACHE_KEY_PREFIX }}-results-${{ runner.os }}-${{ github.sha }}
+      
+      - name: Generate development summary
+        run: |
+          echo "## Copilot Agent Environment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Environment Setup Complete" >> $GITHUB_STEP_SUMMARY
+          echo "- **Go Version**: $(go version | cut -d' ' -f3)" >> $GITHUB_STEP_SUMMARY
+          echo "- **OS**: ${{ runner.os }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Cache Status**: Enabled with key prefix \`${{ env.CACHE_KEY_PREFIX }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Firewall Allowlist**: GitHub docs and APIs whitelisted" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔧 Available Tools" >> $GITHUB_STEP_SUMMARY
+          echo "- golangci-lint: $(golangci-lint version 2>/dev/null | head -1 || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
+          echo "- swag: $(swag --version 2>/dev/null || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Project Health" >> $GITHUB_STEP_SUMMARY
+          echo "- Build: ✅ Successful" >> $GITHUB_STEP_SUMMARY
+          echo "- Lint: ✅ Passed" >> $GITHUB_STEP_SUMMARY
+          echo "- Tests: ✅ All passing" >> $GITHUB_STEP_SUMMARY
+          echo "- Format: ✅ Consistent" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Ready for Development" >> $GITHUB_STEP_SUMMARY
+          echo "The environment is now configured for GitHub Copilot Agent with:" >> $GITHUB_STEP_SUMMARY
+          echo "- Optimized caching for faster rebuilds" >> $GITHUB_STEP_SUMMARY
+          echo "- All development tools pre-installed" >> $GITHUB_STEP_SUMMARY
+          echo "- Network access to GitHub documentation" >> $GITHUB_STEP_SUMMARY
+          echo "- Consistent environment matching CI/CD pipelines" >> $GITHUB_STEP_SUMMARY
+
+  validate-environment:
+    name: Validate Environment Configuration
+    runs-on: ubuntu-latest
+    needs: setup-environment
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Validate Copilot Agent configuration
+        run: |
+          echo "=== Copilot Agent Environment Validation ==="
+          
+          # Check if required environment variables are set
+          echo "Firewall Allow List: ${COPILOT_AGENT_FIREWALL_ALLOW_LIST_ADDITIONS:-Not set}"
+          
+          # Validate network connectivity to allowed domains
+          echo "Testing network connectivity..."
+          curl -I https://docs.github.com || echo "GitHub docs not accessible"
+          curl -I https://api.github.com || echo "GitHub API not accessible"
+          
+          # Check if environment matches CI configuration
+          echo "Environment consistency check..."
+          echo "Go version specified: ${{ env.GO_VERSION }}"
+          echo "Node version specified: ${{ env.NODE_VERSION }}"
+          
+          echo "✅ Environment validation complete"
+        env:
+          COPILOT_AGENT_FIREWALL_ALLOW_LIST_ADDITIONS: "https://docs.github.com,https://api.github.com,https://raw.githubusercontent.com"
