@@ -538,7 +538,10 @@ func TestLogRequestMiddleware(t *testing.T) {
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusTeapot)
-		w.Write([]byte("ok"))
+		_, err := w.Write([]byte("ok"))
+		if err != nil {
+			t.Errorf("unexpected error from w.Write: %v", err)
+		}
 	})
 	mw := srv.logRequestMiddleware(h)
 	req := httptest.NewRequest("GET", "/test", nil)
