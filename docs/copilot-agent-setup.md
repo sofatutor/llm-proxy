@@ -33,6 +33,7 @@ The environment mirrors our existing GitHub Actions workflows with:
 - **Node.js Version**: 20 (for frontend tooling)
 - **OS**: Ubuntu Latest (consistent with CI/CD)
 - **Caching**: Enabled for Go modules, build cache, and development tools
+- **Workflow**: `.github/workflows/copilot-setup-steps.yml`
 
 ### Available Tools
 
@@ -49,7 +50,7 @@ The environment includes all development tools specified in our Makefile:
 The Copilot Agent environment can be manually set up using the workflow dispatch:
 
 1. Go to the Actions tab in the repository
-2. Select "Copilot Agent Environment" workflow
+2. Select "Copilot Setup Steps" workflow
 3. Click "Run workflow"
 4. Optionally provide a task description
 

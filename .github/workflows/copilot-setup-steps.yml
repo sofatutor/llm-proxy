@@ -1,16 +1,11 @@
-name: Copilot Agent Environment
+name: "Copilot Setup Steps"
 
-on:
-  workflow_dispatch:
-    inputs:
-      task_description:
-        description: 'Task description for Copilot Agent'
-        required: false
-        default: 'Development environment setup'
-      
+# Allow testing of the setup steps from your repository's "Actions" tab.
+on: workflow_dispatch
+
 env:
   # Copilot Agent Firewall Configuration
-  # Allow access to GitHub documentation (addresses prerequisite)
+  # Allow access to GitHub documentation and APIs
   COPILOT_AGENT_FIREWALL_ALLOW_LIST_ADDITIONS: "https://docs.github.com,https://api.github.com,https://raw.githubusercontent.com"
   
   # Development Environment Variables
@@ -19,13 +14,21 @@ env:
   
   # Cache Configuration
   CACHE_KEY_PREFIX: copilot-agent
-  
+
 jobs:
-  setup-environment:
-    name: Setup Copilot Agent Development Environment
+  # The job MUST be called `copilot-setup-steps` or it will not be picked up by Copilot.
+  copilot-setup-steps:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     
+    # Set the permissions to the lowest permissions possible needed for your steps.
+    # Copilot will be given its own token for its operations.
+    permissions:
+      # If you want to clone the repository as part of your setup steps, for example to install dependencies, you'll need the `contents: read` permission. If you don't clone the repository in your setup steps, Copilot will do this for you automatically after the steps complete.
+      contents: read
+    
+    # You can define any steps you want, and they will run before the agent starts.
+    # If you do not check out your code, Copilot will do this for you.
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -118,6 +121,25 @@ jobs:
           # Test environment
           make test
       
+      - name: Validate Copilot Agent configuration
+        run: |
+          echo "=== Copilot Agent Environment Validation ==="
+          
+          # Check if required environment variables are set
+          echo "Firewall Allow List: ${COPILOT_AGENT_FIREWALL_ALLOW_LIST_ADDITIONS:-Not set}"
+          
+          # Validate network connectivity to allowed domains
+          echo "Testing network connectivity..."
+          curl -I https://docs.github.com || echo "GitHub docs not accessible"
+          curl -I https://api.github.com || echo "GitHub API not accessible"
+          
+          # Check if environment matches CI configuration
+          echo "Environment consistency check..."
+          echo "Go version specified: ${{ env.GO_VERSION }}"
+          echo "Node version specified: ${{ env.NODE_VERSION }}"
+          
+          echo "✅ Environment validation complete"
+      
       - name: Cache test results
         uses: actions/cache@v4
         with:
@@ -153,33 +175,3 @@ jobs:
           echo "- All development tools pre-installed" >> $GITHUB_STEP_SUMMARY
           echo "- Network access to GitHub documentation" >> $GITHUB_STEP_SUMMARY
           echo "- Consistent environment matching CI/CD pipelines" >> $GITHUB_STEP_SUMMARY
-
-  validate-environment:
-    name: Validate Environment Configuration
-    runs-on: ubuntu-latest
-    needs: setup-environment
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
-      - name: Validate Copilot Agent configuration
-        run: |
-          echo "=== Copilot Agent Environment Validation ==="
-          
-          # Check if required environment variables are set
-          echo "Firewall Allow List: ${COPILOT_AGENT_FIREWALL_ALLOW_LIST_ADDITIONS:-Not set}"
-          
-          # Validate network connectivity to allowed domains
-          echo "Testing network connectivity..."
-          curl -I https://docs.github.com || echo "GitHub docs not accessible"
-          curl -I https://api.github.com || echo "GitHub API not accessible"
-          
-          # Check if environment matches CI configuration
-          echo "Environment consistency check..."
-          echo "Go version specified: ${{ env.GO_VERSION }}"
-          echo "Node version specified: ${{ env.NODE_VERSION }}"
-          
-          echo "✅ Environment validation complete"
-        env:
-          COPILOT_AGENT_FIREWALL_ALLOW_LIST_ADDITIONS: "https://docs.github.com,https://api.github.com,https://raw.githubusercontent.com"
