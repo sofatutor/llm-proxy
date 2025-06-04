@@ -213,12 +213,12 @@ func (s *Server) initializeAPIRoutes() error {
 				bus = eventbus.NewInMemoryEventBus(s.config.ObservabilityBufferSize)
 			} else {
 				bus = redisBus
-				s.logger.Info("Using Redis event bus", 
+				s.logger.Info("Using Redis event bus",
 					zap.String("url", s.config.ObservabilityRedisURL))
 			}
 		default:
 			bus = eventbus.NewInMemoryEventBus(s.config.ObservabilityBufferSize)
-			s.logger.Info("Using in-memory event bus", 
+			s.logger.Info("Using in-memory event bus",
 				zap.Int("bufferSize", s.config.ObservabilityBufferSize))
 		}
 	}

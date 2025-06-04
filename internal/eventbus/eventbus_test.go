@@ -11,7 +11,7 @@ import (
 
 func TestInMemoryEventBus(t *testing.T) {
 	bus := NewInMemoryEventBus(5)
-	
+
 	// Test publishing and subscribing
 	event := Event{
 		RequestID: "test-123",
@@ -20,14 +20,14 @@ func TestInMemoryEventBus(t *testing.T) {
 		Status:    200,
 		Duration:  time.Millisecond * 100,
 	}
-	
+
 	// Subscribe before publishing
 	eventCh := bus.Subscribe()
-	
+
 	// Publish event
 	ctx := context.Background()
 	bus.Publish(ctx, event)
-	
+
 	// Receive event
 	select {
 	case received := <-eventCh:
@@ -44,15 +44,15 @@ func TestInMemoryEventBus_BufferFull(t *testing.T) {
 	// Create small buffer
 	bus := NewInMemoryEventBus(2)
 	eventCh := bus.Subscribe()
-	
+
 	ctx := context.Background()
-	
+
 	// Fill the buffer
 	for i := 0; i < 3; i++ {
 		event := Event{RequestID: fmt.Sprintf("test-%d", i)}
 		bus.Publish(ctx, event)
 	}
-	
+
 	// Should receive first 2 events, third should be dropped
 	received := 0
 	for i := 0; i < 2; i++ {
@@ -63,7 +63,7 @@ func TestInMemoryEventBus_BufferFull(t *testing.T) {
 			break
 		}
 	}
-	
+
 	assert.Equal(t, 2, received)
 }
 
@@ -75,7 +75,7 @@ func TestRedisEventBus_Integration(t *testing.T) {
 		t.Skipf("Redis not available: %v", err)
 	}
 	defer bus.Close()
-	
+
 	event := Event{
 		RequestID: "redis-test-123",
 		Method:    "POST",
@@ -83,14 +83,14 @@ func TestRedisEventBus_Integration(t *testing.T) {
 		Status:    200,
 		Duration:  time.Millisecond * 150,
 	}
-	
+
 	// Subscribe
 	eventCh := bus.Subscribe()
-	
+
 	// Publish
 	ctx := context.Background()
 	bus.Publish(ctx, event)
-	
+
 	// Wait for event
 	select {
 	case received := <-eventCh:

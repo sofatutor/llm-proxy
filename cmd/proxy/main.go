@@ -264,18 +264,20 @@ func runDispatcher(cmd *cobra.Command, args []string) error {
 	eventBusType, _ := cmd.Flags().GetString("event-bus")
 	redisURL, _ := cmd.Flags().GetString("redis-url")
 	filepath, _ := cmd.Flags().GetString("filepath")
+	apiKey, _ := cmd.Flags().GetString("api-key")
+	endpoint, _ := cmd.Flags().GetString("endpoint")
 	batchSize, _ := cmd.Flags().GetInt("batch-size")
 	workers, _ := cmd.Flags().GetInt("workers")
 	detach, _ := cmd.Flags().GetBool("detach")
-	
+
 	if detach {
 		return fmt.Errorf("detach mode is not yet implemented")
 	}
-	
+
 	if service == "" {
 		return fmt.Errorf("--service flag is required")
 	}
-	
+
 	// Create event bus
 	var bus eventbus.EventBus
 	switch eventBusType {
@@ -292,11 +294,11 @@ func runDispatcher(cmd *cobra.Command, args []string) error {
 	default:
 		return fmt.Errorf("unsupported event bus type: %s", eventBusType)
 	}
-	
+
 	// Create plugin
 	var plugin dispatcher.Plugin
 	config := make(map[string]string)
-	
+
 	switch service {
 	case "file":
 		if filepath == "" {
@@ -304,35 +306,53 @@ func runDispatcher(cmd *cobra.Command, args []string) error {
 		}
 		config["filepath"] = filepath
 		plugin = plugins.NewFilePlugin()
+	case "helicone":
+		if apiKey == "" {
+			return fmt.Errorf("--api-key flag is required for helicone service")
+		}
+		config["api_key"] = apiKey
+		if endpoint != "" {
+			config["endpoint"] = endpoint
+		}
+		plugin = plugins.NewHeliconePlugin()
+	case "lunary":
+		if apiKey == "" {
+			return fmt.Errorf("--api-key flag is required for lunary service")
+		}
+		config["api_key"] = apiKey
+		if endpoint != "" {
+			config["endpoint"] = endpoint
+		}
+		plugin = plugins.NewLunaryPlugin()
 	default:
-		return fmt.Errorf("unsupported service: %s (available: file)", service)
+		return fmt.Errorf("unsupported service: %s (available: file, helicone, lunary)", service)
 	}
-	
+
 	// Initialize plugin
 	if err := plugin.Init(config); err != nil {
 		return fmt.Errorf("failed to initialize plugin: %w", err)
 	}
-	
+
 	// Create dispatcher
 	dispatcherConfig := dispatcher.Config{
 		BatchSize: batchSize,
 		Workers:   workers,
 	}
 	d := dispatcher.New(bus, plugin, dispatcherConfig)
-	
+
 	// Handle graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	
+
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	
+
 	go func() {
 		<-sigCh
 		log.Println("Received shutdown signal")
 		cancel()
 	}()
-	
+
 	// Run dispatcher
 	return d.Run(ctx)
 }
@@ -377,10 +397,12 @@ func init() {
 	dispatcherCmd.Flags().String("event-bus", "memory", "Event bus backend (memory, redis)")
 	dispatcherCmd.Flags().String("redis-url", "redis://localhost:6379/0", "Redis URL for event bus")
 	dispatcherCmd.Flags().String("filepath", "", "File path for file dispatcher")
+	dispatcherCmd.Flags().String("api-key", "", "API key for external services (helicone, lunary)")
+	dispatcherCmd.Flags().String("endpoint", "", "Custom endpoint URL for external services")
 	dispatcherCmd.Flags().Int("batch-size", 10, "Batch size for event processing")
 	dispatcherCmd.Flags().Int("workers", 1, "Number of worker processes")
 	dispatcherCmd.Flags().Bool("detach", false, "Run in background (not implemented)")
-	
+
 	// Add all commands to root
 	cobraRoot.AddCommand(setupCmd)
 	cobraRoot.AddCommand(openaiCmd)

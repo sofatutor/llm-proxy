@@ -34,7 +34,7 @@ func TestDispatcher_BasicFlow(t *testing.T) {
 	mockPlugin := new(MockPlugin)
 	mockPlugin.On("Name").Return("test-plugin")
 	mockPlugin.On("Send", mock.Anything, mock.Anything).Return(nil)
-	
+
 	// Create event bus and dispatcher
 	bus := eventbus.NewInMemoryEventBus(10)
 	config := Config{
@@ -42,7 +42,7 @@ func TestDispatcher_BasicFlow(t *testing.T) {
 		Workers:   1,
 	}
 	d := New(bus, mockPlugin, config)
-	
+
 	// Create test event
 	event := eventbus.Event{
 		RequestID: "test-dispatcher-123",
@@ -51,28 +51,28 @@ func TestDispatcher_BasicFlow(t *testing.T) {
 		Status:    200,
 		Duration:  time.Millisecond * 100,
 	}
-	
+
 	// Start dispatcher in goroutine
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	
+
 	go func() {
 		d.Run(ctx)
 	}()
-	
+
 	// Give dispatcher time to start
 	time.Sleep(100 * time.Millisecond)
-	
+
 	// Publish event
 	bus.Publish(ctx, event)
-	
+
 	// Give time for processing
 	time.Sleep(200 * time.Millisecond)
-	
+
 	// Stop dispatcher
 	cancel()
 	time.Sleep(100 * time.Millisecond)
-	
+
 	// Verify plugin was called
 	mockPlugin.AssertCalled(t, "Send", mock.Anything, event)
 }

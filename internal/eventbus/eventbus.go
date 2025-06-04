@@ -75,11 +75,11 @@ func NewRedisEventBus(redisURL, streamKey, groupName string) (*RedisEventBus, er
 	}
 
 	client := redis.NewClient(opt)
-	
+
 	// Test connection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	if err := client.Ping(ctx).Err(); err != nil {
 		return nil, fmt.Errorf("failed to connect to Redis: %w", err)
 	}
@@ -130,15 +130,15 @@ func (b *RedisEventBus) Publish(ctx context.Context, evt Event) {
 // Subscribe returns a channel that receives events from the Redis stream.
 func (b *RedisEventBus) Subscribe() <-chan Event {
 	ch := make(chan Event, 10)
-	
+
 	go func() {
 		defer close(ch)
-		
+
 		consumerName := fmt.Sprintf("consumer-%d", time.Now().UnixNano())
-		
+
 		for {
 			ctx := context.Background()
-			
+
 			// Read from the consumer group
 			streams, err := b.client.XReadGroup(ctx, &redis.XReadGroupArgs{
 				Group:    b.groupName,
@@ -147,7 +147,7 @@ func (b *RedisEventBus) Subscribe() <-chan Event {
 				Count:    10,
 				Block:    time.Second,
 			}).Result()
-			
+
 			if err != nil {
 				if err == redis.Nil {
 					continue // No new messages
@@ -155,7 +155,7 @@ func (b *RedisEventBus) Subscribe() <-chan Event {
 				// Log error and continue
 				continue
 			}
-			
+
 			for _, stream := range streams {
 				for _, message := range stream.Messages {
 					if eventData, ok := message.Values["event"].(string); ok {
@@ -181,7 +181,7 @@ func (b *RedisEventBus) Subscribe() <-chan Event {
 			}
 		}
 	}()
-	
+
 	return ch
 }
 

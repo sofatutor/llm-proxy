@@ -15,18 +15,18 @@ import (
 type Plugin interface {
 	// Init initializes the plugin with the given configuration.
 	Init(config map[string]string) error
-	
+
 	// Send delivers an event to the backend.
 	Send(ctx context.Context, event eventbus.Event) error
-	
+
 	// Name returns the plugin name for identification.
 	Name() string
 }
 
 // Dispatcher manages event dispatching to various backends.
 type Dispatcher struct {
-	eventBus eventbus.EventBus
-	plugin   Plugin
+	eventBus  eventbus.EventBus
+	plugin    Plugin
 	batchSize int
 	workers   int
 	stopCh    chan struct{}
@@ -47,7 +47,7 @@ func New(eventBus eventbus.EventBus, plugin Plugin, config Config) *Dispatcher {
 	if config.Workers <= 0 {
 		config.Workers = 1
 	}
-	
+
 	return &Dispatcher{
 		eventBus:  eventBus,
 		plugin:    plugin,
@@ -61,15 +61,15 @@ func New(eventBus eventbus.EventBus, plugin Plugin, config Config) *Dispatcher {
 func (d *Dispatcher) Run(ctx context.Context) error {
 	log.Printf("Starting dispatcher with plugin: %s", d.plugin.Name())
 	log.Printf("Config - batch size: %d, workers: %d", d.batchSize, d.workers)
-	
+
 	eventCh := d.eventBus.Subscribe()
-	
+
 	// Start workers
 	for i := 0; i < d.workers; i++ {
 		d.wg.Add(1)
 		go d.worker(ctx, eventCh, i)
 	}
-	
+
 	// Wait for context cancellation or stop signal
 	select {
 	case <-ctx.Done():
@@ -77,11 +77,11 @@ func (d *Dispatcher) Run(ctx context.Context) error {
 	case <-d.stopCh:
 		log.Println("Stop signal received, shutting down dispatcher")
 	}
-	
+
 	// Wait for workers to finish
 	d.wg.Wait()
 	log.Println("Dispatcher shut down complete")
-	
+
 	return nil
 }
 
@@ -93,14 +93,14 @@ func (d *Dispatcher) Stop() {
 // worker processes events from the event channel.
 func (d *Dispatcher) worker(ctx context.Context, eventCh <-chan eventbus.Event, workerID int) {
 	defer d.wg.Done()
-	
+
 	log.Printf("Worker %d started", workerID)
 	defer log.Printf("Worker %d stopped", workerID)
-	
+
 	batch := make([]eventbus.Event, 0, d.batchSize)
 	ticker := time.NewTicker(5 * time.Second) // Flush batch every 5 seconds
 	defer ticker.Stop()
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -123,9 +123,9 @@ func (d *Dispatcher) worker(ctx context.Context, eventCh <-chan eventbus.Event, 
 				}
 				return
 			}
-			
+
 			batch = append(batch, event)
-			
+
 			// Process batch when it's full
 			if len(batch) >= d.batchSize {
 				d.processBatch(ctx, batch, workerID)
@@ -144,7 +144,7 @@ func (d *Dispatcher) worker(ctx context.Context, eventCh <-chan eventbus.Event, 
 // processBatch sends a batch of events to the plugin.
 func (d *Dispatcher) processBatch(ctx context.Context, batch []eventbus.Event, workerID int) {
 	log.Printf("Worker %d processing batch of %d events", workerID, len(batch))
-	
+
 	for _, event := range batch {
 		if err := d.sendWithRetry(ctx, event); err != nil {
 			log.Printf("Worker %d failed to send event %s: %v", workerID, event.RequestID, err)
@@ -156,7 +156,7 @@ func (d *Dispatcher) processBatch(ctx context.Context, batch []eventbus.Event, w
 func (d *Dispatcher) sendWithRetry(ctx context.Context, event eventbus.Event) error {
 	maxRetries := 3
 	backoff := time.Second
-	
+
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		if attempt > 0 {
 			select {
@@ -166,13 +166,13 @@ func (d *Dispatcher) sendWithRetry(ctx context.Context, event eventbus.Event) er
 				backoff *= 2 // Exponential backoff
 			}
 		}
-		
+
 		if err := d.plugin.Send(ctx, event); err == nil {
 			return nil // Success
 		} else if attempt == maxRetries-1 {
 			return err // Final attempt failed
 		}
 	}
-	
+
 	return nil // Should never reach here
 }
