@@ -19,6 +19,10 @@ import (
 // This service subscribes to the in-memory event bus and writes each event as a JSONL entry to the specified file.
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	var (
 		filePath   string
 		bufferSize int
@@ -29,7 +33,8 @@ func main() {
 
 	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Fatalf("failed to open file: %v", err)
+		log.Printf("failed to open file: %v", err)
+		return 1
 	}
 	defer func() {
 		if err := f.Close(); err != nil {
@@ -60,7 +65,7 @@ func main() {
 		select {
 		case evt, ok := <-sub:
 			if !ok {
-				return
+				return 0
 			}
 			line, err := json.Marshal(evt)
 			if err != nil {
@@ -71,7 +76,7 @@ func main() {
 				fmt.Fprintf(os.Stderr, "failed to write event: %v\n", err)
 			}
 		case <-ctx.Done():
-			return
+			return 0
 		}
 	}
 }

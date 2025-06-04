@@ -449,3 +449,17 @@ func Test_runChat_and_getChatResponse(t *testing.T) {
 		}
 	})
 }
+
+func TestMain_Help(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"proxy", "--help"}
+	main()
+}
+
+func TestMain_InvalidArg(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"proxy", "--notarealflag"}
+	main()
+}
