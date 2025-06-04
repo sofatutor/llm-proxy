@@ -59,7 +59,7 @@ swag:
 
 # Development setup
 tools:
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.54.2
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2
 	go install golang.org/x/tools/cmd/godoc@latest
 	go install github.com/golang/mock/mockgen@v1.6.0
 	go install github.com/swaggo/swag/cmd/swag@latest
