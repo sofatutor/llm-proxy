@@ -1375,3 +1375,71 @@ func TestTransparentProxy_Handler_ErrorAndEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateRequestMiddleware_EdgeCases(t *testing.T) {
+	proxy := newTestProxyWithConfig(ProxyConfig{
+		AllowedMethods:   []string{"POST"},
+		AllowedEndpoints: []string{"/v1/completions"},
+		ParamWhitelist: map[string][]string{
+			"model": {"gpt-4o"},
+		},
+	})
+	h := proxy.ValidateRequestMiddleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	t.Run("POST with no body", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", "/v1/completions", nil)
+		r.Header.Set("Content-Type", "application/json")
+		h.ServeHTTP(w, r)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("POST with param not in whitelist", func(t *testing.T) {
+		body := `{"model": "not-allowed"}`
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", "/v1/completions", strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		h.ServeHTTP(w, r)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		var resp map[string]interface{}
+		_ = json.NewDecoder(w.Body).Decode(&resp)
+		assert.Equal(t, "param_not_allowed", resp["code"])
+	})
+
+	t.Run("POST with allowed param as non-string", func(t *testing.T) {
+		body := `{"model": 123}`
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", "/v1/completions", strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		h.ServeHTTP(w, r)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		var resp map[string]interface{}
+		_ = json.NewDecoder(w.Body).Decode(&resp)
+		assert.Equal(t, "param_not_allowed", resp["code"])
+	})
+
+	t.Run("POST with missing Content-Type", func(t *testing.T) {
+		body := `{"model": "gpt-4o"}`
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", "/v1/completions", strings.NewReader(body))
+		h.ServeHTTP(w, r)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("CORS with Origin present but no AllowedOrigins", func(t *testing.T) {
+		proxy2 := newTestProxyWithConfig(ProxyConfig{
+			AllowedMethods:   []string{"POST"},
+			AllowedEndpoints: []string{"/v1/completions"},
+		})
+		h2 := proxy2.ValidateRequestMiddleware()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", "/v1/completions", nil)
+		r.Header.Set("Origin", "https://foo.com")
+		h2.ServeHTTP(w, r)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+}
