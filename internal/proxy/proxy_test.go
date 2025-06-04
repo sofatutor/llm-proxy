@@ -1187,3 +1187,191 @@ func TestIsMethodAllowed_EdgeCases(t *testing.T) {
 	p.config.AllowedMethods = []string{"get"}
 	assert.True(t, p.isMethodAllowed("GET"))
 }
+
+func TestTransparentProxy_Handler_ErrorAndEdgeCases(t *testing.T) {
+	mockAPI := createMockAPIServer(t)
+	defer mockAPI.Close()
+
+	cases := []struct {
+		name       string
+		method     string
+		path       string
+		headers    map[string]string
+		validator  func(*MockTokenValidator)
+		store      func(*MockProjectStore)
+		config     ProxyConfig
+		wantStatus int
+		wantBody   string
+	}{
+		{
+			name:      "OPTIONS preflight",
+			method:    http.MethodOptions,
+			path:      "/v1/completions",
+			headers:   map[string]string{"Origin": "https://foo.com"},
+			validator: func(v *MockTokenValidator) {},
+			store:     func(s *MockProjectStore) {},
+			config: ProxyConfig{
+				TargetBaseURL:    mockAPI.URL,
+				AllowedEndpoints: []string{"/v1/completions"},
+				AllowedMethods:   []string{"GET", "POST"},
+			},
+			wantStatus: http.StatusNoContent,
+			wantBody:   "",
+		},
+		{
+			name:      "Missing Authorization header",
+			method:    http.MethodPost,
+			path:      "/v1/completions",
+			headers:   map[string]string{},
+			validator: func(v *MockTokenValidator) {},
+			store:     func(s *MockProjectStore) {},
+			config: ProxyConfig{
+				TargetBaseURL:    mockAPI.URL,
+				AllowedEndpoints: []string{"/v1/completions"},
+				AllowedMethods:   []string{"POST"},
+			},
+			wantStatus: http.StatusUnauthorized,
+			wantBody:   "Authentication error",
+		},
+		{
+			name:    "Token validation error",
+			method:  http.MethodPost,
+			path:    "/v1/completions",
+			headers: map[string]string{"Authorization": "Bearer badtoken"},
+			validator: func(v *MockTokenValidator) {
+				v.On("ValidateTokenWithTracking", mock.Anything, "badtoken").Return("", errors.New("invalid token")).Once()
+			},
+			store: func(s *MockProjectStore) {},
+			config: ProxyConfig{
+				TargetBaseURL:    mockAPI.URL,
+				AllowedEndpoints: []string{"/v1/completions"},
+				AllowedMethods:   []string{"POST"},
+			},
+			wantStatus: http.StatusUnauthorized,
+			wantBody:   "Authentication error",
+		},
+		{
+			name:    "Project store error",
+			method:  http.MethodPost,
+			path:    "/v1/completions",
+			headers: map[string]string{"Authorization": "Bearer test_token"},
+			validator: func(v *MockTokenValidator) {
+				v.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil).Once()
+			},
+			store: func(s *MockProjectStore) {
+				s.On("GetAPIKeyForProject", mock.Anything, "project123").Return("", errors.New("fail")).Once()
+			},
+			config: ProxyConfig{
+				TargetBaseURL:    mockAPI.URL,
+				AllowedEndpoints: []string{"/v1/completions"},
+				AllowedMethods:   []string{"POST"},
+			},
+			wantStatus: http.StatusUnauthorized,
+			wantBody:   "Authentication error",
+		},
+		{
+			name:      "Disallowed method",
+			method:    http.MethodDelete,
+			path:      "/v1/completions",
+			headers:   map[string]string{"Authorization": "Bearer test_token"},
+			validator: func(v *MockTokenValidator) {},
+			store:     func(s *MockProjectStore) {},
+			config: ProxyConfig{
+				TargetBaseURL:    mockAPI.URL,
+				AllowedEndpoints: []string{"/v1/completions"},
+				AllowedMethods:   []string{"POST"},
+			},
+			wantStatus: http.StatusMethodNotAllowed,
+			wantBody:   "Method not allowed",
+		},
+		{
+			name:      "Disallowed endpoint",
+			method:    http.MethodPost,
+			path:      "/notallowed",
+			headers:   map[string]string{"Authorization": "Bearer test_token"},
+			validator: func(v *MockTokenValidator) {},
+			store:     func(s *MockProjectStore) {},
+			config: ProxyConfig{
+				TargetBaseURL:    mockAPI.URL,
+				AllowedEndpoints: []string{"/v1/completions"},
+				AllowedMethods:   []string{"POST"},
+			},
+			wantStatus: http.StatusNotFound,
+			wantBody:   "Endpoint not found",
+		},
+		{
+			name:    "Param whitelist validation error",
+			method:  http.MethodPost,
+			path:    "/v1/completions",
+			headers: map[string]string{"Authorization": "Bearer test_token", "Content-Type": "application/json"},
+			validator: func(v *MockTokenValidator) {
+				v.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil).Once()
+			},
+			store: func(s *MockProjectStore) {
+				s.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil).Once()
+			},
+			config: ProxyConfig{
+				TargetBaseURL:    mockAPI.URL,
+				AllowedEndpoints: []string{"/v1/completions"},
+				AllowedMethods:   []string{"POST"},
+				ParamWhitelist:   map[string][]string{"foo": {"bar"}},
+			},
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "param_not_allowed",
+		},
+		{
+			name:    "CORS origin required",
+			method:  http.MethodPost,
+			path:    "/v1/completions",
+			headers: map[string]string{"Authorization": "Bearer test_token"},
+			validator: func(v *MockTokenValidator) {
+				v.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil).Once()
+			},
+			store: func(s *MockProjectStore) {
+				s.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil).Once()
+			},
+			config: ProxyConfig{
+				TargetBaseURL:    mockAPI.URL,
+				AllowedEndpoints: []string{"/v1/completions"},
+				AllowedMethods:   []string{"POST"},
+				RequiredHeaders:  []string{"origin"},
+			},
+			wantStatus: http.StatusBadRequest,
+			wantBody:   "origin_required",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockValidator := new(MockTokenValidator)
+			mockStore := new(MockProjectStore)
+			if tc.validator != nil {
+				tc.validator(mockValidator)
+			}
+			if tc.store != nil {
+				tc.store(mockStore)
+			}
+			proxy, err := NewTransparentProxyWithLogger(tc.config, mockValidator, mockStore, zap.NewNop())
+			require.NoError(t, err)
+			var body io.Reader
+			if tc.name == "Param whitelist validation error" {
+				body = bytes.NewReader([]byte(`{"foo":"baz"}`))
+			} else {
+				body = bytes.NewReader([]byte(`{"prompt":"test"}`))
+			}
+			req := httptest.NewRequest(tc.method, tc.path, body)
+			for k, v := range tc.headers {
+				req.Header.Set(k, v)
+			}
+			w := httptest.NewRecorder()
+			proxy.Handler().ServeHTTP(w, req)
+			resp := w.Result()
+			respBody, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			assert.Equal(t, tc.wantStatus, resp.StatusCode)
+			if tc.wantBody != "" {
+				assert.Contains(t, string(respBody), tc.wantBody)
+			}
+		})
+	}
+}
