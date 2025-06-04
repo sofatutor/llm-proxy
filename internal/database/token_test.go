@@ -680,3 +680,29 @@ func TestDeleteToken_UpdateToken_IncrementTokenUsage_EdgeCases(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+func TestQueryTokens_ErrorBranches(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// 1. Query error: invalid SQL
+	_, err := db.queryTokens(ctx, "SELECT * FROM not_a_table")
+	if err == nil {
+		t.Error("expected error for invalid table")
+	}
+
+	// 2. Scan error: create a table with missing columns and query it
+	_, err = db.db.ExecContext(ctx, `CREATE TABLE bad_tokens (foo TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to create bad_tokens: %v", err)
+	}
+	_, err = db.db.ExecContext(ctx, `INSERT INTO bad_tokens (foo) VALUES ('bar')`)
+	if err != nil {
+		t.Fatalf("failed to insert into bad_tokens: %v", err)
+	}
+	_, err = db.queryTokens(ctx, "SELECT * FROM bad_tokens")
+	if err == nil {
+		t.Error("expected scan error for bad_tokens table")
+	}
+}

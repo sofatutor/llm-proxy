@@ -3,6 +3,7 @@ package token
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -41,14 +42,7 @@ func (m *MockTokenStore) GetTokenByID(ctx context.Context, tokenID string) (Toke
 		return token, nil
 	}
 
-	// Return default active token if not in map
-	return TokenData{
-		Token:        tokenID,
-		ProjectID:    "default-project",
-		IsActive:     true,
-		RequestCount: 0,
-		CreatedAt:    time.Now(),
-	}, nil
+	return TokenData{}, ErrTokenNotFound
 }
 
 func (m *MockTokenStore) IncrementTokenUsage(ctx context.Context, tokenID string) error {
@@ -426,4 +420,128 @@ func TestStandardValidator_ValidateToken_Coverage(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for ValidateTokenWithTracking with dummy token")
 	}
+}
+
+func TestStandardValidator_ValidateToken_AllBranches(t *testing.T) {
+	ctx := context.Background()
+	store := NewMockTokenStore()
+	validator := NewValidator(store)
+
+	now := time.Now()
+	future := now.Add(1 * time.Hour)
+	past := now.Add(-1 * time.Hour)
+	maxReq := 2
+
+	validToken, _ := GenerateToken()
+	inactiveToken, _ := GenerateToken()
+	expiredToken, _ := GenerateToken()
+	ratelimitedToken, _ := GenerateToken()
+	badFormatToken := "badtoken"
+	missingToken, _ := GenerateToken() // valid format, not in store
+
+	store.AddToken(validToken, TokenData{
+		Token:        validToken,
+		ProjectID:    "p",
+		IsActive:     true,
+		ExpiresAt:    &future,
+		RequestCount: 0,
+		MaxRequests:  &maxReq,
+		CreatedAt:    now,
+	})
+	store.AddToken(inactiveToken, TokenData{
+		Token:     inactiveToken,
+		ProjectID: "p",
+		IsActive:  false,
+		CreatedAt: now,
+	})
+	store.AddToken(expiredToken, TokenData{
+		Token:     expiredToken,
+		ProjectID: "p",
+		IsActive:  true,
+		ExpiresAt: &past,
+		CreatedAt: now,
+	})
+	store.AddToken(ratelimitedToken, TokenData{
+		Token:        ratelimitedToken,
+		ProjectID:    "p",
+		IsActive:     true,
+		ExpiresAt:    &future,
+		RequestCount: 2,
+		MaxRequests:  &maxReq,
+		CreatedAt:    now,
+	})
+
+	tests := []struct {
+		name    string
+		tokenID string
+		wantErr error
+	}{
+		{"valid", validToken, nil},
+		{"inactive", inactiveToken, ErrTokenInactive},
+		{"expired", expiredToken, ErrTokenExpired},
+		{"ratelimited", ratelimitedToken, ErrTokenRateLimit},
+		{"notfound", missingToken, ErrTokenNotFound},
+		{"bad format", badFormatToken, ErrInvalidTokenFormat},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := validator.ValidateToken(ctx, tt.tokenID)
+			if tt.wantErr == nil && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			} else if tt.wantErr != nil && !errors.Is(err, tt.wantErr) {
+				t.Errorf("expected error %v, got %v", tt.wantErr, err)
+			}
+		})
+	}
+
+	t.Run("store error", func(t *testing.T) {
+		store.failOnGet = true
+		defer func() { store.failOnGet = false }()
+		_, err := validator.ValidateToken(ctx, validToken)
+		if err == nil || !strings.Contains(err.Error(), "mock store failure") {
+			t.Errorf("expected store failure, got %v", err)
+		}
+	})
+}
+
+func TestStandardValidator_ValidateTokenWithTracking_AllBranches(t *testing.T) {
+	ctx := context.Background()
+	store := NewMockTokenStore()
+	validator := NewValidator(store)
+
+	now := time.Now()
+	future := now.Add(1 * time.Hour)
+	maxReq := 2
+	validToken, _ := GenerateToken()
+	missingToken, _ := GenerateToken() // valid format, not in store
+	store.AddToken(validToken, TokenData{
+		Token:        validToken,
+		ProjectID:    "p",
+		IsActive:     true,
+		ExpiresAt:    &future,
+		RequestCount: 0,
+		MaxRequests:  &maxReq,
+		CreatedAt:    now,
+	})
+
+	t.Run("happy path", func(t *testing.T) {
+		_, err := validator.ValidateTokenWithTracking(ctx, validToken)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+	t.Run("increment error", func(t *testing.T) {
+		store.failOnIncr = true
+		defer func() { store.failOnIncr = false }()
+		_, err := validator.ValidateTokenWithTracking(ctx, validToken)
+		if err == nil || !strings.Contains(err.Error(), "mock increment failure") {
+			t.Errorf("expected increment failure, got %v", err)
+		}
+	})
+	t.Run("validate error", func(t *testing.T) {
+		_, err := validator.ValidateTokenWithTracking(ctx, missingToken)
+		if !errors.Is(err, ErrTokenNotFound) {
+			t.Errorf("expected notfound error, got %v", err)
+		}
+	})
 }
