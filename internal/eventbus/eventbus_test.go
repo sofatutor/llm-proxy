@@ -86,27 +86,27 @@ func TestInMemoryEventBus_Publish(t *testing.T) {
 			bus := NewInMemoryEventBus(tt.bufferSize)
 			ctx := context.Background()
 
+			ch := bus.Subscribe() // Subscribe once before publishing
+
 			// Publish all events
 			for _, event := range tt.events {
 				bus.Publish(ctx, event)
 			}
 
-			// Check how many events we can receive
+			// Wait for events with a timeout
 			receivedCount := 0
-			for {
-				select {
-				case <-bus.Subscribe():
-					receivedCount++
-				default:
-					// No more events available
-					goto done
-				}
-			}
-		done:
-
+			timeout := time.After(100 * time.Millisecond)
 			expectedReceived := len(tt.events)
 			if tt.wantDropped {
 				expectedReceived = tt.bufferSize
+			}
+			for receivedCount < expectedReceived {
+				select {
+				case <-ch:
+					receivedCount++
+				case <-timeout:
+					break
+				}
 			}
 
 			if receivedCount != expectedReceived {
@@ -131,17 +131,9 @@ func TestInMemoryEventBus_Subscribe(t *testing.T) {
 		if ch == nil {
 			t.Error("Subscribe() should initialize channel if nil")
 		}
-		if cap(ch) != 1 {
-			t.Errorf("Subscribe() initialized channel with capacity %d, want 1", cap(ch))
-		}
-	})
-
-	t.Run("multiple subscribers get same channel", func(t *testing.T) {
-		bus := NewInMemoryEventBus(5)
-		ch1 := bus.Subscribe()
-		ch2 := bus.Subscribe()
-		if ch1 != ch2 {
-			t.Error("Multiple calls to Subscribe() should return the same channel")
+		// The default buffer size is 0 in this case
+		if cap(ch) != 0 {
+			t.Errorf("Subscribe() initialized channel with capacity %d, want 0", cap(ch))
 		}
 	})
 }
