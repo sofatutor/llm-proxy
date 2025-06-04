@@ -8,7 +8,6 @@ env:
   
   # Development Environment Variables
   GO_VERSION: '1.23'
-  NODE_VERSION: '20'
   
   # Cache Configuration
   CACHE_KEY_PREFIX: copilot-agent
@@ -41,15 +40,6 @@ jobs:
           cache-dependency-path: |
             go.sum
             go.mod
-      
-      - name: Set up Node.js (for frontend tooling)
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-            web/package-lock.json
       
       - name: Cache Go modules
         uses: actions/cache@v4
