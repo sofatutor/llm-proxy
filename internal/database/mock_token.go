@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/token"
@@ -235,4 +236,43 @@ func (a *TokenStoreAdapter) GetTokensByProjectID(ctx context.Context, projectID 
 		tokens[i] = ExportTokenData(t)
 	}
 	return tokens, nil
+}
+
+func TestMockTokenStore_EdgeCases(t *testing.T) {
+	store := NewMockTokenStore()
+	ctx := context.Background()
+
+	t.Run("GetTokenByID not found", func(t *testing.T) {
+		_, err := store.GetTokenByID(ctx, "notfound")
+		if err == nil {
+			t.Error("expected error for notfound token")
+		}
+	})
+
+	t.Run("IncrementTokenUsage not found", func(t *testing.T) {
+		err := store.IncrementTokenUsage(ctx, "notfound")
+		if err == nil {
+			t.Error("expected error for notfound token")
+		}
+	})
+
+	t.Run("ListTokens empty", func(t *testing.T) {
+		ts, err := store.ListTokens(ctx)
+		if err != nil {
+			t.Error(err)
+		}
+		if len(ts) != 0 {
+			t.Errorf("expected 0 tokens, got %d", len(ts))
+		}
+	})
+
+	t.Run("GetTokensByProjectID empty", func(t *testing.T) {
+		ts, err := store.GetTokensByProjectID(ctx, "pid")
+		if err != nil {
+			t.Error(err)
+		}
+		if len(ts) != 0 {
+			t.Errorf("expected 0 tokens, got %d", len(ts))
+		}
+	})
 }
