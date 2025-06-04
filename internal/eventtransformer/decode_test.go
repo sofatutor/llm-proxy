@@ -137,3 +137,74 @@ func TestExtractAssistantReplyContent(t *testing.T) {
 		})
 	}
 }
+
+func TestDecompressAndDecode_ErrorsAndEdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		val     string
+		headers map[string]interface{}
+		wantOK  bool
+		wantOut string
+	}{
+		{
+			name:    "invalid base64",
+			val:     "!!!notbase64!!!",
+			headers: map[string]interface{}{},
+			wantOK:  true, // valid UTF-8 fallback
+			wantOut: "!!!notbase64!!!",
+		},
+		{
+			name:    "invalid gzip",
+			val:     base64.StdEncoding.EncodeToString([]byte("notgzipdata")),
+			headers: map[string]interface{}{"content_encoding": "gzip"},
+			wantOK:  true, // valid UTF-8 fallback
+			wantOut: "notgzipdata",
+		},
+		{
+			name:    "invalid brotli",
+			val:     base64.StdEncoding.EncodeToString([]byte("notbrotli")),
+			headers: map[string]interface{}{"content_encoding": "br"},
+			wantOK:  true, // valid UTF-8 fallback
+			wantOut: "notbrotli",
+		},
+		{
+			name:    "binary content-type (audio)",
+			val:     "binarydata",
+			headers: map[string]interface{}{"content_type": "audio/mpeg"},
+			wantOK:  false,
+			wantOut: "binarydata",
+		},
+		{
+			name:    "binary content-type (image)",
+			val:     "imagedata",
+			headers: map[string]interface{}{"content_type": "image/png"},
+			wantOK:  false,
+			wantOut: "imagedata",
+		},
+		{
+			name:    "binary content-type (octet-stream)",
+			val:     "octetdata",
+			headers: map[string]interface{}{"content_type": "application/octet-stream"},
+			wantOK:  false,
+			wantOut: "octetdata",
+		},
+		{
+			name:    "non-JSON, non-UTF8 input",
+			val:     string([]byte{0xff, 0xfe, 0xfd}),
+			headers: map[string]interface{}{},
+			wantOK:  false,
+			wantOut: string([]byte{0xff, 0xfe, 0xfd}),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, ok := DecompressAndDecode(tt.val, tt.headers)
+			if ok != tt.wantOK {
+				t.Errorf("wantOK=%v, got %v", tt.wantOK, ok)
+			}
+			if out != tt.wantOut {
+				t.Errorf("wantOut=%q, got %q", tt.wantOut, out)
+			}
+		})
+	}
+}

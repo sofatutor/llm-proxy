@@ -2,6 +2,7 @@ package eventtransformer
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"testing"
 )
 
@@ -89,5 +90,166 @@ func TestOpenAITransformer_TransformEvent_Basic(t *testing.T) {
 	}
 	if _, ok := out["response_body"]; !ok {
 		t.Error("expected response_body to be set")
+	}
+}
+
+func TestTryBase64DecodeWithLog(t *testing.T) {
+	plain := "hello"
+	plainB64 := base64.StdEncoding.EncodeToString([]byte(plain))
+	plainB64URL := base64.URLEncoding.EncodeToString([]byte(plain))
+	jsonStr := `{"foo":1}`
+
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"plain", plain, plain},
+		{"b64", plainB64, plain},
+		{"b64url", plainB64URL, plain},
+		{"json", jsonStr, jsonStr},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := tryBase64DecodeWithLog(c.input)
+			if got != c.want {
+				t.Errorf("tryBase64DecodeWithLog(%q) = %q, want %q", c.input, got, c.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeToCompactJSON(t *testing.T) {
+	obj := map[string]interface{}{"foo": 1, "messages": []string{"hi"}}
+	b, _ := json.Marshal(obj)
+	compact, msgs, ok := normalizeToCompactJSON(string(b))
+	if !ok {
+		t.Error("expected ok for valid JSON")
+	}
+	if compact == "" || msgs == "" {
+		t.Error("expected non-empty compact and msgs")
+	}
+
+	// Invalid JSON
+	_, _, ok = normalizeToCompactJSON("not json")
+	if ok {
+		t.Error("expected not ok for invalid JSON")
+	}
+}
+
+func TestIsValidUTF8(t *testing.T) {
+	if !isValidUTF8("hello") {
+		t.Error("expected valid UTF-8 for 'hello'")
+	}
+	if isValidUTF8(string([]byte{0xff, 0xfe, 0xfd})) {
+		t.Error("expected invalid UTF-8 for 0xff,0xfe,0xfd")
+	}
+}
+
+func TestOpenAITransformer_TransformEvent_ErrorsAndEdgeCases(t *testing.T) {
+	tr := &OpenAITransformer{}
+	tests := []struct {
+		name  string
+		input map[string]interface{}
+		check func(t *testing.T, out map[string]interface{}, err error)
+	}{
+		{
+			name: "missing ResponseHeaders",
+			input: map[string]interface{}{
+				"Method":       "POST",
+				"ResponseBody": base64.StdEncoding.EncodeToString([]byte(`{"foo":"bar"}`)),
+			},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if out == nil {
+					t.Error("expected non-nil output")
+				}
+			},
+		},
+		{
+			name: "non-JSON response",
+			input: map[string]interface{}{
+				"Method":          "POST",
+				"ResponseHeaders": map[string]interface{}{"Content-Type": "application/json"},
+				"ResponseBody":    base64.StdEncoding.EncodeToString([]byte("notjson")),
+			},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if out == nil {
+					t.Error("expected non-nil output")
+				}
+				if v, ok := out["response_body"].(string); !ok || v != "notjson" {
+					t.Errorf("expected response_body to be 'notjson', got %q", v)
+				}
+			},
+		},
+		{
+			name: "binary response",
+			input: map[string]interface{}{
+				"Method":          "POST",
+				"ResponseHeaders": map[string]interface{}{"Content-Type": "audio/mpeg"},
+				"ResponseBody":    base64.StdEncoding.EncodeToString([]byte("binarydata")),
+			},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if out == nil {
+					t.Error("expected non-nil output")
+				}
+				if v, ok := out["response_body"].(string); !ok || v != "[binary or undecodable data]" {
+					t.Errorf("expected response_body to be '[binary or undecodable data]', got %q", v)
+				}
+			},
+		},
+		{
+			name: "streaming response",
+			input: map[string]interface{}{
+				"Method":          "POST",
+				"ResponseHeaders": map[string]interface{}{"Content-Type": "application/json"},
+				"ResponseBody":    base64.StdEncoding.EncodeToString([]byte("data: {\"id\":\"abc\",\"object\":\"chat.completion.chunk\",\"created\":123,\"model\":\"gpt\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\ndata: {\"choices\":[{\"delta\":{\"content\":\" world\"},\"finish_reason\":\"stop\"}]}\n")),
+			},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if out == nil {
+					t.Error("expected non-nil output")
+				}
+				if v, ok := out["response_body"].(string); !ok || v == "" {
+					t.Error("expected non-empty response_body for streaming")
+				}
+			},
+		},
+		{
+			name: "token usage fallback",
+			input: map[string]interface{}{
+				"Method":          "POST",
+				"ResponseHeaders": map[string]interface{}{"Content-Type": "application/json"},
+				"ResponseBody":    base64.StdEncoding.EncodeToString([]byte(`{"choices":[{"message":{"content":"hi"}}]}`)),
+				"RequestBody":     base64.StdEncoding.EncodeToString([]byte(`{"messages":[{"role":"user","content":"hello"}]}`)),
+			},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if out == nil {
+					t.Error("expected non-nil output")
+				}
+				if _, ok := out["token_usage"]; !ok {
+					t.Error("expected token_usage to be set")
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := tr.TransformEvent(tt.input)
+			tt.check(t, out, err)
+		})
 	}
 }

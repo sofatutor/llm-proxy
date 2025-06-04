@@ -309,8 +309,18 @@ func (t *OpenAITransformer) TransformEvent(evt map[string]any) (map[string]any, 
 
 	// Handle ResponseBody
 	contentType := ""
-	if hdrs, ok := evt["ResponseHeaders"].(map[string]any); ok {
-		for k, v := range hdrs {
+	hdrs, ok := evt["ResponseHeaders"]
+	var hdrMap map[string]any
+	if ok {
+		hdrMap, _ = hdrs.(map[string]any)
+	} else {
+		hdrMap = map[string]any{}
+	}
+	if hdrMap == nil {
+		hdrMap = map[string]any{}
+	}
+	if len(hdrMap) > 0 {
+		for k, v := range hdrMap {
 			if strings.ToLower(strings.ReplaceAll(k, "-", "_")) == "content_type" {
 				switch arr := v.(type) {
 				case []any:
@@ -327,7 +337,7 @@ func (t *OpenAITransformer) TransformEvent(evt map[string]any) (map[string]any, 
 	}
 
 	if respBody, ok := evt["ResponseBody"].(string); ok && respBody != "" {
-		decoded, okDecoded := DecompressAndDecode(respBody, evt["ResponseHeaders"].(map[string]any))
+		decoded, okDecoded := DecompressAndDecode(respBody, hdrMap)
 		if !okDecoded {
 			decoded = tryBase64DecodeWithLog(respBody)
 		}
