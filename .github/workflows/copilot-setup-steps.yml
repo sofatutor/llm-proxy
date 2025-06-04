@@ -5,10 +5,8 @@ on: workflow_dispatch
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  
   # Development Environment Variables
   GO_VERSION: '1.23'
-  
   # Cache Configuration
   CACHE_KEY_PREFIX: copilot-agent
 
@@ -40,16 +38,6 @@ jobs:
           cache-dependency-path: |
             go.sum
             go.mod
-      
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ env.CACHE_KEY_PREFIX }}-go-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ env.CACHE_KEY_PREFIX }}-go-${{ runner.os }}-
       
       - name: Cache development tools
         uses: actions/cache@v4
