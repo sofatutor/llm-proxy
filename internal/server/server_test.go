@@ -586,3 +586,20 @@ func TestServer_logRequestMiddleware(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, rr.Code)
 	assert.Equal(t, "test response", rr.Body.String())
 }
+
+func TestServer_initializeComponents_Success(t *testing.T) {
+	ts := &mockTokenStore{}
+	ps := &mockProjectStore{}
+	
+	// Test with a valid API config
+	config := &config.Config{
+		ListenAddr: "localhost:0",
+		APIConfigPath: "", // Empty path should work with defaults
+	}
+	
+	server, err := New(config, ts, ps)
+	require.NoError(t, err)
+
+	err = server.initializeComponents()
+	assert.NoError(t, err, "initializeComponents should succeed with valid config")
+}
