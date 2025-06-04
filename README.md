@@ -9,6 +9,8 @@ A transparent, secure proxy for OpenAI's API with token management, rate limitin
 - **Admin UI**: Web interface for management
 - **Comprehensive Logging**
 - **Async Instrumentation Middleware**: Non-blocking, streaming-capable instrumentation for all API calls. See [docs/instrumentation.md](docs/instrumentation.md) for advanced usage and extension.
+- **Async Event Bus & Dispatcher**: All API instrumentation events are handled via an always-on, fully asynchronous event bus (in-memory or Redis) with support for multiple subscribers, batching, retry logic, and graceful shutdown. Persistent event logging is handled by a dispatcher CLI or the `--file-event-log` flag.
+- **OpenAI Token Counting**: Accurate prompt and completion token counting using tiktoken-go.
 - **Prometheus Monitoring**
 - **SQLite Storage**
 - **Docker Deployment**
@@ -43,8 +45,9 @@ MANAGEMENT_TOKEN=your-secure-management-token ./bin/llm-proxy
 - `LOG_FILE`: Path to log file (stdout if empty)
 - `LOG_MAX_SIZE_MB`: Rotate log after this size in MB (default 10)
 - `LOG_MAX_BACKUPS`: Number of rotated log files to keep (default 5)
-- `OBSERVABILITY_ENABLED`: Enable async instrumentation middleware (default false)
-- `OBSERVABILITY_BUFFER_SIZE`: Event buffer size for instrumentation events (default 100)
+- `OBSERVABILITY_ENABLED`: Deprecated; the async event bus is now always enabled
+- `OBSERVABILITY_BUFFER_SIZE`: Event buffer size for instrumentation events (default 1000)
+- `FILE_EVENT_LOG`: Path to persistent event log file (enables file event logging via dispatcher)
 
 See `docs/configuration.md` and [docs/instrumentation.md](docs/instrumentation.md) for all options and advanced usage.
 
@@ -139,9 +142,27 @@ llm-proxy manage token generate --project-id <project-id> --duration 24 --manage
 - `--management-token` — Provide the management token (or set `MANAGEMENT_TOKEN` env)
 - `--json` — Output results as JSON (optional)
 
+## Persistent Event Logging & Dispatcher CLI
+
+All API instrumentation events are now handled asynchronously via the event bus. For persistent event logging, use either:
+- The `--file-event-log` flag when running the server (writes all events to a JSONL file)
+- The standalone dispatcher CLI (`cmd/eventdispatcher/`) to subscribe to the event bus and write events to a file or other backends
+
+### Example: File Event Logging
+```bash
+llm-proxy server --file-event-log ./data/events.jsonl
+```
+
+### Example: Dispatcher CLI
+```bash
+llm-proxy dispatcher --backend file --file ./data/events.jsonl
+```
+
+See PLAN.md and [docs/instrumentation.md](docs/instrumentation.md) for architectural details and advanced usage.
+
 ## Project Structure
-- `/cmd` — Entrypoints (`proxy`)
-- `/internal` — Core logic (token, database, proxy, admin, logging)
+- `/cmd` — Entrypoints (`proxy`, `eventdispatcher`)
+- `/internal` — Core logic (token, database, proxy, admin, logging, eventbus, dispatcher)
 - `/api` — OpenAPI specs
 - `/web` — Admin UI static assets
 - `/docs` — Full documentation

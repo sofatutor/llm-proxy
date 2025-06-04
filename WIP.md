@@ -2,6 +2,8 @@
 
 # WIP: OpenAI Token Counting Bugfix (2025-05-27)
 
+# WIP: Async Event Bus, Dispatcher, and Persistent Event Logging (PR #34)
+
 ## Summary
 - Fixed a bug in OpenAI event transformation where `completion_tokens` and `prompt_tokens` were incorrectly calculated.
 - Previously, token counts were computed over the entire response/request JSON, not just the relevant content.
@@ -15,6 +17,23 @@
 - Fix: Only count tokens in the actual assistant reply content. If not present, set completion tokens to zero.
 - Tests: Added table-driven tests for the new helper, covering normal, error, empty, and malformed cases.
 - All tests pass (`go test -v ./internal/eventtransformer/...`).
+
+# WIP: Async Event Bus, Dispatcher, and Persistent Event Logging (PR #34)
+
+## Summary
+- Implemented a fully asynchronous event bus architecture with both InMemoryEventBus and RedisEventBus backends, supporting multiple subscribers (fan-out), batching, retry logic, and graceful shutdown.
+- Added a dispatcher CLI and `--file-event-log` flag for persistent event logging to JSONL files.
+- Middleware now captures and restores the request body for all events, and the event context is richer for diagnostics and debugging.
+- The event bus is always enabled by default, with a larger buffer for high-throughput scenarios.
+- OpenAI token counting bug fixed: `completion_tokens` are now counted only from the assistant's reply, and `prompt_tokens` from the request's `messages` array, using tiktoken-go for accuracy.
+- All changes are covered by comprehensive unit tests and maintain 90%+ code coverage.
+- See PLAN.md for architectural details and rationale.
+
+## Details
+- Event bus and dispatcher are now the foundation for all observability and analytics in the proxy.
+- Persistent event logging is handled by the dispatcher CLI or the `--file-event-log` flag.
+- All event delivery is async, batched, and non-blocking, with robust error handling and retry logic.
+- Migration note: The event bus is now always enabled; configuration options have changed. See PLAN.md and README.md for updated usage and configuration.
 
 > **Note:** All detailed development tasks for Phases 4–7 are now tracked in individual issue files in `docs/issues/`. This WIP.md will serve as a high-level status and index. All future development, tracking, and progress updates will be managed via the issue files. Please refer to the linked issues for detailed tasks, rationale, and acceptance criteria.
 
