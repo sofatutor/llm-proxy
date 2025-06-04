@@ -119,6 +119,26 @@ func TestTryBase64DecodeWithLog(t *testing.T) {
 	}
 }
 
+func TestTryBase64DecodeWithLog_FallbackBranch(t *testing.T) {
+	input := "not_base64_but_valid_utf8"
+	got := tryBase64DecodeWithLog(input)
+	if got != input {
+		t.Errorf("expected fallback to input, got %q", got)
+	}
+}
+
+func TestTryBase64DecodeWithLog_JSONAndInvalidUTF8(t *testing.T) {
+	jsonInput := `{"foo":1}`
+	if got := tryBase64DecodeWithLog(jsonInput); got != jsonInput {
+		t.Errorf("expected JSON passthrough, got %q", got)
+	}
+	invalidUTF8 := base64.StdEncoding.EncodeToString([]byte{0xff, 0xfe, 0xfd})
+	got := tryBase64DecodeWithLog(invalidUTF8)
+	if got != string([]byte{0xff, 0xfe, 0xfd}) {
+		t.Errorf("expected decoded invalid UTF-8, got %q", got)
+	}
+}
+
 func TestNormalizeToCompactJSON(t *testing.T) {
 	obj := map[string]interface{}{"foo": 1, "messages": []string{"hi"}}
 	b, _ := json.Marshal(obj)
@@ -134,6 +154,57 @@ func TestNormalizeToCompactJSON(t *testing.T) {
 	_, _, ok = normalizeToCompactJSON("not json")
 	if ok {
 		t.Error("expected not ok for invalid JSON")
+	}
+}
+
+func TestNormalizeToCompactJSON_AllBranches(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantOK   bool
+		wantMsgs string
+	}{
+		{
+			name:   "not JSON",
+			input:  "not json",
+			wantOK: false,
+		},
+		{
+			name:     "JSON string with valid JSON and messages",
+			input:    `"{\"messages\":[{\"role\":\"user\"}]}"`,
+			wantOK:   true,
+			wantMsgs: `[{"role":"user"}]`,
+		},
+		{
+			name:   "JSON string with invalid JSON",
+			input:  `"not valid json"`,
+			wantOK: true,
+		},
+		{
+			name:     "JSON object with messages",
+			input:    `{"messages":[{"role":"user"}]}`,
+			wantOK:   true,
+			wantMsgs: `[{"role":"user"}]`,
+		},
+		{
+			name:   "JSON object without messages",
+			input:  `{"foo":1}`,
+			wantOK: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			compact, msgs, ok := normalizeToCompactJSON(tt.input)
+			if ok != tt.wantOK {
+				t.Errorf("wantOK=%v, got %v", tt.wantOK, ok)
+			}
+			if tt.wantMsgs != "" && msgs != tt.wantMsgs {
+				t.Errorf("wantMsgs=%q, got %q", tt.wantMsgs, msgs)
+			}
+			if compact == "" && ok {
+				t.Error("expected non-empty compact for ok=true")
+			}
+		})
 	}
 }
 
