@@ -127,7 +127,7 @@ jobs:
             coverage.out
             coverage.html
             bin/
-          key: ${{ env.CACHE_KEY_PREFIX }}-results-${{ runner.os }}-${{ github.sha }}
+          key: ${{ env.CACHE_KEY_PREFIX }}-results-${{ runner.os }}-${{ github.ref_name }}-${{ hashFiles('go.sum', 'go.mod') }}
         continue-on-error: true
       
       - name: Generate development summary
@@ -145,10 +145,10 @@ jobs:
           echo "- swag: $(swag --version 2>/dev/null || echo 'Not available')" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📊 Project Health" >> $GITHUB_STEP_SUMMARY
-          echo "- Build: ✅ Successful" >> $GITHUB_STEP_SUMMARY
-          echo "- Lint: ✅ Passed" >> $GITHUB_STEP_SUMMARY
-          echo "- Tests: ✅ All passing" >> $GITHUB_STEP_SUMMARY
-          echo "- Format: ✅ Consistent" >> $GITHUB_STEP_SUMMARY
+          echo "- Build: $([[ $BUILD_STATUS -eq 0 ]] && echo '✅ Successful' || echo '❌ Failed')" >> $GITHUB_STEP_SUMMARY
+          echo "- Lint: $([[ $LINT_STATUS -eq 0 ]] && echo '✅ Passed' || echo '❌ Failed')" >> $GITHUB_STEP_SUMMARY
+          echo "- Tests: $([[ $TEST_STATUS -eq 0 ]] && echo '✅ All passing' || echo '❌ Some failing')" >> $GITHUB_STEP_SUMMARY
+          echo "- Format: $([[ $FORMAT_STATUS -eq 0 ]] && echo '✅ Consistent' || echo '❌ Issues found')" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🚀 Ready for Development" >> $GITHUB_STEP_SUMMARY
           echo "The environment is now configured for GitHub Copilot Agent with:" >> $GITHUB_STEP_SUMMARY
