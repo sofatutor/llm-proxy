@@ -200,7 +200,27 @@ func (s *Server) initializeAPIRoutes() error {
 
 	var bus eventbus.EventBus
 	if s.config.ObservabilityEnabled {
-		bus = eventbus.NewInMemoryEventBus(s.config.ObservabilityBufferSize)
+		switch s.config.ObservabilityBackend {
+		case "redis":
+			redisBus, err := eventbus.NewRedisEventBus(
+				s.config.ObservabilityRedisURL,
+				"llm-proxy-events",
+				"dispatchers",
+			)
+			if err != nil {
+				s.logger.Warn("Failed to initialize Redis event bus, falling back to in-memory",
+					zap.Error(err))
+				bus = eventbus.NewInMemoryEventBus(s.config.ObservabilityBufferSize)
+			} else {
+				bus = redisBus
+				s.logger.Info("Using Redis event bus", 
+					zap.String("url", s.config.ObservabilityRedisURL))
+			}
+		default:
+			bus = eventbus.NewInMemoryEventBus(s.config.ObservabilityBufferSize)
+			s.logger.Info("Using in-memory event bus", 
+				zap.Int("bufferSize", s.config.ObservabilityBufferSize))
+		}
 	}
 	obsCfg := middleware.ObservabilityConfig{Enabled: s.config.ObservabilityEnabled, EventBus: bus}
 

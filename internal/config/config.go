@@ -53,8 +53,10 @@ type Config struct {
 	ExternalLoggingFallbackToLocal bool          // Fallback to local logging if external delivery fails
 
 	// Observability middleware
-	ObservabilityEnabled    bool // Enable async observability middleware
-	ObservabilityBufferSize int  // Buffer size for in-memory event bus
+	ObservabilityEnabled    bool   // Enable async observability middleware
+	ObservabilityBufferSize int    // Buffer size for in-memory event bus
+	ObservabilityBackend    string // Event bus backend: "memory" or "redis"
+	ObservabilityRedisURL   string // Redis URL for event bus (when backend=redis)
 
 	// CORS settings
 	CORSAllowedOrigins []string      // Allowed origins for CORS
@@ -137,6 +139,8 @@ func New() (*Config, error) {
 
 		ObservabilityEnabled:    getEnvBool("OBSERVABILITY_ENABLED", false),
 		ObservabilityBufferSize: getEnvInt("OBSERVABILITY_BUFFER_SIZE", 100),
+		ObservabilityBackend:    getEnvString("OBSERVABILITY_BACKEND", "memory"),
+		ObservabilityRedisURL:   getEnvString("OBSERVABILITY_REDIS_URL", "redis://localhost:6379/0"),
 
 		// CORS defaults
 		CORSAllowedOrigins: getEnvStringSlice("CORS_ALLOWED_ORIGINS", []string{"*"}),
@@ -291,6 +295,8 @@ func DefaultConfig() *Config {
 
 		ObservabilityEnabled:    false,
 		ObservabilityBufferSize: 100,
+		ObservabilityBackend:    "memory",
+		ObservabilityRedisURL:   "redis://localhost:6379/0",
 
 		// CORS defaults
 		CORSAllowedOrigins: []string{"*"},
