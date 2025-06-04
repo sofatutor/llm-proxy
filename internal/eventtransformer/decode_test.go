@@ -258,3 +258,68 @@ func TestDecompressAndDecode_UnusualHeadersAndFallbacks(t *testing.T) {
 		})
 	}
 }
+
+func TestDecompressAndDecode_DecompressionErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		val     string
+		headers map[string]interface{}
+		wantOK  bool
+		wantOut string
+	}{
+		{
+			name:    "base64 with encoding=gzip, invalid gzip data",
+			val:     base64.StdEncoding.EncodeToString([]byte("notgzipdata")),
+			headers: map[string]interface{}{"content_encoding": "gzip"},
+			wantOK:  true, // fallback to valid UTF-8
+			wantOut: "notgzipdata",
+		},
+		{
+			name:    "base64 with encoding=br, invalid brotli data",
+			val:     base64.StdEncoding.EncodeToString([]byte("notbrotli")),
+			headers: map[string]interface{}{"content_encoding": "br"},
+			wantOK:  true, // fallback to valid UTF-8
+			wantOut: "notbrotli",
+		},
+		{
+			name:    "not base64, encoding=gzip, decompress fails",
+			val:     "notgzipdata",
+			headers: map[string]interface{}{"content_encoding": "gzip"},
+			wantOK:  true, // fallback to valid UTF-8
+			wantOut: "notgzipdata",
+		},
+		{
+			name:    "not base64, encoding=br, decompress fails",
+			val:     "notbrotli",
+			headers: map[string]interface{}{"content_encoding": "br"},
+			wantOK:  true, // fallback to valid UTF-8
+			wantOut: "notbrotli",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, ok := DecompressAndDecode(tt.val, tt.headers)
+			if ok != tt.wantOK {
+				t.Errorf("wantOK=%v, got %v", tt.wantOK, ok)
+			}
+			if out != tt.wantOut {
+				t.Errorf("wantOut=%q, got %q", tt.wantOut, out)
+			}
+		})
+	}
+}
+
+func TestDecompressAndDecode_BinaryAndFallbackBranches(t *testing.T) {
+	binaryHeaders := map[string]interface{}{"content_type": "image/png"}
+	val := "imagedata"
+	out, ok := DecompressAndDecode(val, binaryHeaders)
+	if ok != false || out != val {
+		t.Errorf("expected binary skip to return input and false, got %q, %v", out, ok)
+	}
+
+	nonUTF8 := string([]byte{0xff, 0xfe, 0xfd})
+	out, ok = DecompressAndDecode(nonUTF8, map[string]interface{}{})
+	if ok != false || out != nonUTF8 {
+		t.Errorf("expected fallback to return input and false for non-UTF8, got %q, %v", out, ok)
+	}
+}
