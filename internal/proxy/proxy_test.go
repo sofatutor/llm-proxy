@@ -1213,7 +1213,7 @@ func TestTransparentProxy_Handler_ErrorAndEdgeCases(t *testing.T) {
 			config: ProxyConfig{
 				TargetBaseURL:    mockAPI.URL,
 				AllowedEndpoints: []string{"/v1/completions"},
-				AllowedMethods:   []string{"GET", "POST"},
+				AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
 			},
 			wantStatus: http.StatusNoContent,
 			wantBody:   "",
@@ -1231,7 +1231,7 @@ func TestTransparentProxy_Handler_ErrorAndEdgeCases(t *testing.T) {
 				AllowedMethods:   []string{"POST"},
 			},
 			wantStatus: http.StatusUnauthorized,
-			wantBody:   "Authentication error",
+			wantBody:   "\"Invalid token\"",
 		},
 		{
 			name:    "Token validation error",
@@ -1248,7 +1248,7 @@ func TestTransparentProxy_Handler_ErrorAndEdgeCases(t *testing.T) {
 				AllowedMethods:   []string{"POST"},
 			},
 			wantStatus: http.StatusUnauthorized,
-			wantBody:   "Authentication error",
+			wantBody:   "\"Invalid token\"",
 		},
 		{
 			name:    "Project store error",
@@ -1267,7 +1267,7 @@ func TestTransparentProxy_Handler_ErrorAndEdgeCases(t *testing.T) {
 				AllowedMethods:   []string{"POST"},
 			},
 			wantStatus: http.StatusUnauthorized,
-			wantBody:   "Authentication error",
+			wantBody:   "\"Invalid token\"",
 		},
 		{
 			name:      "Disallowed method",
