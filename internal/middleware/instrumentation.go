@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"time"
@@ -46,6 +47,20 @@ func (m *ObservabilityMiddleware) Middleware() Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
 			crw := &captureResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+
+			var reqBody []byte
+			if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch {
+				if r.Body != nil {
+					// Read and buffer the request body
+					bodyBytes, err := io.ReadAll(r.Body)
+					if err == nil {
+						reqBody = bodyBytes
+						// Restore the body for downstream handlers
+						r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+					}
+				}
+			}
+
 			next.ServeHTTP(crw, r)
 
 			evt := eventbus.Event{
@@ -56,6 +71,7 @@ func (m *ObservabilityMiddleware) Middleware() Middleware {
 				Duration:        time.Since(start),
 				ResponseHeaders: cloneHeader(crw.Header()),
 				ResponseBody:    crw.body.Bytes(),
+				RequestBody:     reqBody,
 			}
 
 			go m.cfg.EventBus.Publish(context.Background(), evt)

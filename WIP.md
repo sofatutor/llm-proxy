@@ -1,5 +1,21 @@
 # WIP: Admin UI Foundation Implementation (PR #19)
 
+# WIP: OpenAI Token Counting Bugfix (2025-05-27)
+
+## Summary
+- Fixed a bug in OpenAI event transformation where `completion_tokens` and `prompt_tokens` were incorrectly calculated.
+- Previously, token counts were computed over the entire response/request JSON, not just the relevant content.
+- Now, `completion_tokens` are counted only from the assistant's reply content (`choices[0].message.content`), and `prompt_tokens` from the request's `messages` array (if present).
+- Added a helper (`extractAssistantReplyContent`) and comprehensive unit tests for edge/error cases.
+- All changes are covered by tests and maintain 90%+ code coverage.
+- See PLAN.md for rationale and architecture.
+
+## Details
+- Bug: Error responses and non-completion responses resulted in nonzero or inflated completion token counts.
+- Fix: Only count tokens in the actual assistant reply content. If not present, set completion tokens to zero.
+- Tests: Added table-driven tests for the new helper, covering normal, error, empty, and malformed cases.
+- All tests pass (`go test -v ./internal/eventtransformer/...`).
+
 > **Note:** All detailed development tasks for Phases 4–7 are now tracked in individual issue files in `docs/issues/`. This WIP.md will serve as a high-level status and index. All future development, tracking, and progress updates will be managed via the issue files. Please refer to the linked issues for detailed tasks, rationale, and acceptance criteria.
 
 ## Status - Admin UI Foundation  

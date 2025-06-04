@@ -44,14 +44,6 @@ type Config struct {
 	LogFormat string // Log format (json, text)
 	LogFile   string // Path to log file (empty for stdout)
 
-	// External logging
-	ExternalLoggingEnabled         bool          // Enable asynchronous external logging
-	ExternalLoggingBufferSize      int           // Buffer size for external log queue
-	ExternalLoggingBatchSize       int           // Batch size for sending logs
-	ExternalLoggingRetryInterval   time.Duration // Interval between retry attempts
-	ExternalLoggingMaxRetries      int           // Maximum number of retry attempts
-	ExternalLoggingFallbackToLocal bool          // Fallback to local logging if external delivery fails
-
 	// Observability middleware
 	ObservabilityEnabled    bool // Enable async observability middleware
 	ObservabilityBufferSize int  // Buffer size for in-memory event bus
@@ -128,15 +120,8 @@ func New() (*Config, error) {
 		LogFormat: getEnvString("LOG_FORMAT", "json"),
 		LogFile:   getEnvString("LOG_FILE", ""),
 
-		ExternalLoggingEnabled:         getEnvBool("EXTERNAL_LOGGING_ENABLED", false),
-		ExternalLoggingBufferSize:      getEnvInt("EXTERNAL_LOGGING_BUFFER_SIZE", 100),
-		ExternalLoggingBatchSize:       getEnvInt("EXTERNAL_LOGGING_BATCH_SIZE", 10),
-		ExternalLoggingRetryInterval:   getEnvDuration("EXTERNAL_LOGGING_RETRY_INTERVAL", 5*time.Second),
-		ExternalLoggingMaxRetries:      getEnvInt("EXTERNAL_LOGGING_MAX_RETRIES", 3),
-		ExternalLoggingFallbackToLocal: getEnvBool("EXTERNAL_LOGGING_FALLBACK_TO_LOCAL", true),
-
-		ObservabilityEnabled:    getEnvBool("OBSERVABILITY_ENABLED", false),
-		ObservabilityBufferSize: getEnvInt("OBSERVABILITY_BUFFER_SIZE", 100),
+		ObservabilityEnabled:    getEnvBool("OBSERVABILITY_ENABLED", true),
+		ObservabilityBufferSize: getEnvInt("OBSERVABILITY_BUFFER_SIZE", 1000),
 
 		// CORS defaults
 		CORSAllowedOrigins: getEnvStringSlice("CORS_ALLOWED_ORIGINS", []string{"*"}),
@@ -282,15 +267,8 @@ func DefaultConfig() *Config {
 		LogFormat: "json",
 		LogFile:   "",
 
-		ExternalLoggingEnabled:         false,
-		ExternalLoggingBufferSize:      100,
-		ExternalLoggingBatchSize:       10,
-		ExternalLoggingRetryInterval:   5 * time.Second,
-		ExternalLoggingMaxRetries:      3,
-		ExternalLoggingFallbackToLocal: true,
-
-		ObservabilityEnabled:    false,
-		ObservabilityBufferSize: 100,
+		ObservabilityEnabled:    true,
+		ObservabilityBufferSize: 1000,
 
 		// CORS defaults
 		CORSAllowedOrigins: []string{"*"},
