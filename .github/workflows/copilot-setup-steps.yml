@@ -6,7 +6,7 @@ on: workflow_dispatch
 env:
   GITHUB_PERSONAL_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   # Development Environment Variables
-  GO_VERSION: '1.23'
+  GO_VERSION: '1.23.9'
   # Cache Configuration
   CACHE_KEY_PREFIX: copilot-agent
 
