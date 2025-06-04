@@ -17,6 +17,7 @@ type Event struct {
 	Duration        time.Duration
 	ResponseHeaders http.Header
 	ResponseBody    []byte
+	RequestBody     []byte
 }
 
 // EventBus is a simple interface for publishing events to subscribers.

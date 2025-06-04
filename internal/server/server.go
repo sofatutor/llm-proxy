@@ -37,6 +37,7 @@ type Server struct {
 	logger       *zap.Logger
 	proxy        *proxy.TransparentProxy
 	metrics      Metrics
+	eventBus     eventbus.EventBus
 }
 
 // HealthResponse is the response body for the health check endpoint.
@@ -73,12 +74,19 @@ func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.Pro
 
 	metrics := Metrics{StartTime: time.Now()}
 
+	var bus eventbus.EventBus
+	if cfg.ObservabilityEnabled {
+		log.Printf("Initializing observability with buffer size %d", cfg.ObservabilityBufferSize)
+		bus = eventbus.NewInMemoryEventBus(cfg.ObservabilityBufferSize)
+	}
+
 	s := &Server{
 		config:       cfg,
 		tokenStore:   tokenStore,
 		projectStore: projectStore,
 		logger:       logger,
 		metrics:      metrics,
+		eventBus:     bus,
 		server: &http.Server{
 			Addr:         cfg.ListenAddr,
 			Handler:      mux,
@@ -198,11 +206,7 @@ func (s *Server) initializeAPIRoutes() error {
 	tokenValidator := token.NewValidator(s.tokenStore)
 	cachedValidator := token.NewCachedValidator(tokenValidator)
 
-	var bus eventbus.EventBus
-	if s.config.ObservabilityEnabled {
-		bus = eventbus.NewInMemoryEventBus(s.config.ObservabilityBufferSize)
-	}
-	obsCfg := middleware.ObservabilityConfig{Enabled: s.config.ObservabilityEnabled, EventBus: bus}
+	obsCfg := middleware.ObservabilityConfig{Enabled: s.config.ObservabilityEnabled, EventBus: s.eventBus}
 
 	proxyHandler, err := proxy.NewTransparentProxyWithLoggerAndObservability(*proxyConfig, cachedValidator, s.projectStore, s.logger, obsCfg)
 	if err != nil {
@@ -716,4 +720,9 @@ func (s *Server) handleNotFound(w http.ResponseWriter, r *http.Request) {
 		zap.String("remote_addr", r.RemoteAddr),
 	)
 	http.NotFound(w, r)
+}
+
+// EventBus returns the event bus used by the server (may be nil if observability is disabled)
+func (s *Server) EventBus() eventbus.EventBus {
+	return s.eventBus
 }
