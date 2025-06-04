@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -28,8 +29,8 @@ type EventBus interface {
 }
 
 type busStats struct {
-	published int
-	dropped   int
+	published atomic.Int64
+	dropped   atomic.Int64
 }
 
 // InMemoryEventBus is an EventBus implementation backed by a buffered channel and
@@ -45,8 +46,7 @@ type InMemoryEventBus struct {
 	retryInterval time.Duration
 	maxRetries    int
 
-	statsMu sync.Mutex
-	stats   busStats
+	stats busStats
 }
 
 // NewInMemoryEventBus creates a new in-memory event bus with the given buffer size.
@@ -67,13 +67,9 @@ func NewInMemoryEventBus(bufferSize int) *InMemoryEventBus {
 func (b *InMemoryEventBus) Publish(ctx context.Context, evt Event) {
 	select {
 	case b.ch <- evt:
-		b.statsMu.Lock()
-		b.stats.published++
-		b.statsMu.Unlock()
+		b.stats.published.Add(1)
 	default:
-		b.statsMu.Lock()
-		b.stats.dropped++
-		b.statsMu.Unlock()
+		b.stats.dropped.Add(1)
 	}
 }
 
@@ -133,9 +129,7 @@ func (b *InMemoryEventBus) Stop() {
 
 // Stats returns the number of published and dropped events.
 func (b *InMemoryEventBus) Stats() (published, dropped int) {
-	b.statsMu.Lock()
-	defer b.statsMu.Unlock()
-	return b.stats.published, b.stats.dropped
+	return int(b.stats.published.Load()), int(b.stats.dropped.Load())
 }
 
 // RedisClient defines the minimal operations required by the RedisEventBus.
@@ -157,8 +151,7 @@ type RedisEventBus struct {
 	retryInterval time.Duration
 	maxRetries    int
 
-	statsMu sync.Mutex
-	stats   busStats
+	stats busStats
 }
 
 // NewRedisEventBus creates a new Redis-backed event bus.
@@ -182,14 +175,10 @@ func (b *RedisEventBus) Publish(ctx context.Context, evt Event) {
 		return
 	}
 	if err := b.client.LPush(ctx, b.key, data); err != nil {
-		b.statsMu.Lock()
-		b.stats.dropped++
-		b.statsMu.Unlock()
+		b.stats.dropped.Add(1)
 		return
 	}
-	b.statsMu.Lock()
-	b.stats.published++
-	b.statsMu.Unlock()
+	b.stats.published.Add(1)
 }
 
 // Subscribe returns a channel that receives events popped from Redis.
@@ -256,7 +245,5 @@ func (b *RedisEventBus) Stop() {
 
 // Stats returns the number of published and dropped events.
 func (b *RedisEventBus) Stats() (published, dropped int) {
-	b.statsMu.Lock()
-	defer b.statsMu.Unlock()
-	return b.stats.published, b.stats.dropped
+	return int(b.stats.published.Load()), int(b.stats.dropped.Load())
 }

@@ -41,7 +41,7 @@ func DecompressAndDecode(val string, headers map[string]interface{}) (string, bo
 		}
 	}
 	// Only log binary skipping
-	if strings.HasPrefix(contentType, "audio/") || strings.HasPrefix(contentType, "image/") || contentType == "application/octet-stream" || contentType == "audio/mpeg" {
+	if strings.HasPrefix(contentType, "audio/") || strings.HasPrefix(contentType, "image/") || contentType == "application/octet-stream" {
 		log.Printf("[decoder] skipping decode for binary content-type: %q", contentType)
 		return val, false
 	}
