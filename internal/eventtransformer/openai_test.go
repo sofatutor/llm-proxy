@@ -452,6 +452,73 @@ func TestMergeThreadStreamingChunks_EdgeCases(t *testing.T) {
 	}
 }
 
+func TestMergeThreadStreamingChunks_MoreBranches(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		check func(t *testing.T, merged map[string]any, err error)
+	}{
+		{
+			name:  "event: thread.run.step.completed with usage",
+			input: "event: thread.run.step.completed\ndata: {\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2,\"total_tokens\":3}}",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				usage, ok := merged["usage"].(map[string]any)
+				if !ok || usage["prompt_tokens"] != 1 {
+					t.Errorf("expected usage to be set with prompt_tokens=1, got %v", usage["prompt_tokens"])
+				}
+			},
+		},
+		{
+			name:  "event: thread.message.delta with delta missing",
+			input: "event: thread.message.delta\ndata: {\"foo\":1}",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				// Should not panic, just no content
+			},
+		},
+		{
+			name:  "event: thread.message.delta with content not a slice",
+			input: "event: thread.message.delta\ndata: {\"delta\":{\"content\":123}}",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				// Should not panic, just no content
+			},
+		},
+		{
+			name:  "event: thread.message.completed with content not a slice",
+			input: "event: thread.message.completed\ndata: {\"content\":123}",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				// Should not panic, just no content
+			},
+		},
+		{
+			name:  "event: thread.run.created with missing fields",
+			input: "event: thread.run.created\ndata: {\"foo\":1}",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				// Should not panic, just missing fields
+			},
+		},
+		{
+			name:  "event: unknown type",
+			input: "event: unknown.type\ndata: {\"foo\":1}",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				// Should not panic, just no effect
+			},
+		},
+		{
+			name:  "input with no events",
+			input: "just some text\nno events here",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				// Should not panic, merged should be mostly empty
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			merged, err := MergeThreadStreamingChunks(c.input)
+			c.check(t, merged, err)
+		})
+	}
+}
+
 func TestOpenAITransformer_TransformEvent_ExtraBranches(t *testing.T) {
 	tr := &OpenAITransformer{}
 	tests := []struct {
@@ -511,5 +578,82 @@ func TestTryBase64DecodeWithLogAndNormalizeToCompactJSON_EdgeCases(t *testing.T)
 	}
 	if _, _, ok := normalizeToCompactJSON(bad); ok {
 		t.Error("normalizeToCompactJSON: expected not ok for invalid UTF-8/JSON")
+	}
+}
+
+func TestOpenAITransformer_TransformEvent_MoreBranches(t *testing.T) {
+	tr := &OpenAITransformer{}
+	tests := []struct {
+		name  string
+		input map[string]interface{}
+		check func(t *testing.T, out map[string]interface{}, err error)
+	}{
+		{
+			name:  "RequestHeaders as non-map",
+			input: map[string]interface{}{"Method": "POST", "RequestHeaders": 123, "ResponseHeaders": map[string]interface{}{"Content-Type": "application/json"}, "ResponseBody": base64.StdEncoding.EncodeToString([]byte(`{"foo":"bar"}`))},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if out == nil {
+					t.Error("expected non-nil output")
+				}
+			},
+		},
+		{
+			name:  "ResponseHeaders as non-map",
+			input: map[string]interface{}{"Method": "POST", "ResponseHeaders": 123, "ResponseBody": base64.StdEncoding.EncodeToString([]byte(`{"foo":"bar"}`))},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if out == nil {
+					t.Error("expected non-nil output")
+				}
+			},
+		},
+		{
+			name:  "RequestBody as []byte",
+			input: map[string]interface{}{"Method": "POST", "RequestHeaders": map[string]interface{}{}, "ResponseHeaders": map[string]interface{}{"Content-Type": "application/json"}, "RequestBody": []byte("hello")},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if out == nil || out["request_body"] != "hello" {
+					t.Errorf("expected request_body to be 'hello', got %v", out["request_body"])
+				}
+			},
+		},
+		{
+			name:  "ResponseBody as []byte",
+			input: map[string]interface{}{"Method": "POST", "RequestHeaders": map[string]interface{}{}, "ResponseHeaders": map[string]interface{}{"Content-Type": "application/json"}, "ResponseBody": []byte("hello")},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				// Should not panic, just skip response_body
+			},
+		},
+		{
+			name:  "ResponseBody not base64, not decodable, not valid UTF-8",
+			input: map[string]interface{}{"Method": "POST", "RequestHeaders": map[string]interface{}{}, "ResponseHeaders": map[string]interface{}{"Content-Type": "application/json"}, "ResponseBody": string([]byte{0xff, 0xfe, 0xfd})},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if out == nil || out["response_body"] != "[binary or undecodable data]" {
+					t.Errorf("expected '[binary or undecodable data]', got %v", out["response_body"])
+				}
+			},
+		},
+		{
+			name:  "Token usage fallback with non-JSON response_body",
+			input: map[string]interface{}{"Method": "POST", "RequestHeaders": map[string]interface{}{}, "ResponseHeaders": map[string]interface{}{"Content-Type": "application/json"}, "ResponseBody": base64.StdEncoding.EncodeToString([]byte("notjson"))},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if _, ok := out["token_usage"]; ok {
+					t.Error("token_usage should not be set for non-JSON response_body")
+				}
+			},
+		},
+		{
+			name:  "Token usage fallback with empty response_body",
+			input: map[string]interface{}{"Method": "POST", "RequestHeaders": map[string]interface{}{}, "ResponseHeaders": map[string]interface{}{"Content-Type": "application/json"}, "ResponseBody": base64.StdEncoding.EncodeToString([]byte(""))},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if _, ok := out["token_usage"]; ok {
+					t.Error("token_usage should not be set for empty response_body")
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := tr.TransformEvent(tt.input)
+			tt.check(t, out, err)
+		})
 	}
 }
