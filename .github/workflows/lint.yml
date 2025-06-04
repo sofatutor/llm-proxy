@@ -34,9 +34,9 @@ jobs:
           fi
       
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: v2.1.6
+          version: v1.64.8
           args: --timeout=5m
           skip-cache: true
           only-new-issues: false
