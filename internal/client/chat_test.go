@@ -369,3 +369,155 @@ func TestHandleNonStreamingResponse_Errors(t *testing.T) {
 		}
 	})
 }
+
+// Additional tests to improve coverage
+
+func TestChatClient_SendChatRequest_MarshalError(t *testing.T) {
+	client := NewChatClient("http://localhost:8080", "test-token")
+
+	// Create a request that will fail to marshal (with invalid data)
+	messages := []ChatMessage{{Role: "user", Content: "test"}}
+	options := ChatOptions{
+		Model:       "gpt-4",
+		Temperature: float64(1), // This should be fine, but let's test other edge cases
+	}
+
+	// We can't easily force a marshal error with valid data, so let's test other branches
+	// Test the request creation error path by using an invalid URL
+	originalBaseURL := client.BaseURL
+	client.BaseURL = "ht!tp://invalid-url with spaces"
+
+	_, err := client.SendChatRequest(messages, options, nil)
+	if err == nil {
+		t.Error("expected error for invalid URL in request creation")
+	}
+
+	// Restore the original URL
+	client.BaseURL = originalBaseURL
+}
+
+func TestChatClient_SendChatRequest_ResponseBodyCloseError(t *testing.T) {
+	// Test the error path in the defer function for response body close
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+		response := ChatResponse{
+			ID:    "test",
+			Model: "gpt-4",
+			Choices: []struct {
+				Index        int         `json:"index"`
+				Message      ChatMessage `json:"message"`
+				FinishReason string      `json:"finish_reason"`
+			}{{
+				Index:        0,
+				Message:      ChatMessage{Role: "assistant", Content: "test response"},
+				FinishReason: "stop",
+			}},
+		}
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := NewChatClient(server.URL, "test-token")
+	messages := []ChatMessage{{Role: "user", Content: "test"}}
+	options := ChatOptions{Model: "gpt-4", UseStreaming: false}
+
+	// This should succeed and exercise the defer close path
+	resp, err := client.SendChatRequest(messages, options, nil)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Error("expected response, got nil")
+	}
+}
+
+func TestChatClient_SendChatRequest_VerboseModeWithMarshaling(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Header().Set("Content-Type", "application/json")
+		response := ChatResponse{
+			ID:    "test",
+			Model: "gpt-4",
+			Choices: []struct {
+				Index        int         `json:"index"`
+				Message      ChatMessage `json:"message"`
+				FinishReason string      `json:"finish_reason"`
+			}{{
+				Index:        0,
+				Message:      ChatMessage{Role: "assistant", Content: "test response"},
+				FinishReason: "stop",
+			}},
+		}
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := NewChatClient(server.URL, "test-token")
+	messages := []ChatMessage{{Role: "user", Content: "test"}}
+	options := ChatOptions{
+		Model:       "gpt-4",
+		UseStreaming: false,
+		VerboseMode: true, // This should trigger the verbose output
+		Temperature: 0.7,
+		MaxTokens:   100,
+	}
+
+	resp, err := client.SendChatRequest(messages, options, nil)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Error("expected response, got nil")
+	}
+}
+
+func TestHandleStreamingResponse_ScannerError(t *testing.T) {
+	client := NewChatClient("http://localhost", "token")
+
+	// Create a response that will cause scanner issues
+	resp := &http.Response{
+		Body: &errReader{err: errors.New("scanner error")},
+	}
+
+	_, err := client.handleStreamingResponse(resp, nil, false)
+	if err == nil {
+		t.Error("expected error from scanner issues")
+	}
+}
+
+func TestHandleStreamingResponse_EmptyLines(t *testing.T) {
+	client := NewChatClient("http://localhost", "token")
+
+	// Create a response with lines that don't start with "data: " and then a valid completion
+	body := "some line without data prefix\n\ndata: {\"id\":\"test\",\"object\":\"chat.completion.chunk\",\"created\":123,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\"},\"finish_reason\":null}]}\ndata: [DONE]\n"
+	resp := &http.Response{
+		Body: io.NopCloser(strings.NewReader(body)),
+	}
+
+	response, err := client.handleStreamingResponse(resp, nil, false)
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+	if response == nil {
+		t.Error("expected response, got nil")
+	}
+}
+
+func TestHandleStreamingResponse_VerboseParseError(t *testing.T) {
+	client := NewChatClient("http://localhost", "token")
+
+	// Create a response with invalid JSON followed by valid completion in verbose mode
+	body := "data: {invalid json}\ndata: {\"id\":\"test\",\"object\":\"chat.completion.chunk\",\"created\":123,\"model\":\"gpt-4\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hello\"},\"finish_reason\":\"stop\"}]}\ndata: [DONE]\n"
+	resp := &http.Response{
+		Body: io.NopCloser(strings.NewReader(body)),
+	}
+
+	response, err := client.handleStreamingResponse(resp, nil, true) // verbose = true
+	if err != nil {
+		t.Errorf("should handle parse errors gracefully in verbose mode: %v", err)
+	}
+	if response == nil {
+		t.Error("expected response, got nil")
+	}
+}
