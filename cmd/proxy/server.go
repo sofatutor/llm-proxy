@@ -131,22 +131,22 @@ func runServerDaemon() {
 	cmd := osExec(execPath, serverArgs...)
 
 	// Detach from the parent process
-	cmd.Cmd.Stdin = nil
-	cmd.Cmd.Stdout = nil
-	cmd.Cmd.Stderr = nil
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
 	cmd.sysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true, // Set process group ID
 	}
 
 	// Start the process
-	if err := cmd.Cmd.Start(); err != nil {
+	if err := cmd.Start(); err != nil {
 		fmt.Printf("Error starting daemon: %v\n", err)
 		osExit(1)
 	}
 
 	// Save the actual process PID to the specified pidFile (default: tmp/server.pid)
-	if cmd.Cmd.Process != nil {
-		pid := cmd.Cmd.Process.Pid
+	if cmd.Process != nil {
+		pid := cmd.Process.Pid
 		if err := os.MkdirAll("tmp", 0755); err != nil {
 			fmt.Printf("Error creating tmp directory: %v\n", err)
 		}
