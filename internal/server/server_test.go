@@ -377,3 +377,34 @@ apis:
 func TestServer_Start_and_InitializeComponents_Coverage(t *testing.T) {
 	t.Skip("Not implemented: triggers double route registration. TODO: fix test config or server logic.")
 }
+
+func TestHandleReadyAndLive(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":8080", RequestTimeout: 30 * time.Second}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/ready", nil)
+	rr := httptest.NewRecorder()
+	srv.handleReady(rr, req)
+	if rr.Code != http.StatusOK || rr.Body.String() != "ready" {
+		t.Errorf("handleReady: expected 200/ready, got %d/%q", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest("GET", "/live", nil)
+	rr = httptest.NewRecorder()
+	srv.handleLive(rr, req)
+	if rr.Code != http.StatusOK || rr.Body.String() != "alive" {
+		t.Errorf("handleLive: expected 200/alive, got %d/%q", rr.Code, rr.Body.String())
+	}
+}
+
+func TestInitializeAPIRoutes_ConfigFallback(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":8080", RequestTimeout: 30 * time.Second, APIConfigPath: "notfound.json"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	// Should not panic or error, should use fallback config
+	err = srv.initializeAPIRoutes()
+	if err != nil {
+		t.Errorf("expected fallback config, got error: %v", err)
+	}
+}
