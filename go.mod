@@ -1,8 +1,6 @@
 module github.com/sofatutor/llm-proxy
 
-go 1.23.0
-
-toolchain go1.24.3
+go 1.23.9
 
 require (
 	github.com/chzyer/readline v1.5.1
