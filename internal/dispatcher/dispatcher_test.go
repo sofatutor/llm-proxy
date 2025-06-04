@@ -57,7 +57,7 @@ func TestDispatcher_BasicFlow(t *testing.T) {
 	defer cancel()
 
 	go func() {
-		d.Run(ctx)
+		_ = d.Run(ctx) // Error is expected when context is cancelled
 	}()
 
 	// Give dispatcher time to start

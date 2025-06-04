@@ -26,9 +26,8 @@ import (
 // For testing
 type execCommand struct {
 	*exec.Cmd
-	path        string
-	args        []string
-	sysProcAttr *syscall.SysProcAttr
+	path string
+	args []string
 }
 
 var osExec = func(name string, args ...string) *execCommand {
@@ -134,7 +133,7 @@ func runServerDaemon() {
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
-	cmd.sysProcAttr = &syscall.SysProcAttr{
+	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setpgid: true, // Set process group ID
 	}
 

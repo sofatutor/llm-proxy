@@ -236,7 +236,7 @@ func TestCaptureResponseWriter_Push_Unsupported(t *testing.T) {
 }
 
 func TestCloneHeader(t *testing.T) {
-	h := http.Header{"A": {"1", "2"}, "B": {"x"}}
+	h := http.Header{"A": []string{"1", "2"}, "B": []string{"x"}}
 	cloned := cloneHeader(h)
 	if len(cloned) != len(h) {
 		t.Errorf("expected same length, got %d vs %d", len(cloned), len(h))

@@ -675,6 +675,10 @@ func (w *timingResponseWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
+func (w *timingResponseWriter) Header() http.Header {
+	return w.ResponseWriter.Header()
+}
+
 func (w *timingResponseWriter) Flush() {
 	if f, ok := w.ResponseWriter.(http.Flusher); ok {
 		f.Flush()

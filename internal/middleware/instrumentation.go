@@ -75,6 +75,10 @@ func (w *captureResponseWriter) WriteHeader(code int) {
 	w.ResponseWriter.WriteHeader(code)
 }
 
+func (w *captureResponseWriter) Header() http.Header {
+	return w.ResponseWriter.Header()
+}
+
 func (w *captureResponseWriter) Write(b []byte) (int, error) {
 	w.body.Write(b)
 	return w.ResponseWriter.Write(b)

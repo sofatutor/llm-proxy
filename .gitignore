@@ -1,6 +1,7 @@
 # Go build artifacts
 /bin/
 /build/
+proxy
 *.exe
 *.exe~
 *.dll
