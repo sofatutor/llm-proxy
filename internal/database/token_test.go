@@ -609,3 +609,74 @@ func TestDBTokenStoreAdapter_GetTokensByProjectID(t *testing.T) {
 	require.Len(t, toksB, 1)
 	require.Equal(t, "tok7", toksB[0].Token)
 }
+
+func TestDeleteToken_UpdateToken_IncrementTokenUsage_EdgeCases(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Insert a project and token for happy path
+	p := proxy.Project{ID: "p1", Name: "P1", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	require.NoError(t, db.CreateProject(ctx, p))
+	tk := Token{Token: "tok1", ProjectID: p.ID, IsActive: true, CreatedAt: time.Now()}
+	require.NoError(t, db.CreateToken(ctx, tk))
+
+	t.Run("delete happy path", func(t *testing.T) {
+		err := db.DeleteToken(ctx, "tok1")
+		require.NoError(t, err)
+		_, err = db.GetTokenByID(ctx, "tok1")
+		require.ErrorIs(t, err, ErrTokenNotFound)
+	})
+
+	t.Run("delete non-existent", func(t *testing.T) {
+		err := db.DeleteToken(ctx, "notfound")
+		require.ErrorIs(t, err, ErrTokenNotFound)
+	})
+
+	t.Run("delete empty token", func(t *testing.T) {
+		err := db.DeleteToken(ctx, "")
+		require.Error(t, err)
+	})
+
+	// Re-insert for update/increment
+	require.NoError(t, db.CreateToken(ctx, tk))
+
+	t.Run("update happy path", func(t *testing.T) {
+		tk.RequestCount = 42
+		err := db.UpdateToken(ctx, tk)
+		require.NoError(t, err)
+		got, err := db.GetTokenByID(ctx, tk.Token)
+		require.NoError(t, err)
+		require.Equal(t, 42, got.RequestCount)
+	})
+
+	t.Run("update non-existent", func(t *testing.T) {
+		tk2 := Token{Token: "notfound", ProjectID: p.ID, IsActive: true, CreatedAt: time.Now()}
+		err := db.UpdateToken(ctx, tk2)
+		require.ErrorIs(t, err, ErrTokenNotFound)
+	})
+
+	t.Run("update empty token", func(t *testing.T) {
+		tk3 := Token{Token: "", ProjectID: p.ID, IsActive: true, CreatedAt: time.Now()}
+		err := db.UpdateToken(ctx, tk3)
+		require.Error(t, err)
+	})
+
+	t.Run("increment happy path", func(t *testing.T) {
+		err := db.IncrementTokenUsage(ctx, tk.Token)
+		require.NoError(t, err)
+		got, err := db.GetTokenByID(ctx, tk.Token)
+		require.NoError(t, err)
+		require.Equal(t, 43, got.RequestCount)
+	})
+
+	t.Run("increment non-existent", func(t *testing.T) {
+		err := db.IncrementTokenUsage(ctx, "notfound")
+		require.ErrorIs(t, err, ErrTokenNotFound)
+	})
+
+	t.Run("increment empty token", func(t *testing.T) {
+		err := db.IncrementTokenUsage(ctx, "")
+		require.Error(t, err)
+	})
+}

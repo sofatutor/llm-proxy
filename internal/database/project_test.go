@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/proxy"
+	"github.com/stretchr/testify/require"
 )
 
 // TestProjectCRUD tests project CRUD operations.
@@ -340,4 +341,56 @@ func TestGetAPIKeyForProject(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for non-existent project")
 	}
+}
+
+func TestDBDeleteProject_And_DBUpdateProject_EdgeCases(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Insert a project for happy path
+	p := Project{ID: "p1", Name: "P1", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	require.NoError(t, db.DBCreateProject(ctx, p))
+
+	t.Run("delete happy path", func(t *testing.T) {
+		err := db.DBDeleteProject(ctx, "p1")
+		require.NoError(t, err)
+		_, err = db.DBGetProjectByID(ctx, "p1")
+		require.ErrorIs(t, err, ErrProjectNotFound)
+	})
+
+	t.Run("delete non-existent", func(t *testing.T) {
+		err := db.DBDeleteProject(ctx, "notfound")
+		require.ErrorIs(t, err, ErrProjectNotFound)
+	})
+
+	t.Run("delete empty ID", func(t *testing.T) {
+		err := db.DBDeleteProject(ctx, "")
+		require.Error(t, err)
+	})
+
+	// Re-insert for update
+	p.ID = "p2"
+	require.NoError(t, db.DBCreateProject(ctx, p))
+
+	t.Run("update happy path", func(t *testing.T) {
+		p.Name = "Updated"
+		err := db.DBUpdateProject(ctx, p)
+		require.NoError(t, err)
+		got, err := db.DBGetProjectByID(ctx, p.ID)
+		require.NoError(t, err)
+		require.Equal(t, "Updated", got.Name)
+	})
+
+	t.Run("update non-existent", func(t *testing.T) {
+		p2 := Project{ID: "notfound", Name: "N", OpenAIAPIKey: "k"}
+		err := db.DBUpdateProject(ctx, p2)
+		require.ErrorIs(t, err, ErrProjectNotFound)
+	})
+
+	t.Run("update empty ID", func(t *testing.T) {
+		p3 := Project{ID: "", Name: "N", OpenAIAPIKey: "k"}
+		err := db.DBUpdateProject(ctx, p3)
+		require.Error(t, err)
+	})
 }
