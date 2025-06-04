@@ -3,21 +3,25 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/sofatutor/llm-proxy/internal/api"
+	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/setup"
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/sofatutor/llm-proxy/internal/utils"
@@ -48,6 +52,13 @@ var (
 
 // Global flag for management API base URL
 var manageAPIBaseURL string
+
+// Dispatcher command flags
+var (
+	dispatcherService  string
+	dispatcherEndpoint string
+	dispatcherBuffer   int
+)
 
 // Setup command definition
 var setupCmd = &cobra.Command{
@@ -256,6 +267,69 @@ func generateSecureToken(length int) string {
 var rootCmd *cobra.Command
 var openaiCmd *cobra.Command
 var benchmarkCmd *cobra.Command
+
+var dispatcherCmd = &cobra.Command{
+	Use:   "dispatcher",
+	Short: "Run the event dispatcher service",
+	Long:  `Run the event dispatcher service. Example: llm-proxy dispatcher --service file --endpoint /path/to/file.jsonl`,
+	Run: func(cmd *cobra.Command, args []string) {
+		if dispatcherService == "file" {
+			if dispatcherEndpoint == "" {
+				fmt.Fprintln(os.Stderr, "--endpoint is required for file service")
+				osExit(1)
+			}
+			f, err := os.OpenFile(dispatcherEndpoint, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "failed to open file: %v\n", err)
+				osExit(1)
+			}
+			defer func() {
+				if err := f.Close(); err != nil {
+					log.Printf("failed to close file: %v", err)
+				}
+			}()
+
+			bus := eventbus.NewInMemoryEventBus(dispatcherBuffer)
+			defer bus.Stop()
+			sub := bus.Subscribe()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+
+			sigs := make(chan os.Signal, 1)
+			signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+			go func() {
+				<-sigs
+				fmt.Fprintln(os.Stderr, "\nShutting down event dispatcher...")
+				cancel()
+			}()
+
+			log.Printf("File event dispatcher started. Writing events to %s", dispatcherEndpoint)
+
+			for {
+				select {
+				case evt, ok := <-sub:
+					if !ok {
+						return
+					}
+					line, err := json.Marshal(evt)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "failed to marshal event: %v\n", err)
+						continue
+					}
+					if _, err := f.Write(append(line, '\n')); err != nil {
+						fmt.Fprintf(os.Stderr, "failed to write event: %v\n", err)
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "unsupported dispatcher service: %s\n", dispatcherService)
+			osExit(1)
+		}
+	},
+}
 
 func init() {
 	// Initialize root command
@@ -1052,6 +1126,12 @@ func init() {
 
 	// Add persistent flag for management API base URL
 	cobraRoot.PersistentFlags().StringVar(&manageAPIBaseURL, "manage-api-base-url", "http://localhost:8080", "Base URL for management API (default: http://localhost:8080)")
+
+	// Add dispatcher command flags
+	dispatcherCmd.Flags().StringVar(&dispatcherService, "service", "file", "Dispatcher service type (file)")
+	dispatcherCmd.Flags().StringVar(&dispatcherEndpoint, "endpoint", "", "Dispatcher endpoint (for file: path to JSONL file)")
+	dispatcherCmd.Flags().IntVar(&dispatcherBuffer, "buffer", 100, "Event bus buffer size")
+	rootCmd.AddCommand(dispatcherCmd)
 }
 
 func main() {

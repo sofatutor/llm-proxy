@@ -8,13 +8,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/sofatutor/llm-proxy/internal/token"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func TestHealthEndpoint(t *testing.T) {
@@ -284,6 +288,26 @@ func (m *mockProjectStore) GetProjectByID(ctx context.Context, id string) (proxy
 func (m *mockProjectStore) UpdateProject(ctx context.Context, p proxy.Project) error { return nil }
 func (m *mockProjectStore) DeleteProject(ctx context.Context, id string) error       { return nil }
 
+// testProjectStore embeds mockProjectStore and allows method overrides for testing
+type testProjectStore struct {
+	*mockProjectStore
+	listProjectsFunc  func(ctx context.Context) ([]proxy.Project, error)
+	createProjectFunc func(ctx context.Context, p proxy.Project) error
+}
+
+func (t *testProjectStore) ListProjects(ctx context.Context) ([]proxy.Project, error) {
+	if t.listProjectsFunc != nil {
+		return t.listProjectsFunc(ctx)
+	}
+	return t.mockProjectStore.ListProjects(ctx)
+}
+func (t *testProjectStore) CreateProject(ctx context.Context, p proxy.Project) error {
+	if t.createProjectFunc != nil {
+		return t.createProjectFunc(ctx, p)
+	}
+	return t.mockProjectStore.CreateProject(ctx, p)
+}
+
 func TestServer_New_WithDependencyInjection_ConfigAndFallback(t *testing.T) {
 	cfg := &config.Config{
 		ListenAddr:         ":8080",
@@ -377,3 +401,189 @@ apis:
 func TestServer_Start_and_InitializeComponents_Coverage(t *testing.T) {
 	t.Skip("Not implemented: triggers double route registration. TODO: fix test config or server logic.")
 }
+
+func TestHandleReadyAndLive(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":8080", RequestTimeout: 30 * time.Second}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/ready", nil)
+	rr := httptest.NewRecorder()
+	srv.handleReady(rr, req)
+	if rr.Code != http.StatusOK || rr.Body.String() != "ready" {
+		t.Errorf("handleReady: expected 200/ready, got %d/%q", rr.Code, rr.Body.String())
+	}
+
+	req = httptest.NewRequest("GET", "/live", nil)
+	rr = httptest.NewRecorder()
+	srv.handleLive(rr, req)
+	if rr.Code != http.StatusOK || rr.Body.String() != "alive" {
+		t.Errorf("handleLive: expected 200/alive, got %d/%q", rr.Code, rr.Body.String())
+	}
+}
+
+func TestInitializeAPIRoutes_ConfigFallback(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":8080", RequestTimeout: 30 * time.Second, APIConfigPath: "notfound.json"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	// Should not panic or error, should use fallback config
+	err = srv.initializeAPIRoutes()
+	if err != nil {
+		t.Errorf("expected fallback config, got error: %v", err)
+	}
+}
+
+func TestHandleProjects_And_CreateProject_EdgeCases(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":8080", RequestTimeout: 30 * time.Second, ManagementToken: "testtoken"}
+	logger := zap.NewNop()
+	ps := &mockProjectStore{}
+	ts := &mockTokenStore{}
+	srv, err := New(cfg, ts, ps)
+	require.NoError(t, err)
+	srv.logger = logger
+
+	setAuth := func(r *http.Request, token string) {
+		r.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	t.Run("method not allowed", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPut, "/manage/projects", nil)
+		setAuth(r, "testtoken")
+		w := httptest.NewRecorder()
+		srv.handleProjects(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
+	})
+
+	t.Run("auth fail", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/manage/projects", nil)
+		setAuth(r, "wrongtoken")
+		w := httptest.NewRecorder()
+		srv.handleProjects(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("GET happy path", func(t *testing.T) {
+		tps := &testProjectStore{mockProjectStore: &mockProjectStore{}}
+		srv.projectStore = tps
+		r := httptest.NewRequest(http.MethodGet, "/manage/projects", nil)
+		setAuth(r, "testtoken")
+		w := httptest.NewRecorder()
+		srv.handleProjects(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+
+	t.Run("GET store error", func(t *testing.T) {
+		tps := &testProjectStore{mockProjectStore: &mockProjectStore{}, listProjectsFunc: func(ctx context.Context) ([]proxy.Project, error) { return nil, errors.New("fail") }}
+		srv.projectStore = tps
+		r := httptest.NewRequest(http.MethodGet, "/manage/projects", nil)
+		setAuth(r, "testtoken")
+		w := httptest.NewRecorder()
+		srv.handleProjects(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	})
+
+	t.Run("POST bad JSON", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "/manage/projects", strings.NewReader("notjson"))
+		setAuth(r, "testtoken")
+		w := httptest.NewRecorder()
+		srv.handleProjects(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("POST missing fields", func(t *testing.T) {
+		body := `{"name":""}`
+		r := httptest.NewRequest(http.MethodPost, "/manage/projects", strings.NewReader(body))
+		setAuth(r, "testtoken")
+		w := httptest.NewRecorder()
+		srv.handleProjects(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("POST store error", func(t *testing.T) {
+		tps := &testProjectStore{mockProjectStore: &mockProjectStore{}, createProjectFunc: func(ctx context.Context, p proxy.Project) error { return errors.New("fail") }}
+		srv.projectStore = tps
+		body := `{"name":"foo","openai_api_key":"bar"}`
+		r := httptest.NewRequest(http.MethodPost, "/manage/projects", strings.NewReader(body))
+		setAuth(r, "testtoken")
+		w := httptest.NewRecorder()
+		srv.handleProjects(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	})
+
+	t.Run("POST happy path", func(t *testing.T) {
+		tps := &testProjectStore{mockProjectStore: &mockProjectStore{}, createProjectFunc: func(ctx context.Context, p proxy.Project) error { return nil }}
+		srv.projectStore = tps
+		body := `{"name":"foo","openai_api_key":"bar"}`
+		r := httptest.NewRequest(http.MethodPost, "/manage/projects", strings.NewReader(body))
+		setAuth(r, "testtoken")
+		w := httptest.NewRecorder()
+		srv.handleProjects(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	})
+}
+
+func TestLogRequestMiddleware(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: 1 * time.Second}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	called := false
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusTeapot)
+		_, err := w.Write([]byte("ok"))
+		if err != nil {
+			t.Errorf("unexpected error from w.Write: %v", err)
+		}
+	})
+	mw := srv.logRequestMiddleware(h)
+	req := httptest.NewRequest("GET", "/test", nil)
+	rr := httptest.NewRecorder()
+	mw.ServeHTTP(rr, req)
+	if !called {
+		t.Error("handler was not called by logRequestMiddleware")
+	}
+	if rr.Code != http.StatusTeapot {
+		t.Errorf("expected status %d, got %d", http.StatusTeapot, rr.Code)
+	}
+	if !strings.Contains(rr.Body.String(), "ok") {
+		t.Errorf("expected body to contain 'ok', got %q", rr.Body.String())
+	}
+}
+
+func TestHandleNotFound_WriteHeader_Flush_EventBus(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: 1 * time.Second}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/notfound", nil)
+	srv.handleNotFound(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", rr.Code)
+	}
+
+	// Initialize event bus for the test
+	srv.eventBus = &mockEventBus{}
+	if srv.EventBus() == nil {
+		t.Error("EventBus() returned nil")
+	}
+}
+
+// mockEventBus implements the eventbus.EventBus interface for testing
+type mockEventBus struct{}
+
+func (m *mockEventBus) Publish(ctx context.Context, evt eventbus.Event) {}
+func (m *mockEventBus) Subscribe() <-chan eventbus.Event {
+	ch := make(chan eventbus.Event)
+	close(ch)
+	return ch
+}
+func (m *mockEventBus) Stop() {}

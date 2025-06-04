@@ -1444,6 +1444,41 @@ func TestServer_templateFuncs_EdgeCases(t *testing.T) {
 	})
 }
 
+func TestServer_templateFuncs_MoreEdgeCases(t *testing.T) {
+	s := &Server{}
+	funcs := s.templateFuncs()
+
+	t.Run("obfuscateAPIKey short", func(t *testing.T) {
+		obf := funcs["obfuscateAPIKey"].(func(string) string)
+		if got := obf("a"); got != "*" {
+			t.Errorf("obfuscateAPIKey short: got %q, want *", got)
+		}
+		if got := obf(""); got != "" {
+			t.Errorf("obfuscateAPIKey empty: got %q, want empty", got)
+		}
+	})
+
+	t.Run("obfuscateToken short", func(t *testing.T) {
+		obf := funcs["obfuscateToken"].(func(string) string)
+		if got := obf("a"); got != "****" {
+			t.Errorf("obfuscateToken short: got %q, want ****", got)
+		}
+		if got := obf(""); got != "****" {
+			t.Errorf("obfuscateToken empty: got %q, want ****", got)
+		}
+	})
+
+	t.Run("contains edge", func(t *testing.T) {
+		contains := funcs["contains"].(func(string, string) bool)
+		if contains("", "") != true {
+			t.Error("contains empty strings should be true")
+		}
+		if contains("foo", "") != true {
+			t.Error("contains any string, empty substr should be true")
+		}
+	})
+}
+
 func TestAdminHealthEndpoint(t *testing.T) {
 	// Ensure at least one HTML file exists for the glob in root and subdir
 	baseFile := filepath.Join(testTemplateDir(), "base.html")

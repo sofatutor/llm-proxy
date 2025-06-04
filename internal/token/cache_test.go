@@ -78,7 +78,7 @@ func (m *MockValidator) AddToken(tokenID string, data TokenData) {
 
 func TestCachedValidator_ValidateToken(t *testing.T) {
 	ctx := context.Background()
-	store := NewMockTokenStore()
+	store := NewStrictMockTokenStore()
 	validator := &StandardValidator{store: store}
 
 	// Create cache with small TTL for testing
@@ -279,7 +279,7 @@ func TestCachedValidator_CacheEviction(t *testing.T) {
 }
 
 func TestCachedValidator_Cleanup(t *testing.T) {
-	store := NewMockTokenStore()
+	store := NewStrictMockTokenStore()
 	validator := &StandardValidator{store: store}
 
 	// Create cache with short TTL and cleanup
@@ -331,7 +331,7 @@ func TestCachedValidator_Cleanup(t *testing.T) {
 
 func TestCachedValidator_EvictOldest(t *testing.T) {
 	ctx := context.Background()
-	store := NewMockTokenStore()
+	store := NewStrictMockTokenStore()
 	validator := &StandardValidator{store: store}
 
 	cachedValidator := NewCachedValidator(validator, CacheOptions{
@@ -387,7 +387,7 @@ func TestCachedValidator_EvictOldest(t *testing.T) {
 func TestCachedValidator_EvictOldest_CorrectnessAndEfficiency(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
-	store := NewMockTokenStore()
+	store := NewStrictMockTokenStore()
 	validator := &StandardValidator{store: store}
 	maxSize := 100
 	cv := NewCachedValidator(validator, CacheOptions{
@@ -433,14 +433,103 @@ func TestCachedValidator_EvictOldest_CorrectnessAndEfficiency(t *testing.T) {
 	}
 }
 
-func (m *MockTokenStore) CreateToken(ctx context.Context, td TokenData) error {
+func (m *StrictMockTokenStore) CreateToken(ctx context.Context, td TokenData) error {
 	return nil
 }
 
-func (m *MockTokenStore) GetTokensByProjectID(ctx context.Context, projectID string) ([]TokenData, error) {
+func (m *StrictMockTokenStore) GetTokensByProjectID(ctx context.Context, projectID string) ([]TokenData, error) {
 	return nil, nil
 }
 
-func (m *MockTokenStore) ListTokens(ctx context.Context) ([]TokenData, error) {
+func (m *StrictMockTokenStore) ListTokens(ctx context.Context) ([]TokenData, error) {
 	return nil, nil
+}
+
+func TestCachedValidator_cacheToken_EdgeCases(t *testing.T) {
+	ctx := context.Background()
+	store := NewStrictMockTokenStore()
+	validator := &StandardValidator{store: store}
+	cv := NewCachedValidator(validator, CacheOptions{TTL: time.Minute, MaxSize: 10, EnableCleanup: false})
+
+	now := time.Now()
+	future := now.Add(time.Hour)
+	validToken, _ := GenerateToken()
+	store.AddToken(validToken, TokenData{
+		Token:     validToken,
+		ProjectID: "p1",
+		ExpiresAt: &future,
+		IsActive:  true,
+		CreatedAt: now,
+	})
+
+	// Valid token: should be cached
+	cv.cacheToken(ctx, validToken)
+	cv.cacheMutex.RLock()
+	_, found := cv.cache[validToken]
+	cv.cacheMutex.RUnlock()
+	if !found {
+		t.Errorf("cacheToken did not cache valid token")
+	}
+
+	// Invalid token: inactive
+	inactiveToken, _ := GenerateToken()
+	store.AddToken(inactiveToken, TokenData{
+		Token:     inactiveToken,
+		ProjectID: "p2",
+		ExpiresAt: &future,
+		IsActive:  false,
+		CreatedAt: now,
+	})
+	cv.cacheToken(ctx, inactiveToken)
+	cv.cacheMutex.RLock()
+	_, found = cv.cache[inactiveToken]
+	cv.cacheMutex.RUnlock()
+	if found {
+		t.Errorf("cacheToken should not cache inactive token")
+	}
+
+	// Not found token
+	cv.cacheToken(ctx, "notfound")
+	cv.cacheMutex.RLock()
+	_, found = cv.cache["notfound"]
+	if found {
+		// Print cache keys for debugging
+		keys := make([]string, 0, len(cv.cache))
+		for k := range cv.cache {
+			keys = append(keys, k)
+		}
+		t.Errorf("cacheToken should not cache notfound token; cache keys: %v", keys)
+	}
+	cv.cacheMutex.RUnlock()
+
+	// Non-StandardValidator: should not panic or cache
+	cv2 := &CachedValidator{validator: &MockValidator{}, cache: make(map[string]CacheEntry)}
+	cv2.cacheToken(ctx, validToken)
+}
+
+// Patch for test: redefine NewStrictMockTokenStore to return ErrTokenNotFound for unknown tokens
+
+type StrictMockTokenStore struct {
+	data map[string]TokenData
+}
+
+func NewStrictMockTokenStore() *StrictMockTokenStore {
+	return &StrictMockTokenStore{data: make(map[string]TokenData)}
+}
+
+func (m *StrictMockTokenStore) AddToken(tokenID string, td TokenData) {
+	m.data[tokenID] = td
+}
+
+func (m *StrictMockTokenStore) GetTokenByID(ctx context.Context, tokenID string) (TokenData, error) {
+	td, ok := m.data[tokenID]
+	if !ok {
+		return TokenData{}, ErrTokenNotFound
+	}
+	return td, nil
+}
+
+// Implement other methods as no-ops for compatibility
+func (m *StrictMockTokenStore) IncrementTokenUsage(ctx context.Context, tokenID string) error {
+	return nil
 }

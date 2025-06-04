@@ -453,3 +453,35 @@ func TestMemoryRateLimiter_Reset_NonExistent(t *testing.T) {
 	// Should not panic or error
 	limiter.Reset(validToken)
 }
+
+func TestMemoryRateLimiter_ResetAndSetLimit(t *testing.T) {
+	rl := NewMemoryRateLimiter(1.0, 10)
+
+	t.Run("Reset non-existent token", func(t *testing.T) {
+		rl.Reset("notfound") // Should not panic or error
+	})
+
+	t.Run("SetLimit new token", func(t *testing.T) {
+		rl.SetLimit("tok1", 2.0, 5)
+		rate, cap, ok := rl.GetLimit("tok1")
+		if !ok || rate != 2.0 || cap != 5 {
+			t.Errorf("SetLimit failed: got rate=%v, cap=%v, ok=%v", rate, cap, ok)
+		}
+	})
+
+	t.Run("SetLimit existing token, lower capacity", func(t *testing.T) {
+		rl.SetLimit("tok1", 1.0, 2)
+		rate, cap, ok := rl.GetLimit("tok1")
+		if !ok || rate != 1.0 || cap != 2 {
+			t.Errorf("SetLimit update failed: got rate=%v, cap=%v, ok=%v", rate, cap, ok)
+		}
+	})
+
+	t.Run("Remove token", func(t *testing.T) {
+		rl.Remove("tok1")
+		_, _, ok := rl.GetLimit("tok1")
+		if ok {
+			t.Error("Remove did not remove token")
+		}
+	})
+}

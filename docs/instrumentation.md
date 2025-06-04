@@ -3,32 +3,41 @@
 ## Overview
 The async instrumentation middleware provides non-blocking, streaming-capable instrumentation for all API calls handled by the LLM Proxy. It captures request/response metadata and emits events to a pluggable event bus for downstream processing (e.g., file, cloud, analytics).
 
-## Enabling Instrumentation
-To enable the middleware, set the following environment variable:
+## Event Bus & Dispatcher Architecture
+- The async event bus is now always enabled and handles all API instrumentation events.
+- The event bus supports multiple subscribers (fan-out), batching, retry logic, and graceful shutdown.
+- Both in-memory and Redis backends are available for local and distributed event delivery.
+- Persistent event logging is handled by a dispatcher CLI or the `--file-event-log` flag on the server, which writes events to a JSONL file.
+- Middleware captures and restores the request body for all events, and the event context is richer for diagnostics and debugging.
+
+## Persistent Event Logging
+- To persist all events to a file, use the `--file-event-log` flag when running the server:
 
 ```sh
-OBSERVABILITY_ENABLED=true
+llm-proxy server --file-event-log ./data/events.jsonl
 ```
 
-You can also control the event buffer size:
+- Alternatively, use the standalone dispatcher CLI to subscribe to the event bus and write events to a file or other backends:
 
 ```sh
-OBSERVABILITY_BUFFER_SIZE=200  # Default: 100
+llm-proxy dispatcher --backend file --file ./data/events.jsonl
 ```
 
 ## Configuration Reference
-- `OBSERVABILITY_ENABLED` (bool): Enable/disable the instrumentation middleware (default: false)
-- `OBSERVABILITY_BUFFER_SIZE` (int): Buffer size for event bus (default: 100)
+- `OBSERVABILITY_ENABLED`: Deprecated; the async event bus is always enabled.
+- `OBSERVABILITY_BUFFER_SIZE` (int): Buffer size for event bus (default: 1000)
+- `FILE_EVENT_LOG`: Path to persistent event log file (enables file event logging via dispatcher)
 
 ## How It Works
-- When enabled, the middleware wraps all proxy requests and responses.
+- The middleware wraps all proxy requests and responses.
 - Captures request ID, method, path, status, duration, headers, and full (streamed) response body.
-- Emits an event to the configured event bus (in-memory by default).
-- Event delivery is fully async and non-blocking.
+- Emits an event to the async event bus (in-memory or Redis).
+- Event delivery is fully async, non-blocking, batched, and resilient to failures.
 
 ## Event Bus Backends
 - **In-Memory** (default): Fast, simple, for local/dev use.
-- **Custom/Redis**: Implement the `EventBus` interface and inject via config for distributed or persistent event delivery.
+- **Redis**: For distributed event delivery and multi-process fan-out.
+- **Custom**: Implement the `EventBus` interface for other backends (Kafka, HTTP, etc.).
 
 ## Event Schema Example
 ```go
@@ -44,11 +53,10 @@ Event {
 }
 ```
 
-## Example: Enabling in Docker
+## Example: Enabling Persistent Logging in Docker
 ```sh
 docker run -d \
-  -e OBSERVABILITY_ENABLED=true \
-  -e OBSERVABILITY_BUFFER_SIZE=200 \
+  -e FILE_EVENT_LOG=./data/events.jsonl \
   ...
 ```
 

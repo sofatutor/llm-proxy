@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -220,29 +221,38 @@ func TestCaptureResponseWriter_Push_Supported(t *testing.T) {
 }
 
 func TestCaptureResponseWriter_Hijack_Unsupported(t *testing.T) {
-	crw := &captureResponseWriter{ResponseWriter: httptest.NewRecorder()}
-	_, _, err := crw.Hijack()
-	if err == nil {
-		t.Error("expected error for unsupported Hijack")
+	rw := httptest.NewRecorder()
+	crw := &captureResponseWriter{ResponseWriter: rw}
+	conn, buf, err := crw.Hijack()
+	if err == nil || conn != nil || buf != nil {
+		t.Errorf("expected error and nils, got: %v, %v, %v", conn, buf, err)
 	}
 }
 
 func TestCaptureResponseWriter_Push_Unsupported(t *testing.T) {
-	crw := &captureResponseWriter{ResponseWriter: httptest.NewRecorder()}
+	rw := httptest.NewRecorder()
+	crw := &captureResponseWriter{ResponseWriter: rw}
 	err := crw.Push("/foo", nil)
-	if err != http.ErrNotSupported {
-		t.Errorf("expected ErrNotSupported, got %v", err)
+	if !errors.Is(err, http.ErrNotSupported) {
+		t.Errorf("expected http.ErrNotSupported, got: %v", err)
 	}
 }
 
 func TestCloneHeader(t *testing.T) {
-	h := http.Header{"A": {"1", "2"}, "B": {"x"}}
+	h := http.Header{"Foo": {"bar", "baz"}}
 	cloned := cloneHeader(h)
-	if len(cloned) != len(h) {
-		t.Errorf("expected same length, got %d vs %d", len(cloned), len(h))
+	if len(cloned) != 1 || len(cloned["Foo"]) != 2 || cloned["Foo"][0] != "bar" || cloned["Foo"][1] != "baz" {
+		t.Errorf("cloneHeader did not clone correctly: %v", cloned)
 	}
-	cloned["A"][0] = "changed"
-	if h["A"][0] == "changed" {
-		t.Error("cloneHeader did not deep copy values")
+	cloned["Foo"][0] = "changed"
+	if h["Foo"][0] == "changed" {
+		t.Error("cloneHeader did not deep copy slice")
 	}
+}
+
+func TestCaptureResponseWriter_Flush(t *testing.T) {
+	rw := httptest.NewRecorder()
+	crw := &captureResponseWriter{ResponseWriter: rw}
+	// Should not panic
+	crw.Flush()
 }

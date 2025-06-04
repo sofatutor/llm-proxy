@@ -609,3 +609,100 @@ func TestDBTokenStoreAdapter_GetTokensByProjectID(t *testing.T) {
 	require.Len(t, toksB, 1)
 	require.Equal(t, "tok7", toksB[0].Token)
 }
+
+func TestDeleteToken_UpdateToken_IncrementTokenUsage_EdgeCases(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Insert a project and token for happy path
+	p := proxy.Project{ID: "p1", Name: "P1", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	require.NoError(t, db.CreateProject(ctx, p))
+	tk := Token{Token: "tok1", ProjectID: p.ID, IsActive: true, CreatedAt: time.Now()}
+	require.NoError(t, db.CreateToken(ctx, tk))
+
+	t.Run("delete happy path", func(t *testing.T) {
+		err := db.DeleteToken(ctx, "tok1")
+		require.NoError(t, err)
+		_, err = db.GetTokenByID(ctx, "tok1")
+		require.ErrorIs(t, err, ErrTokenNotFound)
+	})
+
+	t.Run("delete non-existent", func(t *testing.T) {
+		err := db.DeleteToken(ctx, "notfound")
+		require.ErrorIs(t, err, ErrTokenNotFound)
+	})
+
+	t.Run("delete empty token", func(t *testing.T) {
+		err := db.DeleteToken(ctx, "")
+		require.Error(t, err)
+	})
+
+	// Re-insert for update/increment
+	require.NoError(t, db.CreateToken(ctx, tk))
+
+	t.Run("update happy path", func(t *testing.T) {
+		tk.RequestCount = 42
+		err := db.UpdateToken(ctx, tk)
+		require.NoError(t, err)
+		got, err := db.GetTokenByID(ctx, tk.Token)
+		require.NoError(t, err)
+		require.Equal(t, 42, got.RequestCount)
+	})
+
+	t.Run("update non-existent", func(t *testing.T) {
+		tk2 := Token{Token: "notfound", ProjectID: p.ID, IsActive: true, CreatedAt: time.Now()}
+		err := db.UpdateToken(ctx, tk2)
+		require.ErrorIs(t, err, ErrTokenNotFound)
+	})
+
+	t.Run("update empty token", func(t *testing.T) {
+		tk3 := Token{Token: "", ProjectID: p.ID, IsActive: true, CreatedAt: time.Now()}
+		err := db.UpdateToken(ctx, tk3)
+		require.Error(t, err)
+	})
+
+	t.Run("increment happy path", func(t *testing.T) {
+		err := db.IncrementTokenUsage(ctx, tk.Token)
+		require.NoError(t, err)
+		got, err := db.GetTokenByID(ctx, tk.Token)
+		require.NoError(t, err)
+		require.Equal(t, 43, got.RequestCount)
+	})
+
+	t.Run("increment non-existent", func(t *testing.T) {
+		err := db.IncrementTokenUsage(ctx, "notfound")
+		require.ErrorIs(t, err, ErrTokenNotFound)
+	})
+
+	t.Run("increment empty token", func(t *testing.T) {
+		err := db.IncrementTokenUsage(ctx, "")
+		require.Error(t, err)
+	})
+}
+
+func TestQueryTokens_ErrorBranches(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// 1. Query error: invalid SQL
+	_, err := db.queryTokens(ctx, "SELECT * FROM not_a_table")
+	if err == nil {
+		t.Error("expected error for invalid table")
+	}
+
+	// 2. Scan error: create a table with missing columns and query it
+	_, err = db.db.ExecContext(ctx, `CREATE TABLE bad_tokens (foo TEXT)`)
+	if err != nil {
+		t.Fatalf("failed to create bad_tokens: %v", err)
+	}
+	_, err = db.db.ExecContext(ctx, `INSERT INTO bad_tokens (foo) VALUES ('bar')`)
+	if err != nil {
+		t.Fatalf("failed to insert into bad_tokens: %v", err)
+	}
+	_, err = db.queryTokens(ctx, "SELECT * FROM bad_tokens")
+	if err == nil {
+		t.Error("expected scan error for bad_tokens table")
+	}
+}

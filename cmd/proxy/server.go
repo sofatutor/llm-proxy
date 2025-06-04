@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -21,6 +22,8 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"golang.org/x/term"
+
+	"github.com/sofatutor/llm-proxy/internal/eventtransformer"
 )
 
 // For testing
@@ -51,6 +54,7 @@ var (
 	debugMode          bool
 	serverLogFile      string
 	serverConfigPath   string
+	fileEventLogPath   string // Path to JSONL file for event logging
 )
 
 // Add this before init()
@@ -72,6 +76,7 @@ func init() {
 	serverCmd.Flags().BoolVarP(&debugMode, "debug", "v", false, "Enable debug logging (overrides log-level)")
 	serverCmd.Flags().StringVar(&serverLogFile, "log-file", "", "Path to log file (overrides env var, default: stdout)")
 	serverCmd.Flags().StringVarP(&serverConfigPath, "config", "c", "", "Path to YAML config file for API providers (overrides API_CONFIG_PATH env var)")
+	serverCmd.Flags().StringVar(&fileEventLogPath, "file-event-log", "", "Path to JSONL file for event logging (single-process only)")
 }
 
 // runServer is the main function for the server command
@@ -255,6 +260,55 @@ func runServerForeground() {
 	s, err := server.New(cfg, tokenStore, projectStore)
 	if err != nil {
 		zapLogger.Fatal("Failed to initialize server", zap.Error(err))
+	}
+
+	// File event log integration (single-process only)
+	if fileEventLogPath != "" {
+		f, err := os.OpenFile(fileEventLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			zapLogger.Fatal("Failed to open file event log", zap.Error(err))
+		}
+		bus := s.EventBus()
+		if bus != nil {
+			ch := bus.Subscribe()
+			go func() {
+				for evt := range ch {
+					// Convert eventbus.Event to map[string]interface{} for transformer
+					b, err := json.Marshal(evt)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "failed to marshal event: %v\n", err)
+						continue
+					}
+					var m map[string]interface{}
+					if err := json.Unmarshal(b, &m); err != nil {
+						fmt.Fprintf(os.Stderr, "failed to unmarshal event: %v\n", err)
+						continue
+					}
+					// TODO: Detect provider from path or config. For now, assume OpenAI for /v1/chat/completions
+					provider := "openai"
+					transformed, err := eventtransformer.DispatchTransformer(provider).TransformEvent(m)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "failed to transform event: %v\n", err)
+						continue
+					}
+					if transformed == nil {
+						continue // skip (e.g., OPTIONS)
+					}
+					line, err := json.Marshal(transformed)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "failed to marshal transformed event: %v\n", err)
+						continue
+					}
+					if _, err := f.Write(append(line, '\n')); err != nil {
+						fmt.Fprintf(os.Stderr, "failed to write event: %v\n", err)
+					}
+				}
+				_ = f.Close()
+			}()
+			zapLogger.Info("File event log enabled", zap.String("path", fileEventLogPath))
+		} else {
+			zapLogger.Warn("File event log requested but event bus is not enabled (set observability in config)")
+		}
 	}
 
 	// Log server starting before launching goroutine

@@ -57,16 +57,16 @@ This document outlines the implementation plan for a transparent proxy for OpenA
    - Indexes for fast lookups
 
 4. **Observability & Logging System**
-   - All backend API instrumentation (OpenAI log events, traces, token usage, etc.) is handled via a generic **async event bus** and **dispatcher(s)**.
+   - All backend API instrumentation (OpenAI log events, traces, token usage, etc.) is handled via a fully **asynchronous event bus** and **dispatcher(s)**.
+   - The event bus now supports multiple subscribers (fan-out), batching, retry logic, and graceful shutdown. Both **InMemoryEventBus** and **RedisEventBus** implementations are available for local and distributed event delivery.
+   - The event bus is always enabled by default, with a larger buffer for high-throughput scenarios.
+   - Middleware captures and restores the request body for all events, and the event context is richer for diagnostics and debugging.
    - The proxy/middleware emits events to the event bus; one or more dispatcher services subscribe and deliver events to their respective backends (file, Helicone, Lunary, AWS EventBridge, etc.).
-   - Synchronous file logging is replaced by a file dispatcher service (run as a CLI with `--service file`).
+   - **File Logging**: Persistent event logging is now handled by a file dispatcher, either via the new `dispatcher` CLI command or the `--file-event-log` flag on the server. The dispatcher writes events to a JSONL file, with event transformation (e.g., OpenAI) applied before writing.
    - **Error Handling & Retry Strategies:**
-     - The event bus and all dispatchers must implement robust error handling and retry logic.
-     - On delivery failure, events should be retried with exponential backoff (configurable max attempts and intervals).
-     - If delivery repeatedly fails, events should be sent to a dead-letter queue or fallback mechanism (e.g., local file, alerting, or persistent storage).
-     - All errors, retries, and failures must be logged and exposed via metrics for monitoring and alerting.
-     - The system should be resilient to transient network or backend outages, ensuring no data loss and eventual delivery where possible.
-   - The event bus supports in-memory and Redis backends for flexibility and scalability.
+     - The event bus and all dispatchers implement robust error handling and retry logic, with exponential backoff and dead-letter/fallback mechanisms.
+     - All errors, retries, and failures are logged and exposed via metrics for monitoring and alerting.
+     - The system is resilient to transient network or backend outages, ensuring no data loss and eventual delivery where possible.
    - All event delivery is non-blocking and batched, with retry and health checks.
    - **zap logger** is used exclusively for application-level logs (errors, startup, admin actions, etc.).
    - This separation ensures minimum latency and maximum extensibility.
@@ -167,15 +167,16 @@ _Optional/experimental features (e.g., alerting, tracing, benchmarks) are tracke
 - Support streaming with Server-Sent Events
 
 ### 5. Observability & Logging System
-- Implement async event bus (in-memory and Redis backends)
-- Refactor middleware to emit all API instrumentation events to the event bus
-- Implement dispatcher CLI with pluggable backends (file, Helicone, CloudWatch, etc.)
-- File logging is handled by the file dispatcher (run as a CLI with `--service file`)
-- All event delivery is async, batched, and non-blocking
-- zap logger remains for app-level logs only
-- Add configuration for enabling/disabling dispatchers and event bus backends
-- Write tests for event bus, dispatcher(s), and integration
-- Document the new observability pipeline and extension points
+- Implement async event bus (in-memory and Redis backends) with fan-out, batching, retry logic, and graceful shutdown.
+- Refactor middleware to emit all API instrumentation events to the event bus, capturing and restoring request bodies and providing richer event context.
+- Implement dispatcher CLI with pluggable backends (file, Helicone, CloudWatch, etc.).
+- File logging is handled by the file dispatcher (run as a CLI with `--service file`) or via the `--file-event-log` flag on the server.
+- All event delivery is async, batched, and non-blocking.
+- zap logger remains for app-level logs only.
+- Add configuration for enabling/disabling dispatchers and event bus backends.
+- Write comprehensive tests for event bus (in-memory and Redis), dispatcher(s), and integration.
+- Document the new observability pipeline and extension points.
+- **OpenAI Token Counting**: Token counting for OpenAI events is now accurate: `completion_tokens` are counted only from the assistant's reply, and `prompt_tokens` from the request's `messages` array. The `tiktoken-go` dependency is used for this purpose, with comprehensive unit tests for edge and error cases.
 
 ### 6. Admin UI
 - Design HTML interface with basic CSS
@@ -399,11 +400,11 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 - [x] Implement asynchronous worker for external logging:
   - Buffered sending
   - Batch processing
-- [ ] **Refactor all backend API instrumentation to use the async event bus and dispatcher(s) architecture**
-- [ ] Implement file dispatcher as the default backend for local logging
-- [ ] Add configuration for enabling/disabling dispatchers and event bus backends
-- [ ] Add tests for event bus, dispatcher(s), and integration
-- [ ] Document the new observability pipeline and extension points
+- [x] Refactor all backend API instrumentation to use the async event bus and dispatcher(s) architecture
+- [x] Implement file dispatcher as the default backend for local logging
+- [x] Add configuration for enabling/disabling dispatchers and event bus backends
+- [x] Add tests for event bus, dispatcher(s), and integration
+- [x] Document the new observability pipeline and extension points
 - [ ] Add structured logging throughout the application
 - [ ] Implement log context propagation
 - [ ] Create log search and filtering utilities
@@ -425,11 +426,11 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 ## Project Directory Structure (Updated)
 
 - `cmd/proxy/`: Main CLI for the LLM Proxy. Contains all user/server commands (setup, server, openai chat, benchmark, etc.), tests, and documentation for the main CLI.
+- `cmd/eventdispatcher/`: Standalone CLI tool for running the event dispatcher and writing events to a file (JSONL) or other backends.
 - `internal/`: Shared logic, server, config, token, database, etc.
 - `internal/middleware/instrumentation.go`: Instrumentation middleware emits events to the event bus
 - `internal/eventbus/`: In-memory/redis bus
 - `internal/dispatcher/`: File, Helicone, CloudWatch backends
-- `cmd/event-dispatcher/`: CLI for running dispatcher
 
 **Rationale:**
 - Follows Go best practices and Single Responsibility Principle (SRP).
@@ -478,3 +479,8 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 - All release artifacts (binaries, Docker images, changelogs) are attached to the GitHub Release.
 - The release process is documented in `/docs/release.md` (to be created).
 - All major release, versioning, and operational automation issues are tracked in `docs/issues/` (see: SecOps, Docker, operational, and CLI automation issues).
+
+## Migration/Upgrade Notes
+- The event bus is now always enabled by default; configuration options have changed.
+- For persistent event logging, use the new dispatcher command or the `--file-event-log` flag.
+- OpenAI token counting is now accurate and uses tiktoken-go for all prompt/completion calculations.
