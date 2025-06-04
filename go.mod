@@ -2,8 +2,6 @@ module github.com/sofatutor/llm-proxy
 
 go 1.23.0
 
-toolchain go1.24.3
-
 require (
 	github.com/chzyer/readline v1.5.1
 	github.com/gin-contrib/sessions v1.0.4
