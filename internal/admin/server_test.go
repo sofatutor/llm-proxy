@@ -1613,3 +1613,148 @@ func TestServer_templateFuncs_AllFuncs(t *testing.T) {
 		}
 	})
 }
+
+// Tests to improve coverage for specific functions
+
+func TestAPIClient_DeleteProject_ErrorHandling(t *testing.T) {
+	// Test error in newRequest
+	client := &APIClient{baseURL: "ht!tp://invalid-url", token: "test"}
+	ctx := context.Background()
+	
+	err := client.DeleteProject(ctx, "test-id")
+	if err == nil {
+		t.Error("expected error for invalid URL")
+	}
+}
+
+func TestServer_handleTokensCreate_ValidationErrors(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Test missing required fields
+	t.Run("missing_fields", func(t *testing.T) {
+		s := &Server{engine: gin.New()}
+		s.engine.SetFuncMap(template.FuncMap{})
+		s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens-created.html"))
+
+		s.engine.POST("/tokens", func(c *gin.Context) {
+			var client APIClientInterface = &mockAPIClient{}
+			c.Set("apiClient", client)
+			s.handleTokensCreate(c)
+		})
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/tokens", strings.NewReader(""))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		s.engine.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected status 400, got %d", w.Code)
+		}
+	})
+
+	// Test invalid duration - using out of range value
+	t.Run("invalid_duration_range", func(t *testing.T) {
+		s := &Server{engine: gin.New()}
+		s.engine.SetFuncMap(template.FuncMap{})
+		s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens-created.html"))
+
+		s.engine.POST("/tokens", func(c *gin.Context) {
+			var client APIClientInterface = &mockAPIClient{}
+			c.Set("apiClient", client)
+			s.handleTokensCreate(c)
+		})
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/tokens", strings.NewReader("project_id=test&duration_minutes=999999"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		s.engine.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("expected status 400, got %d", w.Code)
+		}
+	})
+}
+
+func TestServer_templateFuncs_AdditionalCoverage(t *testing.T) {
+	s := &Server{}
+	funcs := s.templateFuncs()
+
+	t.Run("seq_edge_cases", func(t *testing.T) {
+		seq := funcs["seq"].(func(int, int) []int)
+		
+		// Test start > end
+		result := seq(5, 3)
+		if len(result) != 0 {
+			t.Errorf("expected empty slice for start > end, got %v", result)
+		}
+		
+		// Test start == end
+		result = seq(5, 5)
+		if len(result) != 1 || result[0] != 5 {
+			t.Errorf("expected [5] for start == end, got %v", result)
+		}
+		
+		// Test normal case
+		result = seq(1, 3)
+		expected := []int{1, 2, 3}
+		if len(result) != len(expected) {
+			t.Errorf("expected %v, got %v", expected, result)
+		}
+		for i, v := range expected {
+			if result[i] != v {
+				t.Errorf("expected %v, got %v", expected, result)
+				break
+			}
+		}
+	})
+
+	t.Run("lt_gt_edge_cases", func(t *testing.T) {
+		lt := funcs["lt"].(func(any, any) bool)
+		gt := funcs["gt"].(func(any, any) bool)
+		
+		// Test int64 comparisons
+		if !lt(int64(5), int64(10)) {
+			t.Error("int64 lt failed")
+		}
+		if !gt(int64(10), int64(5)) {
+			t.Error("int64 gt failed")
+		}
+		
+		// Test time comparisons
+		now := time.Now()
+		later := now.Add(time.Hour)
+		if !lt(now, later) {
+			t.Error("time lt failed")
+		}
+		if !gt(later, now) {
+			t.Error("time gt failed")
+		}
+		
+		// Test unsupported types
+		if lt("string", "other") {
+			t.Error("string lt should return false")
+		}
+		if gt("string", "other") {
+			t.Error("string gt should return false")
+		}
+		
+		// Test type mismatches
+		if lt(5, "string") {
+			t.Error("type mismatch lt should return false")
+		}
+		if gt(5, "string") {
+			t.Error("type mismatch gt should return false")
+		}
+	})
+
+	t.Run("now_function", func(t *testing.T) {
+		now := funcs["now"].(func() time.Time)
+		before := time.Now()
+		result := now()
+		after := time.Now()
+		
+		if result.Before(before) || result.After(after) {
+			t.Error("now function should return current time")
+		}
+	})
+}
