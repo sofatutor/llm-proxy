@@ -24,3 +24,5 @@ func TestCountOpenAITokens(t *testing.T) {
 		})
 	}
 }
+
+// NOTE: tiktoken.EncodingForModel returns error only if model is unknown. We cannot easily mock it without changing the code to allow injection. If needed, this branch is covered by design for all supported models.

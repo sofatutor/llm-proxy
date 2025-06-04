@@ -253,3 +253,192 @@ func TestOpenAITransformer_TransformEvent_ErrorsAndEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+func TestMergeOpenAIStreamingChunks_EdgeCases(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		check func(t *testing.T, merged map[string]any, err error)
+	}{
+		{
+			name:  "malformed JSON line",
+			input: "data: {notjson}\ndata: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if merged["choices"] == nil {
+					t.Error("expected choices in merged result")
+				}
+			},
+		},
+		{
+			name:  "choices empty",
+			input: "data: {\"choices\":[]}",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				choices := merged["choices"].([]map[string]any)
+				if len(choices) == 0 {
+					t.Error("expected at least one choice")
+				}
+			},
+		},
+		{
+			name:  "choices missing delta/content",
+			input: "data: {\"choices\":[{}]}",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			},
+		},
+		{
+			name:  "usage all zero",
+			input: "data: {\"usage\":{\"prompt_tokens\":0,\"completion_tokens\":0,\"total_tokens\":0},\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				if _, ok := merged["usage"]; ok {
+					t.Error("usage should not be present if all fields zero")
+				}
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			merged, err := MergeOpenAIStreamingChunks(c.input)
+			c.check(t, merged, err)
+		})
+	}
+}
+
+func TestMergeThreadStreamingChunks_EdgeCases(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		check func(t *testing.T, merged map[string]any, err error)
+	}{
+		{
+			name:  "missing data line",
+			input: "event: thread.run.created",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			},
+		},
+		{
+			name:  "malformed data line",
+			input: "event: thread.run.created\ndata: notjson",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			},
+		},
+		{
+			name:  "delta missing or not a slice",
+			input: "event: thread.message.delta\ndata: {\"delta\":{}}",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			},
+		},
+		{
+			name:  "completed content not a slice",
+			input: "event: thread.message.completed\ndata: {\"content\":123}",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			},
+		},
+		{
+			name:  "completed content missing text",
+			input: "event: thread.message.completed\ndata: {\"content\":[{\"type\":\"text\"}]}",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			},
+		},
+		{
+			name:  "unknown event type",
+			input: "event: unknown.type\ndata: {\"foo\":1}",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			merged, err := MergeThreadStreamingChunks(c.input)
+			c.check(t, merged, err)
+		})
+	}
+}
+
+func TestOpenAITransformer_TransformEvent_ExtraBranches(t *testing.T) {
+	tr := &OpenAITransformer{}
+	tests := []struct {
+		name  string
+		input map[string]interface{}
+		check func(t *testing.T, out map[string]interface{}, err error)
+	}{
+		{
+			name:  "missing ResponseBody",
+			input: map[string]interface{}{"Method": "POST", "ResponseHeaders": map[string]interface{}{"Content-Type": "application/json"}},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if out != nil && out["response_body"] != nil && out["response_body"] != "" {
+					t.Error("expected response_body to be absent or empty for missing ResponseBody")
+				}
+			},
+		},
+		{
+			name:  "ResponseBody not string",
+			input: map[string]interface{}{"Method": "POST", "ResponseHeaders": map[string]interface{}{"Content-Type": "application/json"}, "ResponseBody": 123},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if out != nil && out["response_body"] != nil && out["response_body"] != "" {
+					t.Error("expected response_body to be absent or empty for non-string ResponseBody")
+				}
+			},
+		},
+		{
+			name:  "binary undecodable data",
+			input: map[string]interface{}{"Method": "POST", "ResponseHeaders": map[string]interface{}{"Content-Type": "audio/mpeg"}, "ResponseBody": base64.StdEncoding.EncodeToString([]byte{0xff, 0xfe, 0xfd})},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if out == nil || out["response_body"] != "[binary or undecodable data]" {
+					t.Error("expected '[binary or undecodable data]' for binary undecodable")
+				}
+			},
+		},
+		{
+			name:  "token usage fallback",
+			input: map[string]interface{}{"Method": "POST", "ResponseHeaders": map[string]interface{}{"Content-Type": "application/json"}, "ResponseBody": base64.StdEncoding.EncodeToString([]byte(`{"choices":[{"message":{"content":"hi"}}]}`)), "RequestBody": "notbase64"},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if _, ok := out["token_usage"]; !ok {
+					t.Error("expected token_usage to be set even if RequestBody is not base64")
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := tr.TransformEvent(tt.input)
+			tt.check(t, out, err)
+		})
+	}
+}
+
+func TestTryBase64DecodeWithLogAndNormalizeToCompactJSON_EdgeCases(t *testing.T) {
+	bad := string([]byte{0xff, 0xfe, 0xfd})
+	if got := tryBase64DecodeWithLog(bad); got != bad {
+		t.Errorf("tryBase64DecodeWithLog: want %q, got %q", bad, got)
+	}
+	if _, _, ok := normalizeToCompactJSON(bad); ok {
+		t.Error("normalizeToCompactJSON: expected not ok for invalid UTF-8/JSON")
+	}
+}

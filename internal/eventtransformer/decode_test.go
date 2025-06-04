@@ -208,3 +208,53 @@ func TestDecompressAndDecode_ErrorsAndEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+func TestDecompressAndDecode_UnusualHeadersAndFallbacks(t *testing.T) {
+	tests := []struct {
+		name    string
+		val     string
+		headers map[string]interface{}
+		wantOK  bool
+		wantOut string
+	}{
+		{
+			name:    "content_encoding as empty slice",
+			val:     base64.StdEncoding.EncodeToString([]byte(`{"foo":"bar"}`)),
+			headers: map[string]interface{}{"content_encoding": []interface{}{}},
+			wantOK:  true,
+			wantOut: `{"foo":"bar"}`,
+		},
+		{
+			name:    "content_type as non-string slice",
+			val:     "somedata",
+			headers: map[string]interface{}{"content_type": []interface{}{123, true}},
+			wantOK:  true,
+			wantOut: "somedata",
+		},
+		{
+			name:    "decompress to invalid utf8",
+			val:     base64.StdEncoding.EncodeToString([]byte{0xff, 0xfe, 0xfd}),
+			headers: map[string]interface{}{"content_encoding": "gzip"},
+			wantOK:  true, // fallback is valid UTF-8 string
+			wantOut: "//79",
+		},
+		{
+			name:    "not base64, not decompressible, not valid utf8",
+			val:     string([]byte{0xff, 0xfe, 0xfd}),
+			headers: map[string]interface{}{},
+			wantOK:  false,
+			wantOut: string([]byte{0xff, 0xfe, 0xfd}),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, ok := DecompressAndDecode(tt.val, tt.headers)
+			if ok != tt.wantOK {
+				t.Errorf("wantOK=%v, got %v", tt.wantOK, ok)
+			}
+			if out != tt.wantOut {
+				t.Errorf("wantOut=%q, got %q", tt.wantOut, out)
+			}
+		})
+	}
+}
