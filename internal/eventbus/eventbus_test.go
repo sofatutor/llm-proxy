@@ -48,9 +48,9 @@ func TestNewInMemoryEventBus(t *testing.T) {
 
 func TestInMemoryEventBus_Publish(t *testing.T) {
 	tests := []struct {
-		name       string
-		bufferSize int
-		events     []Event
+		name        string
+		bufferSize  int
+		events      []Event
 		wantDropped bool
 	}{
 		{
@@ -199,7 +199,7 @@ func TestInMemoryEventBus_PublishAndSubscribe(t *testing.T) {
 		cancel() // Cancel immediately
 
 		testEvent := Event{RequestID: "test-cancelled", Method: "GET", Path: "/test"}
-		
+
 		// This should not panic or block even with cancelled context
 		bus.Publish(ctx, testEvent)
 
@@ -263,7 +263,7 @@ func TestInMemoryEventBus_ConcurrentAccess(t *testing.T) {
 	t.Run("concurrent publish and subscribe", func(t *testing.T) {
 		bus := NewInMemoryEventBus(100)
 		ctx := context.Background()
-		
+
 		// Start publishing events in a goroutine
 		go func() {
 			for i := 0; i < 50; i++ {

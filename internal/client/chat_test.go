@@ -456,11 +456,11 @@ func TestChatClient_SendChatRequest_VerboseModeWithMarshaling(t *testing.T) {
 	client := NewChatClient(server.URL, "test-token")
 	messages := []ChatMessage{{Role: "user", Content: "test"}}
 	options := ChatOptions{
-		Model:       "gpt-4",
+		Model:        "gpt-4",
 		UseStreaming: false,
-		VerboseMode: true, // This should trigger the verbose output
-		Temperature: 0.7,
-		MaxTokens:   100,
+		VerboseMode:  true, // This should trigger the verbose output
+		Temperature:  0.7,
+		MaxTokens:    100,
 	}
 
 	resp, err := client.SendChatRequest(messages, options, nil)

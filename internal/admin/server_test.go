@@ -1620,7 +1620,7 @@ func TestAPIClient_DeleteProject_ErrorHandling(t *testing.T) {
 	// Test error in newRequest
 	client := &APIClient{baseURL: "ht!tp://invalid-url", token: "test"}
 	ctx := context.Background()
-	
+
 	err := client.DeleteProject(ctx, "test-id")
 	if err == nil {
 		t.Error("expected error for invalid URL")
@@ -1681,19 +1681,19 @@ func TestServer_templateFuncs_AdditionalCoverage(t *testing.T) {
 
 	t.Run("seq_edge_cases", func(t *testing.T) {
 		seq := funcs["seq"].(func(int, int) []int)
-		
+
 		// Test start > end
 		result := seq(5, 3)
 		if len(result) != 0 {
 			t.Errorf("expected empty slice for start > end, got %v", result)
 		}
-		
+
 		// Test start == end
 		result = seq(5, 5)
 		if len(result) != 1 || result[0] != 5 {
 			t.Errorf("expected [5] for start == end, got %v", result)
 		}
-		
+
 		// Test normal case
 		result = seq(1, 3)
 		expected := []int{1, 2, 3}
@@ -1711,7 +1711,7 @@ func TestServer_templateFuncs_AdditionalCoverage(t *testing.T) {
 	t.Run("lt_gt_edge_cases", func(t *testing.T) {
 		lt := funcs["lt"].(func(any, any) bool)
 		gt := funcs["gt"].(func(any, any) bool)
-		
+
 		// Test int64 comparisons
 		if !lt(int64(5), int64(10)) {
 			t.Error("int64 lt failed")
@@ -1719,7 +1719,7 @@ func TestServer_templateFuncs_AdditionalCoverage(t *testing.T) {
 		if !gt(int64(10), int64(5)) {
 			t.Error("int64 gt failed")
 		}
-		
+
 		// Test time comparisons
 		now := time.Now()
 		later := now.Add(time.Hour)
@@ -1729,7 +1729,7 @@ func TestServer_templateFuncs_AdditionalCoverage(t *testing.T) {
 		if !gt(later, now) {
 			t.Error("time gt failed")
 		}
-		
+
 		// Test unsupported types
 		if lt("string", "other") {
 			t.Error("string lt should return false")
@@ -1737,7 +1737,7 @@ func TestServer_templateFuncs_AdditionalCoverage(t *testing.T) {
 		if gt("string", "other") {
 			t.Error("string gt should return false")
 		}
-		
+
 		// Test type mismatches
 		if lt(5, "string") {
 			t.Error("type mismatch lt should return false")
@@ -1752,7 +1752,7 @@ func TestServer_templateFuncs_AdditionalCoverage(t *testing.T) {
 		before := time.Now()
 		result := now()
 		after := time.Now()
-		
+
 		if result.Before(before) || result.After(after) {
 			t.Error("now function should return current time")
 		}

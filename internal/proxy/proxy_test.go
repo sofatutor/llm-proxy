@@ -1253,12 +1253,12 @@ func TestExtractResponseMetadata(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		contentType    string
+		name            string
+		contentType     string
 		contentEncoding string
-		body           string
-		expectError    bool
-		expectHeaders  map[string]string
+		body            string
+		expectError     bool
+		expectHeaders   map[string]string
 	}{
 		{
 			name:        "nil body",
@@ -1342,7 +1342,7 @@ func TestExtractResponseMetadata(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				assert.NoError(t, err)
-				
+
 				// Check expected headers
 				for key, expectedValue := range tt.expectHeaders {
 					actualValue := resp.Header.Get(key)
@@ -1362,8 +1362,8 @@ func TestParseOpenAIResponseMetadata_AdditionalCoverage(t *testing.T) {
 	body := `{"usage": {"prompt_tokens": 10.5, "completion_tokens": 20.7, "total_tokens": 31.2}}`
 	metadata, err := p.parseOpenAIResponseMetadata([]byte(body))
 	assert.NoError(t, err)
-	assert.Equal(t, "10", metadata["Prompt-Tokens"])    // Should truncate to int
-	assert.Equal(t, "21", metadata["Completion-Tokens"]) // Should truncate to int  
+	assert.Equal(t, "10", metadata["Prompt-Tokens"])     // Should truncate to int
+	assert.Equal(t, "21", metadata["Completion-Tokens"]) // Should truncate to int
 	assert.Equal(t, "31", metadata["Total-Tokens"])      // Should truncate to int
 
 	// Test case for created as float

@@ -385,7 +385,7 @@ func TestServer_handleReady(t *testing.T) {
 	ts := &mockTokenStore{}
 	ps := &mockProjectStore{}
 	config := &config.Config{
-		ListenAddr: "localhost:0",
+		ListenAddr:    "localhost:0",
 		APIConfigPath: "",
 	}
 	server, err := New(config, ts, ps)
@@ -404,7 +404,7 @@ func TestServer_handleLive(t *testing.T) {
 	ts := &mockTokenStore{}
 	ps := &mockProjectStore{}
 	config := &config.Config{
-		ListenAddr: "localhost:0",
+		ListenAddr:    "localhost:0",
 		APIConfigPath: "",
 	}
 	server, err := New(config, ts, ps)
@@ -423,7 +423,7 @@ func TestServer_handleNotFound(t *testing.T) {
 	ts := &mockTokenStore{}
 	ps := &mockProjectStore{}
 	config := &config.Config{
-		ListenAddr: "localhost:0",
+		ListenAddr:    "localhost:0",
 		APIConfigPath: "",
 	}
 	server, err := New(config, ts, ps)
@@ -476,7 +476,7 @@ func TestServer_handleMetrics_WithProxyMetrics(t *testing.T) {
 	ts := &mockTokenStore{}
 	ps := &mockProjectStore{}
 	config := &config.Config{
-		ListenAddr: "localhost:0",
+		ListenAddr:    "localhost:0",
 		APIConfigPath: "",
 	}
 	server, err := New(config, ts, ps)
@@ -509,13 +509,13 @@ func TestServer_handleMetrics_WithProxyMetrics(t *testing.T) {
 func TestServer_initializeComponents_ErrorHandling(t *testing.T) {
 	ts := &mockTokenStore{}
 	ps := &mockProjectStore{}
-	
+
 	// Test with an invalid API config that might cause initializeAPIRoutes to fail
 	config := &config.Config{
-		ListenAddr: "localhost:0",
+		ListenAddr:    "localhost:0",
 		APIConfigPath: "/invalid/path/that/does/not/exist.yaml",
 	}
-	
+
 	server, err := New(config, ts, ps)
 	require.NoError(t, err)
 
@@ -531,7 +531,7 @@ func TestServer_handleMetrics_NoProxy(t *testing.T) {
 	ts := &mockTokenStore{}
 	ps := &mockProjectStore{}
 	config := &config.Config{
-		ListenAddr: "localhost:0",
+		ListenAddr:    "localhost:0",
 		APIConfigPath: "",
 	}
 	server, err := New(config, ts, ps)
@@ -562,7 +562,7 @@ func TestServer_logRequestMiddleware(t *testing.T) {
 	ts := &mockTokenStore{}
 	ps := &mockProjectStore{}
 	config := &config.Config{
-		ListenAddr: "localhost:0",
+		ListenAddr:    "localhost:0",
 		APIConfigPath: "",
 	}
 	server, err := New(config, ts, ps)
@@ -590,13 +590,13 @@ func TestServer_logRequestMiddleware(t *testing.T) {
 func TestServer_initializeComponents_Success(t *testing.T) {
 	ts := &mockTokenStore{}
 	ps := &mockProjectStore{}
-	
+
 	// Test with a valid API config
 	config := &config.Config{
-		ListenAddr: "localhost:0",
+		ListenAddr:    "localhost:0",
 		APIConfigPath: "", // Empty path should work with defaults
 	}
-	
+
 	server, err := New(config, ts, ps)
 	require.NoError(t, err)
 
