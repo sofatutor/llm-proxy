@@ -39,8 +39,9 @@ jobs:
             go.sum
             go.mod
       
-      - name: Cache development tools
+      - name: Cache development tools (restore)
         uses: actions/cache@v4
+        id: devtools-cache
         with:
           path: |
             ~/.cache/golangci-lint
@@ -60,6 +61,15 @@ jobs:
           
           # Ensure database directory exists
           make db-setup
+      
+      - name: Cache development tools (save)
+        if: steps.devtools-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/golangci-lint
+            ~/go/bin
+          key: ${{ env.CACHE_KEY_PREFIX }}-tools-${{ runner.os }}-${{ hashFiles('Makefile') }}
       
       - name: Verify environment setup
         run: |
