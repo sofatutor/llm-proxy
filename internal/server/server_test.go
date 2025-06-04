@@ -8,13 +8,16 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/sofatutor/llm-proxy/internal/token"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func TestHealthEndpoint(t *testing.T) {
@@ -284,6 +287,26 @@ func (m *mockProjectStore) GetProjectByID(ctx context.Context, id string) (proxy
 func (m *mockProjectStore) UpdateProject(ctx context.Context, p proxy.Project) error { return nil }
 func (m *mockProjectStore) DeleteProject(ctx context.Context, id string) error       { return nil }
 
+// testProjectStore embeds mockProjectStore and allows method overrides for testing
+type testProjectStore struct {
+	*mockProjectStore
+	listProjectsFunc  func(ctx context.Context) ([]proxy.Project, error)
+	createProjectFunc func(ctx context.Context, p proxy.Project) error
+}
+
+func (t *testProjectStore) ListProjects(ctx context.Context) ([]proxy.Project, error) {
+	if t.listProjectsFunc != nil {
+		return t.listProjectsFunc(ctx)
+	}
+	return t.mockProjectStore.ListProjects(ctx)
+}
+func (t *testProjectStore) CreateProject(ctx context.Context, p proxy.Project) error {
+	if t.createProjectFunc != nil {
+		return t.createProjectFunc(ctx, p)
+	}
+	return t.mockProjectStore.CreateProject(ctx, p)
+}
+
 func TestServer_New_WithDependencyInjection_ConfigAndFallback(t *testing.T) {
 	cfg := &config.Config{
 		ListenAddr:         ":8080",
@@ -407,4 +430,101 @@ func TestInitializeAPIRoutes_ConfigFallback(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected fallback config, got error: %v", err)
 	}
+}
+
+func TestHandleProjects_And_CreateProject_EdgeCases(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":8080", RequestTimeout: 30 * time.Second, ManagementToken: "testtoken"}
+	logger := zap.NewNop()
+	ps := &mockProjectStore{}
+	ts := &mockTokenStore{}
+	srv, err := New(cfg, ts, ps)
+	require.NoError(t, err)
+	srv.logger = logger
+
+	setAuth := func(r *http.Request, token string) {
+		r.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	t.Run("method not allowed", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPut, "/manage/projects", nil)
+		setAuth(r, "testtoken")
+		w := httptest.NewRecorder()
+		srv.handleProjects(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
+	})
+
+	t.Run("auth fail", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodGet, "/manage/projects", nil)
+		setAuth(r, "wrongtoken")
+		w := httptest.NewRecorder()
+		srv.handleProjects(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("GET happy path", func(t *testing.T) {
+		tps := &testProjectStore{mockProjectStore: &mockProjectStore{}}
+		srv.projectStore = tps
+		r := httptest.NewRequest(http.MethodGet, "/manage/projects", nil)
+		setAuth(r, "testtoken")
+		w := httptest.NewRecorder()
+		srv.handleProjects(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+
+	t.Run("GET store error", func(t *testing.T) {
+		tps := &testProjectStore{mockProjectStore: &mockProjectStore{}, listProjectsFunc: func(ctx context.Context) ([]proxy.Project, error) { return nil, errors.New("fail") }}
+		srv.projectStore = tps
+		r := httptest.NewRequest(http.MethodGet, "/manage/projects", nil)
+		setAuth(r, "testtoken")
+		w := httptest.NewRecorder()
+		srv.handleProjects(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	})
+
+	t.Run("POST bad JSON", func(t *testing.T) {
+		r := httptest.NewRequest(http.MethodPost, "/manage/projects", strings.NewReader("notjson"))
+		setAuth(r, "testtoken")
+		w := httptest.NewRecorder()
+		srv.handleProjects(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("POST missing fields", func(t *testing.T) {
+		body := `{"name":""}`
+		r := httptest.NewRequest(http.MethodPost, "/manage/projects", strings.NewReader(body))
+		setAuth(r, "testtoken")
+		w := httptest.NewRecorder()
+		srv.handleProjects(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("POST store error", func(t *testing.T) {
+		tps := &testProjectStore{mockProjectStore: &mockProjectStore{}, createProjectFunc: func(ctx context.Context, p proxy.Project) error { return errors.New("fail") }}
+		srv.projectStore = tps
+		body := `{"name":"foo","openai_api_key":"bar"}`
+		r := httptest.NewRequest(http.MethodPost, "/manage/projects", strings.NewReader(body))
+		setAuth(r, "testtoken")
+		w := httptest.NewRecorder()
+		srv.handleProjects(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	})
+
+	t.Run("POST happy path", func(t *testing.T) {
+		tps := &testProjectStore{mockProjectStore: &mockProjectStore{}, createProjectFunc: func(ctx context.Context, p proxy.Project) error { return nil }}
+		srv.projectStore = tps
+		body := `{"name":"foo","openai_api_key":"bar"}`
+		r := httptest.NewRequest(http.MethodPost, "/manage/projects", strings.NewReader(body))
+		setAuth(r, "testtoken")
+		w := httptest.NewRecorder()
+		srv.handleProjects(w, r)
+		resp := w.Result()
+		assert.Equal(t, http.StatusCreated, resp.StatusCode)
+	})
 }
