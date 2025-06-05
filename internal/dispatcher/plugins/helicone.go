@@ -33,15 +33,15 @@ func (p *HeliconePlugin) Init(cfg map[string]string) error {
 	if !ok || apiKey == "" {
 		return fmt.Errorf("helicone plugin requires 'api-key' configuration")
 	}
-
+	
 	endpoint, ok := cfg["endpoint"]
 	if !ok || endpoint == "" {
 		endpoint = "https://api.hconeai.com/v1/request"
 	}
-
+	
 	p.apiKey = apiKey
 	p.endpoint = endpoint
-
+	
 	return nil
 }
 
@@ -50,14 +50,14 @@ func (p *HeliconePlugin) SendEvents(ctx context.Context, events []dispatcher.Eve
 	if len(events) == 0 {
 		return nil
 	}
-
+	
 	// Helicone expects individual requests, so we send them one by one
 	for _, event := range events {
 		if err := p.sendSingleEvent(ctx, event); err != nil {
 			return fmt.Errorf("failed to send event %s: %w", event.RunID, err)
 		}
 	}
-
+	
 	return nil
 }
 
@@ -67,25 +67,25 @@ func (p *HeliconePlugin) sendSingleEvent(ctx context.Context, event dispatcher.E
 	if err != nil {
 		return fmt.Errorf("failed to marshal event: %w", err)
 	}
-
+	
 	req, err := http.NewRequestWithContext(ctx, "POST", p.endpoint, bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-
+	
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)
-
+	
 	resp, err := p.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
-
+	
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("helicone API returned status %d", resp.StatusCode)
 	}
-
+	
 	return nil
 }
 

@@ -33,15 +33,15 @@ func (p *LunaryPlugin) Init(cfg map[string]string) error {
 	if !ok || apiKey == "" {
 		return fmt.Errorf("lunary plugin requires 'api-key' configuration")
 	}
-
+	
 	endpoint, ok := cfg["endpoint"]
 	if !ok || endpoint == "" {
 		endpoint = "https://api.lunary.ai/v1/runs/ingest"
 	}
-
+	
 	p.apiKey = apiKey
 	p.endpoint = endpoint
-
+	
 	return nil
 }
 
@@ -50,31 +50,31 @@ func (p *LunaryPlugin) SendEvents(ctx context.Context, events []dispatcher.Event
 	if len(events) == 0 {
 		return nil
 	}
-
+	
 	// Lunary expects an array of events
 	data, err := json.Marshal(events)
 	if err != nil {
 		return fmt.Errorf("failed to marshal events: %w", err)
 	}
-
+	
 	req, err := http.NewRequestWithContext(ctx, "POST", p.endpoint, bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-
+	
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)
-
+	
 	resp, err := p.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
-
+	
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("lunary API returned status %d", resp.StatusCode)
 	}
-
+	
 	return nil
 }
 

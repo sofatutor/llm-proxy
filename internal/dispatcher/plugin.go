@@ -20,12 +20,12 @@ type EventPayload struct {
 	Output      json.RawMessage `json:"output,omitempty"`
 
 	// Additional fields for enhanced observability
-	UserID      *string        `json:"userId,omitempty"`
-	TokensUsage *TokensUsage   `json:"tokensUsage,omitempty"`
-	UserProps   map[string]any `json:"userProps,omitempty"`
-	Extra       map[string]any `json:"extra,omitempty"`
-	Metadata    map[string]any `json:"metadata,omitempty"`
-	Tags        []string       `json:"tags,omitempty"`
+	UserID      *string            `json:"userId,omitempty"`
+	TokensUsage *TokensUsage       `json:"tokensUsage,omitempty"`
+	UserProps   map[string]any     `json:"userProps,omitempty"`
+	Extra       map[string]any     `json:"extra,omitempty"`
+	Metadata    map[string]any     `json:"metadata,omitempty"`
+	Tags        []string           `json:"tags,omitempty"`
 }
 
 // TokensUsage represents token usage statistics
@@ -38,10 +38,10 @@ type TokensUsage struct {
 type BackendPlugin interface {
 	// Init initializes the plugin with configuration
 	Init(cfg map[string]string) error
-
+	
 	// SendEvents sends a batch of events to the backend
 	SendEvents(ctx context.Context, events []EventPayload) error
-
+	
 	// Close cleans up any resources used by the plugin
 	Close() error
 }

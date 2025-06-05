@@ -17,11 +17,11 @@ func init() {
 	Registry["file"] = func() dispatcher.BackendPlugin {
 		return NewFilePlugin()
 	}
-
+	
 	Registry["lunary"] = func() dispatcher.BackendPlugin {
 		return NewLunaryPlugin()
 	}
-
+	
 	Registry["helicone"] = func() dispatcher.BackendPlugin {
 		return NewHeliconePlugin()
 	}
@@ -33,7 +33,7 @@ func NewPlugin(name string) (dispatcher.BackendPlugin, error) {
 	if !exists {
 		return nil, fmt.Errorf("unknown plugin: %s", name)
 	}
-
+	
 	return factory(), nil
 }
 
