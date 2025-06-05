@@ -106,6 +106,26 @@ func TestFilePluginErrors(t *testing.T) {
 	}
 }
 
+func TestFilePlugin_CloseEdgeCases(t *testing.T) {
+	plugin := NewFilePlugin()
+	// Close before Init (file is nil)
+	if err := plugin.Close(); err != nil {
+		t.Errorf("Close should not error when file is nil: %v", err)
+	}
+	// Init and close twice
+	tmpFile := "/tmp/test-file-plugin-close.jsonl"
+	cfg := map[string]string{"endpoint": tmpFile}
+	if err := plugin.Init(cfg); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	if err := plugin.Close(); err != nil {
+		t.Errorf("First Close failed: %v", err)
+	}
+	// Second close may return an error (Go os.File.Close returns error if already closed)
+	_ = plugin.Close()
+	_ = os.Remove(tmpFile)
+}
+
 func TestLunaryPlugin(t *testing.T) {
 	plugin := NewLunaryPlugin()
 
@@ -162,6 +182,37 @@ func TestLunaryPlugin(t *testing.T) {
 	}
 }
 
+func TestLunaryPlugin_SendEvents_EdgeCases(t *testing.T) {
+	plugin := NewLunaryPlugin()
+	cfg := map[string]string{"api-key": "test-key", "endpoint": "http://127.0.0.1:0/invalid"}
+	if err := plugin.Init(cfg); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	t.Run("empty events", func(t *testing.T) {
+		if err := plugin.SendEvents(context.Background(), nil); err != nil {
+			t.Errorf("SendEvents with nil events should not error: %v", err)
+		}
+		if err := plugin.SendEvents(context.Background(), []dispatcher.EventPayload{}); err != nil {
+			t.Errorf("SendEvents with empty slice should not error: %v", err)
+		}
+	})
+	t.Run("invalid endpoint", func(t *testing.T) {
+		events := []dispatcher.EventPayload{{Type: "test", Event: "fail", RunID: "fail"}}
+		err := plugin.SendEvents(context.Background(), events)
+		if err == nil {
+			t.Error("Expected error for invalid endpoint")
+		}
+	})
+}
+
+func TestLunaryPlugin_Init_Errors(t *testing.T) {
+	plugin := NewLunaryPlugin()
+	// Missing api-key
+	if err := plugin.Init(map[string]string{}); err == nil {
+		t.Error("Expected error for missing api-key")
+	}
+}
+
 func TestHeliconePlugin(t *testing.T) {
 	plugin := NewHeliconePlugin()
 
@@ -204,6 +255,37 @@ func TestHeliconePlugin(t *testing.T) {
 	err = plugin.Close()
 	if err != nil {
 		t.Fatalf("Close failed: %v", err)
+	}
+}
+
+func TestHeliconePlugin_SendEvents_EdgeCases(t *testing.T) {
+	plugin := NewHeliconePlugin()
+	cfg := map[string]string{"api-key": "test-key", "endpoint": "http://127.0.0.1:0/invalid"}
+	if err := plugin.Init(cfg); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	t.Run("empty events", func(t *testing.T) {
+		if err := plugin.SendEvents(context.Background(), nil); err != nil {
+			t.Errorf("SendEvents with nil events should not error: %v", err)
+		}
+		if err := plugin.SendEvents(context.Background(), []dispatcher.EventPayload{}); err != nil {
+			t.Errorf("SendEvents with empty slice should not error: %v", err)
+		}
+	})
+	t.Run("invalid endpoint", func(t *testing.T) {
+		events := []dispatcher.EventPayload{{Type: "test", Event: "fail", RunID: "fail"}}
+		err := plugin.SendEvents(context.Background(), events)
+		if err == nil {
+			t.Error("Expected error for invalid endpoint")
+		}
+	})
+}
+
+func TestHeliconePlugin_Init_Errors(t *testing.T) {
+	plugin := NewHeliconePlugin()
+	// Missing api-key
+	if err := plugin.Init(map[string]string{}); err == nil {
+		t.Error("Expected error for missing api-key")
 	}
 }
 
