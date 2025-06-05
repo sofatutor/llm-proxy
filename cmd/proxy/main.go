@@ -10,22 +10,23 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/sofatutor/llm-proxy/internal/api"
-	"github.com/sofatutor/llm-proxy/internal/eventbus"
+	"github.com/sofatutor/llm-proxy/internal/dispatcher"
+	"github.com/sofatutor/llm-proxy/internal/dispatcher/plugins"
+	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/setup"
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/sofatutor/llm-proxy/internal/utils"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 )
 
 // Command line flags
@@ -57,7 +58,10 @@ var manageAPIBaseURL string
 var (
 	dispatcherService  string
 	dispatcherEndpoint string
+	dispatcherAPIKey   string
 	dispatcherBuffer   int
+	dispatcherBatch    int
+	dispatcherDetach   bool
 )
 
 // Setup command definition
@@ -271,64 +275,78 @@ var benchmarkCmd *cobra.Command
 var dispatcherCmd = &cobra.Command{
 	Use:   "dispatcher",
 	Short: "Run the event dispatcher service",
-	Long:  `Run the event dispatcher service. Example: llm-proxy dispatcher --service file --endpoint /path/to/file.jsonl`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if dispatcherService == "file" {
-			if dispatcherEndpoint == "" {
-				fmt.Fprintln(os.Stderr, "--endpoint is required for file service")
-				osExit(1)
+	Long:  `Run the event dispatcher service with pluggable backends. Supports file, lunary, and helicone services.`,
+	Run:   runDispatcher,
+}
+
+// runDispatcher is the main function for the dispatcher command
+func runDispatcher(cmd *cobra.Command, args []string) {
+	ctx := context.Background()
+	
+	// Initialize logger
+	logger, err := logging.NewLogger("info", "text", "")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize logger: %v\n", err)
+		osExit(1)
+	}
+	defer func() {
+		if err := logger.Sync(); err != nil {
+			if !strings.Contains(err.Error(), "inappropriate ioctl for device") {
+				log.Printf("Error syncing zap logger: %v", err)
 			}
-			f, err := os.OpenFile(dispatcherEndpoint, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "failed to open file: %v\n", err)
-				osExit(1)
-			}
-			defer func() {
-				if err := f.Close(); err != nil {
-					log.Printf("failed to close file: %v", err)
-				}
-			}()
-
-			bus := eventbus.NewInMemoryEventBus(dispatcherBuffer)
-			defer bus.Stop()
-			sub := bus.Subscribe()
-
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-
-			sigs := make(chan os.Signal, 1)
-			signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-			go func() {
-				<-sigs
-				fmt.Fprintln(os.Stderr, "\nShutting down event dispatcher...")
-				cancel()
-			}()
-
-			log.Printf("File event dispatcher started. Writing events to %s", dispatcherEndpoint)
-
-			for {
-				select {
-				case evt, ok := <-sub:
-					if !ok {
-						return
-					}
-					line, err := json.Marshal(evt)
-					if err != nil {
-						fmt.Fprintf(os.Stderr, "failed to marshal event: %v\n", err)
-						continue
-					}
-					if _, err := f.Write(append(line, '\n')); err != nil {
-						fmt.Fprintf(os.Stderr, "failed to write event: %v\n", err)
-					}
-				case <-ctx.Done():
-					return
-				}
-			}
-		} else {
-			fmt.Fprintf(os.Stderr, "unsupported dispatcher service: %s\n", dispatcherService)
-			osExit(1)
 		}
-	},
+	}()
+	
+	// Create plugin
+	plugin, err := plugins.NewPlugin(dispatcherService)
+	if err != nil {
+		logger.Fatal("Failed to create plugin", zap.Error(err))
+	}
+	
+	// Configure plugin
+	config := make(map[string]string)
+	if dispatcherEndpoint != "" {
+		config["endpoint"] = dispatcherEndpoint
+	}
+	if dispatcherAPIKey != "" {
+		config["api-key"] = dispatcherAPIKey
+	}
+	
+	// Support environment variables for API key
+	if dispatcherAPIKey == "" {
+		if envKey := os.Getenv("LLM_PROXY_API_KEY"); envKey != "" {
+			config["api-key"] = envKey
+		}
+	}
+	
+	if err := plugin.Init(config); err != nil {
+		logger.Fatal("Failed to initialize plugin", zap.Error(err))
+	}
+	
+	// Create dispatcher service
+	dispatcherConfig := dispatcher.Config{
+		BufferSize:     dispatcherBuffer,
+		BatchSize:      dispatcherBatch,
+		FlushInterval:  5 * time.Second,
+		RetryAttempts:  3,
+		RetryBackoff:   time.Second,
+		Plugin:         plugin,
+	}
+	
+	service, err := dispatcher.NewService(dispatcherConfig, logger)
+	if err != nil {
+		logger.Fatal("Failed to create dispatcher service", zap.Error(err))
+	}
+	
+	// Start the service
+	logger.Info("Starting dispatcher service", 
+		zap.String("service", dispatcherService),
+		zap.String("endpoint", dispatcherEndpoint),
+		zap.Bool("detach", dispatcherDetach))
+	
+	if err := service.Run(ctx, dispatcherDetach); err != nil {
+		logger.Fatal("Dispatcher service error", zap.Error(err))
+	}
 }
 
 func init() {
@@ -1128,9 +1146,12 @@ func init() {
 	cobraRoot.PersistentFlags().StringVar(&manageAPIBaseURL, "manage-api-base-url", "http://localhost:8080", "Base URL for management API (default: http://localhost:8080)")
 
 	// Add dispatcher command flags
-	dispatcherCmd.Flags().StringVar(&dispatcherService, "service", "file", "Dispatcher service type (file)")
-	dispatcherCmd.Flags().StringVar(&dispatcherEndpoint, "endpoint", "", "Dispatcher endpoint (for file: path to JSONL file)")
-	dispatcherCmd.Flags().IntVar(&dispatcherBuffer, "buffer", 100, "Event bus buffer size")
+	dispatcherCmd.Flags().StringVar(&dispatcherService, "service", "file", "Dispatcher service type (file, lunary, helicone)")
+	dispatcherCmd.Flags().StringVar(&dispatcherEndpoint, "endpoint", "", "Dispatcher endpoint URL (file: path, lunary/helicone: API endpoint)")
+	dispatcherCmd.Flags().StringVar(&dispatcherAPIKey, "api-key", "", "API key for external services (lunary, helicone)")
+	dispatcherCmd.Flags().IntVar(&dispatcherBuffer, "buffer", 1000, "Event bus buffer size")
+	dispatcherCmd.Flags().IntVar(&dispatcherBatch, "batch-size", 100, "Batch size for sending events")
+	dispatcherCmd.Flags().BoolVar(&dispatcherDetach, "detach", false, "Run in background (daemon mode)")
 	rootCmd.AddCommand(dispatcherCmd)
 }
 
