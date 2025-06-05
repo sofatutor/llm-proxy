@@ -34,6 +34,7 @@ type Service struct {
 	stopOnce sync.Once
 
 	// metrics
+	mu              sync.Mutex
 	eventsProcessed int64
 	eventsDropped   int64
 	eventsSent      int64
@@ -176,8 +177,10 @@ func (s *Service) processEvents(ctx context.Context) {
 			// Transform the event
 			payload, err := s.config.EventTransformer.Transform(evt)
 			if err != nil {
-				s.logger.Error("Failed to transform event", zap.Error(err))
+				s.mu.Lock()
 				s.eventsDropped++
+				s.mu.Unlock()
+				s.logger.Error("Failed to transform event", zap.Error(err))
 				continue
 			}
 
@@ -187,7 +190,9 @@ func (s *Service) processEvents(ctx context.Context) {
 			}
 
 			batch = append(batch, *payload)
+			s.mu.Lock()
 			s.eventsProcessed++
+			s.mu.Unlock()
 
 			// Send batch if it's full
 			if len(batch) >= s.config.BatchSize {
@@ -217,7 +222,9 @@ func (s *Service) sendBatch(ctx context.Context, batch []EventPayload) {
 	for attempt := 0; attempt <= s.config.RetryAttempts; attempt++ {
 		err := s.config.Plugin.SendEvents(ctx, batch)
 		if err == nil {
+			s.mu.Lock()
 			s.eventsSent += int64(len(batch))
+			s.mu.Unlock()
 			s.logger.Debug("Successfully sent batch",
 				zap.Int("batch_size", len(batch)),
 				zap.Int("attempt", attempt+1))
@@ -242,12 +249,16 @@ func (s *Service) sendBatch(ctx context.Context, batch []EventPayload) {
 			s.logger.Error("Failed to send batch after all retries",
 				zap.Error(err),
 				zap.Int("batch_size", len(batch)))
+			s.mu.Lock()
 			s.eventsDropped += int64(len(batch))
+			s.mu.Unlock()
 		}
 	}
 }
 
 // Stats returns service statistics
 func (s *Service) Stats() (processed, dropped, sent int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.eventsProcessed, s.eventsDropped, s.eventsSent
 }

@@ -19,7 +19,11 @@ func TestFilePlugin(t *testing.T) {
 
 	// Test Init with valid endpoint
 	tmpFile := "/tmp/test-file-plugin.jsonl"
-	defer os.Remove(tmpFile)
+	defer func() {
+		if err := os.Remove(tmpFile); err != nil {
+			t.Errorf("failed to remove tmpFile: %v", err)
+		}
+	}()
 
 	cfg := map[string]string{
 		"endpoint": tmpFile,
