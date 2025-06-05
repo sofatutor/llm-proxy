@@ -282,7 +282,7 @@ var dispatcherCmd = &cobra.Command{
 // runDispatcher is the main function for the dispatcher command
 func runDispatcher(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
-	
+
 	// Initialize logger
 	logger, err := logging.NewLogger("info", "text", "")
 	if err != nil {
@@ -296,13 +296,13 @@ func runDispatcher(cmd *cobra.Command, args []string) {
 			}
 		}
 	}()
-	
+
 	// Create plugin
 	plugin, err := plugins.NewPlugin(dispatcherService)
 	if err != nil {
 		logger.Fatal("Failed to create plugin", zap.Error(err))
 	}
-	
+
 	// Configure plugin
 	config := make(map[string]string)
 	if dispatcherEndpoint != "" {
@@ -311,39 +311,39 @@ func runDispatcher(cmd *cobra.Command, args []string) {
 	if dispatcherAPIKey != "" {
 		config["api-key"] = dispatcherAPIKey
 	}
-	
+
 	// Support environment variables for API key
 	if dispatcherAPIKey == "" {
 		if envKey := os.Getenv("LLM_PROXY_API_KEY"); envKey != "" {
 			config["api-key"] = envKey
 		}
 	}
-	
+
 	if err := plugin.Init(config); err != nil {
 		logger.Fatal("Failed to initialize plugin", zap.Error(err))
 	}
-	
+
 	// Create dispatcher service
 	dispatcherConfig := dispatcher.Config{
-		BufferSize:     dispatcherBuffer,
-		BatchSize:      dispatcherBatch,
-		FlushInterval:  5 * time.Second,
-		RetryAttempts:  3,
-		RetryBackoff:   time.Second,
-		Plugin:         plugin,
+		BufferSize:    dispatcherBuffer,
+		BatchSize:     dispatcherBatch,
+		FlushInterval: 5 * time.Second,
+		RetryAttempts: 3,
+		RetryBackoff:  time.Second,
+		Plugin:        plugin,
 	}
-	
+
 	service, err := dispatcher.NewService(dispatcherConfig, logger)
 	if err != nil {
 		logger.Fatal("Failed to create dispatcher service", zap.Error(err))
 	}
-	
+
 	// Start the service
-	logger.Info("Starting dispatcher service", 
+	logger.Info("Starting dispatcher service",
 		zap.String("service", dispatcherService),
 		zap.String("endpoint", dispatcherEndpoint),
 		zap.Bool("detach", dispatcherDetach))
-	
+
 	if err := service.Run(ctx, dispatcherDetach); err != nil {
 		logger.Fatal("Dispatcher service error", zap.Error(err))
 	}

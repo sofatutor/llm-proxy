@@ -10,7 +10,7 @@ import (
 
 func TestDefaultEventTransformer_Transform(t *testing.T) {
 	transformer := &DefaultEventTransformer{}
-	
+
 	tests := []struct {
 		name     string
 		event    eventbus.Event
@@ -55,57 +55,57 @@ func TestDefaultEventTransformer_Transform(t *testing.T) {
 			wantNil: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := transformer.Transform(tt.event)
 			if err != nil {
 				t.Fatalf("Transform failed: %v", err)
 			}
-			
+
 			if tt.wantNil {
 				if result != nil {
 					t.Errorf("Expected nil result for %s request", tt.event.Method)
 				}
 				return
 			}
-			
+
 			if result == nil {
 				t.Fatal("Expected non-nil result")
 			}
-			
+
 			if result.Type != tt.wantType {
 				t.Errorf("Expected Type %s, got %s", tt.wantType, result.Type)
 			}
-			
+
 			if result.RunID == "" {
 				t.Error("Expected non-empty RunID")
 			}
-			
+
 			if result.Event != "start" {
 				t.Errorf("Expected Event 'start', got %s", result.Event)
 			}
-			
+
 			// Check metadata
 			if result.Metadata == nil {
 				t.Fatal("Expected non-nil Metadata")
 			}
-			
+
 			if result.Metadata["method"] != tt.event.Method {
-				t.Errorf("Expected method %s in metadata, got %s", 
+				t.Errorf("Expected method %s in metadata, got %s",
 					tt.event.Method, result.Metadata["method"])
 			}
-			
+
 			if result.Metadata["request_id"] != tt.event.RequestID {
-				t.Errorf("Expected request_id %s in metadata, got %s", 
+				t.Errorf("Expected request_id %s in metadata, got %s",
 					tt.event.RequestID, result.Metadata["request_id"])
 			}
-			
+
 			// Check input/output
 			if len(tt.event.RequestBody) > 0 && result.Input == nil {
 				t.Error("Expected Input to be set when RequestBody is present")
 			}
-			
+
 			if len(tt.event.ResponseBody) > 0 && result.Output == nil {
 				t.Error("Expected Output to be set when ResponseBody is present")
 			}

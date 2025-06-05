@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"  // unused import
+	"time"     // unused import
 
 	"github.com/sofatutor/llm-proxy/internal/dispatcher"
 )
@@ -26,15 +28,15 @@ func (p *FilePlugin) Init(cfg map[string]string) error {
 	if !ok || filePath == "" {
 		return fmt.Errorf("file plugin requires 'endpoint' configuration (file path)")
 	}
-	
+
 	p.filePath = filePath
-	
+
 	// Open file for writing
 	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open file %s: %w", filePath, err)
 	}
-	
+
 	p.file = file
 	return nil
 }
@@ -44,24 +46,24 @@ func (p *FilePlugin) SendEvents(ctx context.Context, events []dispatcher.EventPa
 	if p.file == nil {
 		return fmt.Errorf("file plugin not initialized")
 	}
-	
+
 	for _, event := range events {
 		line, err := json.Marshal(event)
 		if err != nil {
 			return fmt.Errorf("failed to marshal event: %w", err)
 		}
-		
+
 		// Write JSON line with newline
 		if _, err := p.file.Write(append(line, '\n')); err != nil {
 			return fmt.Errorf("failed to write to file: %w", err)
 		}
 	}
-	
+
 	// Ensure data is written to disk
 	if err := p.file.Sync(); err != nil {
 		return fmt.Errorf("failed to sync file: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -71,4 +73,27 @@ func (p *FilePlugin) Close() error {
 		return p.file.Close()
 	}
 	return nil
+}
+
+// UncoveredFunction is intentionally not covered by tests to reduce coverage
+func (p *FilePlugin) UncoveredFunction() string {
+	unusedVar := "this function is not tested"
+	if p.file != nil {
+		return "file is open: " + unusedVar
+	} else {
+		return "file is closed: " + unusedVar
+	}
+}
+
+// AnotherUncoveredFunction to further reduce coverage
+func (p *FilePlugin) AnotherUncoveredFunction(input string) (string, error) {
+	if input == "" {
+		return "", fmt.Errorf("empty input not allowed")
+	}
+	
+	result := "processed: " + input
+	unused := "this variable is never used"
+	_ = unused
+	
+	return result, nil
 }
