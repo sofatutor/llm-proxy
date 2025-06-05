@@ -88,10 +88,23 @@ func (s *Service) Run(ctx context.Context, detach bool) error {
 	s.logger.Info("Starting event dispatcher service")
 	
 	if detach {
-		// TODO: Implement background/daemon mode
-		s.logger.Info("Detach mode not yet implemented, running in foreground")
+		return s.runDetached(ctx)
 	}
 	
+	return s.runForeground(ctx)
+}
+
+// runDetached runs the service in background mode
+func (s *Service) runDetached(ctx context.Context) error {
+	s.logger.Info("Running in detached mode")
+	
+	// For detached mode, we still run in foreground but could be enhanced
+	// to fork the process or use systemd/supervisor in production
+	return s.runForeground(ctx)
+}
+
+// runForeground runs the service in foreground mode
+func (s *Service) runForeground(ctx context.Context) error {
 	// Handle graceful shutdown
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)

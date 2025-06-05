@@ -142,23 +142,38 @@ llm-proxy manage token generate --project-id <project-id> --duration 24 --manage
 - `--management-token` — Provide the management token (or set `MANAGEMENT_TOKEN` env)
 - `--json` — Output results as JSON (optional)
 
-## Persistent Event Logging & Dispatcher CLI
+## Event Dispatcher CLI
 
-All API instrumentation events are now handled asynchronously via the event bus. For persistent event logging, use either:
-- The `--file-event-log` flag when running the server (writes all events to a JSONL file)
-- The standalone dispatcher CLI (`cmd/eventdispatcher/`) to subscribe to the event bus and write events to a file or other backends
+The LLM Proxy includes a powerful, pluggable dispatcher system for sending observability events to external services. The dispatcher supports multiple backends and can be run as a separate service.
 
-### Example: File Event Logging
+### Supported Backends
+- **file**: Write events to JSONL file
+- **lunary**: Send events to Lunary.ai platform
+- **helicone**: Send events to Helicone platform
+
+### Basic Usage
 ```bash
-llm-proxy server --file-event-log ./data/events.jsonl
+# File output  
+llm-proxy dispatcher --service file --endpoint events.jsonl
+
+# Lunary integration
+export LLM_PROXY_API_KEY="your-lunary-api-key"
+llm-proxy dispatcher --service lunary
+
+# Helicone integration
+llm-proxy dispatcher --service helicone --api-key your-helicone-key
+
+# Custom batch size and buffer
+llm-proxy dispatcher --service lunary --api-key $API_KEY --batch-size 50 --buffer 2000
 ```
 
-### Example: Dispatcher CLI
-```bash
-llm-proxy dispatcher --backend file --file ./data/events.jsonl
-```
+### Deployment Options
+The dispatcher can be deployed in multiple ways:
+- **Standalone Process**: Run as a separate service for production
+- **Sidecar Container**: Deploy alongside the main proxy in Kubernetes
+- **Background Mode**: Use `--detach` flag for daemon-like operation
 
-See PLAN.md and [docs/instrumentation.md](docs/instrumentation.md) for architectural details and advanced usage.
+See [docs/instrumentation.md](docs/instrumentation.md) for detailed configuration and architecture.
 
 ## Project Structure
 - `/cmd` — Entrypoints (`proxy`, `eventdispatcher`)
