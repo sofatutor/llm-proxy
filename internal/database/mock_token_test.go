@@ -222,3 +222,8 @@ func TestTokenStoreAdapter_GetTokensByProjectID(t *testing.T) {
 		assert.Equal(t, "p1", tk.ProjectID)
 	}
 }
+
+func TestMockTokenStore_CallEdgeCases(t *testing.T) {
+	// Call the edge cases test function to ensure it's covered
+	TestMockTokenStore_EdgeCases(t)
+}

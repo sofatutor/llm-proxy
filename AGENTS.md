@@ -21,7 +21,7 @@ This file provides essential context and rules for both human and AI contributor
 ---
 
 ## Development Environment
-- Use Go 1.21+ (see `.tool-versions` or Dockerfile for specifics).
+- Use Go 1.23+ (see `.tool-versions` or Dockerfile for specifics).
 - Install dependencies with `make deps` or `go mod tidy`.
 - Use `make lint` to run all linters (golangci-lint, gofmt, etc.).
 - Use `make test` to run all tests (unit, race, coverage).
