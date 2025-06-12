@@ -88,3 +88,4 @@ ENV LISTEN_ADDR=:8080 \
 
 # Run the application
 ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["server"]
