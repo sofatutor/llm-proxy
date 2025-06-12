@@ -9,10 +9,12 @@ RUN go mod download
 # Copy the rest of the source code
 COPY . .
 
-# Build the application
-# Security: Build with hardening flags
-RUN CGO_ENABLED=0 GOOS=linux \
-    go build -a -ldflags "-w -extldflags '-static'" \
+# Install build dependencies for CGO and SQLite
+RUN apk add --no-cache gcc musl-dev sqlite-dev
+
+# Build the application with CGO enabled for go-sqlite3
+RUN CGO_ENABLED=1 GOOS=linux \
+    go build -a -ldflags "-w" \
     -trimpath -o /llm-proxy ./cmd/proxy
 
 # Use a small alpine image for the final container
@@ -21,7 +23,8 @@ FROM alpine:3.18
 # Security: Update packages and add CA certificates
 RUN apk update && \
     apk upgrade && \
-    apk --no-cache add ca-certificates tzdata && \
+    apk --no-cache add ca-certificates tzdata sqlite-libs && \
+    apk --no-cache add redis && \
     rm -rf /var/cache/apk/*
 
 # Security: Create non-root user and group
@@ -33,15 +36,27 @@ RUN mkdir -p /app/data /app/logs /app/config /app/certs && \
 
 WORKDIR /app
 
+RUN mkdir -p /app/bin
+
 # Copy the binary from the builder stage
-COPY --from=builder --chown=appuser:appgroup /llm-proxy /app/llm-proxy
+COPY --from=builder --chown=appuser:appgroup /llm-proxy /app/bin/llm-proxy
 
 # Security: Set restrictive permissions
-RUN chmod 550 /app/llm-proxy && \
+RUN chmod 550 /app/bin/llm-proxy && \
     chmod -R 750 /app/data /app/logs /app/config /app/certs
 
 # Create default config
 COPY --chown=appuser:appgroup .env.example /app/config/.env.example
+
+# Copy entrypoint script
+COPY --chown=appuser:appgroup entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Copy web templates
+COPY --chown=appuser:appgroup web/templates /app/web/templates
+
+# Copy web assets
+COPY --chown=appuser:appgroup web/static /app/web/static
 
 # Define volumes for data persistence
 VOLUME ["/app/data", "/app/logs", "/app/config", "/app/certs"]
@@ -68,7 +83,8 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Set environment variables
 ENV LISTEN_ADDR=:8080 \
     DATABASE_PATH=/app/data/llm-proxy.db \
-    LOG_FILE=/app/logs/llm-proxy.log
+    PATH=/app/bin:$PATH \
+    ADMIN_UI_API_BASE_URL=http://localhost:8080
 
 # Run the application
-CMD ["/app/llm-proxy"]
+ENTRYPOINT ["/app/entrypoint.sh"]
