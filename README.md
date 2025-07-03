@@ -175,8 +175,23 @@ See PLAN.md and [docs/instrumentation.md](docs/instrumentation.md) for architect
 - Use HTTPS in production (via reverse proxy)
 - See `docs/security.md` and `docs/production.md` for best practices
 
+## Documentation
+
+This README provides a quick overview and getting started guide. For comprehensive documentation, see the `/docs` directory:
+
+### 📚 **[Complete Documentation Index](docs/README.md)**
+
+**Key Documentation:**
+- **[CLI Reference](docs/cli-reference.md)** - Complete command-line interface documentation
+- **[Go Package Documentation](docs/go-packages.md)** - Using LLM Proxy packages in your applications
+- **[Architecture Guide](docs/architecture.md)** - System architecture and design
+- **[API Configuration](docs/api-configuration.md)** - Advanced API provider configuration
+- **[Security Best Practices](docs/security.md)** - Production security guidelines
+- **[Instrumentation Guide](docs/instrumentation.md)** - Event system and observability
+
+**For Developers:**
+- [OpenAPI Specification](api/openapi.yaml) - Machine-readable API definitions
+- [Contributing Guidelines](CONTRIBUTING.md) - How to contribute to the project
+
 ## License
 MIT License
-
----
-For advanced usage, architecture, contributing, and benchmarking, see the `/docs` directory.
