@@ -1,91 +1,285 @@
 # AGENTS.md
 
-# Contributor & Agent Guide
+# LLM Proxy - Agent Guide & Project Context
 
 > **Note on Git & GitHub Management:**
 > - **Always use standard `git` and GitHub CLI (`gh`) commands for all routine git and GitHub repository management (branching, committing, pushing, PR creation, merging, etc.).**
 > - **The MCP tools should only be used for actions or data that are not easily accessible via standard commands, such as automated retrieval of review comments on a PR, or advanced API queries.**
 > - **Do not use the MCP for basic git/GitHub operations that are well-supported by `git` or `gh`.**
-> - **Create (or owerwrite) a temporary md file as NEW_PR.md or NEW_ISSUE.md and as for review. Then use this with gh as a body-file argument. After the issue/pr is created, delete the file unasked.
+> - **Create (or overwrite) a temporary md file as NEW_PR.md or NEW_ISSUE.md and ask for review. Then use this with gh as a body-file argument. After the issue/pr is created, delete the file unasked.**
 
-This file provides essential context and rules for both human and AI contributors working in this repository. It is adapted from the core working agreement in CLAUDE.md and is the primary source of truth for agent-driven development.
-
----
-
-## Repository Structure & Focus
-- **Work in the `internal/`, `cmd/`, and root-level config/docs files.**
-- **docs/issues/** markdown files are the primary source for project status, progress, and workflow. Each major task or feature is tracked as a self-contained issue doc.
-- **PLAN.md** is always up to date and must be referenced for project architecture and objectives.
-- **CLAUDE.md** contains the canonical working agreement; this file summarizes and adapts it for agent use.
+This file provides essential context and rules for both human and AI contributors working in this repository. It serves as the primary source of truth for agent-driven development and includes a Sparse Prime representation of the project documentation.
 
 ---
 
-## Development Environment
-- Use Go 1.21+ (see `.tool-versions` or Dockerfile for specifics).
-- Install dependencies with `make deps` or `go mod tidy`.
-- Use `make lint` to run all linters (golangci-lint, gofmt, etc.).
-- Use `make test` to run all tests (unit, race, coverage).
-- Use `make` to see all available targets.
-- CI runs on Ubuntu with the same Makefile commands.
+## 🎯 Project Overview: LLM Proxy
+
+**What:** A transparent, secure proxy for OpenAI's API with token management, rate limiting, logging, and admin UI.
+
+**Key Features:**
+- **Transparent Proxying** - Minimal request/response transformation, authorization header replacement only
+- **Withering Tokens** - Short-lived tokens with expiration, revocation, and rate limiting
+- **Project-based Access Control** - Multi-tenant architecture with isolated API keys
+- **Async Event System** - Non-blocking instrumentation and observability
+- **Admin Management** - CLI and web interface for project/token management
+
+**Technology Stack:**
+- **Language:** Go 1.23+
+- **Database:** SQLite (production: PostgreSQL)
+- **Architecture:** Reverse proxy using `httputil.ReverseProxy`
+- **Deployment:** Docker, single binary, or container orchestration
 
 ---
 
-## Testing & Validation
-- **Test-Driven Development (TDD) is mandatory:**
-  - Write a failing test before implementing any feature or fix.
-  - All code must be covered by tests (unit, integration, or e2e as appropriate).
-  - Code coverage must remain above 90% (enforced in CI).
-- Run `make lint` and `make test` before every commit and PR.
-- No code is merged unless all tests and linters pass.
-- Use table-driven tests and cover edge/error cases.
+## 📚 Sparse Prime Documentation Map
+
+### **Core Documentation**
+```
+README.md                    → Quick start, overview, basic API usage
+docs/README.md              → Complete documentation index with quick reference
+├── docs/cli-reference.md   → Complete CLI command reference and workflows
+├── docs/go-packages.md     → Go package integration for developers
+├── docs/architecture.md    → System design, data flow, and components
+├── docs/api-configuration.md → Advanced API provider configuration
+├── docs/security.md        → Production security and best practices
+└── docs/instrumentation.md → Event system and observability
+```
+
+### **API Structure (Sparse Prime)**
+```
+Health Endpoints:
+  GET /health, /ready, /live  → Service status and monitoring
+
+Management API (requires MANAGEMENT_TOKEN):
+  GET    /manage/projects     → List all projects
+  POST   /manage/projects     → Create project
+  GET    /manage/projects/{id} → Get project details
+  PATCH  /manage/projects/{id} → Update project
+  DELETE /manage/projects/{id} → Delete project
+  
+  GET    /manage/tokens       → List tokens (filter: ?projectId=X&activeOnly=true)
+  POST   /manage/tokens       → Create token
+  GET    /manage/tokens/{id}  → Get token details
+  DELETE /manage/tokens/{id}  → Revoke token
+
+Proxy API (requires withering token):
+  GET|POST /v1/*              → Proxied to OpenAI (transparent)
+```
+
+### **CLI Structure (Sparse Prime)**
+```
+llm-proxy server              → Start HTTP server
+llm-proxy setup [--interactive] → Configure proxy
+llm-proxy manage project <cmd> → Project CRUD operations
+llm-proxy manage token <cmd>   → Token management
+llm-proxy dispatcher          → Event dispatcher service
+llm-proxy openai chat         → Interactive chat interface
+```
+
+### **Go Package Structure (Sparse Prime)**
+```
+internal/config     → Configuration management (env vars, validation)
+internal/server     → HTTP server, routing, lifecycle management
+internal/token      → Token generation, validation, expiration, rate limiting
+internal/proxy      → Transparent reverse proxy with auth middleware
+internal/database   → SQLite/PostgreSQL storage with interfaces
+internal/eventbus   → Async event publishing/subscription (in-memory/Redis)
+internal/utils      → Cryptographic utilities and helpers
+```
+
+### **Key Environment Variables**
+```
+MANAGEMENT_TOKEN=<required>     → Admin API access
+LISTEN_ADDR=:8080              → Server listen address
+DATABASE_PATH=./data/proxy.db  → SQLite database location
+LOG_LEVEL=info                 → Logging verbosity
+OBSERVABILITY_BUFFER_SIZE=1000 → Event bus buffer size
+```
 
 ---
 
-## Contribution & Style Guidelines
-- **Go best practices:**
-  - Idiomatic naming, clear error handling, and documentation for all exported types/functions.
-  - Keep code DRY, simple, and maintainable.
-  - No TODOs left unresolved in code or docs.
-- **Documentation:**
-  - Update the relevant issue doc in docs/issues/ with every significant change.
-  - Document rationale for changes and workflow updates in the issue doc.
-- **Review process:**
-  - All review comments must be addressed in code or docs before merging.
-  - For performance/architecture feedback, implement the solution immediately (do not defer).
-- **CI Monitoring and Enforcement:**
-  - After any push to the repository, you **must** sleep a few seconds and use `gh run list` to view the latest GitHub Actions runs for your commit/branch.
-  - Retry if not, but once you spotted an active job run, attach to it using `watch`.
-  - Use `gh run watch <run-id>` to monitor the status of each CI job (Lint, Build, Test, etc.) until completion.
-  - **It is mandatory to wait for all CI jobs to complete and to fix any CI failures before proceeding with further work, review, or merging.**
-  - No code is merged unless all CI checks pass for the latest commit.
+## 🏗️ Repository Structure & Focus
+
+**Primary Working Areas:**
+- **`internal/`** - Core application logic (token, proxy, server, database)
+- **`cmd/`** - Entry points (proxy server, eventdispatcher)
+- **`docs/`** - Comprehensive documentation
+- **`api/`** - OpenAPI specifications
+- **Root config files** - Docker, Makefile, go.mod, .env
+
+**Key Project Files:**
+- **`PLAN.md`** - Always current project architecture and objectives
+- **`docs/issues/`** - Primary source for project status and workflow tracking (each task as self-contained issue doc)
+- **`working-agreement.mdc`** - Core development workflow rules
+- **`Makefile`** - All build, test, and development commands
+
+**Working Agreement Principles:**
+1. **Issue Docs as Source of Truth** - Each major task tracked in `docs/issues/` with GitHub issue link
+2. **TDD Mandate** - Failing test first, 90%+ coverage enforced, no merges without tests
+3. **Immediate Resolution** - All review comments addressed in code/docs, no TODOs left unresolved
+4. **Transparency** - Every change documented in issue docs with rationale and process
+5. **Best Practices** - Go idioms, clear naming, documentation for all exports
 
 ---
 
-## PR Instructions
-- **Title format:** `[<area>] <Short Description>` (e.g., `[proxy] Add streaming support`)
-- **Description:**
-  - Reference related checklist items in the relevant issue doc and PLAN.md.
-  - Summarize what changed, why, and how it was validated.
-  - Note any new or updated tests and coverage impact.
-  - Note which issue doc is being addressed.
-- **Checklist before merging:**
-  - [ ] All tests pass (`make test`)
-  - [ ] All linters pass (`make lint`)
-  - [ ] Coverage is 90%+
-  - [ ] Issue doc and PLAN.md are current
-  - [ ] No unresolved TODOs or review comments
-  - [ ] All CI jobs have passed for the latest commit (`gh run list`/`gh run watch`)
+## 🔧 Development Environment
+
+**Setup:**
+```bash
+# Dependencies
+make deps           # Install Go dependencies
+go mod tidy         # Clean up modules
+
+# Development
+make lint          # Run all linters (golangci-lint, gofmt, etc.)
+make test          # Run all tests (unit, race, coverage)
+make test-coverage # Generate coverage reports
+make build         # Build binaries
+
+# See all targets
+make help
+```
+
+**Requirements:**
+- Go 1.23+ (see `.tool-versions` or Dockerfile)
+- SQLite for local development
+- Docker for containerized deployment
 
 ---
 
-## Agent-Specific Instructions
-- **Always use `git` and `gh` for all standard git and GitHub management tasks.**
-- **Only use the MCP for actions or data not easily accessible via `git` or `gh`, such as automated retrieval of review comments on a PR, or advanced API queries.**
-- Always explore relevant context in the current issue doc, PLAN.md, and CLAUDE.md before making changes.
-- Prefer small, reviewable increments and document every step in the relevant issue doc.
-- When in doubt, update documentation and ask for clarification in PRs.
-- Respect the most nested AGENTS.md if present in subfolders.
+## ✅ Testing & Validation (TDD Mandatory)
+
+**Test-Driven Development Rules:**
+1. **Write failing test first** - Before implementing any feature or fix
+2. **90%+ coverage required** - Enforced in CI, no exceptions
+3. **All tests must pass** - Before every commit and PR
+4. **Cover edge cases** - Use table-driven tests, test error conditions
+
+**Validation Commands:**
+```bash
+make test          # Run all tests
+make test-race     # Run with race detection
+make test-coverage # Generate coverage reports
+make lint          # Run all linters
+```
+
+**CI Monitoring (Mandatory):**
+```bash
+# After every push, monitor CI completion
+gh run list        # View latest GitHub Actions runs
+gh run watch <id>  # Monitor specific run until completion
+```
 
 ---
 
-**For more details, see CLAUDE.md and the root Makefile.** 
+## 📝 Contribution & Style Guidelines
+
+**Go Best Practices:**
+- Idiomatic naming, clear error handling
+- Document all exported types/functions
+- Keep code DRY, simple, maintainable
+- No unresolved TODOs in code or docs
+
+**Documentation Updates:**
+- Update relevant `docs/issues/` file with every significant change
+- Document rationale and workflow updates
+- Keep `PLAN.md` current with architecture changes
+
+**Review Process:**
+- Address all review comments in code or docs before merging
+- Implement performance/architecture feedback immediately (no deferral)
+- Validate changes with tests and linters
+
+---
+
+## 🚀 PR Instructions
+
+**Title Format:** `[<area>] <Short Description>`
+Examples: `[proxy] Add streaming support`, `[token] Implement rate limiting`
+
+**Description Template:**
+```markdown
+## Summary
+Brief description of changes and motivation
+
+## Changes
+- List of specific changes made
+- Reference to issue docs/checklist items
+- Related PLAN.md updates
+
+## Testing
+- New tests added
+- Coverage impact
+- Validation performed
+
+## Documentation
+- Updated issue doc: docs/issues/xxx.md
+- Other documentation changes
+
+Fixes #issue-number
+```
+
+**Pre-merge Checklist:**
+- [ ] All tests pass (`make test`)
+- [ ] All linters pass (`make lint`)
+- [ ] Coverage ≥ 90%
+- [ ] Issue doc and PLAN.md updated
+- [ ] No unresolved TODOs or review comments
+- [ ] All CI jobs passed (`gh run list`/`gh run watch`)
+
+---
+
+## 🤖 Agent-Specific Instructions
+
+**Git & GitHub Management:**
+- **Always use `git` and `gh`** for standard operations
+- **Use MCP tools only** for data not accessible via standard commands
+- Create temporary files (NEW_PR.md, NEW_ISSUE.md) for body content, delete after use
+
+**Context Gathering:**
+1. **Check current issue doc** in `docs/issues/` for task context
+2. **Review PLAN.md** for architecture and objectives
+3. **Reference documentation** using the Sparse Prime map above
+4. **Extend context** by reading specific docs as needed
+
+**Development Workflow:**
+1. Understand the task from issue doc and PLAN.md
+2. Write failing tests first (TDD)
+3. Implement minimal solution
+4. Ensure tests pass and coverage ≥ 90%
+5. Run linters and fix issues
+6. Update documentation (issue doc, relevant docs)
+7. Create PR with proper format
+8. Monitor CI completion
+
+**Quality Standards:**
+- Prefer small, reviewable increments
+- Document every significant step in issue docs
+- Respect nested AGENTS.md files if present in subfolders
+- When in doubt, update documentation and ask for clarification
+
+---
+
+## 🔗 Quick Links for Context Extension
+
+**Project Understanding:**
+- [Architecture Overview](docs/architecture.md) - Complete system design
+- [Project Plan](PLAN.md) - Current objectives and roadmap
+- [Working Agreement](working-agreement.mdc) - Core development rules
+
+**Implementation Details:**
+- [CLI Reference](docs/cli-reference.md) - Complete command documentation
+- [Go Packages](docs/go-packages.md) - Package integration guide
+- [API Configuration](docs/api-configuration.md) - Advanced proxy configuration
+
+**Production & Security:**
+- [Security Guide](docs/security.md) - Production security practices
+- [OpenAPI Spec](api/openapi.yaml) - Machine-readable API definitions
+
+**Development Process:**
+- [Issues Directory](docs/issues/) - Active task tracking and context
+- [Contributing Guide](CONTRIBUTING.md) - Detailed contribution process
+
+---
+
+**For complete details, see the [Documentation Index](docs/README.md) and individual documentation files.** 
