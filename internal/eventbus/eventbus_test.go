@@ -100,7 +100,7 @@ func TestRedisEventBusLog_PublishReadCount_TTLAndTrim(t *testing.T) {
 	if events[0].LogID == 0 || events[1].LogID == 0 || events[2].LogID == 0 {
 		t.Fatalf("expected non-zero LogID for all events")
 	}
-	if !(events[0].LogID > events[1].LogID && events[1].LogID > events[2].LogID) {
+	if events[0].LogID <= events[1].LogID || events[1].LogID <= events[2].LogID {
 		t.Fatalf("expected descending LogID order: got %d, %d, %d", events[0].LogID, events[1].LogID, events[2].LogID)
 	}
 

@@ -59,7 +59,9 @@ func TestGetManagementToken(t *testing.T) {
 	if err != nil || tok != "from-env" {
 		t.Fatalf("env token: tok=%q err=%v", tok, err)
 	}
-	os.Unsetenv("MANAGEMENT_TOKEN")
+	if err := os.Unsetenv("MANAGEMENT_TOKEN"); err != nil {
+		t.Fatalf("unset env failed: %v", err)
+	}
 
 	// 3) missing
 	cmd = newCmd()

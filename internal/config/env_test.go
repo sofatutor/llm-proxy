@@ -23,7 +23,9 @@ func TestEnvHelpers(t *testing.T) {
 		t.Fatalf("EnvIntOrDefault: got %d, want 42", got)
 	}
 	if got := EnvIntOrDefault("BAD_INT", 7); got != 7 {
-		os.Setenv("BAD_INT", "oops")
+		if err := os.Setenv("BAD_INT", "oops"); err != nil {
+			t.Fatalf("Setenv BAD_INT failed: %v", err)
+		}
 		// fallback when not parseable or not set
 		got2 := EnvIntOrDefault("BAD_INT", 7)
 		if got2 != 7 {
@@ -38,7 +40,9 @@ func TestEnvHelpers(t *testing.T) {
 		t.Fatalf("EnvBoolOrDefault false: got %v, want false", got)
 	}
 	if got := EnvBoolOrDefault("BAD_BOOL", true); got != true {
-		os.Setenv("BAD_BOOL", "oops")
+		if err := os.Setenv("BAD_BOOL", "oops"); err != nil {
+			t.Fatalf("Setenv BAD_BOOL failed: %v", err)
+		}
 		if EnvBoolOrDefault("BAD_BOOL", true) != true {
 			t.Fatalf("EnvBoolOrDefault bad: expected fallback true")
 		}
@@ -48,7 +52,9 @@ func TestEnvHelpers(t *testing.T) {
 		t.Fatalf("EnvFloat64OrDefault: got %v, want 3.14", got)
 	}
 	if got := EnvFloat64OrDefault("BAD_FLOAT", 1.23); got != 1.23 {
-		os.Setenv("BAD_FLOAT", "oops")
+		if err := os.Setenv("BAD_FLOAT", "oops"); err != nil {
+			t.Fatalf("Setenv BAD_FLOAT failed: %v", err)
+		}
 		if EnvFloat64OrDefault("BAD_FLOAT", 1.23) != 1.23 {
 			t.Fatalf("EnvFloat64OrDefault bad: expected fallback 1.23")
 		}
