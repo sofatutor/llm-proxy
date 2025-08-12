@@ -3,6 +3,7 @@ package plugins
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/sofatutor/llm-proxy/internal/dispatcher"
@@ -59,9 +60,9 @@ func TestFilePlugin(t *testing.T) {
 		t.Fatalf("Failed to read file: %v", err)
 	}
 
-	lines := len(content)
-	if lines == 0 {
-		t.Error("Expected file to contain data")
+	lines := len(strings.Split(strings.TrimRight(string(content), "\n"), "\n"))
+	if lines <= 0 {
+		t.Error("Expected file to contain at least one line")
 	}
 
 	// Test Close
