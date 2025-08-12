@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"testing"
-	"time"
 )
 
 func TestMin(t *testing.T) {
