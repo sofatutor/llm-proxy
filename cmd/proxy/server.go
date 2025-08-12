@@ -67,16 +67,16 @@ var serverCmd = &cobra.Command{
 
 func init() {
 	// Server command flags
-	serverCmd.Flags().BoolVarP(&daemonMode, "daemon", "d", false, "Run server in daemon mode (background)")
-	serverCmd.Flags().StringVar(&serverEnvFile, "env", ".env", "Path to .env file")
-	serverCmd.Flags().StringVar(&serverListenAddr, "addr", "", "Address to listen on (overrides env var)")
-	serverCmd.Flags().StringVar(&serverDatabasePath, "db", "", "Path to SQLite database (overrides env var)")
-	serverCmd.Flags().StringVar(&serverLogLevel, "log-level", "", "Log level: debug, info, warn, error (overrides env var)")
-	serverCmd.Flags().StringVar(&pidFile, "pid-file", "tmp/server.pid", "PID file for daemon mode (relative to project root)")
-	serverCmd.Flags().BoolVarP(&debugMode, "debug", "v", false, "Enable debug logging (overrides log-level)")
-	serverCmd.Flags().StringVar(&serverLogFile, "log-file", "", "Path to log file (overrides env var, default: stdout)")
-	serverCmd.Flags().StringVarP(&serverConfigPath, "config", "c", "", "Path to YAML config file for API providers (overrides API_CONFIG_PATH env var)")
-	serverCmd.Flags().StringVar(&fileEventLogPath, "file-event-log", "", "Path to JSONL file for event logging (single-process only)")
+	serverCmd.Flags().BoolVarP(&daemonMode, "daemon", "d", config.EnvBoolOrDefault("DAEMON", false), "Run server in daemon mode (background)")
+	serverCmd.Flags().StringVar(&serverEnvFile, "env", config.EnvOrDefault("ENV", ".env"), "Path to .env file")
+	serverCmd.Flags().StringVar(&serverListenAddr, "addr", config.EnvOrDefault("LISTEN_ADDR", ""), "Address to listen on (overrides env var)")
+	serverCmd.Flags().StringVar(&serverDatabasePath, "db", config.EnvOrDefault("DATABASE_PATH", ""), "Path to SQLite database (overrides env var)")
+	serverCmd.Flags().StringVar(&serverLogLevel, "log-level", config.EnvOrDefault("LOG_LEVEL", ""), "Log level: debug, info, warn, error (overrides env var)")
+	serverCmd.Flags().StringVar(&pidFile, "pid-file", config.EnvOrDefault("PID_FILE", "tmp/server.pid"), "PID file for daemon mode (relative to project root)")
+	serverCmd.Flags().BoolVarP(&debugMode, "debug", "v", config.EnvBoolOrDefault("DEBUG", false), "Enable debug logging (overrides log-level)")
+	serverCmd.Flags().StringVar(&serverLogFile, "log-file", config.EnvOrDefault("LOG_FILE", ""), "Path to log file (overrides env var, default: stdout)")
+	serverCmd.Flags().StringVarP(&serverConfigPath, "config", "c", config.EnvOrDefault("API_CONFIG_PATH", ""), "Path to YAML config file for API providers (overrides API_CONFIG_PATH env var)")
+	serverCmd.Flags().StringVar(&fileEventLogPath, "file-event-log", config.EnvOrDefault("FILE_EVENT_LOG", ""), "Path to JSONL file for event logging (single-process only)")
 }
 
 // runServer is the main function for the server command
