@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
@@ -18,6 +19,24 @@ import (
 //
 // This service subscribes to the in-memory event bus and writes each event as a JSONL entry to the specified file.
 
+// envOrDefault returns the value of the environment variable if set, otherwise the fallback.
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+// envIntOrDefault returns the int value of the environment variable if set and valid, otherwise the fallback.
+func envIntOrDefault(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			return i
+		}
+	}
+	return fallback
+}
+
 func main() {
 	os.Exit(run())
 }
@@ -27,8 +46,8 @@ func run() int {
 		filePath   string
 		bufferSize int
 	)
-	flag.StringVar(&filePath, "file", "events.jsonl", "Path to the output JSONL file")
-	flag.IntVar(&bufferSize, "buffer", 100, "Event bus buffer size")
+	flag.StringVar(&filePath, "file", envOrDefault("EVENTDISPATCHER_FILE", "events.jsonl"), "Path to the output JSONL file")
+	flag.IntVar(&bufferSize, "buffer", envIntOrDefault("EVENTDISPATCHER_BUFFER", 100), "Event bus buffer size")
 	flag.Parse()
 
 	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)

@@ -10,14 +10,16 @@ import (
 
 // EventPayload represents the extended event format for external services
 type EventPayload struct {
-	Type        string          `json:"type"`
-	Event       string          `json:"event"`
-	RunID       string          `json:"runId"`
-	ParentRunID *string         `json:"parentRunId,omitempty"`
-	Name        *string         `json:"name,omitempty"`
-	Timestamp   time.Time       `json:"timestamp"`
-	Input       json.RawMessage `json:"input,omitempty"`
-	Output      json.RawMessage `json:"output,omitempty"`
+	Type         string          `json:"type"`
+	Event        string          `json:"event"`
+	RunID        string          `json:"runId"`
+	ParentRunID  *string         `json:"parentRunId,omitempty"`
+	Name         *string         `json:"name,omitempty"`
+	Timestamp    time.Time       `json:"timestamp"`
+	Input        json.RawMessage `json:"input,omitempty"`
+	InputBase64  string          `json:"input_base64,omitempty"` // base64 if not valid JSON
+	Output       json.RawMessage `json:"output,omitempty"`
+	OutputBase64 string          `json:"output_base64,omitempty"` // base64 if not valid JSON
 
 	// Additional fields for enhanced observability
 	UserID      *string        `json:"userId,omitempty"`
@@ -26,6 +28,7 @@ type EventPayload struct {
 	Extra       map[string]any `json:"extra,omitempty"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
 	Tags        []string       `json:"tags,omitempty"`
+	LogID       int64          `json:"log_id"` // Unique, monotonic event log ID
 }
 
 // TokensUsage represents token usage statistics
