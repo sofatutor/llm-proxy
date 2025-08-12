@@ -367,36 +367,60 @@ func TestServiceSendBatchErrors(t *testing.T) {
 }
 
 func TestServiceSendBatchWithResult_PermanentError(t *testing.T) {
-    plugin := &mockPlugin{sendErr: &PermanentBackendError{Msg: "perm"}}
-    cfg := Config{Plugin: plugin, RetryAttempts: 2, RetryBackoff: time.Millisecond}
-    bus := eventbus.NewInMemoryEventBus(10)
-    svc, err := NewServiceWithBus(cfg, zaptest.NewLogger(t), bus)
-    if err != nil {
-        t.Fatalf("NewServiceWithBus failed: %v", err)
-    }
-    err = svc.sendBatchWithResult(context.Background(), []EventPayload{{RunID: "r"}})
-    if err != nil {
-        t.Fatalf("expected nil error for permanent backend error, got %v", err)
-    }
+	plugin := &mockPlugin{sendErr: &PermanentBackendError{Msg: "perm"}}
+	cfg := Config{Plugin: plugin, RetryAttempts: 2, RetryBackoff: time.Millisecond}
+	bus := eventbus.NewInMemoryEventBus(10)
+	svc, err := NewServiceWithBus(cfg, zaptest.NewLogger(t), bus)
+	if err != nil {
+		t.Fatalf("NewServiceWithBus failed: %v", err)
+	}
+	err = svc.sendBatchWithResult(context.Background(), []EventPayload{{RunID: "r"}})
+	if err != nil {
+		t.Fatalf("expected nil error for permanent backend error, got %v", err)
+	}
 }
 
 func TestServiceStatsGetter(t *testing.T) {
-    cfg := Config{Plugin: &mockPlugin{}}
-    bus := eventbus.NewInMemoryEventBus(10)
-    svc, err := NewServiceWithBus(cfg, zaptest.NewLogger(t), bus)
-    if err != nil {
-        t.Fatalf("NewServiceWithBus failed: %v", err)
-    }
-    // Increment internal counters via sendBatch
-    svc.mu.Lock()
-    svc.eventsProcessed = 3
-    svc.eventsDropped = 1
-    svc.eventsSent = 2
-    svc.mu.Unlock()
-    p, d, s := svc.Stats()
-    if p != 3 || d != 1 || s != 2 {
-        t.Fatalf("unexpected stats p=%d d=%d s=%d", p, d, s)
-    }
+	cfg := Config{Plugin: &mockPlugin{}}
+	bus := eventbus.NewInMemoryEventBus(10)
+	svc, err := NewServiceWithBus(cfg, zaptest.NewLogger(t), bus)
+	if err != nil {
+		t.Fatalf("NewServiceWithBus failed: %v", err)
+	}
+	// Increment internal counters via sendBatch
+	svc.mu.Lock()
+	svc.eventsProcessed = 3
+	svc.eventsDropped = 1
+	svc.eventsSent = 2
+	svc.mu.Unlock()
+	p, d, s := svc.Stats()
+	if p != 3 || d != 1 || s != 2 {
+		t.Fatalf("unexpected stats p=%d d=%d s=%d", p, d, s)
+	}
+}
+
+func TestServiceSendBatchWithResult_RetryBackoff(t *testing.T) {
+	attempts := 0
+	plugin := &mockPlugin{OnSend: func(_ []EventPayload) error {
+		attempts++
+		if attempts < 2 {
+			return fmt.Errorf("temp fail")
+		}
+		return nil
+	}}
+	cfg := Config{Plugin: plugin, RetryAttempts: 3, RetryBackoff: 5 * time.Millisecond}
+	bus := eventbus.NewInMemoryEventBus(10)
+	svc, err := NewServiceWithBus(cfg, zaptest.NewLogger(t), bus)
+	if err != nil {
+		t.Fatalf("NewServiceWithBus failed: %v", err)
+	}
+	err = svc.sendBatchWithResult(context.Background(), []EventPayload{{RunID: "r"}})
+	if err != nil {
+		t.Fatalf("expected success after retry, got %v", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("expected 2 attempts, got %d", attempts)
+	}
 }
 
 func TestDispatcher_DoesNotDispatchDuplicates(t *testing.T) {
