@@ -1,6 +1,7 @@
 package dispatcher
 
 import (
+	"encoding/json"
 	"net/http"
 	"testing"
 	"time"
@@ -54,6 +55,20 @@ func TestDefaultEventTransformer_Transform(t *testing.T) {
 			},
 			wantNil: true,
 		},
+		{
+			name: "binary body should use base64",
+			event: eventbus.Event{
+				RequestID:    "test-bin",
+				Method:       "POST",
+				Path:         "/v1/chat/completions",
+				Status:       200,
+				Duration:     100 * time.Millisecond,
+				RequestBody:  []byte{0x1f, 0x8b, 0x08, 0x00}, // not valid JSON
+				ResponseBody: []byte{0x1f, 0x8b, 0x08, 0x00},
+			},
+			wantNil:  false,
+			wantType: "llm",
+		},
 	}
 
 	for _, tt := range tests {
@@ -102,12 +117,40 @@ func TestDefaultEventTransformer_Transform(t *testing.T) {
 			}
 
 			// Check input/output
-			if len(tt.event.RequestBody) > 0 && result.Input == nil {
-				t.Error("Expected Input to be set when RequestBody is present")
+			if len(tt.event.RequestBody) > 0 {
+				if json.Valid(tt.event.RequestBody) {
+					if result.Input == nil {
+						t.Error("Expected Input to be set for valid JSON RequestBody")
+					}
+					if result.InputBase64 != "" {
+						t.Error("Expected InputBase64 to be empty for valid JSON RequestBody")
+					}
+				} else {
+					if result.Input == nil {
+						t.Error("Expected Input to be set for non-JSON (binary) RequestBody: should be a placeholder string")
+					}
+					if result.InputBase64 != "" {
+						t.Error("Expected InputBase64 to be empty for non-JSON (binary) RequestBody: now always a placeholder string")
+					}
+				}
 			}
 
-			if len(tt.event.ResponseBody) > 0 && result.Output == nil {
-				t.Error("Expected Output to be set when ResponseBody is present")
+			if len(tt.event.ResponseBody) > 0 {
+				if json.Valid(tt.event.ResponseBody) {
+					if result.Output == nil {
+						t.Error("Expected Output to be set for valid JSON ResponseBody")
+					}
+					if result.OutputBase64 != "" {
+						t.Error("Expected OutputBase64 to be empty for valid JSON ResponseBody")
+					}
+				} else {
+					if result.Output == nil {
+						t.Error("Expected Output to be set for non-JSON (binary) ResponseBody: should be a placeholder string")
+					}
+					if result.OutputBase64 != "" {
+						t.Error("Expected OutputBase64 to be empty for non-JSON (binary) ResponseBody: now always a placeholder string")
+					}
+				}
 			}
 		})
 	}
