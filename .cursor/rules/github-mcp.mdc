@@ -1,0 +1,56 @@
+---
+alwaysApply: true
+description: Guidance for using the GitHub MCP with this repository (owner/repo defaults, how to find the PR for the current branch, and recommended tool usage patterns)
+---
+
+## GitHub MCP Usage Guide for this Repo
+
+- **Repository**: `sofatutor/llm-proxy`
+- **Default base branch**: `main`
+- **Remote URL**: `git@github.com:sofatutor/llm-proxy.git`
+
+### Goals this rule supports
+- **Quickly find the PR for the current branch**, retrieve its description, changed files, reviews, comments, and status checks.
+- **Create/update PRs and issues** as needed during development.
+- **Prefer PR metadata over local git** when reasoning about recent changes.
+
+### How to find the PR for the current branch
+- **Preferred**: Use the branch name and list PRs with `head = "sofatutor:<branch-name>"`.
+  - Then fetch PR details and files.
+- If no PR is found, consider opening one or checking issues.
+
+### Recommended tool calls
+Use these MCP methods (parallelize independent reads):
+- **List PR for branch**: `mcp_github-mcp-server_list_pull_requests` with:
+  - `owner: "sofatutor"`, `repo: "llm-proxy"`, `state: "open"`, `head: "sofatutor:<branch>"`
+- **Get PR details**: `mcp_github-mcp-server_get_pull_request` with PR number.
+- **Get changed files**: `mcp_github-mcp-server_get_pull_request_files`.
+- **Get reviews**: `mcp_github-mcp-server_get_pull_request_reviews`.
+- **Get review comments**: `mcp_github-mcp-server_get_pull_request_comments`.
+- **Get status checks**: `mcp_github-mcp-server_get_pull_request_status`.
+- **Get commits**: `mcp_github-mcp-server_get_pull_request` → follow `commits_url`, or use `mcp_github-mcp-server_get_commit` per SHA.
+
+### Creating or updating
+- **Create PR**: `mcp_github-mcp-server_create_pull_request` (set `base: "main"`, `head: <branch>`).
+- **Update PR**: `mcp_github-mcp-server_update_pull_request` (title/body/state/base), or `mcp_github-mcp-server_update_pull_request_branch` to refresh with latest base.
+- **Comment on PR**: `mcp_github-mcp-server_add_pull_request_review_comment` (or `create_pull_request_review` for multi-comments).
+- **Create/Update file in repo (via GitHub API)**: `mcp_github-mcp-server_create_or_update_file` or `mcp_github-mcp-server_push_files`.
+- **Create/Update issue**: `mcp_github-mcp-server_create_issue`, `mcp_github-mcp-server_update_issue`.
+
+### Conventions and tips
+- **Linking**: When referencing, link like `[PR #41](https://github.com/sofatutor/llm-proxy/pull/41)` or `[Issue #32](https://github.com/sofatutor/llm-proxy/issues/32)`.
+- **Parallelize reads**: When summarizing a PR, fetch details, files, reviews, comments, and status in parallel.
+- **Prefer PR info over local diffs** for “what changed recently?” questions.
+- **Default branch**: assume `main` when creating PRs unless specified otherwise.
+- **Scope**: Use the repository values above unless the user explicitly targets another repo.
+
+### Handy examples
+- Find PR for current branch `copilot/fix-32-2`:
+  - List PRs with `head = "sofatutor:copilot/fix-32-2"` → get PR number.
+  - Fetch details via `get_pull_request` and files via `get_pull_request_files`.
+- Post a review comment on a PR:
+  - Use `mcp_github-mcp-server_add_pull_request_review_comment` with `pull_number`, `path`, `line`, and `body`.
+
+### Related docs in repo
+- Project plan and targets: [PLAN.md](mdc:PLAN.md)
+- Observability/dispatcher design: [docs/instrumentation.md](mdc:docs/instrumentation.md), [docs/issues/phase-5-event-dispatcher-service.md](mdc:docs/issues/phase-5-event-dispatcher-service.md)

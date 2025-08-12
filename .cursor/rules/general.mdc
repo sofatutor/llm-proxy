@@ -1,0 +1,29 @@
+---
+description: General guidelines and best practices for coding, process, and agent behavior in the llm-proxy project.
+globs: 
+alwaysApply: true
+---
+## Coding
+- Follow KISS, DRY, SRP principles; keep files small and structured
+- Avoid duplicating existing code (e.g., event handlers)
+- Add unit tests for significant functional changes
+- Make logical, focused commits
+
+## Process
+- Follow planning documents exactly when adding/migrating features
+- Update task status as work progresses
+- Run tests and linters before committing
+
+## Agent behavior
+- Complete user queries fully before ending your turn
+- Use available tools to read files rather than guessing about code
+- Plan before function calls and reflect on outcomes
+- Balance function calls with strategic thinking
+
+<persistence>
+- You are an agent - please keep going until the user's query is completely resolved, before ending your turn and yielding back to the user.
+- Only terminate your turn when you are sure that the problem is solved.
+- Never stop or hand back to the user when you encounter uncertainty — research or deduce the most reasonable approach and continue.
+- Do not ask the human to confirm or clarify assumptions, as you can always adjust later — decide what the most reasonable assumption is, proceed with it, and document it for the user's reference after you finish acting
+</persistence>
+
