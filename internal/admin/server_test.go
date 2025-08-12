@@ -411,6 +411,38 @@ func TestServer_HandleTokensCreate_Errors(t *testing.T) {
 	}
 }
 
+func TestServer_HandleTokensCreate_APIError(t *testing.T) {
+    gin.SetMode(gin.TestMode)
+    tokensFile := filepath.Join(testTemplateDir(), "tokens", "new.html")
+    _ = os.WriteFile(tokensFile, []byte("<html><body>tokens new</body></html>"), 0644)
+    defer func() {
+        if err := os.Remove(tokensFile); err != nil {
+            t.Errorf("failed to remove %s: %v", tokensFile, err)
+        }
+    }()
+
+    s := &Server{engine: gin.New()}
+    s.engine.SetFuncMap(template.FuncMap{})
+    s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens", "*.html"))
+
+    // Bind succeeds, but API returns error → expect 500 branch
+    s.engine.POST("/tokens", func(c *gin.Context) {
+        client := &mockAPIClient{DashboardErr: errFake}
+        c.Set("apiClient", client)
+        s.handleTokensCreate(c)
+    })
+
+    form := strings.NewReader("project_id=1&duration_minutes=60")
+    req, _ := http.NewRequest("POST", "/tokens", form)
+    req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+    w := httptest.NewRecorder()
+    s.engine.ServeHTTP(w, req)
+
+    if w.Code != http.StatusInternalServerError {
+        t.Errorf("expected 500 for API error after valid bind, got %d", w.Code)
+    }
+}
+
 func TestServer_HandleProjectsShow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	projectsShowFile := filepath.Join(testTemplateDir(), "projects-show.html")
