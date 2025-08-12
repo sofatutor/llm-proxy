@@ -100,3 +100,5 @@ temp/
 debug
 debug.test
 __debug_bin
+# CI coverage profile
+coverage_ci.txt
