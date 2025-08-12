@@ -18,9 +18,12 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 	"github.com/sofatutor/llm-proxy/internal/api"
+	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/sofatutor/llm-proxy/internal/dispatcher"
 	"github.com/sofatutor/llm-proxy/internal/dispatcher/plugins"
+	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/setup"
 	"github.com/sofatutor/llm-proxy/internal/token"
@@ -297,6 +300,42 @@ func runDispatcher(cmd *cobra.Command, args []string) {
 		}
 	}()
 
+	// Determine event bus backend
+	busBackend := os.Getenv("LLM_PROXY_EVENT_BUS")
+	if busBackend == "" {
+		busBackend = "redis"
+	}
+
+	var eventBus eventbus.EventBus
+	switch busBackend {
+	case "redis":
+		redisAddr := os.Getenv("REDIS_ADDR")
+		if redisAddr == "" {
+			redisAddr = "localhost:6379"
+		}
+		redisDB := 0
+		if dbStr := os.Getenv("REDIS_DB"); dbStr != "" {
+			if dbVal, err := strconv.Atoi(dbStr); err == nil {
+				redisDB = dbVal
+			}
+		}
+		client := redis.NewClient(&redis.Options{
+			Addr: redisAddr,
+			DB:   redisDB,
+		})
+		adapter := &eventbus.RedisGoClientAdapter{Client: client}
+		eventBus = eventbus.NewRedisEventBusLog(adapter, "llm-proxy-events", 24*time.Hour, 100000)
+		logger.Info("Using Redis event bus", zap.String("addr", redisAddr), zap.Int("db", redisDB))
+	case "memory":
+		if dispatcherService != "file" {
+			logger.Fatal("In-memory event bus only works for single-process file logging. Use Redis for multi-process/event dispatching.")
+		}
+		eventBus = eventbus.NewInMemoryEventBus(dispatcherBuffer)
+		logger.Warn("Using in-memory event bus (single-process only)")
+	default:
+		logger.Fatal("Unknown event bus backend: ", zap.String("backend", busBackend))
+	}
+
 	// Create plugin
 	plugin, err := plugins.NewPlugin(dispatcherService)
 	if err != nil {
@@ -324,6 +363,11 @@ func runDispatcher(cmd *cobra.Command, args []string) {
 	}
 
 	// Create dispatcher service
+	dispatcherVerbose := false
+	if v := os.Getenv("LLM_PROXY_DISPATCHER_VERBOSE"); v == "1" || strings.ToLower(v) == "true" || strings.ToLower(v) == "yes" {
+		dispatcherVerbose = true
+	}
+
 	dispatcherConfig := dispatcher.Config{
 		BufferSize:    dispatcherBuffer,
 		BatchSize:     dispatcherBatch,
@@ -331,9 +375,11 @@ func runDispatcher(cmd *cobra.Command, args []string) {
 		RetryAttempts: 3,
 		RetryBackoff:  time.Second,
 		Plugin:        plugin,
+		PluginName:    dispatcherService,
+		Verbose:       dispatcherVerbose,
 	}
 
-	service, err := dispatcher.NewService(dispatcherConfig, logger)
+	service, err := dispatcher.NewServiceWithBus(dispatcherConfig, logger, eventBus)
 	if err != nil {
 		logger.Fatal("Failed to create dispatcher service", zap.Error(err))
 	}
@@ -355,15 +401,15 @@ func init() {
 	rootCmd = cobraRoot // Ensure rootCmd is initialized before any AddCommand calls
 
 	// Register setup command flags
-	setupCmd.Flags().StringVar(&configPath, "config", ".env", "Path to the configuration file")
-	setupCmd.Flags().StringVar(&openAIAPIKey, "openai-key", "", "OpenAI API Key")
-	setupCmd.Flags().StringVar(&managementToken, "management-token", "", "Management token for the proxy")
-	setupCmd.Flags().StringVar(&databasePath, "db", "data/llm-proxy.db", "Path to SQLite database (default: data/llm-proxy.db, overridden by DATABASE_PATH env var or --db flag)")
-	setupCmd.Flags().StringVar(&listenAddr, "addr", "localhost:8080", "Address to listen on")
-	setupCmd.Flags().BoolVar(&interactiveSetup, "interactive", false, "Run interactive setup")
-	setupCmd.Flags().StringVar(&projectName, "project", "DefaultProject", "Name of the project to create")
-	setupCmd.Flags().IntVar(&tokenDuration, "duration", 24, "Duration of the token in hours")
-	setupCmd.Flags().BoolVar(&skipProjectSetup, "skip-project", false, "Skip project and token setup")
+	setupCmd.Flags().StringVar(&configPath, "config", config.EnvOrDefault("CONFIG", ".env"), "Path to the configuration file")
+	setupCmd.Flags().StringVar(&openAIAPIKey, "openai-key", config.EnvOrDefault("OPENAI_API_KEY", ""), "OpenAI API Key")
+	setupCmd.Flags().StringVar(&managementToken, "management-token", config.EnvOrDefault("MANAGEMENT_TOKEN", ""), "Management token for the proxy")
+	setupCmd.Flags().StringVar(&databasePath, "db", config.EnvOrDefault("DATABASE_PATH", "data/llm-proxy.db"), "Path to SQLite database (default: data/llm-proxy.db, overridden by DATABASE_PATH env var or --db flag)")
+	setupCmd.Flags().StringVar(&listenAddr, "addr", config.EnvOrDefault("LISTEN_ADDR", "localhost:8080"), "Address to listen on")
+	setupCmd.Flags().BoolVar(&interactiveSetup, "interactive", config.EnvBoolOrDefault("INTERACTIVE", false), "Run interactive setup")
+	setupCmd.Flags().StringVar(&projectName, "project", config.EnvOrDefault("PROJECT", "DefaultProject"), "Name of the project to create")
+	setupCmd.Flags().IntVar(&tokenDuration, "duration", config.EnvIntOrDefault("DURATION", 24), "Duration of the token in hours")
+	setupCmd.Flags().BoolVar(&skipProjectSetup, "skip-project", config.EnvBoolOrDefault("SKIP_PROJECT", false), "Skip project and token setup")
 
 	// Add openai parent command
 	openaiCmd = &cobra.Command{
@@ -751,7 +797,47 @@ func init() {
 	benchmarkCmd = &cobra.Command{
 		Use:   "benchmark",
 		Short: "Run benchmarks against the LLM Proxy",
-		Long:  `Benchmark performance metrics including latency, throughput, and errors. Optionally send a JSON body with --json. Latency is measured using X-REQUEST-START, X-UPSTREAM-REQUEST-START, and X-UPSTREAM-REQUEST-STOP headers for precise breakdowns (see documentation).`,
+		Long: `Benchmark latency, throughput, and error rates by sending concurrent POST requests.
+
+Required flags:
+  --base-url        Base URL of the target (e.g., http://localhost:8080 or https://api.openai.com/v1)
+  --endpoint        API path to hit (e.g., /v1/chat/completions or /chat/completions for OpenAI)
+  --token           Bearer token (proxy token or OpenAI API key)
+  --requests, -r    Total number of requests to send
+  --concurrency, -c Number of concurrent workers
+
+Optional flags:
+  --json            JSON request body for POST requests
+  --debug           Print sample responses and headers by status code
+
+Latency breakdown:
+  Request includes X-REQUEST-START (ns). The proxy returns X-UPSTREAM-REQUEST-START and X-UPSTREAM-REQUEST-STOP (ns)
+  so the tool can split upstream vs proxy latency precisely.
+`,
+		Example: `  # Proxy (local)
+  llm-proxy benchmark \
+    --base-url "http://localhost:8080" \
+    --endpoint "/v1/chat/completions" \
+    --token "$PROXY_TOKEN" \
+    --requests 100 --concurrency 4 \
+    --json '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"hi"}]}'
+
+  # OpenAI (direct)
+  llm-proxy benchmark \
+    --base-url "https://api.openai.com/v1" \
+    --endpoint "/chat/completions" \
+    --token "$OPENAI_API_KEY" \
+    --requests 100 --concurrency 4 \
+    --json '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}'
+
+  # Show sample responses and headers per status code
+  llm-proxy benchmark \
+    --base-url "http://localhost:8080" \
+    --endpoint "/v1/chat/completions" \
+    --token "$PROXY_TOKEN" \
+    --requests 20 --concurrency 5 \
+    --json '{"model":"gpt-4.1-nano","messages":[{"role":"user","content":"hi"}]}' \
+    --debug`,
 		Run: func(cmd *cobra.Command, args []string) {
 			baseURL, _ := cmd.Flags().GetString("base-url")
 			endpoint, _ := cmd.Flags().GetString("endpoint")
@@ -762,7 +848,8 @@ func init() {
 			debug, _ := cmd.Flags().GetBool("debug")
 
 			if baseURL == "" || endpoint == "" || token == "" || totalRequests <= 0 || concurrency <= 0 {
-				fmt.Println("Missing required flags or invalid values. Use --base-url, --endpoint, --token, --requests, --concurrency.")
+				fmt.Fprintln(os.Stderr, "Missing required flags or invalid values.")
+				_ = cmd.Help()
 				osExit(1)
 			}
 
@@ -1146,12 +1233,12 @@ func init() {
 	cobraRoot.PersistentFlags().StringVar(&manageAPIBaseURL, "manage-api-base-url", "http://localhost:8080", "Base URL for management API (default: http://localhost:8080)")
 
 	// Add dispatcher command flags
-	dispatcherCmd.Flags().StringVar(&dispatcherService, "service", "file", "Dispatcher service type (file, lunary, helicone)")
-	dispatcherCmd.Flags().StringVar(&dispatcherEndpoint, "endpoint", "", "Dispatcher endpoint URL (file: path, lunary/helicone: API endpoint)")
-	dispatcherCmd.Flags().StringVar(&dispatcherAPIKey, "api-key", "", "API key for external services (lunary, helicone)")
-	dispatcherCmd.Flags().IntVar(&dispatcherBuffer, "buffer", 1000, "Event bus buffer size")
-	dispatcherCmd.Flags().IntVar(&dispatcherBatch, "batch-size", 100, "Batch size for sending events")
-	dispatcherCmd.Flags().BoolVar(&dispatcherDetach, "detach", false, "Run in background (daemon mode)")
+	dispatcherCmd.Flags().StringVar(&dispatcherService, "service", config.EnvOrDefault("DISPATCHER_SERVICE", "file"), "Dispatcher service type (file, lunary, helicone)")
+	dispatcherCmd.Flags().StringVar(&dispatcherEndpoint, "endpoint", config.EnvOrDefault("DISPATCHER_ENDPOINT", ""), "Dispatcher endpoint URL (file: path, lunary/helicone: API endpoint)")
+	dispatcherCmd.Flags().StringVar(&dispatcherAPIKey, "api-key", config.EnvOrDefault("LLM_PROXY_API_KEY", ""), "API key for external services (lunary, helicone)")
+	dispatcherCmd.Flags().IntVar(&dispatcherBuffer, "buffer", config.EnvIntOrDefault("DISPATCHER_BUFFER", 1000), "Event bus buffer size")
+	dispatcherCmd.Flags().IntVar(&dispatcherBatch, "batch-size", config.EnvIntOrDefault("DISPATCHER_BATCH_SIZE", 100), "Batch size for sending events")
+	dispatcherCmd.Flags().BoolVar(&dispatcherDetach, "detach", config.EnvBoolOrDefault("DISPATCHER_DETACH", false), "Run in background (daemon mode)")
 	rootCmd.AddCommand(dispatcherCmd)
 }
 
