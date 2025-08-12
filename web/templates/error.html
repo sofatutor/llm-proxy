@@ -31,7 +31,7 @@
                             {{ if .error }}{{ .error }}{{ else }}An unexpected error occurred.{{ end }}
                         </p>
                         {{ if .error }}
-                        {{ if (or (contains .error "Failed to load dashboard data") (contains .error "connection refused") (contains .error "connection reset") (contains .error "no such host") (contains .error "timeout")) }}
+                        {{ if (or (contains .error "Failed to load dashboard data") (or (contains .error "connection refused") (or (contains .error "connection reset") (or (contains .error "no such host") (contains .error "timeout"))))) }}
                         <div class="alert alert-warning mt-3">
                             <i class="bi bi-info-circle"></i>
                             The backend server appears to be unavailable. Please check the backend status and try again.<br>

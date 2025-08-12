@@ -143,6 +143,33 @@ The dispatcher transforms internal events into a rich format suitable for extern
 - **Graceful Shutdown**: SIGINT/SIGTERM handling
 - **Extensible**: Easy to add new backends
 
+## Important: In-Memory vs. Redis Event Bus
+
+- The **in-memory event bus** only works within a single process. If you run the proxy and dispatcher as separate processes or containers, they will not share events.
+- For distributed, multi-process, or containerized setups, **Redis is required** as the event bus backend.
+
+### Local Redis Setup for Manual Testing
+
+Add the following to your `docker-compose.yml` to run Redis locally:
+
+```yaml
+redis:
+  image: redis:7
+  container_name: llm-proxy-redis
+  ports:
+    - "6379:6379"
+  restart: unless-stopped
+```
+
+Configure both the proxy and dispatcher to use Redis:
+
+```bash
+LLM_PROXY_EVENT_BUS=redis llm-proxy ...
+LLM_PROXY_EVENT_BUS=redis llm-proxy dispatcher ...
+```
+
+This enables full async event delivery and observability pipeline testing across processes.
+
 ## References
 ## References
 - See `internal/middleware/instrumentation.go` for the middleware implementation.

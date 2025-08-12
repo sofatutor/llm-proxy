@@ -175,6 +175,34 @@ The dispatcher can be deployed in multiple ways:
 
 See [docs/instrumentation.md](docs/instrumentation.md) for detailed configuration and architecture.
 
+## Using Redis for Distributed Event Bus (Local Development)
+
+> **Note:** The in-memory event bus only works within a single process. For multi-process setups (e.g., running the proxy and dispatcher as separate processes or containers), you must use Redis as the event bus backend.
+
+### Local Setup with Docker Compose
+
+A `redis` service is included in the `docker-compose.yml` for local development:
+
+```yaml
+db:
+  image: redis:7
+  container_name: llm-proxy-redis
+  ports:
+    - "6379:6379"
+  restart: unless-stopped
+```
+
+### Configuring the Proxy and Dispatcher to Use Redis
+
+Set the event bus backend to Redis by using the appropriate environment variable or CLI flag (see documentation for exact flag):
+
+```bash
+LLM_PROXY_EVENT_BUS=redis llm-proxy ...
+LLM_PROXY_EVENT_BUS=redis llm-proxy dispatcher ...
+```
+
+This ensures both the proxy and dispatcher share events via Redis, enabling full async pipeline testing and production-like operation.
+
 ## Project Structure
 - `/cmd` — Entrypoints (`proxy`, `eventdispatcher`)
 - `/internal` — Core logic (token, database, proxy, admin, logging, eventbus, dispatcher)
