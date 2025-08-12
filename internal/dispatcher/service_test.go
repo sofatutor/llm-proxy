@@ -18,6 +18,7 @@ type mockPlugin struct {
 	initCfg  map[string]string
 	sendErr  error
 	closeErr error
+	OnSend   func([]EventPayload) error
 }
 
 func (m *mockPlugin) Init(cfg map[string]string) error {
@@ -34,6 +35,9 @@ func (m *mockPlugin) SendEvents(ctx context.Context, events []EventPayload) erro
 		return m.sendErr
 	}
 	m.events = append(m.events, events)
+	if m.OnSend != nil {
+		return m.OnSend(events)
+	}
 	return nil
 }
 
@@ -360,4 +364,68 @@ func TestServiceSendBatchErrors(t *testing.T) {
 	// Stop service
 	cancel()
 	time.Sleep(50 * time.Millisecond)
+}
+
+func TestDispatcher_DoesNotDispatchDuplicates(t *testing.T) {
+	client := eventbus.NewMockRedisClientLog()
+	bus := eventbus.NewRedisEventBusLog(client, "events", 0, 0)
+	plugin := &mockPlugin{}
+	logger := zaptest.NewLogger(t)
+
+	cfg := Config{
+		Plugin:           plugin,
+		PluginName:       "file",
+		EventTransformer: NewDefaultEventTransformer(false),
+		FlushInterval:    10 * time.Millisecond,
+		BatchSize:        10,
+	}
+
+	service, err := NewServiceWithBus(cfg, logger, bus)
+	if err != nil {
+		t.Fatalf("NewServiceWithBus failed: %v", err)
+	}
+
+	// Publish 100 events
+	n := 100
+	for i := 0; i < n; i++ {
+		bus.Publish(context.Background(), eventbus.Event{RequestID: fmt.Sprintf("req-%d", i), Method: "POST"})
+	}
+
+	dispatched := make(map[int64]struct{})
+	var dispatchedMu sync.Mutex
+	plugin.OnSend = func(batch []EventPayload) error {
+		dispatchedMu.Lock()
+		defer dispatchedMu.Unlock()
+		for _, evt := range batch {
+			logID := evt.LogID
+			if _, exists := dispatched[logID]; exists {
+				t.Fatalf("Duplicate dispatch of LogID %d", logID)
+			}
+			dispatched[logID] = struct{}{}
+		}
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	go func() { _ = service.Run(ctx, false) }()
+
+	// Wait for all events to be dispatched
+	for i := 0; i < 100; i++ {
+		time.Sleep(10 * time.Millisecond)
+		dispatchedMu.Lock()
+		cnt := len(dispatched)
+		dispatchedMu.Unlock()
+		if cnt == n {
+			break
+		}
+	}
+	_ = service.Stop()
+
+	dispatchedMu.Lock()
+	finalCnt := len(dispatched)
+	dispatchedMu.Unlock()
+	if finalCnt != n {
+		t.Fatalf("Expected %d unique events dispatched, got %d", n, finalCnt)
+	}
 }

@@ -233,7 +233,7 @@ func TestHeliconePlugin(t *testing.T) {
 	}
 
 	// Verify default endpoint
-	if plugin.endpoint != "https://api.hconeai.com/v1/request" {
+	if plugin.endpoint != "https://api.worker.helicone.ai/custom/v1/log" {
 		t.Errorf("Expected default endpoint, got %s", plugin.endpoint)
 	}
 
@@ -275,8 +275,8 @@ func TestHeliconePlugin_SendEvents_EdgeCases(t *testing.T) {
 	t.Run("invalid endpoint", func(t *testing.T) {
 		events := []dispatcher.EventPayload{{Type: "test", Event: "fail", RunID: "fail"}}
 		err := plugin.SendEvents(context.Background(), events)
-		if err == nil {
-			t.Error("Expected error for invalid endpoint")
+		if err != nil {
+			t.Errorf("Expected no error for invalid endpoint (permanent errors are not retried): got %v", err)
 		}
 	})
 }

@@ -24,8 +24,9 @@ import (
 func TestHealthEndpoint(t *testing.T) {
 	// Create a minimal config for testing
 	cfg := &config.Config{
-		ListenAddr:     ":8080",
-		RequestTimeout: 30 * time.Second,
+		ListenAddr:      ":8080",
+		RequestTimeout:  30 * time.Second,
+		EventBusBackend: "in-memory",
 	}
 
 	// Create a new server
@@ -80,10 +81,11 @@ func TestHealthEndpoint(t *testing.T) {
 
 func TestMetricsEndpoint(t *testing.T) {
 	cfg := &config.Config{
-		ListenAddr:     ":8080",
-		RequestTimeout: 30 * time.Second,
-		EnableMetrics:  true,
-		MetricsPath:    "/metrics",
+		ListenAddr:      ":8080",
+		RequestTimeout:  30 * time.Second,
+		EnableMetrics:   true,
+		MetricsPath:     "/metrics",
+		EventBusBackend: "in-memory",
 	}
 	server, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
 	require.NoError(t, err)
@@ -115,7 +117,8 @@ func TestServerLifecycle(t *testing.T) {
 	// Use httptest.NewServer to start the server with the health handler
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		server, err := New(&config.Config{
-			RequestTimeout: 1 * time.Second,
+			RequestTimeout:  1 * time.Second,
+			EventBusBackend: "in-memory",
 		}, &mockTokenStore{}, &mockProjectStore{})
 		require.NoError(t, err)
 		server.handleHealth(w, r)
@@ -145,8 +148,9 @@ func TestServerLifecycle(t *testing.T) {
 	defer shutdownServer.Close()
 
 	cfg := &config.Config{
-		ListenAddr:     ":0", // Random port
-		RequestTimeout: 1 * time.Second,
+		ListenAddr:      ":0", // Random port
+		RequestTimeout:  1 * time.Second,
+		EventBusBackend: "in-memory",
 	}
 
 	// Create a server with the test server's config
@@ -171,8 +175,9 @@ func TestServerLifecycle(t *testing.T) {
 func TestHandleHealthJSONError(t *testing.T) {
 	// Create a minimal config for testing
 	cfg := &config.Config{
-		ListenAddr:     ":8080",
-		RequestTimeout: 30 * time.Second,
+		ListenAddr:      ":8080",
+		RequestTimeout:  30 * time.Second,
+		EventBusBackend: "in-memory",
 	}
 
 	// Create a new server
@@ -315,6 +320,7 @@ func TestServer_New_WithDependencyInjection_ConfigAndFallback(t *testing.T) {
 		APIConfigPath:      "/non/existent/path.yaml", // triggers fallback branch
 		DefaultAPIProvider: "openai",
 		OpenAIAPIURL:       "https://api.openai.com",
+		EventBusBackend:    "in-memory",
 	}
 
 	ts := &mockTokenStore{}
@@ -383,6 +389,7 @@ apis:
 		RequestTimeout:     30 * time.Second,
 		APIConfigPath:      tmpFile.Name(),
 		DefaultAPIProvider: "test_api",
+		EventBusBackend:    "in-memory",
 	}
 	srv2, err := New(cfg2, ts, ps)
 	require.NoError(t, err)
@@ -403,7 +410,7 @@ func TestServer_Start_and_InitializeComponents_Coverage(t *testing.T) {
 }
 
 func TestHandleReadyAndLive(t *testing.T) {
-	cfg := &config.Config{ListenAddr: ":8080", RequestTimeout: 30 * time.Second}
+	cfg := &config.Config{ListenAddr: ":8080", RequestTimeout: 30 * time.Second, EventBusBackend: "in-memory"}
 	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
 	require.NoError(t, err)
 
@@ -423,7 +430,7 @@ func TestHandleReadyAndLive(t *testing.T) {
 }
 
 func TestInitializeAPIRoutes_ConfigFallback(t *testing.T) {
-	cfg := &config.Config{ListenAddr: ":8080", RequestTimeout: 30 * time.Second, APIConfigPath: "notfound.json"}
+	cfg := &config.Config{ListenAddr: ":8080", RequestTimeout: 30 * time.Second, APIConfigPath: "notfound.json", EventBusBackend: "in-memory"}
 	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
 	require.NoError(t, err)
 	// Should not panic or error, should use fallback config
@@ -434,7 +441,7 @@ func TestInitializeAPIRoutes_ConfigFallback(t *testing.T) {
 }
 
 func TestHandleProjects_And_CreateProject_EdgeCases(t *testing.T) {
-	cfg := &config.Config{ListenAddr: ":8080", RequestTimeout: 30 * time.Second, ManagementToken: "testtoken"}
+	cfg := &config.Config{ListenAddr: ":8080", RequestTimeout: 30 * time.Second, ManagementToken: "testtoken", EventBusBackend: "in-memory"}
 	logger := zap.NewNop()
 	ps := &mockProjectStore{}
 	ts := &mockTokenStore{}
@@ -531,7 +538,7 @@ func TestHandleProjects_And_CreateProject_EdgeCases(t *testing.T) {
 }
 
 func TestLogRequestMiddleware(t *testing.T) {
-	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: 1 * time.Second}
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: 1 * time.Second, EventBusBackend: "in-memory"}
 	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
 	require.NoError(t, err)
 	called := false
@@ -559,7 +566,7 @@ func TestLogRequestMiddleware(t *testing.T) {
 }
 
 func TestHandleNotFound_WriteHeader_Flush_EventBus(t *testing.T) {
-	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: 1 * time.Second}
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: 1 * time.Second, EventBusBackend: "in-memory"}
 	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
 	require.NoError(t, err)
 

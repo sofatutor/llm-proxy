@@ -101,6 +101,7 @@ func setupServerAndMocks(t *testing.T) (*Server, *MockTokenStoreExtended, *MockP
 		ListenAddr:      ":8080",
 		RequestTimeout:  30 * time.Second,
 		ManagementToken: "test_management_token",
+		EventBusBackend: "in-memory",
 	}
 
 	server, err := New(cfg, tokenStore, projectStore)
