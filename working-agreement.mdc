@@ -3,4 +3,7 @@ description:
 globs: 
 alwaysApply: true
 ---
-Load CLAUDE.md and AGENTS.md for details on our working agreement.
+Load AGENTS.md for complete working agreement, project context, and agent instructions.
+
+AGENTS.md consolidates all development rules, documentation map, and workflow guidelines.
+CLAUDE.md and .cursorrules are symlinks to AGENTS.md for tool compatibility.
