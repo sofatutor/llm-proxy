@@ -3,10 +3,10 @@
 # LLM Proxy - Agent Guide & Project Context
 
 > **Note on Git & GitHub Management:**
-> - **Always use standard `git` and GitHub CLI (`gh`) commands for all routine git and GitHub repository management (branching, committing, pushing, PR creation, merging, etc.).**
-> - **The MCP tools should only be used for actions or data that are not easily accessible via standard commands, such as automated retrieval of review comments on a PR, or advanced API queries.**
-> - **Do not use the MCP for basic git/GitHub operations that are well-supported by `git` or `gh`.**
-> - **Create (or overwrite) a temporary md file as NEW_PR.md or NEW_ISSUE.md and ask for review. Then use this with gh as a body-file argument. After the issue/pr is created, delete the file unasked.**
+> - **Prefer GitHub MCP for GitHub management tasks**: PR and issue creation/update, fetching and posting review comments, summarizing changes, status checks, and mapping branch↔PR.
+> - **Use standard `git` for local VCS operations**: branching, committing, rebasing, and pushing.
+> - **Use `gh` as a fallback** when MCP is unavailable or for convenience workflows (e.g., `gh run watch` for CI monitoring). MCP can also fetch PR statuses.
+> - When using `gh` for PR/issue bodies, you may create a temporary `NEW_PR.md`/`NEW_ISSUE.md` and delete it after use; with MCP this is not required.
 
 This file provides essential context and rules for both human and AI contributors working in this repository. It serves as the primary source of truth for agent-driven development and includes a Sparse Prime representation of the project documentation.
 
