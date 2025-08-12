@@ -34,6 +34,9 @@ func setupIntegrationServer(t *testing.T) (*httptest.Server, func()) {
 		RequestTimeout:  10 * time.Second,
 		ManagementToken: "integration-token",
 		DatabasePath:    dbFile.Name(),
+		// Ensure event bus is available for server initialization in tests
+		EventBusBackend:         "in-memory",
+		ObservabilityBufferSize: 100,
 	}
 	tokenStore := database.NewDBTokenStoreAdapter(db)
 	projectStore := db
