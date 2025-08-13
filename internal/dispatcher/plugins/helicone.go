@@ -121,10 +121,21 @@ func heliconePayloadFromEvent(event dispatcher.EventPayload) (map[string]interfa
 			meta["request_id"] = rid
 		}
 	}
+	// Help Helicone infer pricing/provider when using manual logger
+	if _, ok := meta["provider"]; !ok {
+		meta["provider"] = "openai"
+	}
 
 	// ProviderRequest
+	// Prefer actual API path from metadata if present so Helicone can infer provider
+	urlPath := "custom-model-nopath"
+	if event.Metadata != nil {
+		if pth, ok := event.Metadata["path"].(string); ok && pth != "" {
+			urlPath = pth
+		}
+	}
 	providerRequest := map[string]interface{}{
-		"url":  "custom-model-nopath",
+		"url":  urlPath,
 		"json": reqBody,
 		"meta": meta,
 	}
@@ -138,12 +149,32 @@ func heliconePayloadFromEvent(event dispatcher.EventPayload) (map[string]interfa
 		"status":  status,
 		"headers": map[string]string{}, // Optionally fill from event.Metadata
 	}
+	// Ensure Helicone sees the provider as non-CUSTOM when using manual logger
+	if _, ok := meta["Helicone-Provider"]; !ok {
+		// Mirror meta["provider"] if set, otherwise default to openai
+		prov := meta["provider"]
+		if prov == "" {
+			prov = "openai"
+		}
+		meta["Helicone-Provider"] = prov
+	}
+
 	// Helicone requires providerResponse.json to be present; ensure it's always an object
 	if isJSON && respBody != nil {
 		providerResponse["json"] = respBody
 	} else {
 		providerResponse["json"] = map[string]interface{}{}
 		providerResponse["note"] = "response was not JSON; omitted"
+	}
+	// Inject usage if we computed it so Helicone can compute cost
+	if event.TokensUsage != nil {
+		if m, ok := providerResponse["json"].(map[string]interface{}); ok {
+			m["usage"] = map[string]int{
+				"prompt_tokens":     event.TokensUsage.Prompt,
+				"completion_tokens": event.TokensUsage.Completion,
+				"total_tokens":      event.TokensUsage.Prompt + event.TokensUsage.Completion,
+			}
+		}
 	}
 	// If OutputBase64 is set, include as base64
 	if event.OutputBase64 != "" {

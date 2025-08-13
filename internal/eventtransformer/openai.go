@@ -414,13 +414,29 @@ func (t *OpenAITransformer) TransformEvent(evt map[string]any) (map[string]any, 
 					}
 				}
 			}
-			if promptTokenSource != "" {
-				t, _ := CountOpenAITokens(promptTokenSource)
+            if promptTokenSource != "" {
+                modelName := ""
+                if req, ok := evt["request_body"].(string); ok && req != "" {
+                    var reqObj map[string]any
+                    _ = json.Unmarshal([]byte(req), &reqObj)
+                    if m, ok := reqObj["model"].(string); ok {
+                        modelName = m
+                    }
+                }
+                t, _ := CountOpenAITokensForModel(promptTokenSource, modelName)
 				pt = t
 			}
-			cnt, _ := extractAssistantReplyContent(resp)
+            cnt, _ := extractAssistantReplyContent(resp)
 			if cnt != "" {
-				tk, _ := CountOpenAITokens(cnt)
+                // Try to read model from the parsed response JSON
+                modelName := ""
+                var respObj map[string]any
+                if err := json.Unmarshal([]byte(resp), &respObj); err == nil {
+                    if m, ok := respObj["model"].(string); ok {
+                        modelName = m
+                    }
+                }
+                tk, _ := CountOpenAITokensForModel(cnt, modelName)
 				ct = tk
 			}
 			evt["TokenUsage"] = map[string]int{"prompt_tokens": pt, "completion_tokens": ct, "total_tokens": pt + ct}
