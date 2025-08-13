@@ -35,6 +35,9 @@ type Service struct {
 	stopCh   chan struct{}
 	wg       sync.WaitGroup
 	stopOnce sync.Once
+	// startedCh is closed after the event processing goroutine has been added
+	// to the WaitGroup. This avoids a data race between Wait() and Add(1).
+	startedCh chan struct{}
 
 	// metrics
 	mu              sync.Mutex
@@ -81,10 +84,11 @@ func NewService(cfg Config, logger *zap.Logger) (*Service, error) {
 	bus := eventbus.NewInMemoryEventBus(cfg.BufferSize)
 
 	return &Service{
-		config:   cfg,
-		eventBus: bus,
-		logger:   logger,
-		stopCh:   make(chan struct{}),
+		config:    cfg,
+		eventBus:  bus,
+		logger:    logger,
+		stopCh:    make(chan struct{}),
+		startedCh: make(chan struct{}),
 	}, nil
 }
 
@@ -127,10 +131,11 @@ func NewServiceWithBus(cfg Config, logger *zap.Logger, bus eventbus.EventBus) (*
 	}
 
 	return &Service{
-		config:   cfg,
-		eventBus: bus,
-		logger:   logger,
-		stopCh:   make(chan struct{}),
+		config:    cfg,
+		eventBus:  bus,
+		logger:    logger,
+		stopCh:    make(chan struct{}),
+		startedCh: make(chan struct{}),
 	}, nil
 }
 
@@ -162,6 +167,8 @@ func (s *Service) runForeground(ctx context.Context) error {
 
 	// Start event processing goroutine
 	s.wg.Add(1)
+	// Signal that Add(1) has completed before any potential Stop() Wait
+	close(s.startedCh)
 	go s.processEvents(ctx)
 
 	// Wait for shutdown signal
@@ -181,7 +188,13 @@ func (s *Service) Stop() error {
 		s.logger.Info("Stopping event dispatcher service")
 
 		close(s.stopCh)
-		s.wg.Wait()
+		// Avoid racing Wait() with a concurrent Add(1) during startup.
+		select {
+		case <-s.startedCh:
+			s.wg.Wait()
+		default:
+			// Not started; nothing to wait for
+		}
 
 		if s.eventBus != nil {
 			s.eventBus.Stop()
