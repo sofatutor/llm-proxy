@@ -307,3 +307,14 @@ func TestGetCorrelationID(t *testing.T) {
 		})
 	}
 }
+
+// Merged from logger_extra_test.go
+func TestWithRequestAndCorrelationContext_NoValues(t *testing.T) {
+	logger := zap.NewNop()
+	if got := WithRequestContext(context.Background(), logger); got == nil {
+		t.Fatalf("WithRequestContext returned nil")
+	}
+	if got := WithCorrelationContext(context.Background(), logger); got == nil {
+		t.Fatalf("WithCorrelationContext returned nil")
+	}
+}

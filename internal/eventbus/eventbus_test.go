@@ -168,6 +168,25 @@ func TestInMemoryEventBus_StopClosesSubscribers(t *testing.T) {
 	}
 }
 
+// --- Merged from eventbus_extra_test.go ---
+func TestInMemoryEventBus_Stats(t *testing.T) {
+	b := NewInMemoryEventBus(1)
+	defer b.Stop()
+
+	// Publish 1 fits, next two should be dropped due to buffer full (no subscribers)
+	b.Publish(context.Background(), Event{})
+	b.Publish(context.Background(), Event{})
+	b.Publish(context.Background(), Event{})
+
+	pub, drop := b.Stats()
+	if pub < 1 {
+		t.Fatalf("published = %d, want >= 1", pub)
+	}
+	if drop < 1 {
+		t.Fatalf("dropped = %d, want >= 1", drop)
+	}
+}
+
 func TestRedisEventBusLog_PublishReadCount_TTLAndTrim(t *testing.T) {
 	client := newMockRedisClientLog()
 	// TTL 1s, maxLen 3

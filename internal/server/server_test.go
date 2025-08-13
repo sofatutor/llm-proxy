@@ -440,6 +440,63 @@ func TestInitializeAPIRoutes_ConfigFallback(t *testing.T) {
 	}
 }
 
+// --- Merged from server_extra_test.go ---
+
+func Test_getClientIP(t *testing.T) {
+	s := &Server{}
+
+	// X-Forwarded-For with multiple entries
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("X-Forwarded-For", "203.0.113.1, 203.0.113.2")
+	if got := s.getClientIP(r); got != "203.0.113.1" {
+		t.Fatalf("got %q, want %q", got, "203.0.113.1")
+	}
+
+	// X-Real-IP fallback
+	r = httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("X-Real-IP", "198.51.100.7")
+	if got := s.getClientIP(r); got != "198.51.100.7" {
+		t.Fatalf("got %q, want %q", got, "198.51.100.7")
+	}
+
+	// RemoteAddr fallback with host:port
+	r = httptest.NewRequest(http.MethodGet, "/", nil)
+	r.RemoteAddr = "192.0.2.5:12345"
+	if got := s.getClientIP(r); got != "192.0.2.5" {
+		t.Fatalf("got %q, want %q", got, "192.0.2.5")
+	}
+
+	// RemoteAddr without colon
+	r = httptest.NewRequest(http.MethodGet, "/", nil)
+	r.RemoteAddr = "192.0.2.99"
+	if got := s.getClientIP(r); got != "192.0.2.99" {
+		t.Fatalf("got %q, want %q", got, "192.0.2.99")
+	}
+}
+
+type flushRecorder struct {
+	http.ResponseWriter
+	flushed bool
+}
+
+func (f *flushRecorder) Flush() { f.flushed = true }
+
+func Test_responseWriter_Flush(t *testing.T) {
+	// Underlying implements http.Flusher
+	rr := httptest.NewRecorder()
+	fr := &flushRecorder{ResponseWriter: rr}
+	rw := &responseWriter{ResponseWriter: fr}
+	rw.Flush()
+	if !fr.flushed {
+		t.Fatalf("expected Flush to be forwarded")
+	}
+
+	// Underlying does not implement http.Flusher (no panic, no forward)
+	rw2 := &responseWriter{ResponseWriter: httptest.NewRecorder()}
+	// Should be a no-op
+	rw2.Flush()
+}
+
 func TestHandleProjects_And_CreateProject_EdgeCases(t *testing.T) {
 	cfg := &config.Config{ListenAddr: ":8080", RequestTimeout: 30 * time.Second, ManagementToken: "testtoken", EventBusBackend: "in-memory"}
 	logger := zap.NewNop()

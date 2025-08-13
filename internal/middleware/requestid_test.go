@@ -240,3 +240,38 @@ func TestRequestIDMiddleware_HeaderValidation(t *testing.T) {
 		})
 	}
 }
+
+// --- Merged from requestid_extra_test.go ---
+
+func TestGetOrGenerateID(t *testing.T) {
+	// Empty -> generates non-empty
+	if id := getOrGenerateID(""); id == "" {
+		t.Fatalf("expected non-empty id")
+	}
+	// Whitespace -> trims to empty -> generates
+	if id := getOrGenerateID("   "); id == "" {
+		t.Fatalf("expected non-empty id for whitespace input")
+	}
+	// Pass-through
+	if id := getOrGenerateID("custom"); id != "custom" {
+		t.Fatalf("expected pass-through, got %q", id)
+	}
+}
+
+func TestRequestIDMiddleware_SetsHeaders(t *testing.T) {
+	mw := NewRequestIDMiddleware()
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	handler.ServeHTTP(rr, req)
+
+	if rr.Header().Get("X-Request-ID") == "" {
+		t.Fatalf("X-Request-ID not set")
+	}
+	if rr.Header().Get("X-Correlation-ID") == "" {
+		t.Fatalf("X-Correlation-ID not set")
+	}
+}
