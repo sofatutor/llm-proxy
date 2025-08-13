@@ -2,8 +2,9 @@ name: Docker
 
 on:
   push:
-    branches: [ main, docker/phase-6-docker-optimization-ghcr ]
+    branches: [ main ]
     tags: [ 'v*' ]
+  pull_request:
 
 jobs:
   docker:
@@ -90,14 +91,13 @@ jobs:
         env:
           MANAGEMENT_TOKEN: smoke-token
 
-      # Debug logs (enable temporarily when diagnosing failures)
-      # - name: Debug logs (temporary)
-      #   if: failure()
-      #   run: |
-      #     echo "docker ps -a:" && docker ps -a || true
-      #     echo "docker logs (tail 300):" && docker logs --tail 300 llm-proxy || true
-      #     echo "Exit code:" && docker inspect llm-proxy --format='{{.State.ExitCode}}' || true
-      #     echo "State:" && docker inspect llm-proxy --format='{{json .State}}' || true
+      - name: Debug logs
+        if: failure()
+        run: |
+          echo "docker ps -a:" && docker ps -a || true
+          echo "docker logs (tail 300):" && docker logs --tail 300 llm-proxy || true
+          echo "Exit code:" && docker inspect llm-proxy --format='{{.State.ExitCode}}' || true
+          echo "State:" && docker inspect llm-proxy --format='{{json .State}}' || true
 
       - name: Stop container (cleanup)
         if: always()
