@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // ManagerStore is a composite interface for all required store operations
@@ -182,8 +184,8 @@ func (m *Manager) IsTokenValid(ctx context.Context, tokenID string) bool {
 }
 
 // StartAutomaticRevocation starts automatic revocation of expired tokens
-func (m *Manager) StartAutomaticRevocation(interval time.Duration) *AutomaticRevocation {
-	autoRevoke := NewAutomaticRevocation(m.revoker, interval)
+func (m *Manager) StartAutomaticRevocation(interval time.Duration, logger *zap.Logger) *AutomaticRevocation {
+	autoRevoke := NewAutomaticRevocation(m.revoker, interval, logger)
 	autoRevoke.Start()
 	return autoRevoke
 }

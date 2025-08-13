@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -19,7 +18,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/obfuscate"
+	"go.uber.org/zap"
 )
 
 // Session represents a user session
@@ -60,6 +61,7 @@ type Server struct {
 	config    *config.Config
 	engine    *gin.Engine
 	apiClient *APIClient
+	logger    *zap.Logger
 
 	// For testability: allow injection of token validation logic
 	ValidateTokenWithAPI func(context.Context, string) bool
@@ -71,6 +73,12 @@ type Server struct {
 // NewServer creates a new Admin UI server with the provided configuration.
 // It initializes the Gin engine, sets up routes, and configures the HTTP server.
 func NewServer(cfg *config.Config) (*Server, error) {
+	// Initialize logger
+	logger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize admin server logger: %w", err)
+	}
+
 	// Set Gin mode based on log level
 	if cfg.LogLevel == "debug" {
 		gin.SetMode(gin.DebugMode)
@@ -115,6 +123,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 		config:      cfg,
 		engine:      engine,
 		apiClient:   apiClient,
+		logger:      logger,
 		auditLogger: auditLogger,
 		server: &http.Server{
 			Addr:         cfg.AdminUI.ListenAddr,
