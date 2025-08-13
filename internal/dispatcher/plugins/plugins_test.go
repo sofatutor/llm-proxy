@@ -76,13 +76,7 @@ func TestFilePluginErrors(t *testing.T) {
 	plugin := NewFilePlugin()
 
 	// Test SendEvents with invalid file path (before Init)
-	events := []dispatcher.EventPayload{
-		{
-			Type:  "test",
-			Event: "start",
-			RunID: "test-123",
-		},
-	}
+	events := []dispatcher.EventPayload{{Type: "test", Event: "start", RunID: "test-123"}}
 
 	err := plugin.SendEvents(context.Background(), events)
 	if err == nil {
@@ -104,6 +98,22 @@ func TestFilePluginErrors(t *testing.T) {
 	err = plugin2.Close()
 	if err != nil {
 		t.Errorf("Close should work even without Init: %v", err)
+	}
+}
+
+func TestFilePlugin_SendEvents_MarshalError(t *testing.T) {
+	plugin := NewFilePlugin()
+	tmpFile := "/tmp/test-file-plugin-marshal.jsonl"
+	cfg := map[string]string{"endpoint": tmpFile}
+	if err := plugin.Init(cfg); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	defer func() { _ = plugin.Close(); _ = os.Remove(tmpFile) }()
+
+	// Use an unsupported value (function) in Metadata to force json.Marshal error
+	bad := dispatcher.EventPayload{Type: "test", Event: "bad", RunID: "x", Metadata: map[string]any{"fn": func() {}}}
+	if err := plugin.SendEvents(context.Background(), []dispatcher.EventPayload{bad}); err == nil {
+		t.Fatalf("expected marshal error, got nil")
 	}
 }
 

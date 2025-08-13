@@ -1,8 +1,8 @@
 package eventtransformer
 
 import (
-    "testing"
 	"strings"
+	"testing"
 )
 
 func TestCountOpenAITokens(t *testing.T) {
