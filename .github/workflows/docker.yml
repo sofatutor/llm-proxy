@@ -2,7 +2,7 @@ name: Docker
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, docker/phase-6-docker-optimization-ghcr ]
     tags: [ 'v*' ]
   pull_request:
 
@@ -33,6 +33,7 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=ref,event=branch
+            type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha
@@ -66,7 +67,7 @@ jobs:
         with:
           context: .
           platforms: linux/amd64
-          load: true
+          push: true
           tags: llm-proxy:${{ steps.set_tag.outputs.name }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -85,7 +86,6 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Pull pushed image and tag for Makefile
-        if: github.event_name != 'pull_request'
         run: |
           # Compute sanitized branch tag (lowercase, replace invalid chars)
           BR_RAW="${GITHUB_REF_NAME}"
