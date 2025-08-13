@@ -80,6 +80,9 @@ func heliconePayloadFromEvent(event dispatcher.EventPayload) (map[string]interfa
 	if len(event.Input) > 0 {
 		_ = json.Unmarshal(event.Input, &reqBody)
 	}
+	if reqBody == nil {
+		reqBody = map[string]interface{}{}
+	}
 	if len(event.Output) > 0 {
 		if err := json.Unmarshal(event.Output, &respBody); err == nil {
 			isJSON = true
@@ -113,6 +116,10 @@ func heliconePayloadFromEvent(event dispatcher.EventPayload) (map[string]interfa
 				meta[k] = s
 			}
 		}
+		// Ensure request_id is propagated if present in metadata
+		if rid, ok := event.Metadata["request_id"].(string); ok && rid != "" {
+			meta["request_id"] = rid
+		}
 	}
 
 	// ProviderRequest
@@ -131,9 +138,11 @@ func heliconePayloadFromEvent(event dispatcher.EventPayload) (map[string]interfa
 		"status":  status,
 		"headers": map[string]string{}, // Optionally fill from event.Metadata
 	}
-	if isJSON {
+	// Helicone requires providerResponse.json to be present; ensure it's always an object
+	if isJSON && respBody != nil {
 		providerResponse["json"] = respBody
 	} else {
+		providerResponse["json"] = map[string]interface{}{}
 		providerResponse["note"] = "response was not JSON; omitted"
 	}
 	// If OutputBase64 is set, include as base64
@@ -170,6 +179,12 @@ func (p *HeliconePlugin) sendHeliconeEvent(ctx context.Context, payload map[stri
 		_, _ = buf.ReadFrom(resp.Body)
 		log.Printf("Helicone API error %d: %s", resp.StatusCode, buf.String())
 		return &dispatcher.PermanentBackendError{Msg: fmt.Sprintf("helicone API returned status 500: %s", buf.String())}
+	}
+	if resp.StatusCode == http.StatusBadRequest { // 400: treat as permanent (payload/schema issue)
+		buf := new(bytes.Buffer)
+		_, _ = buf.ReadFrom(resp.Body)
+		log.Printf("Helicone API error %d: %s", resp.StatusCode, buf.String())
+		return &dispatcher.PermanentBackendError{Msg: fmt.Sprintf("helicone API returned status 400: %s", buf.String())}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		buf := new(bytes.Buffer)

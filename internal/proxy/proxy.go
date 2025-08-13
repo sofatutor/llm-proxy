@@ -545,10 +545,12 @@ func (p *TransparentProxy) Handler() http.Handler {
 		// Generate request ID and add to context
 		requestID := uuid.New().String()
 		ctx := context.WithValue(r.Context(), ctxKeyRequestID, requestID)
+		// Also add to shared logging context so middlewares can read it
+		ctx = logging.WithRequestID(ctx, requestID)
 		r = r.WithContext(ctx)
 
-		// Set X-Request-ID header
-		w.Header().Set("X-Request-ID", requestID)
+		// Set request header so observability/file logger can capture it (response header is still set in ModifyResponse only)
+		r.Header.Set("X-Request-ID", requestID)
 
 		// Record when proxy receives the request
 		receivedAt := time.Now().UTC()
@@ -771,6 +773,9 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 					zap.String("method", r.Method),
 					zap.String("path", r.URL.Path))
 				w.WriteHeader(http.StatusMethodNotAllowed)
+				if requestID != "" {
+					w.Header().Set("X-Request-ID", requestID)
+				}
 				w.Header().Set("Content-Type", "application/json")
 				if err := json.NewEncoder(w).Encode(ErrorResponse{
 					Error: "Method not allowed",
