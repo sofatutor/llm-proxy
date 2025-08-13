@@ -238,7 +238,9 @@ Web interface for system administration:
 ```mermaid
 sequenceDiagram
     Client->>+Proxy: Request with Proxy Token
-    Proxy->>+TokenManager: Validate Token
+    Note over Proxy: Generate/Extract Request ID
+    Proxy->>Proxy: Attach Request ID to Context
+    Proxy->>+TokenManager: Validate Token (with context)
     TokenManager->>+Database: Get Token Data
     Database-->>-TokenManager: Token Data
     TokenManager->>TokenManager: Check Expiration & Rate Limits
@@ -248,15 +250,15 @@ sequenceDiagram
     alt Token Valid
         Proxy->>+Database: Get API Key for Project
         Database-->>-Proxy: API Key
-        Proxy->>Proxy: Replace Authorization Header
-        Proxy->>+TargetAPI: Forward Request
+        Proxy->>Proxy: Replace Authorization Header + Add Request ID
+        Proxy->>+TargetAPI: Forward Request with Headers
         TargetAPI-->>-Proxy: Response
         
         alt Normal Response
-            Proxy->>Proxy: Extract Metadata
-            Proxy->>+Logger: Log API Call with Metadata
+            Proxy->>Proxy: Extract Metadata + Request ID
+            Proxy->>+Logger: Log API Call with Metadata & Context
             Logger-->>-Proxy: Log Confirmation
-            Proxy->>+AuditLogger: Log Security Event
+            Proxy->>+AuditLogger: Log Security Event with Request ID
             AuditLogger-->>-Proxy: Audit Confirmation
         else Streaming Response
             Proxy->>Proxy: Setup Streaming Pipeline
@@ -264,15 +266,17 @@ sequenceDiagram
                 TargetAPI-->>Proxy: Response Chunk
                 Proxy-->>Client: Forward Chunk
             end
-            Proxy->>+Logger: Log Aggregated Metadata
+            Proxy->>+Logger: Log Aggregated Metadata with Request ID
             Logger-->>-Proxy: Log Confirmation
-            Proxy->>+AuditLogger: Log Security Event
+            Proxy->>+AuditLogger: Log Security Event with Request ID
             AuditLogger-->>-Proxy: Audit Confirmation
         end
         
-        Proxy-->>-Client: Response
+        Proxy-->>-Client: Response (with X-Request-ID header)
     else Token Invalid
-        Proxy-->>Client: Error Response
+        Proxy->>+AuditLogger: Log Failed Authentication with Request ID
+        AuditLogger-->>-Proxy: Audit Confirmation
+        Proxy-->>Client: Error Response (with X-Request-ID header)
     end
 ```
 
