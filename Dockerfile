@@ -1,31 +1,33 @@
-FROM golang:1.23-alpine AS builder
+# syntax=docker/dockerfile:1.7
+
+# Use target platform for CGO (ensures native GCC under QEMU for non-amd64)
+FROM --platform=$TARGETPLATFORM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
 # Copy go.mod and go.sum files first for better caching
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    GOMODCACHE=/go/pkg/mod go mod download
 
 # Copy the rest of the source code
 COPY . .
 
 # Install build dependencies for CGO and SQLite
-RUN apk add --no-cache gcc musl-dev sqlite-dev
+RUN --mount=type=cache,target=/var/cache/apk apk add gcc musl-dev sqlite-dev
 
 # Build the application with CGO enabled for go-sqlite3
-RUN CGO_ENABLED=1 GOOS=linux \
-    go build -a -ldflags "-w" \
-    -trimpath -o /llm-proxy ./cmd/proxy
+ENV CGO_ENABLED=1
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    GOMODCACHE=/go/pkg/mod \
+    go build -ldflags "-w" -trimpath -o /llm-proxy ./cmd/proxy
 
 # Use a small alpine image for the final container
 FROM alpine:3.18
 
-# Security: Update packages and add CA certificates
-RUN apk update && \
-    apk upgrade && \
-    apk --no-cache add ca-certificates tzdata sqlite-libs && \
-    apk --no-cache add redis && \
-    rm -rf /var/cache/apk/*
+# Security: Add only required runtime libraries
+RUN --mount=type=cache,target=/var/cache/apk apk add ca-certificates tzdata sqlite-libs wget
 
 # Security: Create non-root user and group
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
@@ -44,9 +46,6 @@ COPY --from=builder --chown=appuser:appgroup /llm-proxy /app/bin/llm-proxy
 # Security: Set restrictive permissions
 RUN chmod 550 /app/bin/llm-proxy && \
     chmod -R 750 /app/data /app/logs /app/config /app/certs
-
-# Create default config
-COPY --chown=appuser:appgroup .env.example /app/config/.env.example
 
 # Copy entrypoint script
 COPY --chown=appuser:appgroup entrypoint.sh /app/entrypoint.sh

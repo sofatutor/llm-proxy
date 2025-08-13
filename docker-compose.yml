@@ -2,6 +2,13 @@ x-llm-proxy-base: &llm-proxy-base
   image: llm-proxy:latest
   restart: unless-stopped
   entrypoint: ["/app/entrypoint.sh"]
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  tmpfs:
+    - /tmp
   environment:
     - OPENAI_API_KEY=${OPENAI_API_KEY}
     - MANAGEMENT_TOKEN=${MANAGEMENT_TOKEN}
