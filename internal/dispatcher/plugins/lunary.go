@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -71,7 +72,7 @@ func (p *LunaryPlugin) SendEvents(ctx context.Context, events []dispatcher.Event
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			fmt.Printf("failed to close response body: %v\n", err)
+			log.Printf("[lunary] failed to close response body: %v", err)
 		}
 	}()
 

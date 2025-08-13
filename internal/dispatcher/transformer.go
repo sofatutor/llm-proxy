@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
-	"fmt"
 	"io"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -111,17 +111,17 @@ func safeRawMessageOrBase64(data []byte, headers map[string][]string) (json.RawM
 	if decompressErr == nil && json.Unmarshal(decompressed, &js) == nil {
 		return js, ""
 	} else if decompressErr != nil {
-		fmt.Printf("[transformer] Decompression failed: %v\n", decompressErr)
+		log.Printf("[transformer] Decompression failed: %v", decompressErr)
 	} else if json.Unmarshal(decompressed, &js) != nil {
 		if strings.Contains(contentType, "json") {
-			fmt.Printf("[transformer] JSON unmarshal after decompress failed: %v\nFirst 64 bytes: %x\n", decompressErr, decompressed[:min(64, len(decompressed))])
+			log.Printf("[transformer] JSON unmarshal after decompress failed: %v First 64 bytes: %x", decompressErr, decompressed[:min(64, len(decompressed))])
 		}
 	}
 	// Try direct JSON unmarshal if not already tried
 	if decompressErr != nil && json.Unmarshal(data, &js) == nil {
 		return js, ""
 	} else if decompressErr != nil {
-		fmt.Printf("[transformer] JSON unmarshal failed: %v\nFirst 64 bytes: %x\n", decompressErr, data[:min(64, len(data))])
+		log.Printf("[transformer] JSON unmarshal failed: %v First 64 bytes: %x", decompressErr, data[:min(64, len(data))])
 	}
 	// If valid UTF-8, try to parse as JSON string or OpenAI event stream
 	if utf8.Valid(decompressed) {

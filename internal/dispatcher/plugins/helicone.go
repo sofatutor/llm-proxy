@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -54,7 +55,7 @@ func (p *HeliconePlugin) SendEvents(ctx context.Context, events []dispatcher.Eve
 	for _, event := range events {
 		// Skip events with empty output
 		if len(event.Output) == 0 && event.OutputBase64 == "" {
-			fmt.Printf("[helicone] Skipping event with empty output: RunID=%s, Path=%v\n", event.RunID, event.Metadata["path"])
+			log.Printf("[helicone] Skipping event with empty output: RunID=%s, Path=%v", event.RunID, event.Metadata["path"])
 			continue
 		}
 		payload, err := heliconePayloadFromEvent(event)
@@ -63,7 +64,7 @@ func (p *HeliconePlugin) SendEvents(ctx context.Context, events []dispatcher.Eve
 		}
 		if err := p.sendHeliconeEvent(ctx, payload); err != nil {
 			// Print payload for debugging on error
-			fmt.Printf("[helicone] Error sending event. Payload: %s\n", mustMarshalJSON(payload))
+			log.Printf("[helicone] Error sending event. Payload: %s", mustMarshalJSON(payload))
 			return err
 		}
 	}
@@ -167,13 +168,13 @@ func (p *HeliconePlugin) sendHeliconeEvent(ctx context.Context, payload map[stri
 	if resp.StatusCode == 500 {
 		buf := new(bytes.Buffer)
 		_, _ = buf.ReadFrom(resp.Body)
-		fmt.Printf("Helicone API error %d: %s\n", resp.StatusCode, buf.String())
+		log.Printf("Helicone API error %d: %s", resp.StatusCode, buf.String())
 		return &dispatcher.PermanentBackendError{Msg: fmt.Sprintf("helicone API returned status 500: %s", buf.String())}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		buf := new(bytes.Buffer)
 		_, _ = buf.ReadFrom(resp.Body)
-		fmt.Printf("Helicone API error %d: %s\n", resp.StatusCode, buf.String())
+		log.Printf("Helicone API error %d: %s", resp.StatusCode, buf.String())
 		return fmt.Errorf("helicone API returned status %d", resp.StatusCode)
 	}
 	return nil
