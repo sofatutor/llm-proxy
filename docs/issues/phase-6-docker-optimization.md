@@ -15,7 +15,7 @@ Optimize the Dockerfile and containerization setup for the LLM proxy. This inclu
 - [x] Add container health checks
 - [x] Implement Docker security best practices (non-root user, minimal image, etc.)
 - [x] Document Docker build and deployment process
-- [ ] Add tests for Docker builds and health checks
+- [x] Add tests for Docker builds and health checks (CI smoke test in `.github/workflows/docker.yml`)
 - [x] Build and publish Docker image to GitHub Container Registry (GHCR)
 
 ## Acceptance Criteria
