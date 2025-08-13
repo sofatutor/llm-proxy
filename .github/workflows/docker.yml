@@ -77,8 +77,11 @@ jobs:
       - name: Pull pushed image and tag for Makefile
         if: github.event_name != 'pull_request'
         run: |
-          docker pull ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
-          docker tag ghcr.io/${{ github.repository }}:sha-${{ github.sha }} llm-proxy:latest
+          # Use sanitized branch tag (ref name with slashes replaced by '-')
+          BRANCH_TAG="${GITHUB_REF_NAME//\//-}"
+          echo "Pulling ghcr.io/${{ github.repository }}:${BRANCH_TAG}"
+          docker pull ghcr.io/${{ github.repository }}:${BRANCH_TAG}
+          docker tag ghcr.io/${{ github.repository }}:${BRANCH_TAG} llm-proxy:latest
 
       - name: Smoke test using Makefile (run + health)
         if: github.event_name != 'pull_request'
