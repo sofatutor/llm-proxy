@@ -11,6 +11,105 @@ import (
 	"go.uber.org/zap/zaptest"
 )
 
+// test-scoped mock Redis client implementing eventbus.RedisClient for Redis log bus
+type mockRedisClientLog struct {
+	list  [][]byte
+	ttl   time.Duration
+	seq   map[string]int64
+	store map[string]string
+}
+
+func newMockRedisClientLog() *mockRedisClientLog {
+	return &mockRedisClientLog{list: make([][]byte, 0), seq: make(map[string]int64), store: make(map[string]string)}
+}
+
+func (m *mockRedisClientLog) LPush(_ context.Context, _ string, values ...interface{}) error {
+	for _, v := range values {
+		var b []byte
+		switch val := v.(type) {
+		case string:
+			b = []byte(val)
+		case []byte:
+			b = val
+		}
+		m.list = append([][]byte{b}, m.list...)
+	}
+	return nil
+}
+
+func (m *mockRedisClientLog) LRANGE(_ context.Context, _ string, start, stop int64) ([]string, error) {
+	ln := int64(len(m.list))
+	if ln == 0 {
+		return []string{}, nil
+	}
+	if start < 0 {
+		start = ln + start
+	}
+	if stop < 0 {
+		stop = ln + stop
+	}
+	if start < 0 {
+		start = 0
+	}
+	if stop >= ln {
+		stop = ln - 1
+	}
+	if start > stop || start >= ln {
+		return []string{}, nil
+	}
+	out := make([]string, 0, stop-start+1)
+	for i := start; i <= stop; i++ {
+		out = append(out, string(m.list[i]))
+	}
+	return out, nil
+}
+
+func (m *mockRedisClientLog) LLEN(_ context.Context, _ string) (int64, error) {
+	return int64(len(m.list)), nil
+}
+func (m *mockRedisClientLog) EXPIRE(_ context.Context, _ string, expiration time.Duration) error {
+	m.ttl = expiration
+	return nil
+}
+func (m *mockRedisClientLog) LTRIM(_ context.Context, _ string, start, stop int64) error {
+	ln := int64(len(m.list))
+	if start < 0 {
+		start = ln + start
+	}
+	if stop < 0 {
+		stop = ln + stop
+	}
+	if start < 0 {
+		start = 0
+	}
+	if stop >= ln {
+		stop = ln - 1
+	}
+	if start > stop || start >= ln {
+		m.list = [][]byte{}
+		return nil
+	}
+	m.list = m.list[start : stop+1]
+	return nil
+}
+func (m *mockRedisClientLog) Incr(_ context.Context, key string) (int64, error) {
+	if m.seq == nil {
+		m.seq = make(map[string]int64)
+	}
+	m.seq[key]++
+	return m.seq[key], nil
+}
+func (m *mockRedisClientLog) Get(_ context.Context, key string) (string, error) {
+	return m.store[key], nil
+}
+func (m *mockRedisClientLog) Set(_ context.Context, key, value string) error {
+	if m.store == nil {
+		m.store = make(map[string]string)
+	}
+	m.store[key] = value
+	return nil
+}
+
 // mockPlugin is a mock implementation of BackendPlugin for testing
 type mockPlugin struct {
 	mu       sync.Mutex
@@ -508,7 +607,7 @@ func TestService_StopIdempotent(t *testing.T) {
 }
 
 func TestDispatcher_DoesNotDispatchDuplicates(t *testing.T) {
-	client := eventbus.NewMockRedisClientLog()
+	client := newMockRedisClientLog()
 	bus := eventbus.NewRedisEventBusLog(client, "events", 0, 0)
 	plugin := &mockPlugin{}
 	logger := zaptest.NewLogger(t)
