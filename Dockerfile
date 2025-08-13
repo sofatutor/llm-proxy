@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
-FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS builder
+# Use target platform for CGO (ensures native GCC under QEMU for non-amd64)
+FROM --platform=$TARGETPLATFORM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
@@ -16,13 +17,10 @@ COPY . .
 RUN --mount=type=cache,target=/var/cache/apk apk add gcc musl-dev sqlite-dev
 
 # Build the application with CGO enabled for go-sqlite3
-ARG TARGETOS
-ARG TARGETARCH
 ENV CGO_ENABLED=1
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     GOMODCACHE=/go/pkg/mod \
-    GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -ldflags "-w" -trimpath -o /llm-proxy ./cmd/proxy
 
 # Use a small alpine image for the final container
