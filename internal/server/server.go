@@ -38,6 +38,7 @@ type Server struct {
 	metrics      Metrics
 	eventBus     eventbus.EventBus
 	auditLogger  *audit.Logger
+	db           *database.DB
 }
 
 // HealthResponse is the response body for the health check endpoint.
@@ -140,6 +141,7 @@ func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectSto
 		metrics:      metrics,
 		eventBus:     bus,
 		auditLogger:  auditLogger,
+		db:           db,
 		server: &http.Server{
 			Addr:         cfg.ListenAddr,
 			Handler:      mux,
@@ -156,6 +158,8 @@ func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectSto
 	mux.HandleFunc("/manage/projects", s.logRequestMiddleware(s.handleProjects))
 	mux.HandleFunc("/manage/projects/", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleProjectByID)))
 	mux.HandleFunc("/manage/tokens", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleTokens)))
+	mux.HandleFunc("/manage/audit", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleAuditEvents)))
+	mux.HandleFunc("/manage/audit/", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleAuditEventByID)))
 
 	// Add catch-all handler for unmatched routes to ensure logging
 	mux.HandleFunc("/", s.logRequestMiddleware(s.handleNotFound))
@@ -895,6 +899,18 @@ func getRequestID(ctx context.Context) string {
 	return uuid.New().String()
 }
 
+// parseInt parses a string to an integer with a default value
+func parseInt(s string, defaultValue int) int {
+	if s == "" {
+		return defaultValue
+	}
+	var result int
+	if _, err := fmt.Sscanf(s, "%d", &result); err != nil {
+		return defaultValue
+	}
+	return result
+}
+
 // logRequestMiddleware logs all incoming requests with timing information using structured logging
 func (s *Server) logRequestMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -1036,4 +1052,145 @@ func (s *Server) auditEvent(action string, actor string, result audit.ResultType
 		ev = ev.WithDetail("origin", "admin-ui")
 	}
 	return ev
+}
+
+// Handler for /manage/audit (GET: list)
+func (s *Server) handleAuditEvents(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	requestID := getRequestID(ctx)
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Only proceed if we have database access
+	if s.db == nil {
+		s.logger.Error("audit events requested but database not available", zap.String("request_id", requestID))
+		http.Error(w, `{"error":"audit events not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	// Parse query parameters for filtering
+	query := r.URL.Query()
+	filters := database.AuditEventFilters{
+		Action:        query.Get("action"),
+		ClientIP:      query.Get("client_ip"),
+		ProjectID:     query.Get("project_id"),
+		Outcome:       query.Get("outcome"),
+		Actor:         query.Get("actor"),
+		RequestID:     query.Get("request_id"),
+		CorrelationID: query.Get("correlation_id"),
+		Method:        query.Get("method"),
+		Path:          query.Get("path"),
+		Search:        query.Get("search"),
+	}
+
+	// Parse time filters
+	if startTime := query.Get("start_time"); startTime != "" {
+		filters.StartTime = &startTime
+	}
+	if endTime := query.Get("end_time"); endTime != "" {
+		filters.EndTime = &endTime
+	}
+
+	// Parse pagination
+	page := parseInt(query.Get("page"), 1)
+	pageSize := parseInt(query.Get("page_size"), 20)
+	if pageSize > 100 {
+		pageSize = 100 // Limit page size
+	}
+	filters.Limit = pageSize
+	filters.Offset = (page - 1) * pageSize
+
+	// Get audit events
+	events, err := s.db.ListAuditEvents(ctx, filters)
+	if err != nil {
+		s.logger.Error("failed to list audit events", zap.Error(err), zap.String("request_id", requestID))
+		http.Error(w, `{"error":"failed to list audit events"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Get total count for pagination
+	totalCount, err := s.db.CountAuditEvents(ctx, filters)
+	if err != nil {
+		s.logger.Error("failed to count audit events", zap.Error(err), zap.String("request_id", requestID))
+		http.Error(w, `{"error":"failed to count audit events"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Calculate pagination info
+	totalPages := (totalCount + pageSize - 1) / pageSize
+	hasNext := page < totalPages
+	hasPrev := page > 1
+
+	response := map[string]interface{}{
+		"events": events,
+		"pagination": map[string]interface{}{
+			"page":        page,
+			"page_size":   pageSize,
+			"total_count": totalCount,
+			"total_pages": totalPages,
+			"has_next":    hasNext,
+			"has_prev":    hasPrev,
+		},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		s.logger.Error("failed to encode audit events response", zap.Error(err), zap.String("request_id", requestID))
+	}
+
+	// Audit: successful audit events listing
+	_ = s.auditLogger.Log(s.auditEvent(audit.ActionAuditList, audit.ActorManagement, audit.ResultSuccess, r, requestID).
+		WithDetail("events_count", len(events)).
+		WithDetail("page", page).
+		WithDetail("page_size", pageSize).
+		WithDetail("total_count", totalCount))
+}
+
+// Handler for /manage/audit/{id} (GET: show)
+func (s *Server) handleAuditEventByID(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	requestID := getRequestID(ctx)
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Only proceed if we have database access
+	if s.db == nil {
+		s.logger.Error("audit event requested but database not available", zap.String("request_id", requestID))
+		http.Error(w, `{"error":"audit event not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	// Extract audit event ID from path
+	id := strings.TrimPrefix(r.URL.Path, "/manage/audit/")
+	if id == "" {
+		http.Error(w, `{"error":"audit event ID is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Get specific audit event by ID
+	event, err := s.db.GetAuditEventByID(ctx, id)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			http.Error(w, `{"error":"audit event not found"}`, http.StatusNotFound)
+		} else {
+			s.logger.Error("failed to get audit event", zap.Error(err), zap.String("audit_id", id), zap.String("request_id", requestID))
+			http.Error(w, `{"error":"failed to get audit event"}`, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(event); err != nil {
+		s.logger.Error("failed to encode audit event response", zap.Error(err), zap.String("audit_id", id), zap.String("request_id", requestID))
+	}
+
+	// Audit: successful audit event retrieval
+	_ = s.auditLogger.Log(s.auditEvent(audit.ActionAuditShow, audit.ActorManagement, audit.ResultSuccess, r, requestID).
+		WithDetail("audit_event_id", id))
 }
