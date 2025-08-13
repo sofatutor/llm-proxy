@@ -12,6 +12,8 @@ GOLINT=golangci-lint
 # Binary names
 BINDIR=bin
 PROXY_BINARY=$(BINDIR)/llm-proxy
+IMAGE?=llm-proxy:latest
+RUN_FLAGS?=--rm
 
 all: test build
 
@@ -57,13 +59,13 @@ docker-build:
 
 docker-run:
 	@mkdir -p $(PWD)/tmp/llm-proxy-data
-	docker run --rm -d \
+	docker run $(RUN_FLAGS) -d \
 	  --name llm-proxy \
 	  -p 8080:8080 \
 	  -v $(PWD)/tmp/llm-proxy-data:/app/data \
 	  -e MANAGEMENT_TOKEN=$${MANAGEMENT_TOKEN:-dev-management-token} \
 	  -e LLM_PROXY_EVENT_BUS=in-memory \
-	  llm-proxy:latest server
+	  $(IMAGE) server
 
 docker-stop:
 	@docker rm -f llm-proxy >/dev/null 2>&1 || true

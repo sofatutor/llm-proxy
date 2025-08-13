@@ -59,7 +59,7 @@ jobs:
           context: .
           platforms: linux/amd64
           load: true
-          tags: llm-proxy:latest
+          tags: llm-proxy:${{ github.head_ref || github.ref_name }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -83,11 +83,11 @@ jobs:
           BRANCH_TAG="${GITHUB_REF_NAME//\//-}"
           echo "Pulling ghcr.io/${{ github.repository }}:${BRANCH_TAG}"
           docker pull ghcr.io/${{ github.repository }}:${BRANCH_TAG}
-          docker tag ghcr.io/${{ github.repository }}:${BRANCH_TAG} llm-proxy:latest
+          docker tag ghcr.io/${{ github.repository }}:${BRANCH_TAG} llm-proxy:${BRANCH_TAG}
 
       - name: Smoke test using Makefile (run + health)
         run: |
-          make docker-smoke
+          make docker-smoke IMAGE=llm-proxy:${{ github.head_ref || github.ref_name }}
         env:
           MANAGEMENT_TOKEN: smoke-token
 
