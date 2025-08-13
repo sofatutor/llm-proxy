@@ -20,6 +20,7 @@ Start with the main [README](../README.md) for a quick overview, installation, a
 ## Observability & Monitoring
 
 - **[Instrumentation Guide](instrumentation.md)** - Event system, async middleware, and monitoring
+- **[Security Best Practices](security.md)** - Production security, secrets management, audit logging, and hardening
 
 ## API Reference
 
@@ -56,6 +57,9 @@ The [OpenAPI specification](../api/openapi.yaml) provides machine-readable API d
 | `LISTEN_ADDR` | Server address | `:8080` |
 | `DATABASE_PATH` | SQLite database | `./data/llm-proxy.db` |
 | `LOG_LEVEL` | Logging level | `info` |
+| `AUDIT_ENABLED` | Enable audit logging | `true` |
+| `AUDIT_LOG_FILE` | Audit log file path | `./data/audit.log` |
+| `AUDIT_STORE_IN_DB` | Store audit events in DB | `true` |
 | `OBSERVABILITY_BUFFER_SIZE` | Event bus buffer | `1000` |
 
 ### Key Commands
