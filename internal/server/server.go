@@ -708,10 +708,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			s.logger.Error("invalid token create request body", zap.Error(err), zap.String("request_id", requestID))
 
 			// Audit: token creation failure - invalid request
-			_ = s.auditLogger.Log(audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure).
-				WithRequestID(requestID).
-				WithHTTPMethod(r.Method).
-				WithEndpoint(r.URL.Path).
+			_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
 				WithError(err).
 				WithDetail("validation_error", "invalid request body"))
 
@@ -726,9 +723,6 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 				// Audit: token creation failure - duration too long
 				_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
 					WithProjectID(req.ProjectID).
-					WithRequestID(requestID).
-					WithHTTPMethod(r.Method).
-					WithEndpoint(r.URL.Path).
 					WithDetail("validation_error", "duration exceeds maximum").
 					WithDetail("requested_duration_minutes", req.DurationMinutes).
 					WithDetail("max_duration_minutes", maxDurationMinutes))
@@ -741,11 +735,8 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			s.logger.Error("missing required fields for token create", zap.String("project_id", req.ProjectID), zap.Int("duration_minutes", req.DurationMinutes), zap.String("request_id", requestID))
 
 			// Audit: token creation failure - missing duration
-			_ = s.auditLogger.Log(audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure).
+			_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
 				WithProjectID(req.ProjectID).
-				WithRequestID(requestID).
-				WithHTTPMethod(r.Method).
-				WithEndpoint(r.URL.Path).
 				WithDetail("validation_error", "missing duration_minutes"))
 
 			http.Error(w, `{"error":"project_id and duration_minutes are required"}`, http.StatusBadRequest)
@@ -755,10 +746,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			s.logger.Error("missing project_id for token create", zap.String("request_id", requestID))
 
 			// Audit: token creation failure - missing project ID
-			_ = s.auditLogger.Log(audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure).
-				WithRequestID(requestID).
-				WithHTTPMethod(r.Method).
-				WithEndpoint(r.URL.Path).
+			_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
 				WithDetail("validation_error", "missing project_id"))
 
 			http.Error(w, `{"error":"project_id is required"}`, http.StatusBadRequest)
@@ -770,11 +758,8 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			s.logger.Error("project not found for token create", zap.String("project_id", req.ProjectID), zap.Error(err), zap.String("request_id", requestID))
 
 			// Audit: token creation failure - project not found
-			_ = s.auditLogger.Log(audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure).
+			_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
 				WithProjectID(req.ProjectID).
-				WithRequestID(requestID).
-				WithHTTPMethod(r.Method).
-				WithEndpoint(r.URL.Path).
 				WithError(err).
 				WithDetail("error_type", "project not found"))
 
@@ -787,11 +772,8 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			s.logger.Error("failed to generate token", zap.Error(err), zap.String("request_id", requestID))
 
 			// Audit: token creation failure - generation error
-			_ = s.auditLogger.Log(audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure).
+			_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
 				WithProjectID(req.ProjectID).
-				WithRequestID(requestID).
-				WithHTTPMethod(r.Method).
-				WithEndpoint(r.URL.Path).
 				WithError(err).
 				WithDetail("error_type", "token generation failed"))
 
@@ -811,11 +793,8 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			s.logger.Error("failed to store token", zap.Error(err), zap.String("request_id", requestID))
 
 			// Audit: token creation failure - storage error
-			_ = s.auditLogger.Log(audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure).
+			_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
 				WithProjectID(req.ProjectID).
-				WithRequestID(requestID).
-				WithHTTPMethod(r.Method).
-				WithEndpoint(r.URL.Path).
 				WithTokenID(tokenStr).
 				WithError(err).
 				WithDetail("error_type", "storage failed"))

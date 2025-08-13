@@ -90,11 +90,11 @@ func (l *Logger) Log(event *Event) error {
 	if l.dbEnabled {
 		// Use background context with timeout for database operations
 		ctx := context.Background()
-		if err := l.dbStore.StoreAuditEvent(ctx, event); err != nil {
-			// Log database errors but don't fail the audit operation
-			// File logging is the primary reliable audit trail
-			fmt.Printf("Warning: Failed to store audit event to database: %v\n", err)
-		}
+        if err := l.dbStore.StoreAuditEvent(ctx, event); err != nil {
+            // Avoid hard dependency on a logger; keep stdout warning for now but
+            // ensure it's concise. In production, this would be wired to a structured logger.
+            _, _ = io.WriteString(os.Stdout, "audit: failed to store event in database\n")
+        }
 	}
 
 	return nil

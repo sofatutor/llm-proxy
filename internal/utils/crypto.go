@@ -33,6 +33,5 @@ func GenerateSecureTokenMustSucceed(length int) string {
 	return token
 }
 
-// ObfuscateToken obfuscates a token for display purposes
-// Shows first 8 characters followed by dots and last 4 characters
+// Deprecated: use obfuscate.ObfuscateTokenGeneric directly at call sites.
 func ObfuscateToken(token string) string { return obfuscate.ObfuscateTokenGeneric(token) }

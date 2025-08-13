@@ -32,10 +32,6 @@ func (d *DB) StoreAuditEvent(ctx context.Context, event *audit.Event) error {
 	if d == nil || d.db == nil {
 		return fmt.Errorf("database is nil")
 	}
-	// Ensure schema exists (important for in-memory databases in tests)
-	if err := initDatabase(d.db); err != nil {
-		return fmt.Errorf("failed to ensure database schema: %w", err)
-	}
 	if event == nil {
 		return fmt.Errorf("audit event cannot be nil")
 	}
