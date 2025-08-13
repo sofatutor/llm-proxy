@@ -1,5 +1,7 @@
 # Developer Documentation
 
+Tracking: [Issue #52](https://github.com/sofatutor/llm-proxy/issues/52)
+
 ## Summary
 Create and update developer documentation for the LLM proxy, including architecture overview, code organization, contributing guidelines, and API reference. This issue can be worked on in parallel with other documentation and deployment issues.
 

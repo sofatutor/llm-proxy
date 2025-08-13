@@ -1,5 +1,7 @@
 # Kubernetes Deployment with HELM
 
+Tracking: [Issue #49](https://github.com/sofatutor/llm-proxy/issues/49)
+
 ## Summary
 Document and implement deployment of the LLM proxy to Kubernetes using HELM charts, including chart creation, configuration, and CI/CD integration.
 
@@ -28,8 +30,16 @@ flowchart TD
 - [ ] Test Kubernetes deployment for functionality, reliability, and scaling
 - [ ] Document Kubernetes and HELM deployment process and best practices
 
+## CDK/EKS Integration (optional but recommended on AWS)
+- [ ] Provision or import an EKS cluster via AWS CDK (TypeScript)
+- [ ] Deploy the Helm chart using CDK (`cluster.addHelmChart`) with values, namespace, timeouts
+- [ ] Configure IRSA for controllers or pods that require AWS permissions
+- [ ] Support private/OCI Helm registries and image pull secrets as needed
+- [ ] CI step to synth/validate CDK and optionally deploy to a test environment
+
 ## Acceptance Criteria
 - Kubernetes manifests and HELM chart are available and tested
 - Secrets management is implemented and documented
 - Logging, health checks, and autoscaling are configured
 - Documentation and tests are updated accordingly 
+- If using AWS: CDK-based Helm deployment to EKS is demonstrated or documented

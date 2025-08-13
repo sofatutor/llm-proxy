@@ -1,5 +1,7 @@
 # Log Integration
 
+Tracking: [Issue #43](https://github.com/sofatutor/llm-proxy/issues/43)
+
 ## Summary
 Integrate structured logging, context propagation, and audit logging throughout the LLM proxy application.
 

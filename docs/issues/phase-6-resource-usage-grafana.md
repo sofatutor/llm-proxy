@@ -1,5 +1,7 @@
 # Resource Usage Monitoring & Grafana Dashboards
 
+Tracking: [Issue #54](https://github.com/sofatutor/llm-proxy/issues/54)
+
 ## Summary
 Implement resource usage monitoring and provide Grafana dashboard templates for the LLM proxy.
 
