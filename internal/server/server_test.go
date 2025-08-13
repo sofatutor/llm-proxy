@@ -451,7 +451,7 @@ func TestServer_Start_ReturnsListenError(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	addr := ln.Addr().String()
-	_ = ln.Close()
+	// Keep the listener open to force EADDRINUSE for Start()
 	srv.server.Addr = addr
 
 	errCh := make(chan error, 1)
@@ -461,6 +461,7 @@ func TestServer_Start_ReturnsListenError(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected error from Start() when port unavailable")
 		}
+		_ = ln.Close()
 	case <-time.After(2 * time.Second):
 		t.Fatalf("Start() did not return in time")
 	}
