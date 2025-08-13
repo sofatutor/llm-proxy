@@ -182,7 +182,6 @@ Recommendations for production:
 - If you require strict, zero-loss semantics, consider a durable queue with consumer offsets (e.g., Redis Streams with consumer groups, Kafka) instead of a simple Redis list with TTL/trim.
 
 ## References
-## References
 - See `internal/middleware/instrumentation.go` for the middleware implementation.
 - See `internal/eventbus/eventbus.go` for the event bus interface and in-memory backend.
 - See `internal/dispatcher/` for the pluggable dispatcher architecture.
