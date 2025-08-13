@@ -78,7 +78,6 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Pull pushed image and tag for Makefile
-        if: github.event_name != 'pull_request'
         run: |
           # Use sanitized branch tag (ref name with slashes replaced by '-')
           BRANCH_TAG="${GITHUB_REF_NAME//\//-}"
