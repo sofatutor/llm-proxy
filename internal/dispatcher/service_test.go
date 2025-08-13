@@ -423,6 +423,90 @@ func TestServiceSendBatchWithResult_RetryBackoff(t *testing.T) {
 	}
 }
 
+func TestService_TimerFlushSendsBatch(t *testing.T) {
+	// Plugin that records sends
+	type recordPlugin struct {
+		mu    sync.Mutex
+		sends int
+	}
+	var rp recordPlugin
+	done := make(chan struct{}, 1)
+	var once sync.Once
+	plugin := &mockPlugin{OnSend: func(_ []EventPayload) error {
+		rp.mu.Lock()
+		rp.sends++
+		rp.mu.Unlock()
+		once.Do(func() { done <- struct{}{} })
+		return nil
+	}}
+
+	cfg := Config{
+		Plugin:           plugin,
+		EventTransformer: NewDefaultEventTransformer(false),
+		BufferSize:       10,
+		BatchSize:        10,                    // large so timer triggers flush
+		FlushInterval:    10 * time.Millisecond, // short timer
+		RetryAttempts:    1,
+		RetryBackoff:     time.Millisecond,
+	}
+	bus := eventbus.NewInMemoryEventBus(10)
+	svc, err := NewServiceWithBus(cfg, zaptest.NewLogger(t), bus)
+	if err != nil {
+		t.Fatalf("NewServiceWithBus failed: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = svc.Run(ctx, false) }()
+
+	// Give Run/processEvents time to subscribe to the bus before publishing
+	time.Sleep(20 * time.Millisecond)
+
+	// Publish a single event and rely on timer flush
+	bus.Publish(context.Background(), eventbus.Event{RequestID: "flush", Method: "POST"})
+
+	// Wait until a send occurs or timeout
+	select {
+	case <-done:
+		// ok
+	case <-time.After(1 * time.Second):
+		t.Fatal("timeout waiting for timer flush send")
+	}
+	cancel()
+	_ = svc.Stop()
+
+	rp.mu.Lock()
+	sends := rp.sends
+	rp.mu.Unlock()
+	if sends == 0 {
+		t.Fatalf("expected at least one send via timer flush, got %d", sends)
+	}
+}
+
+func TestService_StopIdempotent(t *testing.T) {
+	cfg := Config{
+		Plugin:           &mockPlugin{},
+		EventTransformer: NewDefaultEventTransformer(false),
+		BufferSize:       2,
+		BatchSize:        1,
+		FlushInterval:    time.Millisecond,
+	}
+	bus := eventbus.NewInMemoryEventBus(2)
+	svc, err := NewServiceWithBus(cfg, zaptest.NewLogger(t), bus)
+	if err != nil {
+		t.Fatalf("NewServiceWithBus failed: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { _ = svc.Run(ctx, false) }()
+	cancel()
+	if err := svc.Stop(); err != nil {
+		t.Fatalf("first Stop err: %v", err)
+	}
+	if err := svc.Stop(); err != nil {
+		t.Fatalf("second Stop err: %v", err)
+	}
+}
+
 func TestDispatcher_DoesNotDispatchDuplicates(t *testing.T) {
 	client := eventbus.NewMockRedisClientLog()
 	bus := eventbus.NewRedisEventBusLog(client, "events", 0, 0)
