@@ -16,6 +16,15 @@ import (
 	"github.com/sofatutor/llm-proxy/internal/utils"
 )
 
+// context keys used to forward browser metadata from Admin UI → Management API
+type forwardedCtxKey string
+
+const (
+	ctxKeyForwardedUA      forwardedCtxKey = "forwarded_user_agent"
+	ctxKeyForwardedReferer forwardedCtxKey = "forwarded_referer"
+	ctxKeyForwardedIP      forwardedCtxKey = "forwarded_ip"
+)
+
 // APIClient handles communication with the Management API
 type APIClient struct {
 	baseURL    string
@@ -328,6 +337,27 @@ func (c *APIClient) newRequest(ctx context.Context, method, path string, body an
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+
+	// Forward browser context when present
+	if v := ctx.Value(ctxKeyForwardedUA); v != nil {
+		if ua, ok := v.(string); ok && ua != "" {
+			req.Header.Set("X-Forwarded-User-Agent", ua)
+			req.Header.Set("X-Admin-Origin", "1")
+		}
+	}
+	if v := ctx.Value(ctxKeyForwardedReferer); v != nil {
+		if ref, ok := v.(string); ok && ref != "" {
+			req.Header.Set("X-Forwarded-Referer", ref)
+			req.Header.Set("X-Admin-Origin", "1")
+		}
+	}
+	if v := ctx.Value(ctxKeyForwardedIP); v != nil {
+		if ip, ok := v.(string); ok && ip != "" {
+			// Provide original browser IP for backend audit logging
+			req.Header.Set("X-Forwarded-For", ip)
+			req.Header.Set("X-Admin-Origin", "1")
+		}
 	}
 
 	return req, nil

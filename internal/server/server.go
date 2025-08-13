@@ -1036,10 +1036,25 @@ func (s *Server) EventBus() eventbus.EventBus {
 // auditEvent creates a new audit event with common fields filled from the HTTP request
 func (s *Server) auditEvent(action string, actor string, result audit.ResultType, r *http.Request, requestID string) *audit.Event {
 	clientIP := s.getClientIP(r)
-	return audit.NewEvent(action, actor, result).
+	// Prefer forwarded UA and referer from Admin UI if present
+	forwardedUA := r.Header.Get("X-Forwarded-User-Agent")
+	userAgent := r.UserAgent()
+	if forwardedUA != "" {
+		userAgent = forwardedUA
+	}
+	forwardedRef := r.Header.Get("X-Forwarded-Referer")
+
+	ev := audit.NewEvent(action, actor, result).
 		WithRequestID(requestID).
 		WithHTTPMethod(r.Method).
 		WithEndpoint(r.URL.Path).
 		WithClientIP(clientIP).
-		WithUserAgent(r.UserAgent())
+		WithUserAgent(userAgent)
+	if forwardedRef != "" {
+		ev = ev.WithDetail("referer", forwardedRef)
+	}
+	if r.Header.Get("X-Admin-Origin") == "1" {
+		ev = ev.WithDetail("origin", "admin-ui")
+	}
+	return ev
 }

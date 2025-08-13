@@ -245,8 +245,17 @@ func (s *Server) handleDashboard(c *gin.Context) {
 	// Get API client from context
 	apiClientIface := c.MustGet("apiClient").(APIClientInterface)
 
-	// Get dashboard data from Management API
-	dashboardData, err := apiClientIface.GetDashboardData(c.Request.Context())
+	// Get dashboard data from Management API with forwarded browser metadata
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	dashboardData, err := apiClientIface.GetDashboardData(ctx)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to load dashboard data: %v", err),
@@ -268,7 +277,17 @@ func (s *Server) handleProjectsList(c *gin.Context) {
 	page := getPageFromQuery(c, 1)
 	pageSize := getPageSizeFromQuery(c, 10)
 
-	projects, pagination, err := apiClient.GetProjects(c.Request.Context(), page, pageSize)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	// Forward best-effort original client IP from headers
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	projects, pagination, err := apiClient.GetProjects(ctx, page, pageSize)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to load projects: %v", err),
@@ -308,7 +327,16 @@ func (s *Server) handleProjectsCreate(c *gin.Context) {
 		return
 	}
 
-	project, err := apiClient.CreateProject(c.Request.Context(), req.Name, req.OpenAIAPIKey)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	project, err := apiClient.CreateProject(ctx, req.Name, req.OpenAIAPIKey)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "base.html", gin.H{
 			"title":    "Create Project",
@@ -327,7 +355,16 @@ func (s *Server) handleProjectsShow(c *gin.Context) {
 
 	id := c.Param("id")
 
-	project, err := apiClient.GetProject(c.Request.Context(), id)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	project, err := apiClient.GetProject(ctx, id)
 	if err != nil {
 		c.HTML(http.StatusNotFound, "error.html", gin.H{
 			"error": "Project not found",
@@ -348,7 +385,16 @@ func (s *Server) handleProjectsEdit(c *gin.Context) {
 
 	id := c.Param("id")
 
-	project, err := apiClient.GetProject(c.Request.Context(), id)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	project, err := apiClient.GetProject(ctx, id)
 	if err != nil {
 		c.HTML(http.StatusNotFound, "error.html", gin.H{
 			"error": "Project not found",
@@ -381,7 +427,16 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 		return
 	}
 
-	project, err := apiClient.UpdateProject(c.Request.Context(), id, req.Name, req.OpenAIAPIKey)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	project, err := apiClient.UpdateProject(ctx, id, req.Name, req.OpenAIAPIKey)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to update project: %v", err),
@@ -398,7 +453,16 @@ func (s *Server) handleProjectsDelete(c *gin.Context) {
 
 	id := c.Param("id")
 
-	err := apiClient.DeleteProject(c.Request.Context(), id)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	err := apiClient.DeleteProject(ctx, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("Failed to delete project: %v", err),
@@ -418,7 +482,16 @@ func (s *Server) handleTokensList(c *gin.Context) {
 	pageSize := getPageSizeFromQuery(c, 10)
 	projectID := c.Query("project_id")
 
-	tokens, pagination, err := apiClient.GetTokens(c.Request.Context(), projectID, page, pageSize)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	tokens, pagination, err := apiClient.GetTokens(ctx, projectID, page, pageSize)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to load tokens: %v", err),
@@ -427,7 +500,7 @@ func (s *Server) handleTokensList(c *gin.Context) {
 	}
 
 	// Fetch all projects to create a lookup map for project names
-	projects, _, err := apiClient.GetProjects(c.Request.Context(), 1, 1000) // Get up to 1000 projects
+	projects, _, err := apiClient.GetProjects(ctx, 1, 1000) // Get up to 1000 projects
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to load projects: %v", err),
@@ -453,7 +526,16 @@ func (s *Server) handleTokensNew(c *gin.Context) {
 	// Get API client from context
 	apiClient := c.MustGet("apiClient").(APIClientInterface)
 
-	projects, _, err := apiClient.GetProjects(c.Request.Context(), 1, 100)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	projects, _, err := apiClient.GetProjects(ctx, 1, 100)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to load projects: %v", err),
@@ -478,7 +560,17 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 	}
 
 	if err := c.ShouldBind(&req); err != nil {
-		projects, _, _ := apiClient.GetProjects(c.Request.Context(), 1, 100)
+		// forward context as well for consistency in audit logs
+		projCtx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+		if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+			projCtx = context.WithValue(projCtx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+		} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+			projCtx = context.WithValue(projCtx, ctxKeyForwardedIP, ip)
+		}
+		if ref := c.Request.Referer(); ref != "" {
+			projCtx = context.WithValue(projCtx, ctxKeyForwardedReferer, ref)
+		}
+		projects, _, _ := apiClient.GetProjects(projCtx, 1, 100)
 		c.HTML(http.StatusBadRequest, "base.html", gin.H{
 			"title":    "Generate Token",
 			"template": "tokens/new",
@@ -488,9 +580,20 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 		return
 	}
 
-	token, err := apiClient.CreateToken(c.Request.Context(), req.ProjectID, req.DurationMinutes)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	token, err := apiClient.CreateToken(ctx, req.ProjectID, req.DurationMinutes)
 	if err != nil {
-		projects, _, _ := apiClient.GetProjects(c.Request.Context(), 1, 100)
+		// forward context as well for consistency in audit logs
+		projCtx := ctx
+		projects, _, _ := apiClient.GetProjects(projCtx, 1, 100)
 		c.HTML(http.StatusInternalServerError, "base.html", gin.H{
 			"title":    "Generate Token",
 			"template": "tokens/new",
