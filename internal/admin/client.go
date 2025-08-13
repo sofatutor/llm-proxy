@@ -12,7 +12,7 @@ import (
 	"os"
 	"time"
 
-    "github.com/sofatutor/llm-proxy/internal/obfuscate"
+	"github.com/sofatutor/llm-proxy/internal/obfuscate"
 )
 
 // context keys used to forward browser metadata from Admin UI → Management API
