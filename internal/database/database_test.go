@@ -5,11 +5,61 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 )
+
+func TestMaintainAndStatsOnInMemoryDB(t *testing.T) {
+	db, err := New(Config{Path: ":memory:"})
+	if err != nil {
+		t.Fatalf("New DB error: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	// Ensure schema exists
+	if err := DBInitForTests(db); err != nil {
+		t.Fatalf("DBInitForTests error: %v", err)
+	}
+
+	// Maintain should succeed
+	if err := db.MaintainDatabase(context.Background()); err != nil {
+		t.Fatalf("MaintainDatabase error: %v", err)
+	}
+
+	// Stats should return a map with expected keys
+	stats, err := db.GetStats(context.Background())
+	if err != nil {
+		t.Fatalf("GetStats error: %v", err)
+	}
+	for _, k := range []string{"database_size_bytes", "project_count", "active_token_count", "expired_token_count", "total_request_count"} {
+		if _, ok := stats[k]; !ok {
+			t.Fatalf("missing stats key: %s", k)
+		}
+	}
+}
+
+func TestBackupDatabaseCreatesFile(t *testing.T) {
+	dir := t.TempDir()
+	backup := filepath.Join(dir, "backup.sqlite")
+
+	db, err := New(Config{Path: ":memory:"})
+	if err != nil {
+		t.Fatalf("New DB error: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	if err := DBInitForTests(db); err != nil {
+		t.Fatalf("DBInitForTests error: %v", err)
+	}
+
+	if err := db.BackupDatabase(context.Background(), backup); err != nil {
+		t.Fatalf("BackupDatabase error: %v", err)
+	}
+	if _, err := os.Stat(backup); err != nil {
+		t.Fatalf("expected backup file to exist: %v", err)
+	}
+}
 
 // testDB creates a temporary database for testing.
 func testDB(t *testing.T) (*DB, func()) {

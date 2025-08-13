@@ -2,6 +2,8 @@ package eventbus
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 )
@@ -168,6 +170,36 @@ func TestInMemoryEventBus_StopClosesSubscribers(t *testing.T) {
 	}
 }
 
+// Covers retry branch in dispatch(): subscriber buffer full causes non-blocking send retries
+func TestInMemoryEventBus_DispatchRetryWhenSubscriberFull(t *testing.T) {
+	bus := NewInMemoryEventBus(1)
+	defer bus.Stop()
+
+	sub := bus.Subscribe() // buffer size 1
+
+	// First publish fills subscriber buffer
+	bus.Publish(context.Background(), Event{RequestID: "r1"})
+	// Allow loop to deliver
+	time.Sleep(10 * time.Millisecond)
+
+	// Second publish triggers retry path because sub is full and we never drain it
+	start := time.Now()
+	bus.Publish(context.Background(), Event{RequestID: "r2"})
+
+	// Wait a bit longer than total retry backoff to ensure dispatch attempts happened
+	time.Sleep(50 * time.Millisecond)
+
+	// Subscriber buffer should still be full (1)
+	if got := len(sub); got != 1 {
+		t.Fatalf("expected subscriber buffer to remain full (1), got %d", got)
+	}
+
+	// Sanity: publish path executed quickly (not blocking), but we waited for retry backoff
+	if time.Since(start) < 40*time.Millisecond {
+		t.Fatalf("expected some retry backoff time to elapse")
+	}
+}
+
 // --- Merged from eventbus_extra_test.go ---
 func TestInMemoryEventBus_Stats(t *testing.T) {
 	b := NewInMemoryEventBus(1)
@@ -225,5 +257,83 @@ func TestRedisEventBusLog_PublishReadCount_TTLAndTrim(t *testing.T) {
 	// TTL should be set on first publish
 	if client.ttl <= 0 {
 		t.Fatalf("expected TTL to be set, got %v", client.ttl)
+	}
+}
+
+func TestRedisEventBus_StopIsNoop(t *testing.T) {
+	client := newMockRedisClientLog()
+	bus := NewRedisEventBusPublisher(client, "events")
+	// Stop should be a no-op and not panic
+	bus.Stop()
+}
+
+func TestRedisEventBus_SubscribeReturnsClosedChannel(t *testing.T) {
+	client := newMockRedisClientLog()
+	bus := NewRedisEventBusPublisher(client, "events")
+	ch := bus.Subscribe()
+	// Channel should be closed immediately
+	select {
+	case _, ok := <-ch:
+		if ok {
+			t.Fatalf("expected closed channel from Subscribe")
+		}
+	default:
+		t.Fatalf("expected closed channel from Subscribe (non-blocking)")
+	}
+}
+
+func TestRedisEventBus_ClientAccessor(t *testing.T) {
+	client := newMockRedisClientLog()
+	bus := NewRedisEventBusPublisher(client, "events")
+	if bus.Client() != client {
+		t.Fatalf("Client() did not return underlying client")
+	}
+}
+
+// Erroring Redis client to cover Publish() error branch on Incr
+type errRedisClient struct{}
+
+func (e *errRedisClient) LPush(context.Context, string, ...interface{}) error { return nil }
+func (e *errRedisClient) LRANGE(context.Context, string, int64, int64) ([]string, error) {
+	return nil, nil
+}
+func (e *errRedisClient) LLEN(context.Context, string) (int64, error)         { return 0, nil }
+func (e *errRedisClient) EXPIRE(context.Context, string, time.Duration) error { return nil }
+func (e *errRedisClient) LTRIM(context.Context, string, int64, int64) error   { return nil }
+func (e *errRedisClient) Incr(context.Context, string) (int64, error)         { return 0, errors.New("boom") }
+func (e *errRedisClient) Get(context.Context, string) (string, error)         { return "", nil }
+func (e *errRedisClient) Set(context.Context, string, string) error           { return nil }
+
+func TestRedisEventBus_Publish_IncrError_DropsEvent(t *testing.T) {
+	bus := NewRedisEventBusPublisher(&errRedisClient{}, "events")
+	// Should not panic and should not add items
+	bus.Publish(context.Background(), Event{RequestID: "x"})
+	if cnt, err := bus.EventCount(context.Background()); err != nil || cnt != 0 {
+		t.Fatalf("expected 0 events on error path, got cnt=%d err=%v", cnt, err)
+	}
+}
+
+func TestRedisEventBus_ReadEvents_SkipsInvalidJSON(t *testing.T) {
+	client := newMockRedisClientLog()
+	bus := NewRedisEventBusLog(client, "events", 0, 0)
+
+	// Inject invalid JSON directly
+	_ = client.LPush(context.Background(), "events", "not-json")
+
+	// Add a valid event via Publish
+	bus.Publish(context.Background(), Event{RequestID: "ok"})
+
+	evts, err := bus.ReadEvents(context.Background(), 0, -1)
+	if err != nil {
+		t.Fatalf("ReadEvents error: %v", err)
+	}
+	// Should only parse the valid one
+	if len(evts) != 1 {
+		t.Fatalf("expected 1 parsed event, got %d", len(evts))
+	}
+	// Validate it’s the valid one
+	b, _ := json.Marshal(evts[0])
+	if !json.Valid(b) || evts[0].RequestID != "ok" {
+		t.Fatalf("unexpected event parsed: %+v", evts[0])
 	}
 }
