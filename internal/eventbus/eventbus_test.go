@@ -6,6 +6,9 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	miniredis "github.com/alicebob/miniredis/v2"
+	redis "github.com/redis/go-redis/v9"
 )
 
 // test-local mock implementing RedisClient, shared across tests in this package
@@ -287,6 +290,58 @@ func TestRedisEventBus_ClientAccessor(t *testing.T) {
 	bus := NewRedisEventBusPublisher(client, "events")
 	if bus.Client() != client {
 		t.Fatalf("Client() did not return underlying client")
+	}
+}
+
+// helper to create a real go-redis client against miniredis
+func newMockableRedisClient(addr string) *redis.Client {
+	return redis.NewClient(&redis.Options{Addr: addr, DB: 0})
+}
+
+func TestRedisGoClientAdapter_AllMethods(t *testing.T) {
+	s, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("miniredis.Run error: %v", err)
+	}
+	defer s.Close()
+
+	rdb := newMockableRedisClient(s.Addr())
+	adapter := &RedisGoClientAdapter{Client: rdb}
+
+	ctx := context.Background()
+
+	if err := adapter.Set(ctx, "k", "v"); err != nil {
+		t.Fatalf("Set error: %v", err)
+	}
+	if got, err := adapter.Get(ctx, "k"); err != nil || got != "v" {
+		t.Fatalf("Get got (%q, %v), want (\"v\", nil)", got, err)
+	}
+
+	if n, err := adapter.Incr(ctx, "seq"); err != nil || n != 1 {
+		t.Fatalf("Incr #1 got (%d, %v), want (1, nil)", n, err)
+	}
+	if n, err := adapter.Incr(ctx, "seq"); err != nil || n != 2 {
+		t.Fatalf("Incr #2 got (%d, %v), want (2, nil)", n, err)
+	}
+
+	if err := adapter.LPush(ctx, "list", "a", "b", "c"); err != nil {
+		t.Fatalf("LPush error: %v", err)
+	}
+	if ln, err := adapter.LLEN(ctx, "list"); err != nil || ln != 3 {
+		t.Fatalf("LLEN got (%d, %v), want (3, nil)", ln, err)
+	}
+	if items, err := adapter.LRANGE(ctx, "list", 0, -1); err != nil || len(items) != 3 {
+		t.Fatalf("LRANGE got (len=%d, %v), want (3, nil)", len(items), err)
+	}
+	if err := adapter.LTRIM(ctx, "list", 0, 1); err != nil {
+		t.Fatalf("LTRIM error: %v", err)
+	}
+	if ln, err := adapter.LLEN(ctx, "list"); err != nil || ln != 2 {
+		t.Fatalf("LLEN after LTRIM got (%d, %v), want (2, nil)", ln, err)
+	}
+
+	if err := adapter.EXPIRE(ctx, "list", time.Second); err != nil {
+		t.Fatalf("EXPIRE error: %v", err)
 	}
 }
 

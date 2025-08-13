@@ -6,7 +6,7 @@ package audit
 import (
 	"time"
 
-	"github.com/sofatutor/llm-proxy/internal/utils"
+	"github.com/sofatutor/llm-proxy/internal/obfuscate"
 )
 
 // Event represents a security audit event with canonical fields.
@@ -130,7 +130,7 @@ func (e *Event) WithDetail(key string, value interface{}) *Event {
 
 // WithTokenID adds an obfuscated token ID to the audit event details
 func (e *Event) WithTokenID(token string) *Event {
-	return e.WithDetail("token_id", utils.ObfuscateToken(token))
+	return e.WithDetail("token_id", obfuscate.ObfuscateTokenGeneric(token))
 }
 
 // WithError adds error information to the audit event details

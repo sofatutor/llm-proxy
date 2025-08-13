@@ -12,8 +12,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/sofatutor/llm-proxy/internal/obfuscate"
-	"github.com/sofatutor/llm-proxy/internal/utils"
+    "github.com/sofatutor/llm-proxy/internal/obfuscate"
 )
 
 // context keys used to forward browser metadata from Admin UI → Management API
@@ -47,12 +46,9 @@ func NewAPIClient(baseURL, token string) *APIClient {
 // Shows first 8 characters followed by dots and last 4 characters
 func ObfuscateAPIKey(apiKey string) string { return obfuscate.ObfuscateTokenGeneric(apiKey) }
 
-// ObfuscateToken obfuscates a token for display purposes
-// Shows first 8 characters followed by dots and last 4 characters
-// Deprecated: Use utils.ObfuscateToken instead
-func ObfuscateToken(token string) string {
-	return utils.ObfuscateToken(token)
-}
+// ObfuscateToken obfuscates a token for display purposes.
+// Use centralized helper to avoid linter warning on deprecated wrapper.
+func ObfuscateToken(token string) string { return obfuscate.ObfuscateTokenGeneric(token) }
 
 // Project represents a project from the Management API
 type Project struct {
