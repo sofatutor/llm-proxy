@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
@@ -678,6 +679,71 @@ func TestHandleNotFound_WriteHeader_Flush_EventBus(t *testing.T) {
 	srv.eventBus = &mockEventBus{}
 	if srv.EventBus() == nil {
 		t.Error("EventBus() returned nil")
+	}
+}
+
+func TestAuditEvent_ForwardedHeaders(t *testing.T) {
+	s := &Server{}
+	r := httptest.NewRequest(http.MethodPost, "/manage/projects", nil)
+	r.Header.Set("X-Forwarded-For", "203.0.113.9")
+	r.Header.Set("X-Forwarded-User-Agent", "Mozilla/5.0 (Macintosh)")
+	r.Header.Set("X-Forwarded-Referer", "https://admin.example.com/projects")
+	r.Header.Set("X-Admin-Origin", "1")
+
+	ev := s.auditEvent("action.test", "actor.test", audit.ResultSuccess, r, "req-123")
+	if ev == nil {
+		t.Fatalf("expected event, got nil")
+	}
+	if ev.ClientIP != "203.0.113.9" {
+		t.Fatalf("client IP mismatch: got %v", ev.ClientIP)
+	}
+	if ua, ok := ev.Details["user_agent"].(string); !ok || !strings.Contains(ua, "Mozilla/5.0") {
+		t.Fatalf("user_agent not set from forwarded header: %v", ev.Details["user_agent"])
+	}
+	if ref, ok := ev.Details["referer"].(string); !ok || !strings.Contains(ref, "admin.example.com") {
+		t.Fatalf("referer detail missing: %v", ev.Details["referer"])
+	}
+	if origin, ok := ev.Details["origin"].(string); !ok || origin != "admin-ui" {
+		t.Fatalf("origin detail missing or wrong: %v", ev.Details["origin"])
+	}
+}
+
+func TestAuditEvent_NoForwardedHeaders(t *testing.T) {
+	s := &Server{}
+	r := httptest.NewRequest(http.MethodGet, "/manage/tokens", nil)
+	r.Header.Set("User-Agent", "Go-http-client/1.1")
+	r.RemoteAddr = "192.0.2.50:1234"
+
+	ev := s.auditEvent("action.test", "actor.test", audit.ResultSuccess, r, "req-456")
+	if ev == nil {
+		t.Fatalf("expected event, got nil")
+	}
+	if ev.ClientIP != "192.0.2.50" {
+		t.Fatalf("client IP mismatch: got %v", ev.ClientIP)
+	}
+	if ua, ok := ev.Details["user_agent"].(string); !ok || ua != "Go-http-client/1.1" {
+		t.Fatalf("user_agent should fall back to request UA: %v", ev.Details["user_agent"])
+	}
+	if _, ok := ev.Details["referer"]; ok {
+		t.Fatalf("referer should not be set when not forwarded")
+	}
+	if _, ok := ev.Details["origin"]; ok {
+		t.Fatalf("origin should not be set when header missing")
+	}
+}
+
+func TestHandleTokens_Create_DurationTooLong(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, ManagementToken: "testtoken", EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	body := `{"project_id":"any","duration_minutes":525601}`
+	r := httptest.NewRequest(http.MethodPost, "/manage/tokens", strings.NewReader(body))
+	r.Header.Set("Authorization", "Bearer "+cfg.ManagementToken)
+	w := httptest.NewRecorder()
+	srv.handleTokens(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for too long duration, got %d", w.Code)
 	}
 }
 
