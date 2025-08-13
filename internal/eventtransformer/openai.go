@@ -3,7 +3,6 @@ package eventtransformer
 import (
 	"encoding/base64"
 	"encoding/json"
-	"log"
 	"os"
 	"strings"
 	"unicode/utf8"
@@ -108,7 +107,7 @@ func MergeOpenAIStreamingChunks(body string) (map[string]any, error) {
 			"total_tokens":      usage.TotalTokens,
 		}
 	}
-	log.Printf("[eventtransformer] [streaming] Merged OpenAI chunks (len=%d)", content.Len())
+	// Merged OpenAI chunks successfully
 	return merged, nil
 }
 
@@ -242,7 +241,7 @@ func MergeThreadStreamingChunks(body string) (map[string]any, error) {
 			"total_tokens":      usage.TotalTokens,
 		}
 	}
-	log.Printf("[eventtransformer] [streaming] Merged thread.run chunks (len=%d, used_completed=%v)", contentB.Len(), foundCompleted)
+	// Merged thread.run chunks successfully
 	return merged, nil
 }
 
@@ -365,7 +364,7 @@ func (t *OpenAITransformer) TransformEvent(evt map[string]any) (map[string]any, 
 						evt["TokenUsage"] = usage
 					}
 				} else {
-					log.Printf("[eventtransformer] merge stream error: %v", err)
+					// Merge stream error - using decoded response body
 					evt["response_body"] = decoded
 				}
 			} else {
