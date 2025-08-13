@@ -443,40 +443,40 @@ func TestInitializeAPIRoutes_ConfigFallback(t *testing.T) {
 
 // Start should initialize components and then return promptly with a listen error when the port is unavailable
 func TestServer_Start_ReturnsListenError(t *testing.T) {
-    cfg := &config.Config{ListenAddr: "127.0.0.1:0", RequestTimeout: 1 * time.Second, EventBusBackend: "in-memory"}
-    srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
-    require.NoError(t, err)
+	cfg := &config.Config{ListenAddr: "127.0.0.1:0", RequestTimeout: 1 * time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
 
-    // occupy a port briefly to force a bind error
-    ln, err := net.Listen("tcp", "127.0.0.1:0")
-    require.NoError(t, err)
-    addr := ln.Addr().String()
-    _ = ln.Close()
-    srv.server.Addr = addr
+	// occupy a port briefly to force a bind error
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := ln.Addr().String()
+	_ = ln.Close()
+	srv.server.Addr = addr
 
-    errCh := make(chan error, 1)
-    go func() { errCh <- srv.Start() }()
-    select {
-    case err := <-errCh:
-        if err == nil {
-            t.Fatalf("expected error from Start() when port unavailable")
-        }
-    case <-time.After(2 * time.Second):
-        t.Fatalf("Start() did not return in time")
-    }
+	errCh := make(chan error, 1)
+	go func() { errCh <- srv.Start() }()
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Fatalf("expected error from Start() when port unavailable")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("Start() did not return in time")
+	}
 }
 
 // initializeComponents calls initializeAPIRoutes successfully (covers happy path)
 func TestServer_initializeComponents_CoversHappyPath(t *testing.T) {
-    cfg := &config.Config{ListenAddr: ":0", RequestTimeout: 1 * time.Second, APIConfigPath: "notfound.json", EventBusBackend: "in-memory"}
-    srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
-    require.NoError(t, err)
-    if err := srv.initializeComponents(); err != nil {
-        t.Fatalf("initializeComponents error: %v", err)
-    }
-    if srv.proxy == nil {
-        t.Fatalf("proxy was not set by initializeComponents")
-    }
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: 1 * time.Second, APIConfigPath: "notfound.json", EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	if err := srv.initializeComponents(); err != nil {
+		t.Fatalf("initializeComponents error: %v", err)
+	}
+	if srv.proxy == nil {
+		t.Fatalf("proxy was not set by initializeComponents")
+	}
 }
 
 // --- Merged from server_extra_test.go ---
