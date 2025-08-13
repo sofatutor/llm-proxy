@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/sofatutor/llm-proxy/internal/admin"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -92,43 +93,12 @@ func ProjectID(id string) zap.Field {
 
 // TokenID returns a field for token ID (obfuscated for security)
 func TokenID(token string) zap.Field {
-	return zap.String("token_id", ObfuscateToken(token))
+	return zap.String("token_id", admin.ObfuscateToken(token))
 }
 
 // ClientIP returns a field for client IP address
 func ClientIP(ip string) zap.Field {
 	return zap.String("client_ip", ip)
-}
-
-// ObfuscateToken obfuscates a token for safe logging
-func ObfuscateToken(token string) string {
-	if len(token) == 0 {
-		return "***"
-	}
-	if len(token) <= 4 {
-		return token[0:1] + "***"
-	}
-	
-	// Special handling for UUIDs (36 chars with specific pattern)
-	if len(token) == 36 && strings.Count(token, "-") == 4 {
-		// For UUIDs, show only first 8 characters (first segment)
-		return token[0:8] + "***"
-	}
-	
-	// For tokens with hyphens, keep the prefix + first 4 chars after first hyphen
-	if strings.Contains(token, "-") {
-		parts := strings.SplitN(token, "-", 2)
-		if len(parts) == 2 && len(parts[1]) >= 4 {
-			return parts[0] + "-" + parts[1][0:4] + "***"
-		}
-	}
-	
-	// For other longer tokens, show first 8 characters
-	showLen := 8
-	if len(token) < showLen {
-		showLen = len(token) / 2
-	}
-	return token[0:showLen] + "***"
 }
 
 // Context management for request/correlation IDs

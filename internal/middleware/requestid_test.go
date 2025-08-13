@@ -13,43 +13,43 @@ import (
 
 func TestRequestIDMiddleware(t *testing.T) {
 	tests := []struct {
-		name               string
-		existingRequestID  string // X-Request-ID header in request
+		name                  string
+		existingRequestID     string // X-Request-ID header in request
 		existingCorrelationID string // X-Correlation-ID header in request
-		expectRequestID    bool
-		expectCorrelationID bool
+		expectRequestID       bool
+		expectCorrelationID   bool
 		expectResponseHeaders bool
 	}{
 		{
-			name:               "no existing headers - generates new IDs",
-			existingRequestID:  "",
+			name:                  "no existing headers - generates new IDs",
+			existingRequestID:     "",
 			existingCorrelationID: "",
-			expectRequestID:    true,
-			expectCorrelationID: true,
+			expectRequestID:       true,
+			expectCorrelationID:   true,
 			expectResponseHeaders: true,
 		},
 		{
-			name:               "existing request ID - uses it",
-			existingRequestID:  "existing-req-123",
+			name:                  "existing request ID - uses it",
+			existingRequestID:     "existing-req-123",
 			existingCorrelationID: "",
-			expectRequestID:    true,
-			expectCorrelationID: true,
+			expectRequestID:       true,
+			expectCorrelationID:   true,
 			expectResponseHeaders: true,
 		},
 		{
-			name:               "existing correlation ID - uses it",
-			existingRequestID:  "",
+			name:                  "existing correlation ID - uses it",
+			existingRequestID:     "",
 			existingCorrelationID: "existing-corr-456",
-			expectRequestID:    true,
-			expectCorrelationID: true,
+			expectRequestID:       true,
+			expectCorrelationID:   true,
 			expectResponseHeaders: true,
 		},
 		{
-			name:               "both existing headers - uses them",
-			existingRequestID:  "existing-req-123",
+			name:                  "both existing headers - uses them",
+			existingRequestID:     "existing-req-123",
 			existingCorrelationID: "existing-corr-456",
-			expectRequestID:    true,
-			expectCorrelationID: true,
+			expectRequestID:       true,
+			expectCorrelationID:   true,
 			expectResponseHeaders: true,
 		},
 	}
@@ -79,7 +79,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 			if tt.existingCorrelationID != "" {
 				req.Header.Set("X-Correlation-ID", tt.existingCorrelationID)
 			}
-			
+
 			// Create response recorder
 			rr := httptest.NewRecorder()
 
@@ -109,7 +109,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 			if tt.expectResponseHeaders {
 				assert.NotEmpty(t, rr.Header().Get("X-Request-ID"), "response should have X-Request-ID header")
 				assert.NotEmpty(t, rr.Header().Get("X-Correlation-ID"), "response should have X-Correlation-ID header")
-				
+
 				if tt.existingRequestID != "" {
 					assert.Equal(t, tt.existingRequestID, rr.Header().Get("X-Request-ID"))
 				}
@@ -123,11 +123,11 @@ func TestRequestIDMiddleware(t *testing.T) {
 
 func TestRequestIDMiddleware_GenerateUniqueIDs(t *testing.T) {
 	middleware := NewRequestIDMiddleware()
-	
+
 	// Track generated IDs
 	generatedRequestIDs := make(map[string]bool)
 	generatedCorrelationIDs := make(map[string]bool)
-	
+
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if requestID, ok := logging.GetRequestID(r.Context()); ok {
 			generatedRequestIDs[requestID] = true
@@ -152,25 +152,25 @@ func TestRequestIDMiddleware_GenerateUniqueIDs(t *testing.T) {
 func TestRequestIDMiddleware_Integration(t *testing.T) {
 	// Test that the middleware integrates properly with the logging context helpers
 	middleware := NewRequestIDMiddleware()
-	
+
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify context can be used with logging helpers
 		requestID, hasRequestID := logging.GetRequestID(r.Context())
 		correlationID, hasCorrelationID := logging.GetCorrelationID(r.Context())
-		
+
 		require.True(t, hasRequestID, "context should have request ID")
 		require.True(t, hasCorrelationID, "context should have correlation ID")
 		require.NotEmpty(t, requestID, "request ID should not be empty")
 		require.NotEmpty(t, correlationID, "correlation ID should not be empty")
-		
+
 		// Test that context values are accessible
 		ctxWithBoth := logging.WithRequestID(logging.WithCorrelationID(context.Background(), correlationID), requestID)
 		retrievedRequestID, _ := logging.GetRequestID(ctxWithBoth)
 		retrievedCorrelationID, _ := logging.GetCorrelationID(ctxWithBoth)
-		
+
 		assert.Equal(t, requestID, retrievedRequestID)
 		assert.Equal(t, correlationID, retrievedCorrelationID)
-		
+
 		w.WriteHeader(http.StatusOK)
 	})
 
@@ -217,7 +217,7 @@ func TestRequestIDMiddleware_HeaderValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			middleware := NewRequestIDMiddleware()
-			
+
 			var contextRequestID string
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if id, ok := logging.GetRequestID(r.Context()); ok {

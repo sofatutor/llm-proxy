@@ -117,11 +117,11 @@ func TestCanonicalFields(t *testing.T) {
 				return RequestFields("req-123", "GET", "/v1/chat", 200, 150)
 			},
 			expected: map[string]interface{}{
-				"request_id":   "req-123",
-				"method":       "GET",
-				"path":         "/v1/chat",
-				"status_code":  int64(200), // zap uses int64 internally
-				"duration_ms":  int64(150), // zap uses int64 internally
+				"request_id":  "req-123",
+				"method":      "GET",
+				"path":        "/v1/chat",
+				"status_code": int64(200), // zap uses int64 internally
+				"duration_ms": int64(150), // zap uses int64 internally
 			},
 		},
 		{
@@ -148,7 +148,7 @@ func TestCanonicalFields(t *testing.T) {
 				return []zap.Field{TokenID("token-abcdef123456")}
 			},
 			expected: map[string]interface{}{
-				"token_id": "token-abcd***", // Should be obfuscated
+				"token_id": "token-ab...3456", // Should be obfuscated using admin.ObfuscateToken
 			},
 		},
 		{
@@ -185,43 +185,6 @@ func TestCanonicalFields(t *testing.T) {
 	}
 }
 
-// Test token obfuscation helper
-func TestObfuscateToken(t *testing.T) {
-	tests := []struct {
-		name     string
-		token    string
-		expected string
-	}{
-		{
-			name:     "normal token",
-			token:    "token-abcdef123456",
-			expected: "token-abcd***",
-		},
-		{
-			name:     "short token",
-			token:    "abc",
-			expected: "a***",
-		},
-		{
-			name:     "empty token",
-			token:    "",
-			expected: "***",
-		},
-		{
-			name:     "uuid token",
-			token:    "550e8400-e29b-41d4-a716-446655440000",
-			expected: "550e8400***",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := ObfuscateToken(tt.token)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
 // Test context-based logger helpers
 func TestWithRequestContext(t *testing.T) {
 	// Create test logger with observer
@@ -230,7 +193,7 @@ func TestWithRequestContext(t *testing.T) {
 
 	// Create context with request ID
 	ctx := WithRequestID(context.Background(), "req-test-123")
-	
+
 	// Get logger with request context
 	ctxLogger := WithRequestContext(ctx, logger)
 	ctxLogger.Info("test message")
@@ -238,7 +201,7 @@ func TestWithRequestContext(t *testing.T) {
 	// Verify request_id field was added
 	require.Len(t, recorded.All(), 1)
 	entry := recorded.All()[0]
-	
+
 	requestID, exists := entry.ContextMap()["request_id"]
 	require.True(t, exists)
 	assert.Equal(t, "req-test-123", requestID)
@@ -251,7 +214,7 @@ func TestWithCorrelationContext(t *testing.T) {
 
 	// Create context with correlation ID
 	ctx := WithCorrelationID(context.Background(), "corr-test-456")
-	
+
 	// Get logger with correlation context
 	ctxLogger := WithCorrelationContext(ctx, logger)
 	ctxLogger.Info("test message")
@@ -259,7 +222,7 @@ func TestWithCorrelationContext(t *testing.T) {
 	// Verify correlation_id field was added
 	require.Len(t, recorded.All(), 1)
 	entry := recorded.All()[0]
-	
+
 	correlationID, exists := entry.ContextMap()["correlation_id"]
 	require.True(t, exists)
 	assert.Equal(t, "corr-test-456", correlationID)
@@ -278,7 +241,7 @@ func TestNewChildLogger(t *testing.T) {
 	// Verify component field was added
 	require.Len(t, recorded.All(), 1)
 	entry := recorded.All()[0]
-	
+
 	component, exists := entry.ContextMap()["component"]
 	require.True(t, exists)
 	assert.Equal(t, "proxy", component)

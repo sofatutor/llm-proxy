@@ -23,8 +23,6 @@ import (
 	"go.uber.org/zap"
 )
 
-type ctxKey string
-
 // Server represents the HTTP server for the LLM Proxy.
 // It encapsulates the underlying http.Server along with application configuration
 // and handles request routing and server lifecycle management.
@@ -686,30 +684,30 @@ func getRequestID(ctx context.Context) string {
 func (s *Server) logRequestMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		startTime := time.Now()
-		
+
 		// Get or generate request ID from header
 		requestID := r.Header.Get("X-Request-ID")
 		if requestID == "" {
 			requestID = uuid.New().String()
 		}
-		
-		// Get or generate correlation ID from header  
+
+		// Get or generate correlation ID from header
 		correlationID := r.Header.Get("X-Correlation-ID")
 		if correlationID == "" {
 			correlationID = uuid.New().String()
 		}
-		
+
 		// Add to context using our new context helpers
 		ctx := logging.WithRequestID(r.Context(), requestID)
 		ctx = logging.WithCorrelationID(ctx, correlationID)
-		
+
 		// Set response headers
 		w.Header().Set("X-Request-ID", requestID)
 		w.Header().Set("X-Correlation-ID", correlationID)
 
 		// Create a response writer that captures status code
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-		
+
 		// Get client IP
 		clientIP := s.getClientIP(r)
 
@@ -729,7 +727,7 @@ func (s *Server) logRequestMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		duration := time.Since(startTime)
 		durationMs := int(duration.Milliseconds())
-		
+
 		// Log completion with canonical fields
 		if rw.statusCode >= 500 {
 			reqLogger.Error("request completed with server error",
@@ -753,12 +751,12 @@ func (s *Server) getClientIP(r *http.Request) string {
 		}
 		return strings.TrimSpace(xff)
 	}
-	
+
 	// Check for X-Real-IP header
 	if xri := r.Header.Get("X-Real-IP"); xri != "" {
 		return strings.TrimSpace(xri)
 	}
-	
+
 	// Fall back to RemoteAddr
 	if idx := strings.LastIndex(r.RemoteAddr, ":"); idx != -1 {
 		return r.RemoteAddr[:idx]
