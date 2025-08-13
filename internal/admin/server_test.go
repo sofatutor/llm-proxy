@@ -163,6 +163,21 @@ func (m *mockAPIClient) CreateProject(ctx context.Context, name, apiKey string) 
 	return &Project{ID: "new-id", Name: name, OpenAIAPIKey: apiKey}, nil
 }
 
+// Implement audit methods to satisfy APIClientInterface
+func (m *mockAPIClient) GetAuditEvents(ctx context.Context, filters map[string]string, page, pageSize int) ([]AuditEvent, *Pagination, error) {
+	if m.DashboardErr != nil {
+		return nil, nil, m.DashboardErr
+	}
+	return []AuditEvent{{ID: "evt-1", Outcome: "success"}}, &Pagination{Page: page, PageSize: pageSize, TotalItems: 1, TotalPages: 1}, nil
+}
+
+func (m *mockAPIClient) GetAuditEvent(ctx context.Context, id string) (*AuditEvent, error) {
+	if m.DashboardErr != nil {
+		return nil, m.DashboardErr
+	}
+	return &AuditEvent{ID: id, Outcome: "success"}, nil
+}
+
 var _ APIClientInterface = (*mockAPIClient)(nil) // Ensure interface compliance
 
 func TestServer_HandleDashboard(t *testing.T) {

@@ -99,22 +99,22 @@ type DashboardData struct {
 
 // AuditEvent represents an audit log entry for the admin UI
 type AuditEvent struct {
-	ID            string     `json:"id"`
-	Timestamp     time.Time  `json:"timestamp"`
-	Action        string     `json:"action"`
-	Actor         string     `json:"actor"`
-	ProjectID     *string    `json:"project_id,omitempty"`
-	RequestID     *string    `json:"request_id,omitempty"`
-	CorrelationID *string    `json:"correlation_id,omitempty"`
-	ClientIP      *string    `json:"client_ip,omitempty"`
-	Method        *string    `json:"method,omitempty"`
-	Path          *string    `json:"path,omitempty"`
-	UserAgent     *string    `json:"user_agent,omitempty"`
-	Outcome       string     `json:"outcome"`
-	Reason        *string    `json:"reason,omitempty"`
-	TokenID       *string    `json:"token_id,omitempty"`
-	Metadata      *string    `json:"metadata,omitempty"` // JSON string
-	ParsedMeta    *AuditMetadata `json:"-"` // Parsed metadata for template use
+	ID            string         `json:"id"`
+	Timestamp     time.Time      `json:"timestamp"`
+	Action        string         `json:"action"`
+	Actor         string         `json:"actor"`
+	ProjectID     *string        `json:"project_id,omitempty"`
+	RequestID     *string        `json:"request_id,omitempty"`
+	CorrelationID *string        `json:"correlation_id,omitempty"`
+	ClientIP      *string        `json:"client_ip,omitempty"`
+	Method        *string        `json:"method,omitempty"`
+	Path          *string        `json:"path,omitempty"`
+	UserAgent     *string        `json:"user_agent,omitempty"`
+	Outcome       string         `json:"outcome"`
+	Reason        *string        `json:"reason,omitempty"`
+	TokenID       *string        `json:"token_id,omitempty"`
+	Metadata      *string        `json:"metadata,omitempty"` // JSON string
+	ParsedMeta    *AuditMetadata `json:"-"`                  // Parsed metadata for template use
 }
 
 // AuditMetadata represents parsed metadata for easier template access
@@ -123,7 +123,7 @@ type AuditMetadata map[string]interface{}
 // AuditEventsResponse represents the API response for audit events listing
 type AuditEventsResponse struct {
 	Events     []AuditEvent `json:"events"`
-	Pagination Pagination  `json:"pagination"`
+	Pagination Pagination   `json:"pagination"`
 }
 
 // GetDashboardData retrieves dashboard statistics

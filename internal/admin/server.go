@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"log"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -782,14 +783,14 @@ func (s *Server) templateFuncs() template.FuncMap {
 			// Show up to 7 page numbers around current page
 			start := current - 3
 			end := current + 3
-			
+
 			if start < 1 {
 				start = 1
 			}
 			if end > total {
 				end = total
 			}
-			
+
 			// Adjust if we have fewer than 7 pages to show
 			if end-start < 6 && total > 6 {
 				if start == 1 {
@@ -804,7 +805,7 @@ func (s *Server) templateFuncs() template.FuncMap {
 					}
 				}
 			}
-			
+
 			pages := make([]int, 0, end-start+1)
 			for i := start; i <= end; i++ {
 				pages = append(pages, i)
@@ -969,7 +970,7 @@ func (s *Server) handleAuditList(c *gin.Context) {
 	// Parse query parameters for filtering
 	filters := make(map[string]string)
 	query := c.Request.URL.Query()
-	
+
 	// Filter parameters
 	if action := query.Get("action"); action != "" {
 		filters["action"] = action
@@ -1024,7 +1025,7 @@ func (s *Server) handleAuditList(c *gin.Context) {
 	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
 		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
 	}
-	
+
 	events, pagination, err := apiClientIface.GetAuditEvents(ctx, filters, page, pageSize)
 	if err != nil {
 		log.Printf("Failed to get audit events: %v", err)
@@ -1062,7 +1063,7 @@ func (s *Server) handleAuditShow(c *gin.Context) {
 	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
 		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
 	}
-	
+
 	event, err := apiClientIface.GetAuditEvent(ctx, id)
 	if err != nil {
 		log.Printf("Failed to get audit event %s: %v", id, err)

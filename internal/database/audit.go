@@ -301,9 +301,9 @@ func (d *DB) CountAuditEvents(ctx context.Context, filters AuditEventFilters) (i
 // GetAuditEventByID retrieves a specific audit event by its ID
 func (d *DB) GetAuditEventByID(ctx context.Context, id string) (*AuditEvent, error) {
 	query := "SELECT id, timestamp, action, actor, project_id, request_id, correlation_id, client_ip, method, path, user_agent, outcome, reason, token_id, metadata FROM audit_events WHERE id = ?"
-	
+
 	row := d.db.QueryRowContext(ctx, query, id)
-	
+
 	var event AuditEvent
 	err := row.Scan(
 		&event.ID,
@@ -328,6 +328,6 @@ func (d *DB) GetAuditEventByID(ctx context.Context, id string) (*AuditEvent, err
 		}
 		return nil, fmt.Errorf("failed to get audit event: %w", err)
 	}
-	
+
 	return &event, nil
 }
