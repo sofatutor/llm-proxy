@@ -90,6 +90,14 @@ jobs:
         env:
           MANAGEMENT_TOKEN: smoke-token
 
+      - name: Debug logs (temporary)
+        if: failure()
+        run: |
+          echo "docker ps -a:" && docker ps -a || true
+          echo "docker logs (tail 300):" && docker logs --tail 300 llm-proxy || true
+          echo "Exit code:" && docker inspect llm-proxy --format='{{.State.ExitCode}}' || true
+          echo "State:" && docker inspect llm-proxy --format='{{json .State}}' || true
+
       - name: Stop container (cleanup)
         if: always()
         run: make docker-stop
