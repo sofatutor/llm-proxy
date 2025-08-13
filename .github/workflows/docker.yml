@@ -2,7 +2,7 @@ name: Docker
 
 on:
   push:
-    branches: [ main, docker/phase-6-docker-optimization-ghcr ]
+    branches: [ main ]
     tags: [ 'v*' ]
   pull_request:
 
