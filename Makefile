@@ -14,6 +14,7 @@ BINDIR=bin
 PROXY_BINARY=$(BINDIR)/llm-proxy
 IMAGE?=llm-proxy:latest
 RUN_FLAGS?=--rm
+MOUNTS?=-v $(PWD)/tmp/llm-proxy-data:/app/data
 
 all: test build
 
@@ -62,7 +63,7 @@ docker-run:
 	docker run $(RUN_FLAGS) -d \
 	  --name llm-proxy \
 	  -p 8080:8080 \
-	  -v $(PWD)/tmp/llm-proxy-data:/app/data \
+	  $(MOUNTS) \
 	  -e MANAGEMENT_TOKEN=$${MANAGEMENT_TOKEN:-dev-management-token} \
 	  -e LLM_PROXY_EVENT_BUS=in-memory \
 	  $(IMAGE) server
@@ -75,8 +76,8 @@ docker-smoke:
 	# Wait for container to be healthy and test /health
 	@# Start container if not running
 	@if [ -z "$$(docker ps -q -f name=^/llm-proxy$$ -f status=running)" ]; then \
-	  echo "Starting llm-proxy container..."; \
-	  $(MAKE) docker-run RUN_FLAGS=; \
+	  echo "Starting llm-proxy container (no host mount)..."; \
+	  $(MAKE) docker-run RUN_FLAGS= MOUNTS=; \
 	  sleep 2; \
 	fi
 	@echo "Waiting for llm-proxy to become healthy..."
