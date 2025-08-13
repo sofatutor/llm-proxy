@@ -1,10 +1,13 @@
-FROM golang:1.23-alpine AS builder
+# syntax=docker/dockerfile:1.7
+
+FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS builder
 
 WORKDIR /app
 
 # Copy go.mod and go.sum files first for better caching
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    GOMODCACHE=/go/pkg/mod go mod download
 
 # Copy the rest of the source code
 COPY . .
@@ -13,9 +16,14 @@ COPY . .
 RUN apk add --no-cache gcc musl-dev sqlite-dev
 
 # Build the application with CGO enabled for go-sqlite3
-RUN CGO_ENABLED=1 GOOS=linux \
-    go build -a -ldflags "-w" \
-    -trimpath -o /llm-proxy ./cmd/proxy
+ARG TARGETOS
+ARG TARGETARCH
+ENV CGO_ENABLED=1
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    GOMODCACHE=/go/pkg/mod \
+    GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -ldflags "-w" -trimpath -o /llm-proxy ./cmd/proxy
 
 # Use a small alpine image for the final container
 FROM alpine:3.18
