@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
@@ -440,6 +442,102 @@ func TestInitializeAPIRoutes_ConfigFallback(t *testing.T) {
 	}
 }
 
+// Start should initialize components and then return promptly with a listen error when the port is unavailable
+func TestServer_Start_ReturnsListenError(t *testing.T) {
+	cfg := &config.Config{ListenAddr: "127.0.0.1:0", RequestTimeout: 1 * time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	// occupy a port briefly to force a bind error
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := ln.Addr().String()
+	// Keep the listener open to force EADDRINUSE for Start()
+	srv.server.Addr = addr
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- srv.Start() }()
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Fatalf("expected error from Start() when port unavailable")
+		}
+		_ = ln.Close()
+	case <-time.After(2 * time.Second):
+		t.Fatalf("Start() did not return in time")
+	}
+}
+
+// initializeComponents calls initializeAPIRoutes successfully (covers happy path)
+func TestServer_initializeComponents_CoversHappyPath(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: 1 * time.Second, APIConfigPath: "notfound.json", EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	if err := srv.initializeComponents(); err != nil {
+		t.Fatalf("initializeComponents error: %v", err)
+	}
+	if srv.proxy == nil {
+		t.Fatalf("proxy was not set by initializeComponents")
+	}
+}
+
+// --- Merged from server_extra_test.go ---
+
+func Test_getClientIP(t *testing.T) {
+	s := &Server{}
+
+	// X-Forwarded-For with multiple entries
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("X-Forwarded-For", "203.0.113.1, 203.0.113.2")
+	if got := s.getClientIP(r); got != "203.0.113.1" {
+		t.Fatalf("got %q, want %q", got, "203.0.113.1")
+	}
+
+	// X-Real-IP fallback
+	r = httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("X-Real-IP", "198.51.100.7")
+	if got := s.getClientIP(r); got != "198.51.100.7" {
+		t.Fatalf("got %q, want %q", got, "198.51.100.7")
+	}
+
+	// RemoteAddr fallback with host:port
+	r = httptest.NewRequest(http.MethodGet, "/", nil)
+	r.RemoteAddr = "192.0.2.5:12345"
+	if got := s.getClientIP(r); got != "192.0.2.5" {
+		t.Fatalf("got %q, want %q", got, "192.0.2.5")
+	}
+
+	// RemoteAddr without colon
+	r = httptest.NewRequest(http.MethodGet, "/", nil)
+	r.RemoteAddr = "192.0.2.99"
+	if got := s.getClientIP(r); got != "192.0.2.99" {
+		t.Fatalf("got %q, want %q", got, "192.0.2.99")
+	}
+}
+
+type flushRecorder struct {
+	http.ResponseWriter
+	flushed bool
+}
+
+func (f *flushRecorder) Flush() { f.flushed = true }
+
+func Test_responseWriter_Flush(t *testing.T) {
+	// Underlying implements http.Flusher
+	rr := httptest.NewRecorder()
+	fr := &flushRecorder{ResponseWriter: rr}
+	rw := &responseWriter{ResponseWriter: fr}
+	rw.Flush()
+	if !fr.flushed {
+		t.Fatalf("expected Flush to be forwarded")
+	}
+
+	// Underlying does not implement http.Flusher (no panic, no forward)
+	rw2 := &responseWriter{ResponseWriter: httptest.NewRecorder()}
+	// Should be a no-op
+	rw2.Flush()
+}
+
 func TestHandleProjects_And_CreateProject_EdgeCases(t *testing.T) {
 	cfg := &config.Config{ListenAddr: ":8080", RequestTimeout: 30 * time.Second, ManagementToken: "testtoken", EventBusBackend: "in-memory"}
 	logger := zap.NewNop()
@@ -581,6 +679,145 @@ func TestHandleNotFound_WriteHeader_Flush_EventBus(t *testing.T) {
 	srv.eventBus = &mockEventBus{}
 	if srv.EventBus() == nil {
 		t.Error("EventBus() returned nil")
+	}
+}
+
+func TestAuditEvent_ForwardedHeaders(t *testing.T) {
+	s := &Server{}
+	r := httptest.NewRequest(http.MethodPost, "/manage/projects", nil)
+	r.Header.Set("X-Forwarded-For", "203.0.113.9")
+	r.Header.Set("X-Forwarded-User-Agent", "Mozilla/5.0 (Macintosh)")
+	r.Header.Set("X-Forwarded-Referer", "https://admin.example.com/projects")
+	r.Header.Set("X-Admin-Origin", "1")
+
+	ev := s.auditEvent("action.test", "actor.test", audit.ResultSuccess, r, "req-123")
+	if ev == nil {
+		t.Fatalf("expected event, got nil")
+	}
+	if ev.ClientIP != "203.0.113.9" {
+		t.Fatalf("client IP mismatch: got %v", ev.ClientIP)
+	}
+	if ua, ok := ev.Details["user_agent"].(string); !ok || !strings.Contains(ua, "Mozilla/5.0") {
+		t.Fatalf("user_agent not set from forwarded header: %v", ev.Details["user_agent"])
+	}
+	if ref, ok := ev.Details["referer"].(string); !ok || !strings.Contains(ref, "admin.example.com") {
+		t.Fatalf("referer detail missing: %v", ev.Details["referer"])
+	}
+	if origin, ok := ev.Details["origin"].(string); !ok || origin != "admin-ui" {
+		t.Fatalf("origin detail missing or wrong: %v", ev.Details["origin"])
+	}
+}
+
+func TestAuditEvent_NoForwardedHeaders(t *testing.T) {
+	s := &Server{}
+	r := httptest.NewRequest(http.MethodGet, "/manage/tokens", nil)
+	r.Header.Set("User-Agent", "Go-http-client/1.1")
+	r.RemoteAddr = "192.0.2.50:1234"
+
+	ev := s.auditEvent("action.test", "actor.test", audit.ResultSuccess, r, "req-456")
+	if ev == nil {
+		t.Fatalf("expected event, got nil")
+	}
+	if ev.ClientIP != "192.0.2.50" {
+		t.Fatalf("client IP mismatch: got %v", ev.ClientIP)
+	}
+	if ua, ok := ev.Details["user_agent"].(string); !ok || ua != "Go-http-client/1.1" {
+		t.Fatalf("user_agent should fall back to request UA: %v", ev.Details["user_agent"])
+	}
+	if _, ok := ev.Details["referer"]; ok {
+		t.Fatalf("referer should not be set when not forwarded")
+	}
+	if _, ok := ev.Details["origin"]; ok {
+		t.Fatalf("origin should not be set when header missing")
+	}
+}
+
+func TestHandleTokens_Create_DurationTooLong(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, ManagementToken: "testtoken", EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	body := `{"project_id":"any","duration_minutes":525601}`
+	r := httptest.NewRequest(http.MethodPost, "/manage/tokens", strings.NewReader(body))
+	r.Header.Set("Authorization", "Bearer "+cfg.ManagementToken)
+	w := httptest.NewRecorder()
+	srv.handleTokens(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for too long duration, got %d", w.Code)
+	}
+}
+
+func TestInitializeAPIRoutes_FallbackToDefaultWhenProviderMissing(t *testing.T) {
+	// Create a real config file where DefaultAPI is test_api
+	tmpFile, err := os.CreateTemp("", "api_config_*.yaml")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer func() {
+		_ = os.Remove(tmpFile.Name())
+	}()
+	configYAML := `
+default_api: test_api
+apis:
+  test_api:
+    base_url: https://api.example.com
+    allowed_endpoints:
+      - /v1/test
+    allowed_methods:
+      - GET
+`
+	if _, err := tmpFile.Write([]byte(configYAML)); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	_ = tmpFile.Close()
+
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, APIConfigPath: tmpFile.Name(), DefaultAPIProvider: "missing_api", EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	if err := srv.initializeAPIRoutes(); err != nil {
+		t.Fatalf("initializeAPIRoutes failed: %v", err)
+	}
+
+	// Verify the route from default provider exists
+	req := httptest.NewRequest("GET", "/v1/test", nil)
+	rr := httptest.NewRecorder()
+	srv.server.Handler.ServeHTTP(rr, req)
+	if rr.Code == http.StatusNotFound {
+		t.Fatalf("expected /v1/test to be registered via default provider fallback")
+	}
+}
+
+func TestLogRequestMiddleware_ServerError(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	called := false
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("error"))
+	})
+	mw := srv.logRequestMiddleware(h)
+	req := httptest.NewRequest("GET", "/err", nil)
+	rr := httptest.NewRecorder()
+	mw.ServeHTTP(rr, req)
+	if !called {
+		t.Fatalf("handler not called")
+	}
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rr.Code)
+	}
+}
+
+func TestNew_UnknownEventBusBackend_ReturnsError(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "unknown-backend"}
+	_, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	if err == nil {
+		t.Fatalf("expected error for unknown event bus backend")
+	}
+	if !strings.Contains(err.Error(), "unknown event bus backend") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

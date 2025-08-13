@@ -3,6 +3,7 @@ module github.com/sofatutor/llm-proxy
 go 1.23.9
 
 require (
+	github.com/alicebob/miniredis/v2 v2.31.0
 	github.com/andybalholm/brotli v1.1.1
 	github.com/chzyer/readline v1.5.1
 	github.com/gin-contrib/sessions v1.0.4
@@ -11,7 +12,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/pkoukk/tiktoken-go v0.1.7
-	github.com/redis/go-redis/v9 v9.0.0
+	github.com/redis/go-redis/v9 v9.6.1
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.27.0
@@ -20,6 +21,7 @@ require (
 )
 
 require (
+	github.com/alicebob/gopher-json v0.0.0-20200520072559-a9ecdc9d1d3a // indirect
 	github.com/bytedance/sonic v1.13.2 // indirect
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
@@ -49,6 +51,7 @@ require (
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
+	github.com/yuin/gopher-lua v1.1.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/arch v0.16.0 // indirect
 	golang.org/x/crypto v0.37.0 // indirect

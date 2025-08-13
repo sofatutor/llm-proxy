@@ -29,10 +29,12 @@ func TestObservabilityMiddleware_NonStreaming(t *testing.T) {
 	req.Header.Set("X-Request-ID", "req1")
 	rr := httptest.NewRecorder()
 
+	// Subscribe before invoking handler to avoid racing with async publish
+	ch := bus.Subscribe()
 	wrapped.ServeHTTP(rr, req)
 
 	select {
-	case evt := <-bus.Subscribe():
+	case evt := <-ch:
 		require.Equal(t, "req1", evt.RequestID)
 		require.Equal(t, http.StatusOK, evt.Status)
 		require.Equal(t, "ok", string(evt.ResponseBody))

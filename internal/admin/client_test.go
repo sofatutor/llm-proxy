@@ -495,6 +495,32 @@ func TestAPIClient_RequestCreation(t *testing.T) {
 	}
 }
 
+func TestAPIClient_newRequest_ForwardsBrowserContext(t *testing.T) {
+	client := NewAPIClient("http://example.com", "test-token")
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, ctxKeyForwardedUA, "UA-123")
+	ctx = context.WithValue(ctx, ctxKeyForwardedReferer, "http://admin.local/page")
+	ctx = context.WithValue(ctx, ctxKeyForwardedIP, "203.0.113.7")
+
+	req, err := client.newRequest(ctx, http.MethodGet, "/test", nil)
+	if err != nil {
+		t.Fatalf("newRequest failed: %v", err)
+	}
+
+	if got := req.Header.Get("X-Forwarded-User-Agent"); got != "UA-123" {
+		t.Fatalf("X-Forwarded-User-Agent=%q, want %q", got, "UA-123")
+	}
+	if got := req.Header.Get("X-Forwarded-Referer"); got != "http://admin.local/page" {
+		t.Fatalf("X-Forwarded-Referer=%q, want %q", got, "http://admin.local/page")
+	}
+	if got := req.Header.Get("X-Forwarded-For"); got != "203.0.113.7" {
+		t.Fatalf("X-Forwarded-For=%q, want %q", got, "203.0.113.7")
+	}
+	if got := req.Header.Get("X-Admin-Origin"); got != "1" {
+		t.Fatalf("X-Admin-Origin=%q, want %q", got, "1")
+	}
+}
+
 func TestAPIClient_UpdateProjectPartial(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]string

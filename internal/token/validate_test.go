@@ -545,3 +545,45 @@ func TestStandardValidator_ValidateTokenWithTracking_AllBranches(t *testing.T) {
 		}
 	})
 }
+
+// --- Merged from validate_wrappers_test.go ---
+type mockValidator struct {
+	project string
+	err     error
+}
+
+func (m *mockValidator) ValidateToken(ctx context.Context, token string) (string, error) {
+	if m.err != nil {
+		return "", m.err
+	}
+	return m.project, nil
+}
+
+func (m *mockValidator) ValidateTokenWithTracking(ctx context.Context, token string) (string, error) {
+	if m.err != nil {
+		return "", m.err
+	}
+	return m.project, nil
+}
+
+func TestValidateToken_Wrappers(t *testing.T) {
+	ctx := context.Background()
+
+	// Success path
+	ok := &mockValidator{project: "p1"}
+	if got, err := ValidateToken(ctx, ok, "sk-test"); err != nil || got != "p1" {
+		t.Fatalf("ValidateToken() = (%q,%v), want (p1,nil)", got, err)
+	}
+	if got, err := ValidateTokenWithTracking(ctx, ok, "sk-test"); err != nil || got != "p1" {
+		t.Fatalf("ValidateTokenWithTracking() = (%q,%v), want (p1,nil)", got, err)
+	}
+
+	// Error path
+	e := &mockValidator{err: errors.New("boom")}
+	if _, err := ValidateToken(ctx, e, "sk-test"); err == nil {
+		t.Fatalf("expected error from ValidateToken")
+	}
+	if _, err := ValidateTokenWithTracking(ctx, e, "sk-test"); err == nil {
+		t.Fatalf("expected error from ValidateTokenWithTracking")
+	}
+}

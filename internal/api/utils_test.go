@@ -70,3 +70,14 @@ func TestGetManagementToken(t *testing.T) {
 		t.Fatalf("missing token should error, got tok=%q err=%v", tok, err)
 	}
 }
+
+func TestParseTimeHeader_InvalidFormats(t *testing.T) {
+	// empty returns zero time
+	if !ParseTimeHeader("").IsZero() {
+		t.Fatalf("expected zero time for empty header")
+	}
+	// bad format returns zero time
+	if !ParseTimeHeader("not-a-time").IsZero() {
+		t.Fatalf("expected zero time for bad format")
+	}
+}

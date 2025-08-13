@@ -44,6 +44,12 @@ type Config struct {
 	LogFormat string // Log format (json, text)
 	LogFile   string // Path to log file (empty for stdout)
 
+	// Audit logging
+	AuditEnabled   bool   // Enable audit logging for security events
+	AuditLogFile   string // Path to audit log file (empty to disable)
+	AuditCreateDir bool   // Create parent directories for audit log file
+	AuditStoreInDB bool   // Store audit events in database for analytics
+
 	// Observability middleware
 	ObservabilityEnabled    bool // Enable async observability middleware
 	ObservabilityBufferSize int  // Buffer size for in-memory event bus
@@ -124,6 +130,12 @@ func New() (*Config, error) {
 		LogLevel:  getEnvString("LOG_LEVEL", "info"),
 		LogFormat: getEnvString("LOG_FORMAT", "json"),
 		LogFile:   getEnvString("LOG_FILE", ""),
+
+		// Audit logging defaults
+		AuditEnabled:   getEnvBool("AUDIT_ENABLED", true),
+		AuditLogFile:   getEnvString("AUDIT_LOG_FILE", "./data/audit.log"),
+		AuditCreateDir: getEnvBool("AUDIT_CREATE_DIR", true),
+		AuditStoreInDB: getEnvBool("AUDIT_STORE_IN_DB", true),
 
 		ObservabilityEnabled:    getEnvBool("OBSERVABILITY_ENABLED", true),
 		ObservabilityBufferSize: getEnvInt("OBSERVABILITY_BUFFER_SIZE", 1000),

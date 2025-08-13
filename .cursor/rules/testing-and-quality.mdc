@@ -23,7 +23,8 @@ Use these commands before committing/pushing. They match CI behavior in `.github
 
 - **Linters and formatting**
   - `make lint` (runs `golangci-lint`, `gofmt` checks, etc.)
-  - Format all files: `gofmt -w -s .`
+  - Before committing, always run: `make fmt` to apply repository formatting rules
+  - Format all files (alternative): `gofmt -w -s .`
   - Verify nothing unformatted: `gofmt -l .` must print nothing.
 
 ## Pre-push checklist (must be green)

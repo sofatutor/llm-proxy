@@ -17,7 +17,9 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/obfuscate"
 )
 
 // Session represents a user session
@@ -61,6 +63,9 @@ type Server struct {
 
 	// For testability: allow injection of token validation logic
 	ValidateTokenWithAPI func(context.Context, string) bool
+
+	// Audit logger for admin actions
+	auditLogger *audit.Logger
 }
 
 // NewServer creates a new Admin UI server with the provided configuration.
@@ -90,10 +95,27 @@ func NewServer(cfg *config.Config) (*Server, error) {
 		apiClient = NewAPIClient(cfg.AdminUI.APIBaseURL, cfg.AdminUI.ManagementToken)
 	}
 
+	// Initialize audit logger
+	var auditLogger *audit.Logger
+	if cfg.AuditEnabled && cfg.AuditLogFile != "" {
+		auditConfig := audit.LoggerConfig{
+			FilePath:  cfg.AuditLogFile,
+			CreateDir: cfg.AuditCreateDir,
+		}
+		var err error
+		auditLogger, err = audit.NewLogger(auditConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize admin audit logger: %w", err)
+		}
+	} else {
+		auditLogger = audit.NewNullLogger()
+	}
+
 	s := &Server{
-		config:    cfg,
-		engine:    engine,
-		apiClient: apiClient,
+		config:      cfg,
+		engine:      engine,
+		apiClient:   apiClient,
+		auditLogger: auditLogger,
 		server: &http.Server{
 			Addr:         cfg.AdminUI.ListenAddr,
 			Handler:      engine,
@@ -223,8 +245,17 @@ func (s *Server) handleDashboard(c *gin.Context) {
 	// Get API client from context
 	apiClientIface := c.MustGet("apiClient").(APIClientInterface)
 
-	// Get dashboard data from Management API
-	dashboardData, err := apiClientIface.GetDashboardData(c.Request.Context())
+	// Get dashboard data from Management API with forwarded browser metadata
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	dashboardData, err := apiClientIface.GetDashboardData(ctx)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to load dashboard data: %v", err),
@@ -246,7 +277,17 @@ func (s *Server) handleProjectsList(c *gin.Context) {
 	page := getPageFromQuery(c, 1)
 	pageSize := getPageSizeFromQuery(c, 10)
 
-	projects, pagination, err := apiClient.GetProjects(c.Request.Context(), page, pageSize)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	// Forward best-effort original client IP from headers
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	projects, pagination, err := apiClient.GetProjects(ctx, page, pageSize)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to load projects: %v", err),
@@ -286,7 +327,16 @@ func (s *Server) handleProjectsCreate(c *gin.Context) {
 		return
 	}
 
-	project, err := apiClient.CreateProject(c.Request.Context(), req.Name, req.OpenAIAPIKey)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	project, err := apiClient.CreateProject(ctx, req.Name, req.OpenAIAPIKey)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "base.html", gin.H{
 			"title":    "Create Project",
@@ -305,7 +355,16 @@ func (s *Server) handleProjectsShow(c *gin.Context) {
 
 	id := c.Param("id")
 
-	project, err := apiClient.GetProject(c.Request.Context(), id)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	project, err := apiClient.GetProject(ctx, id)
 	if err != nil {
 		c.HTML(http.StatusNotFound, "error.html", gin.H{
 			"error": "Project not found",
@@ -326,7 +385,16 @@ func (s *Server) handleProjectsEdit(c *gin.Context) {
 
 	id := c.Param("id")
 
-	project, err := apiClient.GetProject(c.Request.Context(), id)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	project, err := apiClient.GetProject(ctx, id)
 	if err != nil {
 		c.HTML(http.StatusNotFound, "error.html", gin.H{
 			"error": "Project not found",
@@ -359,7 +427,16 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 		return
 	}
 
-	project, err := apiClient.UpdateProject(c.Request.Context(), id, req.Name, req.OpenAIAPIKey)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	project, err := apiClient.UpdateProject(ctx, id, req.Name, req.OpenAIAPIKey)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to update project: %v", err),
@@ -376,7 +453,16 @@ func (s *Server) handleProjectsDelete(c *gin.Context) {
 
 	id := c.Param("id")
 
-	err := apiClient.DeleteProject(c.Request.Context(), id)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	err := apiClient.DeleteProject(ctx, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": fmt.Sprintf("Failed to delete project: %v", err),
@@ -396,7 +482,16 @@ func (s *Server) handleTokensList(c *gin.Context) {
 	pageSize := getPageSizeFromQuery(c, 10)
 	projectID := c.Query("project_id")
 
-	tokens, pagination, err := apiClient.GetTokens(c.Request.Context(), projectID, page, pageSize)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	tokens, pagination, err := apiClient.GetTokens(ctx, projectID, page, pageSize)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to load tokens: %v", err),
@@ -405,7 +500,7 @@ func (s *Server) handleTokensList(c *gin.Context) {
 	}
 
 	// Fetch all projects to create a lookup map for project names
-	projects, _, err := apiClient.GetProjects(c.Request.Context(), 1, 1000) // Get up to 1000 projects
+	projects, _, err := apiClient.GetProjects(ctx, 1, 1000) // Get up to 1000 projects
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to load projects: %v", err),
@@ -431,7 +526,16 @@ func (s *Server) handleTokensNew(c *gin.Context) {
 	// Get API client from context
 	apiClient := c.MustGet("apiClient").(APIClientInterface)
 
-	projects, _, err := apiClient.GetProjects(c.Request.Context(), 1, 100)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	projects, _, err := apiClient.GetProjects(ctx, 1, 100)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to load projects: %v", err),
@@ -456,7 +560,17 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 	}
 
 	if err := c.ShouldBind(&req); err != nil {
-		projects, _, _ := apiClient.GetProjects(c.Request.Context(), 1, 100)
+		// forward context as well for consistency in audit logs
+		projCtx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+		if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+			projCtx = context.WithValue(projCtx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+		} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+			projCtx = context.WithValue(projCtx, ctxKeyForwardedIP, ip)
+		}
+		if ref := c.Request.Referer(); ref != "" {
+			projCtx = context.WithValue(projCtx, ctxKeyForwardedReferer, ref)
+		}
+		projects, _, _ := apiClient.GetProjects(projCtx, 1, 100)
 		c.HTML(http.StatusBadRequest, "base.html", gin.H{
 			"title":    "Generate Token",
 			"template": "tokens/new",
@@ -466,9 +580,20 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 		return
 	}
 
-	token, err := apiClient.CreateToken(c.Request.Context(), req.ProjectID, req.DurationMinutes)
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+	token, err := apiClient.CreateToken(ctx, req.ProjectID, req.DurationMinutes)
 	if err != nil {
-		projects, _, _ := apiClient.GetProjects(c.Request.Context(), 1, 100)
+		// forward context as well for consistency in audit logs
+		projCtx := ctx
+		projects, _, _ := apiClient.GetProjects(projCtx, 1, 100)
 		c.HTML(http.StatusInternalServerError, "base.html", gin.H{
 			"title":    "Generate Token",
 			"template": "tokens/new",
@@ -629,21 +754,8 @@ func (s *Server) templateFuncs() template.FuncMap {
 		"not": func(a bool) bool {
 			return !a
 		},
-		"obfuscateAPIKey": func(apiKey string) string {
-			if len(apiKey) <= 12 {
-				if len(apiKey) <= 4 {
-					return strings.Repeat("*", len(apiKey))
-				}
-				return apiKey[:2] + strings.Repeat("*", len(apiKey)-2)
-			}
-			return apiKey[:8] + "..." + apiKey[len(apiKey)-4:]
-		},
-		"obfuscateToken": func(token string) string {
-			if len(token) <= 8 {
-				return "****"
-			}
-			return token[:4] + "****" + token[len(token)-4:]
-		},
+		"obfuscateAPIKey": func(apiKey string) string { return obfuscate.ObfuscateTokenGeneric(apiKey) },
+		"obfuscateToken":  func(token string) string { return obfuscate.ObfuscateTokenSimple(token) },
 		"contains": func(s, substr string) bool {
 			return strings.Contains(s, substr)
 		},
@@ -790,8 +902,5 @@ func getFormFieldNames(form map[string][]string) []string {
 
 // obfuscateToken returns a partially masked version of a token for logging
 func obfuscateToken(token string) string {
-	if len(token) <= 8 {
-		return "****"
-	}
-	return token[:4] + "****" + token[len(token)-4:]
+	return obfuscate.ObfuscateTokenSimple(token)
 }

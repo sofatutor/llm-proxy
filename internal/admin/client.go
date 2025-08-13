@@ -10,8 +10,18 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"time"
+
+	"github.com/sofatutor/llm-proxy/internal/obfuscate"
+)
+
+// context keys used to forward browser metadata from Admin UI → Management API
+type forwardedCtxKey string
+
+const (
+	ctxKeyForwardedUA      forwardedCtxKey = "forwarded_user_agent"
+	ctxKeyForwardedReferer forwardedCtxKey = "forwarded_referer"
+	ctxKeyForwardedIP      forwardedCtxKey = "forwarded_ip"
 )
 
 // APIClient handles communication with the Management API
@@ -34,33 +44,11 @@ func NewAPIClient(baseURL, token string) *APIClient {
 
 // ObfuscateAPIKey obfuscates an API key for display purposes
 // Shows first 8 characters followed by dots and last 4 characters
-func ObfuscateAPIKey(apiKey string) string {
-	if len(apiKey) <= 12 {
-		// For short keys, show first few chars + dots
-		if len(apiKey) <= 4 {
-			return strings.Repeat("*", len(apiKey))
-		}
-		return apiKey[:2] + strings.Repeat("*", len(apiKey)-2)
-	}
+func ObfuscateAPIKey(apiKey string) string { return obfuscate.ObfuscateTokenGeneric(apiKey) }
 
-	// For longer keys (like OpenAI keys), show first 8 and last 4
-	return apiKey[:8] + "..." + apiKey[len(apiKey)-4:]
-}
-
-// ObfuscateToken obfuscates a token for display purposes
-// Shows first 8 characters followed by dots and last 4 characters
-func ObfuscateToken(token string) string {
-	if len(token) <= 12 {
-		// For short tokens, show first few chars + dots
-		if len(token) <= 4 {
-			return strings.Repeat("*", len(token))
-		}
-		return token[:2] + strings.Repeat("*", len(token)-2)
-	}
-
-	// For longer tokens, show first 8 and last 4
-	return token[:8] + "..." + token[len(token)-4:]
-}
+// ObfuscateToken obfuscates a token for display purposes.
+// Use centralized helper to avoid linter warning on deprecated wrapper.
+func ObfuscateToken(token string) string { return obfuscate.ObfuscateTokenGeneric(token) }
 
 // Project represents a project from the Management API
 type Project struct {
@@ -345,6 +333,27 @@ func (c *APIClient) newRequest(ctx context.Context, method, path string, body an
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+
+	// Forward browser context when present
+	if v := ctx.Value(ctxKeyForwardedUA); v != nil {
+		if ua, ok := v.(string); ok && ua != "" {
+			req.Header.Set("X-Forwarded-User-Agent", ua)
+			req.Header.Set("X-Admin-Origin", "1")
+		}
+	}
+	if v := ctx.Value(ctxKeyForwardedReferer); v != nil {
+		if ref, ok := v.(string); ok && ref != "" {
+			req.Header.Set("X-Forwarded-Referer", ref)
+			req.Header.Set("X-Admin-Origin", "1")
+		}
+	}
+	if v := ctx.Value(ctxKeyForwardedIP); v != nil {
+		if ip, ok := v.(string); ok && ip != "" {
+			// Provide original browser IP for backend audit logging
+			req.Header.Set("X-Forwarded-For", ip)
+			req.Header.Set("X-Admin-Origin", "1")
+		}
 	}
 
 	return req, nil

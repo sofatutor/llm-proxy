@@ -1763,3 +1763,36 @@ func TestServer_templateFuncs_AllFuncs(t *testing.T) {
 		}
 	})
 }
+
+func TestServer_templateFuncs_ObfuscationAndContains_Edges(t *testing.T) {
+	// Ensure template dir has at least one root and one nested template, otherwise NewServer panics
+	td := t.TempDir()
+	if err := os.WriteFile(filepath.Join(td, "base.html"), []byte("{{define \"base\"}}ok{{end}}"), 0o644); err != nil {
+		t.Fatalf("write base.html: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(td, "sub"), 0o755); err != nil {
+		t.Fatalf("mkdir sub: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(td, "sub", "nested.html"), []byte("{{define \"nested\"}}ok{{end}}"), 0o644); err != nil {
+		t.Fatalf("write nested.html: %v", err)
+	}
+
+	cfg := &config.Config{AdminUI: config.AdminUIConfig{TemplateDir: td}}
+	s, err := NewServer(cfg)
+	require.NoError(t, err)
+
+	funcs := s.templateFuncs()
+
+	// obfuscateAPIKey short (<=4) → all asterisks
+	if got := funcs["obfuscateAPIKey"].(func(string) string)("abc"); got != "***" {
+		t.Fatalf("obfuscateAPIKey short = %q, want ***", got)
+	}
+	// obfuscateToken short (<=8) → ****
+	if got := funcs["obfuscateToken"].(func(string) string)("short"); got != "****" {
+		t.Fatalf("obfuscateToken short = %q, want ****", got)
+	}
+	// contains
+	if !funcs["contains"].(func(string, string) bool)("hello", "ell") {
+		t.Fatalf("contains should be true for substring")
+	}
+}

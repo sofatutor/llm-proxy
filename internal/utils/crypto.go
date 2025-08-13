@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+
+	"github.com/sofatutor/llm-proxy/internal/obfuscate"
 )
 
 // GenerateSecureToken generates a secure random token of the given length
@@ -30,3 +32,6 @@ func GenerateSecureTokenMustSucceed(length int) string {
 	}
 	return token
 }
+
+// Deprecated: use obfuscate.ObfuscateTokenGeneric directly at call sites.
+func ObfuscateToken(token string) string { return obfuscate.ObfuscateTokenGeneric(token) }
