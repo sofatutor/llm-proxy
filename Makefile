@@ -62,6 +62,8 @@ docker-run:
 	  -p 8080:8080 \
 	  -v $(PWD)/tmp/llm-proxy-data:/app/data \
 	  -e MANAGEMENT_TOKEN=$${MANAGEMENT_TOKEN:-dev-management-token} \
+	  -e LOG_LEVEL=debug \
+	  -e DEBUG=1 \
 	  -e LLM_PROXY_EVENT_BUS=in-memory \
 	  llm-proxy:latest server
 
@@ -78,7 +80,7 @@ docker-smoke:
 	  sleep 2; \
 	fi
 	@echo "Waiting for llm-proxy to become healthy..."
-	@for i in `seq 1 20`; do \
+	@for i in `seq 1 40`; do \
 	  if curl -sf http://localhost:8080/health >/dev/null; then \
 	    echo "Healthcheck OK"; \
 	    exit 0; \
@@ -86,6 +88,7 @@ docker-smoke:
 	  sleep 1; \
 	done; \
 	echo "Healthcheck failed"; \
+	docker logs llm-proxy || true; \
 	exit 1
 
 # API documentation

@@ -87,6 +87,8 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           make docker-smoke
+        env:
+          MANAGEMENT_TOKEN: smoke-token
 
       - name: Stop container (cleanup)
         if: always()
