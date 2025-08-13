@@ -13,7 +13,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY . .
 
 # Install build dependencies for CGO and SQLite
-RUN apk add --no-cache gcc musl-dev sqlite-dev
+RUN --mount=type=cache,target=/var/cache/apk apk add gcc musl-dev sqlite-dev
 
 # Build the application with CGO enabled for go-sqlite3
 ARG TARGETOS
@@ -29,7 +29,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM alpine:3.18
 
 # Security: Add only required runtime libraries
-RUN apk --no-cache add ca-certificates tzdata sqlite-libs wget
+RUN --mount=type=cache,target=/var/cache/apk apk add ca-certificates tzdata sqlite-libs wget
 
 # Security: Create non-root user and group
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
