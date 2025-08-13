@@ -482,11 +482,8 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		s.logger.Error("failed to create project", zap.Error(err), zap.String("name", req.Name), zap.String("request_id", requestID))
 
 		// Audit: project creation failure - store error
-		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectCreate, audit.ActorManagement, audit.ResultFailure).
+		s.auditLogger.Log(s.auditEvent(audit.ActionProjectCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
 			WithProjectID(id).
-			WithRequestID(requestID).
-			WithHTTPMethod(r.Method).
-			WithEndpoint(r.URL.Path).
 			WithError(err).
 			WithDetail("project_name", req.Name))
 
@@ -496,11 +493,8 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 	s.logger.Info("project created", zap.String("id", id), zap.String("name", req.Name), zap.String("request_id", requestID))
 
 	// Audit: project creation success
-	s.auditLogger.Log(audit.NewEvent(audit.ActionProjectCreate, audit.ActorManagement, audit.ResultSuccess).
+	s.auditLogger.Log(s.auditEvent(audit.ActionProjectCreate, audit.ActorManagement, audit.ResultSuccess, r, requestID).
 		WithProjectID(id).
-		WithRequestID(requestID).
-		WithHTTPMethod(r.Method).
-		WithEndpoint(r.URL.Path).
 		WithDetail("project_name", req.Name))
 
 	w.Header().Set("Content-Type", "application/json")
@@ -540,10 +534,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		s.logger.Error("invalid project id for update", zap.String("id", id))
 
 		// Audit: project update failure - invalid ID
-		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultFailure).
-			WithRequestID(requestID).
-			WithHTTPMethod(r.Method).
-			WithEndpoint(r.URL.Path).
+		s.auditLogger.Log(s.auditEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultFailure, r, requestID).
 			WithDetail("validation_error", "invalid project id").
 			WithDetail("provided_id", id))
 
@@ -555,11 +546,8 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		s.logger.Error("invalid request body for update", zap.Error(err))
 
 		// Audit: project update failure - invalid request body
-		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultFailure).
+		s.auditLogger.Log(s.auditEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultFailure, r, requestID).
 			WithProjectID(id).
-			WithRequestID(requestID).
-			WithHTTPMethod(r.Method).
-			WithEndpoint(r.URL.Path).
 			WithError(err).
 			WithDetail("validation_error", "invalid request body"))
 
@@ -571,11 +559,8 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		s.logger.Error("project not found for update", zap.String("id", id), zap.Error(err))
 
 		// Audit: project update failure - not found
-		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultFailure).
+		s.auditLogger.Log(s.auditEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultFailure, r, requestID).
 			WithProjectID(id).
-			WithRequestID(requestID).
-			WithHTTPMethod(r.Method).
-			WithEndpoint(r.URL.Path).
 			WithError(err).
 			WithDetail("error_type", "project not found"))
 
@@ -598,11 +583,8 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		s.logger.Error("failed to update project", zap.String("id", id), zap.Error(err))
 
 		// Audit: project update failure - store error
-		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultFailure).
+		s.auditLogger.Log(s.auditEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultFailure, r, requestID).
 			WithProjectID(id).
-			WithRequestID(requestID).
-			WithHTTPMethod(r.Method).
-			WithEndpoint(r.URL.Path).
 			WithError(err).
 			WithDetail("updated_fields", updatedFields))
 
@@ -612,11 +594,8 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 	s.logger.Info("project updated", zap.String("id", id))
 
 	// Audit: project update success
-	s.auditLogger.Log(audit.NewEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultSuccess).
+	s.auditLogger.Log(s.auditEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultSuccess, r, requestID).
 		WithProjectID(id).
-		WithRequestID(requestID).
-		WithHTTPMethod(r.Method).
-		WithEndpoint(r.URL.Path).
 		WithDetail("updated_fields", updatedFields).
 		WithDetail("project_name", project.Name))
 
@@ -635,10 +614,7 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 		s.logger.Error("invalid project id for delete", zap.String("id", id), zap.String("request_id", requestID))
 
 		// Audit: project delete failure - invalid ID
-		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectDelete, audit.ActorManagement, audit.ResultFailure).
-			WithRequestID(requestID).
-			WithHTTPMethod(r.Method).
-			WithEndpoint(r.URL.Path).
+		s.auditLogger.Log(s.auditEvent(audit.ActionProjectDelete, audit.ActorManagement, audit.ResultFailure, r, requestID).
 			WithDetail("validation_error", "invalid project id").
 			WithDetail("provided_id", id))
 
@@ -649,11 +625,8 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 		s.logger.Error("project not found for delete", zap.String("id", id), zap.Error(err), zap.String("request_id", requestID))
 
 		// Audit: project delete failure - not found or store error
-		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectDelete, audit.ActorManagement, audit.ResultFailure).
+		s.auditLogger.Log(s.auditEvent(audit.ActionProjectDelete, audit.ActorManagement, audit.ResultFailure, r, requestID).
 			WithProjectID(id).
-			WithRequestID(requestID).
-			WithHTTPMethod(r.Method).
-			WithEndpoint(r.URL.Path).
 			WithError(err))
 
 		http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
@@ -662,11 +635,8 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 	s.logger.Info("project deleted", zap.String("id", id), zap.String("request_id", requestID))
 
 	// Audit: project delete success
-	s.auditLogger.Log(audit.NewEvent(audit.ActionProjectDelete, audit.ActorManagement, audit.ResultSuccess).
-		WithProjectID(id).
-		WithRequestID(requestID).
-		WithHTTPMethod(r.Method).
-		WithEndpoint(r.URL.Path))
+	s.auditLogger.Log(s.auditEvent(audit.ActionProjectDelete, audit.ActorManagement, audit.ResultSuccess, r, requestID).
+		WithProjectID(id))
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -754,7 +724,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 				s.logger.Error("duration_minutes exceeds maximum allowed", zap.Int("duration_minutes", req.DurationMinutes), zap.String("request_id", requestID))
 
 				// Audit: token creation failure - duration too long
-				s.auditLogger.Log(audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure).
+				s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
 					WithProjectID(req.ProjectID).
 					WithRequestID(requestID).
 					WithHTTPMethod(r.Method).
@@ -860,7 +830,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		)
 
 		// Audit: token creation success
-		s.auditLogger.Log(audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultSuccess).
+		s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultSuccess, r, requestID).
 			WithProjectID(req.ProjectID).
 			WithRequestID(requestID).
 			WithHTTPMethod(r.Method).
@@ -889,7 +859,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			s.logger.Error("failed to list tokens", zap.Error(err))
 
 			// Audit: token list failure
-			auditEvent := audit.NewEvent(audit.ActionTokenList, audit.ActorManagement, audit.ResultFailure).
+			auditEvent := s.auditEvent(audit.ActionTokenList, audit.ActorManagement, audit.ResultFailure, r, requestID).
 				WithRequestID(requestID).
 				WithHTTPMethod(r.Method).
 				WithEndpoint(r.URL.Path).
@@ -905,7 +875,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		s.logger.Info("tokens listed", zap.Int("count", len(tokens)))
 
 		// Audit: token list success
-		auditEvent := audit.NewEvent(audit.ActionTokenList, audit.ActorManagement, audit.ResultSuccess).
+		auditEvent := s.auditEvent(audit.ActionTokenList, audit.ActorManagement, audit.ResultSuccess, r, requestID).
 			WithRequestID(requestID).
 			WithHTTPMethod(r.Method).
 			WithEndpoint(r.URL.Path).
