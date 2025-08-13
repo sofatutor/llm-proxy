@@ -115,6 +115,27 @@ This project uses a structured PR strategy:
 - Place unit tests next to the code being tested
 - Use `/test` for integration/e2e tests and fixtures
 
+### Coverage Reports
+
+Code coverage reports are automatically generated and made available in multiple ways:
+
+**Local Development:**
+```bash
+# Generate and view HTML coverage report
+make coverage
+# This opens the report in your browser
+```
+
+**CI/CD Artifacts:**
+- HTML coverage reports are uploaded as build artifacts for each PR and push to main
+- Navigate to the Actions tab → Select a workflow run → Download the "coverage-report" artifact
+- Extract and open `coverage.html` in your browser
+
+**GitHub Pages (Live):**
+- Coverage reports for the main branch are automatically deployed to GitHub Pages
+- Access the live report at: `https://[your-org].github.io/llm-proxy/`
+- Updated automatically on each push to main
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under the project's MIT License.

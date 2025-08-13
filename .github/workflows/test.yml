@@ -48,6 +48,20 @@ jobs:
             exit 1
           fi
       
+      - name: Generate HTML coverage report
+        if: matrix.test-type == 'unit'
+        run: |
+          go tool cover -html=coverage.txt -o coverage.html
+          echo "📊 HTML coverage report generated: coverage.html"
+      
+      - name: Upload coverage report
+        if: matrix.test-type == 'unit'
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-report
+          path: coverage.html
+          retention-days: 30
+      
       - name: Test Summary
         run: |
           if [ "${{ matrix.test-type }}" = "unit" ]; then
