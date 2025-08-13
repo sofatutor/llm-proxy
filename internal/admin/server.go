@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -20,7 +19,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/obfuscate"
+	"go.uber.org/zap"
 )
 
 // Session represents a user session
@@ -63,6 +64,7 @@ type Server struct {
 	config    *config.Config
 	engine    *gin.Engine
 	apiClient *APIClient
+	logger    *zap.Logger
 
 	// For testability: allow injection of token validation logic
 	ValidateTokenWithAPI func(context.Context, string) bool
@@ -74,6 +76,12 @@ type Server struct {
 // NewServer creates a new Admin UI server with the provided configuration.
 // It initializes the Gin engine, sets up routes, and configures the HTTP server.
 func NewServer(cfg *config.Config) (*Server, error) {
+	// Initialize logger
+	logger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize admin server logger: %w", err)
+	}
+
 	// Set Gin mode based on log level
 	if cfg.LogLevel == "debug" {
 		gin.SetMode(gin.DebugMode)
@@ -118,6 +126,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 		config:      cfg,
 		engine:      engine,
 		apiClient:   apiClient,
+		logger:      logger,
 		auditLogger: auditLogger,
 		server: &http.Server{
 			Addr:         cfg.AdminUI.ListenAddr,
@@ -240,7 +249,7 @@ func (s *Server) setupRoutes() {
 			}
 			err := resp.Body.Close()
 			if err != nil {
-				log.Printf("failed to close backend health response body: %v", err)
+				s.logger.Warn("failed to close backend health response body", zap.Error(err))
 			}
 		}
 		c.JSON(http.StatusOK, gin.H{
@@ -814,6 +823,10 @@ func (s *Server) handleLoginForm(c *gin.Context) {
 }
 
 func (s *Server) handleLogin(c *gin.Context) {
+	logger := s.logger
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	var req struct {
 		ManagementToken string `form:"management_token" binding:"required"`
 		RememberMe      bool   `form:"remember_me"`
@@ -821,11 +834,11 @@ func (s *Server) handleLogin(c *gin.Context) {
 
 	if err := c.Request.ParseForm(); err == nil {
 		// Only log field presence, not values
-		log.Printf("Raw POST form fields: %v", getFormFieldNames(c.Request.PostForm))
+		logger.Debug("raw POST form fields", zap.Strings("fields", getFormFieldNames(c.Request.PostForm)))
 	}
 
 	if err := c.ShouldBind(&req); err != nil {
-		log.Printf("ShouldBind error: %v", err)
+		logger.Warn("ShouldBind error", zap.Error(err))
 		c.HTML(http.StatusBadRequest, "login.html", gin.H{
 			"title": "Sign In",
 			"error": "Please enter your management token",
@@ -833,7 +846,7 @@ func (s *Server) handleLogin(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Login attempt: token=%q rememberMe=%v", obfuscateToken(req.ManagementToken), req.RememberMe)
+	logger.Info("login attempt", zap.String("token", obfuscateToken(req.ManagementToken)), zap.Bool("remember_me", req.RememberMe))
 
 	// Use injected or default token validation
 	validate := s.ValidateTokenWithAPI
@@ -841,7 +854,7 @@ func (s *Server) handleLogin(c *gin.Context) {
 		validate = s.validateTokenWithAPI
 	}
 	if !validate(c.Request.Context(), req.ManagementToken) {
-		log.Printf("Token validation failed for token=%q", obfuscateToken(req.ManagementToken))
+		logger.Error("token validation failed", zap.String("token", obfuscateToken(req.ManagementToken)))
 		c.HTML(http.StatusUnauthorized, "login.html", gin.H{
 			"title": "Sign In",
 			"error": "Invalid management token. Please check your token and try again.",
@@ -868,10 +881,10 @@ func (s *Server) handleLogin(c *gin.Context) {
 		})
 	}
 	if err := session.Save(); err != nil {
-		log.Printf("Session save error: %v", err)
+		logger.Error("session save error", zap.Error(err))
 	}
 
-	log.Printf("Session saved for token=%q, rememberMe=%v", obfuscateToken(req.ManagementToken), req.RememberMe)
+	logger.Info("session saved", zap.String("token", obfuscateToken(req.ManagementToken)), zap.Bool("remember_me", req.RememberMe))
 
 	// Redirect to dashboard
 	c.Redirect(http.StatusSeeOther, "/dashboard")
@@ -881,7 +894,7 @@ func (s *Server) handleLogout(c *gin.Context) {
 	session := sessions.Default(c)
 	session.Clear()
 	if err := session.Save(); err != nil {
-		log.Printf("Session save error: %v", err)
+		s.logger.Error("session save error", zap.Error(err))
 	}
 	c.Redirect(http.StatusSeeOther, "/auth/login")
 }
@@ -926,7 +939,7 @@ func (s *Server) validateTokenWithAPI(ctx context.Context, token string) bool {
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			log.Printf("Error closing response body: %v", err)
+			s.logger.Warn("Error closing response body", zap.Error(err))
 		}
 	}()
 

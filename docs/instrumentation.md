@@ -3,12 +3,32 @@
 ## Overview
 The async instrumentation middleware provides non-blocking, streaming-capable instrumentation for all API calls handled by the LLM Proxy. It captures request/response metadata and emits events to a pluggable event bus for downstream processing (e.g., file, cloud, analytics).
 
+**Note:** Instrumentation middleware and audit logging serve different purposes:
+- **Instrumentation**: Captures API request/response metadata for observability and analytics
+- **Audit Logging**: Records security-sensitive operations for compliance and investigations
+
+Both systems operate independently and can be configured separately.
+
 ## Event Bus & Dispatcher Architecture
 - The async event bus is now always enabled and handles all API instrumentation events.
 - The event bus supports multiple subscribers (fan-out), batching, retry logic, and graceful shutdown.
 - Both in-memory and Redis backends are available for local and distributed event delivery.
 - Persistent event logging is handled by a dispatcher CLI or the `--file-event-log` flag on the server, which writes events to a JSONL file.
 - Middleware captures and restores the request body for all events, and the event context is richer for diagnostics and debugging.
+
+### Relationship to Audit Logging
+
+The instrumentation event bus is separate from the audit logging system:
+
+- **Event Bus**: Captures API request/response data for observability (instrumentation middleware)
+- **Audit Logger**: Records security events directly to file/database (audit middleware)
+
+Both systems can run simultaneously:
+- Instrumentation events flow through the event bus to dispatchers
+- Audit events are written directly to audit logs (file and/or database)
+- No overlap in captured data - instrumentation focuses on API performance, audit focuses on security events
+
+For complete system observability, both should be enabled in production environments.
 
 ## Persistent Event Logging
 - To persist all events to a file, use the `--file-event-log` flag when running the server:

@@ -44,8 +44,11 @@ flowchart LR
         AuthSystem["Auth System"] --> TokenManager["Token Manager"]
         TokenManager --> ReverseProxy["Reverse Proxy"]
         ReverseProxy <--> LoggingSystem["Logging System"]
+        ReverseProxy <--> AuditLogger["Audit Logger"]
         AdminUI["Admin UI"] --> TokenManager
         DB[("Database")] <--> TokenManager
+        DB <--> AuditLogger
+        AuditLogger --> AuditFile[("Audit Log File")]
     end
     
     Proxy --> API["Target API"]
@@ -58,13 +61,18 @@ flowchart TD
     Request["Client Request"] --> Middleware
     
     subgraph Middleware["Middleware Chain"]
-        Logging["Logging Middleware"] --> Validation["Validation Middleware"] 
+        Logging["Logging Middleware"] --> Audit["Audit Middleware"]
+        Audit --> Validation["Validation Middleware"] 
         Validation --> Timeout["Timeout Middleware"]
         Timeout --> Metrics["Metrics Middleware"]
     end
     
     Middleware --> Director["Director Function"] --> Transport["HTTP Transport"] --> TargetAPI["Target API"]
     TargetAPI --> Response["API Response"] --> ModifyResponse["ModifyResponse Function"] --> Client["Client"]
+    
+    Audit -.-> AuditLogger["Audit Logger"]
+    AuditLogger --> AuditFile[("Audit Log File")]
+    AuditLogger --> AuditDB[("Database")]
     
     ErrorHandler["Error Handler"] --> Client
     Director -.-> |"Error"| ErrorHandler
@@ -178,13 +186,26 @@ The proxy implementation is based on Go's `httputil.ReverseProxy` with customiza
 
 ### Logging System
 
-- **Purpose**: Record application events and request details
+- **Purpose**: Record application events, request details, and security-sensitive operations
 - **Key Features**:
   - Structured logging
   - Log levels
   - Request/response logging
   - Error tracking
-- **Implementation**: `internal/logging/*`
+  - **Audit logging** for compliance and security investigations
+- **Implementation**: `internal/logging/*` and `internal/audit/*`
+
+#### Audit Logging
+
+- **Purpose**: Record security-sensitive operations for compliance and investigations
+- **Key Features**:
+  - Immutable audit trail
+  - Token obfuscation (no plaintext secrets)
+  - Dual storage (file + database)
+  - JSONL format for easy parsing
+  - Configurable retention policies
+- **Implementation**: `internal/audit/*`
+- **Storage**: File-based (JSONL) and/or database-based
 
 ## API Structure
 
@@ -235,6 +256,8 @@ sequenceDiagram
             Proxy->>Proxy: Extract Metadata
             Proxy->>+Logger: Log API Call with Metadata
             Logger-->>-Proxy: Log Confirmation
+            Proxy->>+AuditLogger: Log Security Event
+            AuditLogger-->>-Proxy: Audit Confirmation
         else Streaming Response
             Proxy->>Proxy: Setup Streaming Pipeline
             loop For Each Chunk
@@ -243,6 +266,8 @@ sequenceDiagram
             end
             Proxy->>+Logger: Log Aggregated Metadata
             Logger-->>-Proxy: Log Confirmation
+            Proxy->>+AuditLogger: Log Security Event
+            AuditLogger-->>-Proxy: Audit Confirmation
         end
         
         Proxy-->>-Client: Response

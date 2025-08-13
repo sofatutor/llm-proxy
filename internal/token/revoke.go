@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 var (
@@ -135,15 +137,17 @@ type AutomaticRevocation struct {
 	interval    time.Duration
 	stopChan    chan struct{}
 	stoppedChan chan struct{}
+	logger      *zap.Logger
 }
 
 // NewAutomaticRevocation creates a new automatic token revocation
-func NewAutomaticRevocation(revoker *Revoker, interval time.Duration) *AutomaticRevocation {
+func NewAutomaticRevocation(revoker *Revoker, interval time.Duration, logger *zap.Logger) *AutomaticRevocation {
 	return &AutomaticRevocation{
 		revoker:     revoker,
 		interval:    interval,
 		stopChan:    make(chan struct{}),
 		stoppedChan: make(chan struct{}),
+		logger:      logger,
 	}
 }
 
@@ -160,10 +164,9 @@ func (a *AutomaticRevocation) Start() {
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				count, err := a.revoker.RevokeExpiredTokens(ctx)
 				if err != nil {
-					// Log the error, but continue
-					fmt.Printf("Failed to automatically revoke expired tokens: %v\n", err)
+					a.logger.Error("Failed to automatically revoke expired tokens", zap.Error(err))
 				} else if count > 0 {
-					fmt.Printf("Automatically revoked %d expired tokens\n", count)
+					a.logger.Info("Automatically revoked expired tokens", zap.Int("count", count))
 				}
 				cancel()
 			case <-a.stopChan:

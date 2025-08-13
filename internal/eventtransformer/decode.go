@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
-	"log"
 	"strings"
 	"unicode/utf8"
 
@@ -40,9 +39,9 @@ func DecompressAndDecode(val string, headers map[string]interface{}) (string, bo
 			}
 		}
 	}
-	// Only log binary skipping
+	// Skip binary content types (audio, image, octet-stream)
 	if strings.HasPrefix(contentType, "audio/") || strings.HasPrefix(contentType, "image/") || contentType == "application/octet-stream" {
-		log.Printf("[decoder] skipping decode for binary content-type: %q", contentType)
+		// Skipping decode for binary content-type
 		return val, false
 	}
 
@@ -142,6 +141,6 @@ func DecompressAndDecode(val string, headers map[string]interface{}) (string, bo
 	if utf8.Valid([]byte(val)) {
 		return val, true
 	}
-	log.Printf("[decoder] fallback: returning original input, could not decode")
+	// Fallback: returning original input, could not decode
 	return val, false
 }

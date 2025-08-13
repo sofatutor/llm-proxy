@@ -45,6 +45,16 @@ lint:
 		echo "$$unformatted"; \
 		exit 1; \
 	fi
+	@# Guard against raw fmt/log usage in guarded runtime packages (exclude tests)
+	@RAW_LOG_DIRS="internal/server internal/proxy internal/token internal/admin internal/eventtransformer internal/middleware internal/logging internal/setup internal/api internal/obfuscate internal/utils internal/database"; \
+	PATTERN='\\<(fmt|log)\\.(Printf|Println|Print|Fatal|Fatalf|Panic|Panicf)\\('; \
+	matches=$$(grep -R -nE "$$PATTERN" --include='*.go' --exclude='*_test.go' $$RAW_LOG_DIRS 2>/dev/null || true); \
+	if [ -n "$$matches" ]; then \
+		echo "Disallowed raw fmt/log calls detected in guarded directories:"; \
+		echo "$$matches"; \
+		echo "Replace with structured zap logging (internal/logging) and appropriate levels."; \
+		exit 1; \
+	fi
 
 clean:
 	$(GOCLEAN)
