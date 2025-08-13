@@ -1,4 +1,5 @@
-{{ define "projects-new" }}
+{{ define "projects/new.html" }}
+{{ template "layout/start" . }}
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -96,4 +97,5 @@ function togglePassword(fieldId) {
     }
 }
 </script>
+{{ template "layout/end" . }}
 {{ end }}

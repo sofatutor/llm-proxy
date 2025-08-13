@@ -1,4 +1,5 @@
-{{ define "projects-edit" }}
+{{ define "projects/edit.html" }}
+{{ template "layout/start" . }}
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -198,4 +199,5 @@ function confirmDelete(projectId, projectName) {
     new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }
 </script>
+{{ template "layout/end" . }}
 {{ end }}

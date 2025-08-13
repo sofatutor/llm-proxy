@@ -55,6 +55,26 @@ func init() {
 
 // runChat is the main function for the chat command
 func runChat(cmd *cobra.Command, args []string) {
+	// Require token (and proxy URL) before starting interactive readline to avoid
+	// unnecessary terminal setup in non-interactive/error cases (helps tests too).
+	if proxyToken == "" {
+		fmt.Println("Starting chat session with", model)
+		if useStreaming {
+			fmt.Println("Streaming mode enabled")
+		}
+		if verboseMode {
+			fmt.Println("Verbose mode enabled")
+		}
+		fmt.Println("Type 'exit' or 'quit' to end the session")
+		fmt.Println("System prompt:", systemPrompt)
+		fmt.Println()
+		fmt.Println("Error: token is required")
+		return
+	}
+	if proxyURL == "" {
+		fmt.Println("Error: proxy URL is required")
+		return
+	}
 	// Print session information
 	fmt.Println("Starting chat session with", model)
 	if useStreaming {

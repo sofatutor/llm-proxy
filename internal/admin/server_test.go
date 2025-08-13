@@ -228,7 +228,7 @@ func TestServer_HandleDashboard_Error(t *testing.T) {
 
 func TestServer_HandleProjectsList(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	projectsFile := createTestTemplate(t, "projects-list-complete.html", "<html><body>projects</body></html>")
+	projectsFile := createTestTemplate(t, "projects/list.html", "<html><body>projects</body></html>")
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -251,7 +251,7 @@ func TestServer_HandleProjectsList(t *testing.T) {
 
 func TestServer_HandleProjectsList_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	projectsFile := createTestTemplate(t, "projects-list-complete.html", "<html><body>projects</body></html>")
+	projectsFile := createTestTemplate(t, "projects/list.html", "<html><body>projects</body></html>")
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -274,7 +274,7 @@ func TestServer_HandleProjectsList_Error(t *testing.T) {
 
 func TestServer_HandleTokensList(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	tokensFile := filepath.Join(testTemplateDir(), "tokens-list-complete.html")
+	tokensFile := filepath.Join(testTemplateDir(), "tokens", "list.html")
 	_ = os.WriteFile(tokensFile, []byte("<html><body>tokens</body></html>"), 0644)
 	defer func() {
 		err := os.Remove(tokensFile)
@@ -285,7 +285,7 @@ func TestServer_HandleTokensList(t *testing.T) {
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens-list-complete.html"))
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens", "list.html"))
 
 	s.engine.GET("/tokens", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{}
@@ -304,7 +304,7 @@ func TestServer_HandleTokensList(t *testing.T) {
 
 func TestServer_HandleTokensList_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	tokensFile := filepath.Join(testTemplateDir(), "tokens-list-complete.html")
+	tokensFile := filepath.Join(testTemplateDir(), "tokens", "list.html")
 	_ = os.WriteFile(tokensFile, []byte("<html><body>tokens</body></html>"), 0644)
 	defer func() {
 		err := os.Remove(tokensFile)
@@ -315,7 +315,7 @@ func TestServer_HandleTokensList_Error(t *testing.T) {
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens-list-complete.html"))
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens", "list.html"))
 
 	s.engine.GET("/tokens", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{DashboardErr: errFake}

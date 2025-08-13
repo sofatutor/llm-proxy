@@ -1,4 +1,5 @@
-{{ define "tokens-created" }}
+{{ define "tokens/created.html" }}
+{{ template "layout/start" . }}
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -221,4 +222,5 @@ function showCopySuccess() {
     });
 }
 </script>
+{{ template "layout/end" . }}
 {{ end }}

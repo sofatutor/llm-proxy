@@ -284,8 +284,9 @@ func (s *Server) handleDashboard(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "dashboard.html", gin.H{
-		"title": "Dashboard",
-		"data":  dashboardData,
+		"title":  "Dashboard",
+		"active": "dashboard",
+		"data":   dashboardData,
 	})
 }
 
@@ -315,17 +316,18 @@ func (s *Server) handleProjectsList(c *gin.Context) {
 		return
 	}
 
-	c.HTML(http.StatusOK, "projects-list-complete.html", gin.H{
+	c.HTML(http.StatusOK, "projects/list.html", gin.H{
 		"title":      "Projects",
+		"active":     "projects",
 		"projects":   projects,
 		"pagination": pagination,
 	})
 }
 
 func (s *Server) handleProjectsNew(c *gin.Context) {
-	c.HTML(http.StatusOK, "base.html", gin.H{
-		"title":    "Create Project",
-		"template": "projects/new",
+	c.HTML(http.StatusOK, "projects/new.html", gin.H{
+		"title":  "Create Project",
+		"active": "projects",
 	})
 }
 
@@ -339,10 +341,10 @@ func (s *Server) handleProjectsCreate(c *gin.Context) {
 	}
 
 	if err := c.ShouldBind(&req); err != nil {
-		c.HTML(http.StatusBadRequest, "base.html", gin.H{
-			"title":    "Create Project",
-			"template": "projects/new",
-			"error":    "Please fill in all required fields",
+		c.HTML(http.StatusBadRequest, "projects/new.html", gin.H{
+			"title":  "Create Project",
+			"active": "projects",
+			"error":  "Please fill in all required fields",
 		})
 		return
 	}
@@ -358,10 +360,10 @@ func (s *Server) handleProjectsCreate(c *gin.Context) {
 	}
 	project, err := apiClient.CreateProject(ctx, req.Name, req.OpenAIAPIKey)
 	if err != nil {
-		c.HTML(http.StatusInternalServerError, "base.html", gin.H{
-			"title":    "Create Project",
-			"template": "projects/new",
-			"error":    fmt.Sprintf("Failed to create project: %v", err),
+		c.HTML(http.StatusInternalServerError, "projects/new.html", gin.H{
+			"title":  "Create Project",
+			"active": "projects",
+			"error":  fmt.Sprintf("Failed to create project: %v", err),
 		})
 		return
 	}
@@ -392,10 +394,10 @@ func (s *Server) handleProjectsShow(c *gin.Context) {
 		return
 	}
 
-	c.HTML(http.StatusOK, "base.html", gin.H{
-		"title":    "Project Details",
-		"template": "projects/show",
-		"project":  project,
+	c.HTML(http.StatusOK, "projects/show.html", gin.H{
+		"title":   "Project Details",
+		"active":  "projects",
+		"project": project,
 	})
 }
 
@@ -422,10 +424,10 @@ func (s *Server) handleProjectsEdit(c *gin.Context) {
 		return
 	}
 
-	c.HTML(http.StatusOK, "base.html", gin.H{
-		"title":    "Edit Project",
-		"template": "projects/edit",
-		"project":  project,
+	c.HTML(http.StatusOK, "projects/edit.html", gin.H{
+		"title":   "Edit Project",
+		"active":  "projects",
+		"project": project,
 	})
 }
 
@@ -534,7 +536,9 @@ func (s *Server) handleTokensList(c *gin.Context) {
 		projectNames[project.ID] = project.Name
 	}
 
-	c.HTML(http.StatusOK, "tokens-list-complete.html", gin.H{
+	c.HTML(http.StatusOK, "tokens/list.html", gin.H{
+		"title":        "Tokens",
+		"active":       "tokens",
 		"tokens":       tokens,
 		"pagination":   pagination,
 		"projectId":    projectID,
@@ -563,9 +567,9 @@ func (s *Server) handleTokensNew(c *gin.Context) {
 		return
 	}
 
-	c.HTML(http.StatusOK, "base.html", gin.H{
+	c.HTML(http.StatusOK, "tokens/new.html", gin.H{
 		"title":    "Generate Token",
-		"template": "tokens/new",
+		"active":   "tokens",
 		"projects": projects,
 	})
 }
@@ -591,9 +595,9 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 			projCtx = context.WithValue(projCtx, ctxKeyForwardedReferer, ref)
 		}
 		projects, _, _ := apiClient.GetProjects(projCtx, 1, 100)
-		c.HTML(http.StatusBadRequest, "base.html", gin.H{
+		c.HTML(http.StatusBadRequest, "tokens/new.html", gin.H{
 			"title":    "Generate Token",
-			"template": "tokens/new",
+			"active":   "tokens",
 			"projects": projects,
 			"error":    "Please fill in all required fields correctly",
 		})
@@ -614,19 +618,19 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 		// forward context as well for consistency in audit logs
 		projCtx := ctx
 		projects, _, _ := apiClient.GetProjects(projCtx, 1, 100)
-		c.HTML(http.StatusInternalServerError, "base.html", gin.H{
+		c.HTML(http.StatusInternalServerError, "tokens/new.html", gin.H{
 			"title":    "Generate Token",
-			"template": "tokens/new",
+			"active":   "tokens",
 			"projects": projects,
 			"error":    fmt.Sprintf("Failed to create token: %v", err),
 		})
 		return
 	}
 
-	c.HTML(http.StatusOK, "base.html", gin.H{
-		"title":    "Token Created",
-		"template": "tokens/created",
-		"token":    token,
+	c.HTML(http.StatusOK, "tokens/created.html", gin.H{
+		"title":  "Token Created",
+		"active": "tokens",
+		"token":  token,
 	})
 }
 
@@ -666,6 +670,20 @@ func parsePositiveInt(s string) (int, error) {
 // templateFuncs returns custom template functions for HTML templates
 func (s *Server) templateFuncs() template.FuncMap {
 	return template.FuncMap{
+		"stringOr": func(value any, fallback string) string {
+			// Safely dereference optional strings for templates
+			switch v := value.(type) {
+			case *string:
+				if v != nil && *v != "" {
+					return *v
+				}
+			case string:
+				if v != "" {
+					return v
+				}
+			}
+			return fallback
+		},
 		"add": func(a, b int) int {
 			return a + b
 		},
@@ -1037,6 +1055,8 @@ func (s *Server) handleAuditList(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "audit/list.html", gin.H{
+		"title":      "Audit Events",
+		"active":     "audit",
 		"events":     events,
 		"pagination": pagination,
 		"filters":    filters,
@@ -1082,6 +1102,8 @@ func (s *Server) handleAuditShow(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "audit/show.html", gin.H{
-		"event": event,
+		"title":  "Audit Event",
+		"active": "audit",
+		"event":  event,
 	})
 }

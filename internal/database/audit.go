@@ -168,9 +168,9 @@ func (d *DB) ListAuditEvents(ctx context.Context, filters AuditEventFilters) ([]
 		args = append(args, filters.Path)
 	}
 	if filters.Search != "" {
-		query += " AND (reason LIKE ? OR metadata LIKE ?)"
+		query += " AND (request_id LIKE ? OR correlation_id LIKE ? OR client_ip LIKE ? OR action LIKE ? OR actor LIKE ? OR method LIKE ? OR path LIKE ? OR reason LIKE ? OR metadata LIKE ?)"
 		searchPattern := "%" + filters.Search + "%"
-		args = append(args, searchPattern, searchPattern)
+		args = append(args, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern)
 	}
 	if filters.StartTime != nil {
 		query += " AND timestamp >= ?"
@@ -276,9 +276,9 @@ func (d *DB) CountAuditEvents(ctx context.Context, filters AuditEventFilters) (i
 		args = append(args, filters.Path)
 	}
 	if filters.Search != "" {
-		query += " AND (reason LIKE ? OR metadata LIKE ?)"
+		query += " AND (request_id LIKE ? OR correlation_id LIKE ? OR client_ip LIKE ? OR action LIKE ? OR actor LIKE ? OR method LIKE ? OR path LIKE ? OR reason LIKE ? OR metadata LIKE ?)"
 		searchPattern := "%" + filters.Search + "%"
-		args = append(args, searchPattern, searchPattern)
+		args = append(args, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern)
 	}
 	if filters.StartTime != nil {
 		query += " AND timestamp >= ?"
