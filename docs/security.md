@@ -137,8 +137,10 @@ AUDIT_STORE_IN_DB=true
 - All tokens in audit logs are automatically obfuscated using a consistent pattern
 - Original tokens are never stored in audit logs in plaintext
 - Obfuscation preserves prefix (e.g., `tok-`) and shows partial content for identification
-- For tokens with known prefixes: shows first 4 and last 4 characters with asterisks in middle
+- For tokens with known prefixes (such as `tok-`, `sk-`, `api_`, `Bearer `, or `ghp_`): the obfuscation logic shows the first 4 and last 4 characters of the token, with asterisks in the middle.
 - Example: `tok-1234567890abcdef` becomes `tok-1234****cdef`
+- For tokens without a recognized prefix, the obfuscation may show only the first and last 2 characters, or fully mask the value depending on configuration.
+- Example: `abcd1234efgh5678` (no known prefix) becomes `ab********78`
 
 **No-Secrets Policy:**
 - API keys are never logged in audit events
@@ -162,7 +164,7 @@ AUDIT_STORE_IN_DB=true
 
 ```bash
 # Example logrotate configuration
-/app/data/audit.log {
+./data/audit.log {
     daily
     rotate 90
     compress
@@ -181,8 +183,18 @@ AUDIT_STORE_IN_DB=true
 
 ```sql
 -- Example cleanup query (run via scheduled job)
+-- For databases that support LIMIT in DELETE (e.g., MySQL, SQLite):
 DELETE FROM audit_events 
-WHERE timestamp < datetime('now', '-90 days');
+WHERE timestamp < datetime('now', '-90 days')
+LIMIT 1000;
+
+-- Repeat the cleanup job until no more rows match the condition.
+
+-- For databases that do not support LIMIT in DELETE (e.g., PostgreSQL), consider using a CTE:
+-- WITH del AS (
+--   SELECT ctid FROM audit_events WHERE timestamp < NOW() - INTERVAL '90 days' LIMIT 1000
+-- )
+-- DELETE FROM audit_events WHERE ctid IN (SELECT ctid FROM del);
 
 -- Recommended indexes
 CREATE INDEX idx_audit_timestamp ON audit_events(timestamp);
