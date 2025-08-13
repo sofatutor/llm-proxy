@@ -29,6 +29,13 @@ type AuditEventFilters struct {
 
 // StoreAuditEvent persists an audit event to the database
 func (d *DB) StoreAuditEvent(ctx context.Context, event *audit.Event) error {
+	if d == nil || d.db == nil {
+		return fmt.Errorf("database is nil")
+	}
+	// Ensure schema exists (important for in-memory databases in tests)
+	if err := initDatabase(d.db); err != nil {
+		return fmt.Errorf("failed to ensure database schema: %w", err)
+	}
 	if event == nil {
 		return fmt.Errorf("audit event cannot be nil")
 	}
@@ -38,7 +45,7 @@ func (d *DB) StoreAuditEvent(ctx context.Context, event *audit.Event) error {
 
 	// Convert metadata to JSON string if present
 	var metadataJSON *string
-	if event.Details != nil && len(event.Details) > 0 {
+	if len(event.Details) > 0 {
 		metadataBytes, err := json.Marshal(event.Details)
 		if err != nil {
 			return fmt.Errorf("failed to marshal audit event metadata: %w", err)
@@ -117,38 +124,31 @@ func (d *DB) StoreAuditEvent(ctx context.Context, event *audit.Event) error {
 func (d *DB) ListAuditEvents(ctx context.Context, filters AuditEventFilters) ([]AuditEvent, error) {
 	query := "SELECT id, timestamp, action, actor, project_id, request_id, correlation_id, client_ip, method, path, user_agent, outcome, reason, token_id, metadata FROM audit_events WHERE 1=1"
 	args := []interface{}{}
-	argIndex := 1
 
 	// Apply filters
 	if filters.Action != "" {
 		query += " AND action = ?"
 		args = append(args, filters.Action)
-		argIndex++
 	}
 	if filters.ClientIP != "" {
 		query += " AND client_ip = ?"
 		args = append(args, filters.ClientIP)
-		argIndex++
 	}
 	if filters.ProjectID != "" {
 		query += " AND project_id = ?"
 		args = append(args, filters.ProjectID)
-		argIndex++
 	}
 	if filters.Outcome != "" {
 		query += " AND outcome = ?"
 		args = append(args, filters.Outcome)
-		argIndex++
 	}
 	if filters.StartTime != nil {
 		query += " AND timestamp >= ?"
 		args = append(args, *filters.StartTime)
-		argIndex++
 	}
 	if filters.EndTime != nil {
 		query += " AND timestamp <= ?"
 		args = append(args, *filters.EndTime)
-		argIndex++
 	}
 
 	// Order by timestamp descending
@@ -168,7 +168,7 @@ func (d *DB) ListAuditEvents(ctx context.Context, filters AuditEventFilters) ([]
 	if err != nil {
 		return nil, fmt.Errorf("failed to query audit events: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var events []AuditEvent
 	for rows.Next() {

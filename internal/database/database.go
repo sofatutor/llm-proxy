@@ -55,8 +55,15 @@ func New(config Config) (*DB, error) {
 	}
 
 	// Configure connection pool
-	db.SetMaxOpenConns(config.MaxOpenConns)
-	db.SetMaxIdleConns(config.MaxIdleConns)
+	// Special case: in-memory SQLite databases are per-connection. Use a single connection
+	// to ensure schema and data are visible across queries within the same *sql.DB handle.
+	if config.Path == ":memory:" {
+		db.SetMaxOpenConns(1)
+		db.SetMaxIdleConns(1)
+	} else {
+		db.SetMaxOpenConns(config.MaxOpenConns)
+		db.SetMaxIdleConns(config.MaxIdleConns)
+	}
 	db.SetConnMaxLifetime(config.ConnMaxLifetime)
 
 	// Test the connection
@@ -163,6 +170,14 @@ func initDatabase(db *sql.DB) error {
 	}
 
 	return nil
+}
+
+// DBInitForTests is a helper to ensure schema exists in tests. No-op if db is nil.
+func DBInitForTests(d *DB) error {
+	if d == nil || d.db == nil {
+		return nil
+	}
+	return initDatabase(d.db)
 }
 
 // Transaction executes the given function within a transaction.

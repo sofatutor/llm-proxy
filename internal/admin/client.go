@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"time"
 
+	"github.com/sofatutor/llm-proxy/internal/obfuscate"
 	"github.com/sofatutor/llm-proxy/internal/utils"
 )
 
@@ -36,18 +36,7 @@ func NewAPIClient(baseURL, token string) *APIClient {
 
 // ObfuscateAPIKey obfuscates an API key for display purposes
 // Shows first 8 characters followed by dots and last 4 characters
-func ObfuscateAPIKey(apiKey string) string {
-	if len(apiKey) <= 12 {
-		// For short keys, show first few chars + dots
-		if len(apiKey) <= 4 {
-			return strings.Repeat("*", len(apiKey))
-		}
-		return apiKey[:2] + strings.Repeat("*", len(apiKey)-2)
-	}
-
-	// For longer keys (like OpenAI keys), show first 8 and last 4
-	return apiKey[:8] + "..." + apiKey[len(apiKey)-4:]
-}
+func ObfuscateAPIKey(apiKey string) string { return obfuscate.ObfuscateTokenGeneric(apiKey) }
 
 // ObfuscateToken obfuscates a token for display purposes
 // Shows first 8 characters followed by dots and last 4 characters

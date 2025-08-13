@@ -13,7 +13,7 @@ func TestDB_StoreAuditEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 
@@ -90,7 +90,7 @@ func TestDB_ListAuditEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 
@@ -195,7 +195,7 @@ func TestAuditLogger_DatabaseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test database: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Create temporary file for audit log
 	tmpFile := t.TempDir() + "/audit.log"
@@ -210,7 +210,7 @@ func TestAuditLogger_DatabaseIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create audit logger: %v", err)
 	}
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	// Create test event with client IP
 	event := audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultSuccess).

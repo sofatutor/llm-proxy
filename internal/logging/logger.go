@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sofatutor/llm-proxy/internal/admin"
+	"github.com/sofatutor/llm-proxy/internal/obfuscate"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -93,7 +93,7 @@ func ProjectID(id string) zap.Field {
 
 // TokenID returns a field for token ID (obfuscated for security)
 func TokenID(token string) zap.Field {
-	return zap.String("token_id", admin.ObfuscateToken(token))
+	return zap.String("token_id", obfuscate.ObfuscateTokenGeneric(token))
 }
 
 // ClientIP returns a field for client IP address

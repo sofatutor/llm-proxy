@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/config"
@@ -37,15 +36,18 @@ func TestAuditLogging_Integration(t *testing.T) {
 		ObservabilityBufferSize: 100,
 	}
 
-	// Create stores
-	db, err := database.NewSQLiteStore(":memory:")
+	// Create stores using the standard database package
+	db, err := database.New(database.Config{Path: ":memory:"})
 	require.NoError(t, err)
-	defer db.Close()
+	// Ensure table schemas exist explicitly for in-memory DB
+	require.NoError(t, database.DBInitForTests(db))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
 
-	// Create server
-	server, err := New(cfg, db, db)
+	// Create server (use DBTokenStoreAdapter for token store)
+	server, err := New(cfg, database.NewDBTokenStoreAdapter(db), db)
 	require.NoError(t, err)
-	defer server.Shutdown(context.Background())
+	defer func() { _ = server.Shutdown(context.Background()) }()
 
 	// Verify audit logger is initialized
 	assert.NotNil(t, server.auditLogger)
@@ -91,7 +93,7 @@ func TestAuditLogging_Integration(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w2.Code)
 
 	// Close the server to ensure audit logs are flushed
-	server.Shutdown(context.Background())
+	_ = server.Shutdown(context.Background())
 
 	// Read audit log file
 	auditData, err := os.ReadFile(auditLogPath)
@@ -147,15 +149,17 @@ func TestAuditLogging_Disabled(t *testing.T) {
 		ObservabilityBufferSize: 100,
 	}
 
-	// Create stores
-	db, err := database.NewSQLiteStore(":memory:")
+	// Create stores using the standard database package
+	db, err := database.New(database.Config{Path: ":memory:"})
 	require.NoError(t, err)
-	defer db.Close()
+	require.NoError(t, database.DBInitForTests(db))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
 
-	// Create server
-	server, err := New(cfg, db, db)
+	// Create server (use DBTokenStoreAdapter for token store)
+	server, err := New(cfg, database.NewDBTokenStoreAdapter(db), db)
 	require.NoError(t, err)
-	defer server.Shutdown(context.Background())
+	defer func() { _ = server.Shutdown(context.Background()) }()
 
 	// Verify audit logger is null logger (no-op)
 	assert.NotNil(t, server.auditLogger)
@@ -196,15 +200,17 @@ func TestAuditLogging_FailureEvents(t *testing.T) {
 		ObservabilityBufferSize: 100,
 	}
 
-	// Create stores
-	db, err := database.NewSQLiteStore(":memory:")
+	// Create stores using the standard database package
+	db, err := database.New(database.Config{Path: ":memory:"})
 	require.NoError(t, err)
-	defer db.Close()
+	require.NoError(t, database.DBInitForTests(db))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
 
-	// Create server
-	server, err := New(cfg, db, db)
+	// Create server (use DBTokenStoreAdapter for token store)
+	server, err := New(cfg, database.NewDBTokenStoreAdapter(db), db)
 	require.NoError(t, err)
-	defer server.Shutdown(context.Background())
+	defer func() { _ = server.Shutdown(context.Background()) }()
 
 	// Test invalid project creation - should generate failure audit event
 	req := httptest.NewRequest("POST", "/manage/projects", strings.NewReader("{invalid json"))
@@ -218,7 +224,7 @@ func TestAuditLogging_FailureEvents(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
 	// Close the server to ensure audit logs are flushed
-	server.Shutdown(context.Background())
+	_ = server.Shutdown(context.Background())
 
 	// Read audit log file
 	auditData, err := os.ReadFile(auditLogPath)

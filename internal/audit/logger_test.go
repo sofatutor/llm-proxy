@@ -24,7 +24,7 @@ func TestNewLogger(t *testing.T) {
 
 		logger, err := NewLogger(config)
 		require.NoError(t, err)
-		defer logger.Close()
+		defer func() { _ = logger.Close() }()
 
 		assert.Equal(t, logPath, logger.GetPath())
 		assert.FileExists(t, logPath)
@@ -41,7 +41,7 @@ func TestNewLogger(t *testing.T) {
 
 		logger, err := NewLogger(config)
 		require.NoError(t, err)
-		defer logger.Close()
+		defer func() { _ = logger.Close() }()
 
 		assert.FileExists(t, logPath)
 		assert.DirExists(t, filepath.Dir(logPath))
@@ -85,7 +85,7 @@ func TestLogger_Log(t *testing.T) {
 
 		logger, err := NewLogger(config)
 		require.NoError(t, err)
-		defer logger.Close()
+		defer func() { _ = logger.Close() }()
 
 		event := NewEvent(ActionTokenCreate, ActorManagement, ResultSuccess).
 			WithProjectID("proj-123").
@@ -123,7 +123,7 @@ func TestLogger_Log(t *testing.T) {
 
 		logger, err := NewLogger(config)
 		require.NoError(t, err)
-		defer logger.Close()
+		defer func() { _ = logger.Close() }()
 
 		events := []*Event{
 			NewEvent(ActionTokenCreate, ActorManagement, ResultSuccess),
@@ -171,12 +171,12 @@ func TestLogger_Log(t *testing.T) {
 		event1 := NewEvent(ActionTokenCreate, ActorManagement, ResultSuccess)
 		err = logger1.Log(event1)
 		require.NoError(t, err)
-		logger1.Close()
+		_ = logger1.Close()
 
 		// Create new logger and write another event
 		logger2, err := NewLogger(config)
 		require.NoError(t, err)
-		defer logger2.Close()
+		defer func() { _ = logger2.Close() }()
 
 		event2 := NewEvent(ActionProjectDelete, ActorAdmin, ResultFailure)
 		err = logger2.Log(event2)
@@ -201,7 +201,7 @@ func TestLogger_Log(t *testing.T) {
 
 		logger, err := NewLogger(config)
 		require.NoError(t, err)
-		defer logger.Close()
+		defer func() { _ = logger.Close() }()
 
 		err = logger.Log(nil)
 		assert.Error(t, err)
@@ -257,7 +257,7 @@ func TestLogger_ThreadSafety(t *testing.T) {
 
 	logger, err := NewLogger(config)
 	require.NoError(t, err)
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	// Write events from multiple goroutines
 	numGoroutines := 10
@@ -322,7 +322,7 @@ func TestLogger_JSONLFormat(t *testing.T) {
 
 	logger, err := NewLogger(config)
 	require.NoError(t, err)
-	defer logger.Close()
+	defer func() { _ = logger.Close() }()
 
 	// Create an event with various field types
 	timestamp := time.Date(2023, 12, 25, 10, 30, 45, 0, time.UTC)

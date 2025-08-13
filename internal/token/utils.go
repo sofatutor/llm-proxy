@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/sofatutor/llm-proxy/internal/obfuscate"
 )
 
 // Constants for token options and generation
@@ -172,29 +174,7 @@ func TruncateToken(token string, showChars int) string {
 }
 
 // ObfuscateToken partially obfuscates a token for display purposes
-func ObfuscateToken(token string) string {
-	if token == "" || !strings.HasPrefix(token, TokenPrefix) {
-		return token
-	}
-
-	// Keep the prefix intact
-	prefix := TokenPrefix
-	rest := token[len(prefix):]
-
-	// Show first 4 and last 4 characters of the rest
-	if len(rest) <= 8 {
-		return token // Too short to meaningfully obfuscate
-	}
-
-	visible := 4
-	first := rest[:visible]
-	last := rest[len(rest)-visible:]
-
-	// Replace middle characters with asterisks
-	middle := strings.Repeat("*", len(rest)-(visible*2))
-
-	return prefix + first + middle + last
-}
+func ObfuscateToken(token string) string { return obfuscate.ObfuscateTokenByPrefix(token, TokenPrefix) }
 
 // TokenInfo represents information about a token for display purposes
 type TokenInfo struct {

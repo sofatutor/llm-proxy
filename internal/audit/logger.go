@@ -11,7 +11,7 @@ import (
 )
 
 // Logger handles writing audit events to multiple backends (file and database)
-// with immutable semantics. It provides thread-safe operations and ensures 
+// with immutable semantics. It provides thread-safe operations and ensures
 // all audit events are persisted.
 type Logger struct {
 	file      *os.File

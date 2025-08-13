@@ -19,6 +19,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/obfuscate"
 )
 
 // Session represents a user session
@@ -650,21 +651,8 @@ func (s *Server) templateFuncs() template.FuncMap {
 		"not": func(a bool) bool {
 			return !a
 		},
-		"obfuscateAPIKey": func(apiKey string) string {
-			if len(apiKey) <= 12 {
-				if len(apiKey) <= 4 {
-					return strings.Repeat("*", len(apiKey))
-				}
-				return apiKey[:2] + strings.Repeat("*", len(apiKey)-2)
-			}
-			return apiKey[:8] + "..." + apiKey[len(apiKey)-4:]
-		},
-		"obfuscateToken": func(token string) string {
-			if len(token) <= 8 {
-				return "****"
-			}
-			return token[:4] + "****" + token[len(token)-4:]
-		},
+		"obfuscateAPIKey": func(apiKey string) string { return obfuscate.ObfuscateTokenGeneric(apiKey) },
+		"obfuscateToken":  func(token string) string { return obfuscate.ObfuscateTokenSimple(token) },
 		"contains": func(s, substr string) bool {
 			return strings.Contains(s, substr)
 		},
@@ -811,8 +799,5 @@ func getFormFieldNames(form map[string][]string) []string {
 
 // obfuscateToken returns a partially masked version of a token for logging
 func obfuscateToken(token string) string {
-	if len(token) <= 8 {
-		return "****"
-	}
-	return token[:4] + "****" + token[len(token)-4:]
+	return obfuscate.ObfuscateTokenSimple(token)
 }
