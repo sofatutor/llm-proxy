@@ -67,56 +67,56 @@ func TestNewAPIClient(t *testing.T) {
 }
 
 func TestAPIClient_NewRequestAndDoRequest_ErrorBranches(t *testing.T) {
-    t.Parallel()
-    // Create client with fake base and token
-    c := NewAPIClient("http://example", "tkn")
+	t.Parallel()
+	// Create client with fake base and token
+	c := NewAPIClient("http://example", "tkn")
 
-    // newRequest with body sets headers and JSON marshals
-    req, err := c.newRequest(context.Background(), http.MethodPost, "/x", map[string]string{"a": "b"})
-    if err != nil {
-        t.Fatalf("newRequest err: %v", err)
-    }
-    if req.Header.Get("Authorization") == "" || req.Header.Get("Content-Type") != "application/json" {
-        t.Fatalf("headers not set as expected")
-    }
+	// newRequest with body sets headers and JSON marshals
+	req, err := c.newRequest(context.Background(), http.MethodPost, "/x", map[string]string{"a": "b"})
+	if err != nil {
+		t.Fatalf("newRequest err: %v", err)
+	}
+	if req.Header.Get("Authorization") == "" || req.Header.Get("Content-Type") != "application/json" {
+		t.Fatalf("headers not set as expected")
+	}
 
-    // doRequest with 400 + JSON error payload
-    srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.WriteHeader(http.StatusBadRequest)
-        _, _ = w.Write([]byte(`{"error":"bad"}`))
-    }))
-    defer srv.Close()
-    c.baseURL = srv.URL
-    req.URL = mustParseURL(t, srv.URL+"/x")
-    err = c.doRequest(req, nil)
-    if err == nil || !strings.Contains(err.Error(), "API error (400): bad") {
-        t.Fatalf("expected structured API error, got %v", err)
-    }
+	// doRequest with 400 + JSON error payload
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"bad"}`))
+	}))
+	defer srv.Close()
+	c.baseURL = srv.URL
+	req.URL = mustParseURL(t, srv.URL+"/x")
+	err = c.doRequest(req, nil)
+	if err == nil || !strings.Contains(err.Error(), "API error (400): bad") {
+		t.Fatalf("expected structured API error, got %v", err)
+	}
 
-    // doRequest with 500 and non-JSON body (use a fresh request so body isn't exhausted)
-    srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.WriteHeader(http.StatusInternalServerError)
-        _, _ = w.Write([]byte("oops"))
-    }))
-    defer srv2.Close()
-    req2, err := c.newRequest(context.Background(), http.MethodPost, "/x", map[string]string{"a": "b"})
-    if err != nil {
-        t.Fatalf("newRequest err: %v", err)
-    }
-    req2.URL = mustParseURL(t, srv2.URL+"/x")
-    err = c.doRequest(req2, nil)
-    if err == nil || !strings.Contains(err.Error(), "API error: 500") {
-        t.Fatalf("expected generic API error, got %v", err)
-    }
+	// doRequest with 500 and non-JSON body (use a fresh request so body isn't exhausted)
+	srv2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("oops"))
+	}))
+	defer srv2.Close()
+	req2, err := c.newRequest(context.Background(), http.MethodPost, "/x", map[string]string{"a": "b"})
+	if err != nil {
+		t.Fatalf("newRequest err: %v", err)
+	}
+	req2.URL = mustParseURL(t, srv2.URL+"/x")
+	err = c.doRequest(req2, nil)
+	if err == nil || !strings.Contains(err.Error(), "API error: 500") {
+		t.Fatalf("expected generic API error, got %v", err)
+	}
 }
 
 func mustParseURL(t *testing.T, u string) *url.URL {
-    t.Helper()
-    pu, err := url.Parse(u)
-    if err != nil {
-        t.Fatalf("parse: %v", err)
-    }
-    return pu
+	t.Helper()
+	pu, err := url.Parse(u)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	return pu
 }
 
 func TestAPIClient_GetDashboardData(t *testing.T) {
