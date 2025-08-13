@@ -86,12 +86,11 @@ jobs:
 
       - name: Pull pushed image and tag for Makefile
         run: |
-          # Compute sanitized branch tag (lowercase, replace invalid chars)
-          BR_RAW="${GITHUB_REF_NAME}"
-          BRANCH_TAG=$(echo "$BR_RAW" | tr '[:upper:]' '[:lower:]' | sed -E 's|[^a-z0-9_.-]|-|g; s|^[.-]+||; s|[.-]+$||')
-          echo "Pulling ghcr.io/${{ github.repository }}:${BRANCH_TAG}"
-          docker pull ghcr.io/${{ github.repository }}:${BRANCH_TAG}
-          docker tag ghcr.io/${{ github.repository }}:${BRANCH_TAG} llm-proxy:${BRANCH_TAG}
+          # Use the same sanitized tag computed earlier
+          TAG="${{ steps.set_tag.outputs.name }}"
+          echo "Pulling ghcr.io/${{ github.repository }}:${TAG}"
+          docker pull ghcr.io/${{ github.repository }}:${TAG}
+          docker tag ghcr.io/${{ github.repository }}:${TAG} llm-proxy:${TAG}
 
       - name: Smoke test using Makefile (run + health)
         run: |
