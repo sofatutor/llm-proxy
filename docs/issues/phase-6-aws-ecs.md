@@ -1,5 +1,7 @@
 # AWS ECS Deployment
 
+Tracking: [Issue #46](https://github.com/sofatutor/llm-proxy/issues/46)
+
 ## Summary
 Document and implement deployment of the LLM proxy to AWS ECS, including containerization, task definition, service setup, and CI/CD integration.
 
