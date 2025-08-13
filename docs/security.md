@@ -96,13 +96,138 @@ The Dockerfile is configured to run as a non-root user:
 - Secure log storage and transmission
 - Implement log rotation and retention policies
 
+### Audit Logging
+
+The LLM Proxy provides comprehensive audit logging for security-sensitive operations, designed for compliance and security investigations.
+
+#### Configuration
+
+Audit logging is controlled by these environment variables:
+
+- **`AUDIT_ENABLED`** (default: `true`): Enable/disable audit logging entirely
+- **`AUDIT_LOG_FILE`** (default: `./data/audit.log`): Path to audit log file
+- **`AUDIT_CREATE_DIR`** (default: `true`): Create parent directories if they don't exist
+- **`AUDIT_STORE_IN_DB`** (default: `true`): Store audit events in database for analytics
+
+#### Enabling and Disabling
+
+```bash
+# Enable audit logging (default)
+AUDIT_ENABLED=true
+AUDIT_LOG_FILE=./data/audit.log
+AUDIT_STORE_IN_DB=true
+
+# Disable audit logging
+AUDIT_ENABLED=false
+
+# File-only audit logging (no database storage)
+AUDIT_ENABLED=true
+AUDIT_LOG_FILE=./data/audit.log
+AUDIT_STORE_IN_DB=false
+
+# Database-only audit logging (no file)
+AUDIT_ENABLED=true
+AUDIT_LOG_FILE=""
+AUDIT_STORE_IN_DB=true
+```
+
+#### Privacy and Data Protection
+
+**Token Obfuscation Guarantees:**
+- All tokens in audit logs are automatically obfuscated using a consistent pattern
+- Original tokens are never stored in audit logs in plaintext
+- Obfuscation preserves prefix (e.g., `tok-`) and shows partial content for identification
+- For tokens with known prefixes: shows first 4 and last 4 characters with asterisks in middle
+- Example: `tok-1234567890abcdef` becomes `tok-1234****cdef`
+
+**No-Secrets Policy:**
+- API keys are never logged in audit events
+- Request/response bodies containing sensitive data are not logged
+- Only metadata (method, endpoint, status, duration) is captured
+- Personal Identifiable Information (PII) is not logged
+
+**Data Minimization:**
+- Audit events contain only necessary information for security investigations
+- Client IP addresses are logged but can be masked via configuration
+- User-Agent strings are logged for security analysis
+- Request IDs enable correlation without exposing sensitive data
+
+#### Retention Guidance
+
+**File Backend Retention:**
+- Implement log rotation using standard tools (logrotate, Docker volume rotation)
+- Recommended retention: 90 days minimum for compliance, 1 year for enhanced security
+- Secure storage with appropriate file permissions (600 or 640)
+- Consider encryption at rest for sensitive environments
+
+```bash
+# Example logrotate configuration
+/app/data/audit.log {
+    daily
+    rotate 90
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
+```
+
+**Database Backend Retention:**
+- Database storage enables structured queries and analytics
+- Implement automated cleanup of old audit events
+- Consider partitioning by date for large deployments
+- Recommended indexes on timestamp, action, and project_id fields
+
+```sql
+-- Example cleanup query (run via scheduled job)
+DELETE FROM audit_events 
+WHERE timestamp < datetime('now', '-90 days');
+
+-- Recommended indexes
+CREATE INDEX idx_audit_timestamp ON audit_events(timestamp);
+CREATE INDEX idx_audit_action ON audit_events(action);
+CREATE INDEX idx_audit_project ON audit_events(project_id);
+```
+
+#### Event Format
+
+Audit events are stored in JSONL format (file backend) or structured database records:
+
+```json
+{
+  "timestamp": "2023-12-01T10:00:00Z",
+  "action": "token.create",
+  "actor": "management",
+  "project_id": "proj-123",
+  "request_id": "req-456",
+  "client_ip": "192.168.1.100",
+  "result": "success",
+  "details": {
+    "http_method": "POST",
+    "endpoint": "/manage/tokens",
+    "duration_minutes": 60,
+    "token_id": "tok-1234****cdef"
+  }
+}
+```
+
+#### Audited Events
+
+The following operations generate audit events:
+
+- **Token Operations**: create, revoke, delete, validate, access
+- **Project Operations**: create, read, update, delete
+- **Authentication**: successful and failed authentication attempts
+- **Management API**: all administrative operations
+
 ### Security Monitoring
 
 - Monitor for unusual access patterns
 - Set up alerts for potential security incidents
-- Implement audit logging for sensitive operations
-- Regularly review access logs
+- Regularly review audit logs for security investigations
 - Consider implementing a Web Application Firewall (WAF)
+- Use audit logs for compliance reporting and forensic analysis
 
 ## Regular Security Practices
 

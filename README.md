@@ -45,6 +45,10 @@ MANAGEMENT_TOKEN=your-secure-management-token ./bin/llm-proxy
 - `LOG_FILE`: Path to log file (stdout if empty)
 - `LOG_MAX_SIZE_MB`: Rotate log after this size in MB (default 10)
 - `LOG_MAX_BACKUPS`: Number of rotated log files to keep (default 5)
+- `AUDIT_ENABLED`: Enable audit logging (default `true`)
+- `AUDIT_LOG_FILE`: Audit log file path (default `./data/audit.log`)
+- `AUDIT_STORE_IN_DB`: Store audit events in database (default `true`)
+- `AUDIT_CREATE_DIR`: Create audit log directories (default `true`)
 - `OBSERVABILITY_ENABLED`: Deprecated; the async event bus is now always enabled
 - `OBSERVABILITY_BUFFER_SIZE`: Event buffer size for instrumentation events (default 1000)
 - `FILE_EVENT_LOG`: Path to persistent event log file (enables file event logging via dispatcher)
