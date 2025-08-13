@@ -2,7 +2,7 @@ name: Docker
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, docker/phase-6-docker-optimization-ghcr ]
     tags: [ 'v*' ]
 
 jobs:
@@ -61,3 +61,18 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max 
+
+      - name: Pull pushed image and tag for Makefile
+        if: github.event_name != 'pull_request'
+        run: |
+          docker pull ghcr.io/${{ github.repository }}:sha-${{ github.sha }}
+          docker tag ghcr.io/${{ github.repository }}:sha-${{ github.sha }} llm-proxy:latest
+
+      - name: Smoke test using Makefile (run + health)
+        if: github.event_name != 'pull_request'
+        run: |
+          make docker-smoke
+
+      - name: Stop container (cleanup)
+        if: always()
+        run: make docker-stop
