@@ -175,6 +175,8 @@ The dispatcher can be deployed in multiple ways:
 
 See [docs/instrumentation.md](docs/instrumentation.md) for detailed configuration and architecture.
 
+> Warning: Event loss can occur if the Redis event log is configured with TTL/max length values that are too low for your dispatcher lag and throughput. In production, increase Redis TTL and list length to cover worst-case backlogs and keep the dispatcher running with sufficient batch size/throughput. For strict guarantees, use a durable queue (e.g., Redis Streams with consumer groups or Kafka). See the Production Reliability section in `docs/instrumentation.md`.
+
 ## Using Redis for Distributed Event Bus (Local Development)
 
 > **Note:** The in-memory event bus only works within a single process. For multi-process setups (e.g., running the proxy and dispatcher as separate processes or containers), you must use Redis as the event bus backend.

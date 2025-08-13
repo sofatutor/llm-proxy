@@ -170,6 +170,17 @@ LLM_PROXY_EVENT_BUS=redis llm-proxy dispatcher ...
 
 This enables full async event delivery and observability pipeline testing across processes.
 
+## Production Reliability Warning: Event Retention & Loss
+
+> Important: If the Redis-backed event log expires or is trimmed before the dispatcher reads events, those events are irretrievably lost. The dispatcher will log warnings like "Missed events due to TTL or trimming" when it detects gaps.
+
+Recommendations for production:
+
+- Size retention to your worst-case lag: increase the Redis list TTL and max length so they exceed the maximum expected dispatcher downtime/lag and event volume burst.
+- Keep the dispatcher continuously running and sized appropriately: raise batch size and processing concurrency to keep up with peak throughput.
+- Monitor gaps: alert on warnings about missed events and on dispatcher lag.
+- If you require strict, zero-loss semantics, consider a durable queue with consumer offsets (e.g., Redis Streams with consumer groups, Kafka) instead of a simple Redis list with TTL/trim.
+
 ## References
 ## References
 - See `internal/middleware/instrumentation.go` for the middleware implementation.
