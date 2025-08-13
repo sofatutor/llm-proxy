@@ -17,6 +17,7 @@ import (
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
+	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/config"
 )
 
@@ -61,6 +62,9 @@ type Server struct {
 
 	// For testability: allow injection of token validation logic
 	ValidateTokenWithAPI func(context.Context, string) bool
+	
+	// Audit logger for admin actions
+	auditLogger *audit.Logger
 }
 
 // NewServer creates a new Admin UI server with the provided configuration.
@@ -90,10 +94,27 @@ func NewServer(cfg *config.Config) (*Server, error) {
 		apiClient = NewAPIClient(cfg.AdminUI.APIBaseURL, cfg.AdminUI.ManagementToken)
 	}
 
+	// Initialize audit logger
+	var auditLogger *audit.Logger
+	if cfg.AuditEnabled && cfg.AuditLogFile != "" {
+		auditConfig := audit.LoggerConfig{
+			FilePath:  cfg.AuditLogFile,
+			CreateDir: cfg.AuditCreateDir,
+		}
+		var err error
+		auditLogger, err = audit.NewLogger(auditConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize admin audit logger: %w", err)
+		}
+	} else {
+		auditLogger = audit.NewNullLogger()
+	}
+
 	s := &Server{
-		config:    cfg,
-		engine:    engine,
-		apiClient: apiClient,
+		config:      cfg,
+		engine:      engine,
+		apiClient:   apiClient,
+		auditLogger: auditLogger,
 		server: &http.Server{
 			Addr:         cfg.AdminUI.ListenAddr,
 			Handler:      engine,

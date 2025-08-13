@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/logging"
@@ -35,6 +36,7 @@ type Server struct {
 	proxy        *proxy.TransparentProxy
 	metrics      Metrics
 	eventBus     eventbus.EventBus
+	auditLogger  *audit.Logger
 }
 
 // HealthResponse is the response body for the health check endpoint.
@@ -67,6 +69,23 @@ func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.Pro
 	logger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize logger: %w", err)
+	}
+
+	// Initialize audit logger
+	var auditLogger *audit.Logger
+	if cfg.AuditEnabled && cfg.AuditLogFile != "" {
+		auditConfig := audit.LoggerConfig{
+			FilePath:  cfg.AuditLogFile,
+			CreateDir: cfg.AuditCreateDir,
+		}
+		auditLogger, err = audit.NewLogger(auditConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize audit logger: %w", err)
+		}
+		log.Printf("Audit logging enabled: %s", cfg.AuditLogFile)
+	} else {
+		auditLogger = audit.NewNullLogger()
+		log.Printf("Audit logging disabled")
 	}
 
 	metrics := Metrics{StartTime: time.Now()}
@@ -107,6 +126,7 @@ func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.Pro
 		logger:       logger,
 		metrics:      metrics,
 		eventBus:     bus,
+		auditLogger:  auditLogger,
 		server: &http.Server{
 			Addr:         cfg.ListenAddr,
 			Handler:      mux,
@@ -250,6 +270,12 @@ func (s *Server) initializeAPIRoutes() error {
 // The context should typically include a timeout to prevent
 // the shutdown from blocking indefinitely.
 func (s *Server) Shutdown(ctx context.Context) error {
+	// Close audit logger first to ensure all events are written
+	if s.auditLogger != nil {
+		if err := s.auditLogger.Close(); err != nil {
+			s.logger.Error("failed to close audit logger during shutdown", zap.Error(err))
+		}
+	}
 	return s.server.Shutdown(ctx)
 }
 
@@ -372,13 +398,30 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
 	s.logger.Debug("handleListProjects: START")
 	ctx := r.Context()
+	requestID := getRequestID(ctx)
 	projects, err := s.projectStore.ListProjects(ctx)
 	if err != nil {
 		s.logger.Error("failed to list projects", zap.Error(err))
+		
+		// Audit: project list failure
+		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectList, audit.ActorManagement, audit.ResultFailure).
+			WithRequestID(requestID).
+			WithHTTPMethod(r.Method).
+			WithEndpoint(r.URL.Path).
+			WithError(err))
+		
 		http.Error(w, `{"error":"failed to list projects"}`, http.StatusInternalServerError)
 		s.logger.Debug("handleListProjects: END (error)")
 		return
 	}
+	
+	// Audit: project list success
+	s.auditLogger.Log(audit.NewEvent(audit.ActionProjectList, audit.ActorManagement, audit.ResultSuccess).
+		WithRequestID(requestID).
+		WithHTTPMethod(r.Method).
+		WithEndpoint(r.URL.Path).
+		WithDetail("project_count", len(projects)))
+	
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(projects); err != nil {
 		s.logger.Error("failed to encode projects response", zap.Error(err))
@@ -398,11 +441,30 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.logger.Error("invalid request body", zap.Error(err), zap.String("request_id", requestID))
+		
+		// Audit: project creation failure - invalid request
+		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectCreate, audit.ActorManagement, audit.ResultFailure).
+			WithRequestID(requestID).
+			WithHTTPMethod(r.Method).
+			WithEndpoint(r.URL.Path).
+			WithError(err).
+			WithDetail("validation_error", "invalid request body"))
+		
 		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 		return
 	}
 	if req.Name == "" || req.OpenAIAPIKey == "" {
 		s.logger.Error("missing required fields", zap.String("name", req.Name), zap.String("openai_api_key", req.OpenAIAPIKey), zap.String("request_id", requestID))
+		
+		// Audit: project creation failure - missing fields
+		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectCreate, audit.ActorManagement, audit.ResultFailure).
+			WithRequestID(requestID).
+			WithHTTPMethod(r.Method).
+			WithEndpoint(r.URL.Path).
+			WithDetail("validation_error", "missing required fields").
+			WithDetail("name_provided", req.Name != "").
+			WithDetail("api_key_provided", req.OpenAIAPIKey != ""))
+		
 		http.Error(w, `{"error":"name and openai_api_key are required"}`, http.StatusBadRequest)
 		return
 	}
@@ -417,10 +479,29 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.projectStore.CreateProject(ctx, project); err != nil {
 		s.logger.Error("failed to create project", zap.Error(err), zap.String("name", req.Name), zap.String("request_id", requestID))
+		
+		// Audit: project creation failure - store error
+		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectCreate, audit.ActorManagement, audit.ResultFailure).
+			WithProjectID(id).
+			WithRequestID(requestID).
+			WithHTTPMethod(r.Method).
+			WithEndpoint(r.URL.Path).
+			WithError(err).
+			WithDetail("project_name", req.Name))
+		
 		http.Error(w, `{"error":"failed to create project"}`, http.StatusInternalServerError)
 		return
 	}
 	s.logger.Info("project created", zap.String("id", id), zap.String("name", req.Name), zap.String("request_id", requestID))
+	
+	// Audit: project creation success
+	s.auditLogger.Log(audit.NewEvent(audit.ActionProjectCreate, audit.ActorManagement, audit.ResultSuccess).
+		WithProjectID(id).
+		WithRequestID(requestID).
+		WithHTTPMethod(r.Method).
+		WithEndpoint(r.URL.Path).
+		WithDetail("project_name", req.Name))
+	
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(project); err != nil {
@@ -452,37 +533,92 @@ func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request) {
 // PATCH /manage/projects/{id}
 func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	requestID := getRequestID(ctx)
 	id := strings.TrimPrefix(r.URL.Path, "/manage/projects/")
 	if id == "" || strings.Contains(id, "/") {
 		s.logger.Error("invalid project id for update", zap.String("id", id))
+		
+		// Audit: project update failure - invalid ID
+		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultFailure).
+			WithRequestID(requestID).
+			WithHTTPMethod(r.Method).
+			WithEndpoint(r.URL.Path).
+			WithDetail("validation_error", "invalid project id").
+			WithDetail("provided_id", id))
+		
 		http.Error(w, `{"error":"invalid project id"}`, http.StatusBadRequest)
 		return
 	}
 	var req map[string]string
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.logger.Error("invalid request body for update", zap.Error(err))
+		
+		// Audit: project update failure - invalid request body
+		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultFailure).
+			WithProjectID(id).
+			WithRequestID(requestID).
+			WithHTTPMethod(r.Method).
+			WithEndpoint(r.URL.Path).
+			WithError(err).
+			WithDetail("validation_error", "invalid request body"))
+		
 		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 		return
 	}
 	project, err := s.projectStore.GetProjectByID(ctx, id)
 	if err != nil {
 		s.logger.Error("project not found for update", zap.String("id", id), zap.Error(err))
+		
+		// Audit: project update failure - not found
+		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultFailure).
+			WithProjectID(id).
+			WithRequestID(requestID).
+			WithHTTPMethod(r.Method).
+			WithEndpoint(r.URL.Path).
+			WithError(err).
+			WithDetail("error_type", "project not found"))
+		
 		http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
 		return
 	}
+	
+	// Track what fields are being updated
+	var updatedFields []string
 	if name, ok := req["name"]; ok {
 		project.Name = name
+		updatedFields = append(updatedFields, "name")
 	}
 	if key, ok := req["openai_api_key"]; ok {
 		project.OpenAIAPIKey = key
+		updatedFields = append(updatedFields, "openai_api_key")
 	}
 	project.UpdatedAt = time.Now().UTC()
 	if err := s.projectStore.UpdateProject(ctx, project); err != nil {
 		s.logger.Error("failed to update project", zap.String("id", id), zap.Error(err))
+		
+		// Audit: project update failure - store error
+		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultFailure).
+			WithProjectID(id).
+			WithRequestID(requestID).
+			WithHTTPMethod(r.Method).
+			WithEndpoint(r.URL.Path).
+			WithError(err).
+			WithDetail("updated_fields", updatedFields))
+		
 		http.Error(w, `{"error":"failed to update project"}`, http.StatusInternalServerError)
 		return
 	}
 	s.logger.Info("project updated", zap.String("id", id))
+	
+	// Audit: project update success
+	s.auditLogger.Log(audit.NewEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultSuccess).
+		WithProjectID(id).
+		WithRequestID(requestID).
+		WithHTTPMethod(r.Method).
+		WithEndpoint(r.URL.Path).
+		WithDetail("updated_fields", updatedFields).
+		WithDetail("project_name", project.Name))
+	
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(project); err != nil {
 		s.logger.Error("failed to encode project response", zap.Error(err))
@@ -496,15 +632,41 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/manage/projects/")
 	if id == "" || strings.Contains(id, "/") {
 		s.logger.Error("invalid project id for delete", zap.String("id", id), zap.String("request_id", requestID))
+		
+		// Audit: project delete failure - invalid ID
+		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectDelete, audit.ActorManagement, audit.ResultFailure).
+			WithRequestID(requestID).
+			WithHTTPMethod(r.Method).
+			WithEndpoint(r.URL.Path).
+			WithDetail("validation_error", "invalid project id").
+			WithDetail("provided_id", id))
+		
 		http.Error(w, `{"error":"invalid project id"}`, http.StatusBadRequest)
 		return
 	}
 	if err := s.projectStore.DeleteProject(ctx, id); err != nil {
 		s.logger.Error("project not found for delete", zap.String("id", id), zap.Error(err), zap.String("request_id", requestID))
+		
+		// Audit: project delete failure - not found or store error
+		s.auditLogger.Log(audit.NewEvent(audit.ActionProjectDelete, audit.ActorManagement, audit.ResultFailure).
+			WithProjectID(id).
+			WithRequestID(requestID).
+			WithHTTPMethod(r.Method).
+			WithEndpoint(r.URL.Path).
+			WithError(err))
+		
 		http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
 		return
 	}
 	s.logger.Info("project deleted", zap.String("id", id), zap.String("request_id", requestID))
+	
+	// Audit: project delete success
+	s.auditLogger.Log(audit.NewEvent(audit.ActionProjectDelete, audit.ActorManagement, audit.ResultSuccess).
+		WithProjectID(id).
+		WithRequestID(requestID).
+		WithHTTPMethod(r.Method).
+		WithEndpoint(r.URL.Path))
+	
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -573,6 +735,15 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			s.logger.Error("invalid token create request body", zap.Error(err), zap.String("request_id", requestID))
+			
+			// Audit: token creation failure - invalid request
+			s.auditLogger.Log(audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure).
+				WithRequestID(requestID).
+				WithHTTPMethod(r.Method).
+				WithEndpoint(r.URL.Path).
+				WithError(err).
+				WithDetail("validation_error", "invalid request body"))
+			
 			http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 			return
 		}
@@ -580,17 +751,45 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		if req.DurationMinutes > 0 {
 			if req.DurationMinutes > maxDurationMinutes {
 				s.logger.Error("duration_minutes exceeds maximum allowed", zap.Int("duration_minutes", req.DurationMinutes), zap.String("request_id", requestID))
+				
+				// Audit: token creation failure - duration too long
+				s.auditLogger.Log(audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure).
+					WithProjectID(req.ProjectID).
+					WithRequestID(requestID).
+					WithHTTPMethod(r.Method).
+					WithEndpoint(r.URL.Path).
+					WithDetail("validation_error", "duration exceeds maximum").
+					WithDetail("requested_duration_minutes", req.DurationMinutes).
+					WithDetail("max_duration_minutes", maxDurationMinutes))
+				
 				http.Error(w, `{"error":"duration_minutes exceeds maximum allowed"}`, http.StatusBadRequest)
 				return
 			}
 			duration = time.Duration(req.DurationMinutes) * time.Minute
 		} else {
 			s.logger.Error("missing required fields for token create", zap.String("project_id", req.ProjectID), zap.Int("duration_minutes", req.DurationMinutes), zap.String("request_id", requestID))
+			
+			// Audit: token creation failure - missing duration
+			s.auditLogger.Log(audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure).
+				WithProjectID(req.ProjectID).
+				WithRequestID(requestID).
+				WithHTTPMethod(r.Method).
+				WithEndpoint(r.URL.Path).
+				WithDetail("validation_error", "missing duration_minutes"))
+			
 			http.Error(w, `{"error":"project_id and duration_minutes are required"}`, http.StatusBadRequest)
 			return
 		}
 		if req.ProjectID == "" {
 			s.logger.Error("missing project_id for token create", zap.String("request_id", requestID))
+			
+			// Audit: token creation failure - missing project ID
+			s.auditLogger.Log(audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure).
+				WithRequestID(requestID).
+				WithHTTPMethod(r.Method).
+				WithEndpoint(r.URL.Path).
+				WithDetail("validation_error", "missing project_id"))
+			
 			http.Error(w, `{"error":"project_id is required"}`, http.StatusBadRequest)
 			return
 		}
@@ -598,6 +797,16 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		_, err := s.projectStore.GetProjectByID(ctx, req.ProjectID)
 		if err != nil {
 			s.logger.Error("project not found for token create", zap.String("project_id", req.ProjectID), zap.Error(err), zap.String("request_id", requestID))
+			
+			// Audit: token creation failure - project not found
+			s.auditLogger.Log(audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure).
+				WithProjectID(req.ProjectID).
+				WithRequestID(requestID).
+				WithHTTPMethod(r.Method).
+				WithEndpoint(r.URL.Path).
+				WithError(err).
+				WithDetail("error_type", "project not found"))
+			
 			http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
 			return
 		}
@@ -605,6 +814,16 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		tokenStr, expiresAt, _, err := token.NewTokenGenerator().GenerateWithOptions(duration, nil)
 		if err != nil {
 			s.logger.Error("failed to generate token", zap.Error(err), zap.String("request_id", requestID))
+			
+			// Audit: token creation failure - generation error
+			s.auditLogger.Log(audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure).
+				WithProjectID(req.ProjectID).
+				WithRequestID(requestID).
+				WithHTTPMethod(r.Method).
+				WithEndpoint(r.URL.Path).
+				WithError(err).
+				WithDetail("error_type", "token generation failed"))
+			
 			http.Error(w, `{"error":"failed to generate token"}`, http.StatusInternalServerError)
 			return
 		}
@@ -619,6 +838,17 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := s.tokenStore.CreateToken(ctx, dbToken); err != nil {
 			s.logger.Error("failed to store token", zap.Error(err), zap.String("request_id", requestID))
+			
+			// Audit: token creation failure - storage error
+			s.auditLogger.Log(audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure).
+				WithProjectID(req.ProjectID).
+				WithRequestID(requestID).
+				WithHTTPMethod(r.Method).
+				WithEndpoint(r.URL.Path).
+				WithTokenID(tokenStr).
+				WithError(err).
+				WithDetail("error_type", "storage failed"))
+			
 			http.Error(w, `{"error":"failed to store token"}`, http.StatusInternalServerError)
 			return
 		}
@@ -627,6 +857,17 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			zap.String("project_id", req.ProjectID),
 			zap.String("request_id", requestID),
 		)
+		
+		// Audit: token creation success
+		s.auditLogger.Log(audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultSuccess).
+			WithProjectID(req.ProjectID).
+			WithRequestID(requestID).
+			WithHTTPMethod(r.Method).
+			WithEndpoint(r.URL.Path).
+			WithTokenID(tokenStr).
+			WithDetail("duration_minutes", req.DurationMinutes).
+			WithDetail("expires_at", expiresAt.Format(time.RFC3339)))
+		
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]interface{}{
 			"token":      tokenStr,
@@ -645,10 +886,34 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			s.logger.Error("failed to list tokens", zap.Error(err))
+			
+			// Audit: token list failure
+			auditEvent := audit.NewEvent(audit.ActionTokenList, audit.ActorManagement, audit.ResultFailure).
+				WithRequestID(requestID).
+				WithHTTPMethod(r.Method).
+				WithEndpoint(r.URL.Path).
+				WithError(err)
+			if projectID != "" {
+				auditEvent.WithProjectID(projectID)
+			}
+			s.auditLogger.Log(auditEvent)
+			
 			http.Error(w, `{"error":"failed to list tokens"}`, http.StatusInternalServerError)
 			return
 		}
 		s.logger.Info("tokens listed", zap.Int("count", len(tokens)))
+		
+		// Audit: token list success
+		auditEvent := audit.NewEvent(audit.ActionTokenList, audit.ActorManagement, audit.ResultSuccess).
+			WithRequestID(requestID).
+			WithHTTPMethod(r.Method).
+			WithEndpoint(r.URL.Path).
+			WithDetail("token_count", len(tokens))
+		if projectID != "" {
+			auditEvent.WithProjectID(projectID).WithDetail("filtered_by_project", true)
+		}
+		s.auditLogger.Log(auditEvent)
+		
 		w.Header().Set("Content-Type", "application/json")
 
 		// Create sanitized response without actual token values
