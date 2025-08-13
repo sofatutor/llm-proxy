@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -92,13 +91,13 @@ func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectSto
 			return nil, fmt.Errorf("failed to initialize audit logger: %w", err)
 		}
 		if cfg.AuditStoreInDB && db != nil {
-			log.Printf("Audit logging enabled: %s (with database storage)", cfg.AuditLogFile)
+			logger.Info("Audit logging enabled with database storage", zap.String("log_file", cfg.AuditLogFile))
 		} else {
-			log.Printf("Audit logging enabled: %s (file only)", cfg.AuditLogFile)
+			logger.Info("Audit logging enabled", zap.String("log_file", cfg.AuditLogFile))
 		}
 	} else {
 		auditLogger = audit.NewNullLogger()
-		log.Printf("Audit logging disabled")
+		logger.Info("Audit logging disabled")
 	}
 
 	metrics := Metrics{StartTime: time.Now()}
@@ -111,22 +110,28 @@ func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectSto
 			DB:   cfg.RedisDB,
 		})
 		// Redis diagnostics
-		log.Printf("[eventbus] Connecting to Redis at %s (db %d)", cfg.RedisAddr, cfg.RedisDB)
+		logger.Info("Connecting to Redis", zap.String("addr", cfg.RedisAddr), zap.Int("db", cfg.RedisDB))
 		pong, err := client.Ping(context.Background()).Result()
 		if err != nil {
-			log.Fatalf("[eventbus] Failed to ping Redis at %s (db %d): %v", cfg.RedisAddr, cfg.RedisDB, err)
+			logger.Fatal("Failed to ping Redis",
+				zap.String("addr", cfg.RedisAddr),
+				zap.Int("db", cfg.RedisDB),
+				zap.Error(err))
 		}
-		log.Printf("[eventbus] Successfully pinged Redis at %s (db %d): %s", cfg.RedisAddr, cfg.RedisDB, pong)
+		logger.Info("Successfully pinged Redis",
+			zap.String("addr", cfg.RedisAddr),
+			zap.Int("db", cfg.RedisDB),
+			zap.String("response", pong))
 		err = client.Set(context.Background(), "llm-proxy-debug", "hello", 0).Err()
 		if err != nil {
-			log.Fatalf("[eventbus] Failed to set test key in Redis: %v", err)
+			logger.Fatal("Failed to set test key in Redis", zap.Error(err))
 		}
-		log.Printf("[eventbus] Successfully set test key 'llm-proxy-debug' in Redis")
+		logger.Debug("Successfully set test key in Redis", zap.String("key", "llm-proxy-debug"))
 		adapter := &eventbus.RedisGoClientAdapter{Client: client}
 		bus = eventbus.NewRedisEventBusPublisher(adapter, "llm-proxy-events")
-		log.Printf("Using Redis event bus at %s (db %d)", cfg.RedisAddr, cfg.RedisDB)
+		logger.Info("Using Redis event bus", zap.String("addr", cfg.RedisAddr), zap.Int("db", cfg.RedisDB))
 	case "in-memory":
-		log.Printf("Using in-memory event bus (single-process only)")
+		logger.Info("Using in-memory event bus", zap.String("mode", "single-process"))
 		bus = eventbus.NewInMemoryEventBus(cfg.ObservabilityBufferSize)
 	default:
 		return nil, fmt.Errorf("unknown event bus backend: %s", cfg.EventBusBackend)
@@ -182,7 +187,7 @@ func (s *Server) Start() error {
 		return fmt.Errorf("failed to initialize components: %w", err)
 	}
 
-	log.Printf("Server starting on %s\n", s.config.ListenAddr)
+	s.logger.Info("Server starting", zap.String("listen_addr", s.config.ListenAddr))
 
 	return s.server.ListenAndServe()
 }
@@ -206,8 +211,9 @@ func (s *Server) initializeAPIRoutes() error {
 	apiConfig, err := proxy.LoadAPIConfigFromFile(s.config.APIConfigPath)
 	if err != nil {
 		// If the config file doesn't exist or has errors, fall back to a default OpenAI configuration
-		log.Printf("Warning: Failed to load API config from %s: %v", s.config.APIConfigPath, err)
-		log.Printf("Using default OpenAI configuration")
+		s.logger.Warn("Failed to load API config, using default OpenAI configuration",
+			zap.String("config_path", s.config.APIConfigPath),
+			zap.Error(err))
 
 		// Create a default API configuration
 		apiConfig = &proxy.APIConfig{
@@ -247,7 +253,7 @@ func (s *Server) initializeAPIRoutes() error {
 	proxyConfig, err := apiConfig.GetProxyConfigForAPI(s.config.DefaultAPIProvider)
 	if err != nil {
 		// If specified provider doesn't exist, use the default one
-		log.Printf("Warning: %v", err)
+		s.logger.Warn("Specified API provider not found, using default", zap.Error(err))
 		proxyConfig, err = apiConfig.GetProxyConfigForAPI(apiConfig.DefaultAPI)
 		if err != nil {
 			return fmt.Errorf("failed to get proxy configuration: %w", err)
@@ -270,8 +276,9 @@ func (s *Server) initializeAPIRoutes() error {
 	// Register proxy routes
 	s.server.Handler.(*http.ServeMux).Handle("/v1/", proxyHandler.Handler())
 
-	log.Printf("Initialized proxy for %s with %d allowed endpoints",
-		proxyConfig.TargetBaseURL, len(proxyConfig.AllowedEndpoints))
+	s.logger.Info("Initialized proxy",
+		zap.String("target_base_url", proxyConfig.TargetBaseURL),
+		zap.Int("allowed_endpoints", len(proxyConfig.AllowedEndpoints)))
 
 	return nil
 }
@@ -308,7 +315,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-		log.Printf("Error encoding health response: %v\n", err)
+		s.logger.Error("Error encoding health response", zap.Error(err))
 		return
 	}
 	// Status code 200 OK is set implicitly when the response is written successfully

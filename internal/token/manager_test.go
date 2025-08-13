@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // CompleteStore implements TokenStore, RevocationStore and RateLimitStore for testing
@@ -478,7 +480,7 @@ func TestManager_StartAutomaticRevocation(t *testing.T) {
 	store.mutex.Unlock()
 
 	// Start automatic revocation
-	auto := manager.StartAutomaticRevocation(100 * time.Millisecond)
+	auto := manager.StartAutomaticRevocation(100*time.Millisecond, zap.NewNop())
 	defer auto.Stop()
 
 	// Wait for revocation to run

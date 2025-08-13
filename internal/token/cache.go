@@ -4,7 +4,6 @@ import (
 	"container/heap"
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 )
@@ -245,10 +244,7 @@ func (cv *CachedValidator) invalidateCache(tokenID string) {
 		delete(cv.heapIndex, tokenID)
 	}
 	cv.cacheMutex.Unlock()
-	// Debug: assert heap and cache sizes are consistent
-	if len(cv.cache) != cv.heap.Len() {
-		log.Printf("[DEBUG] cache size %d != heap size %d after invalidateCache", len(cv.cache), cv.heap.Len())
-	}
+	// Note: In production, cache and heap sizes should always be consistent
 }
 
 // evictOldest removes the single oldest entry from the cache

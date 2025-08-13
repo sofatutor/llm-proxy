@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // MockRevocationStore implements RevocationStore for testing
@@ -576,7 +578,7 @@ func TestAutomaticRevocation(t *testing.T) {
 
 	// Set up automatic revocation with a very short interval
 	interval := 100 * time.Millisecond
-	autoRevoke := NewAutomaticRevocation(revoker, interval)
+	autoRevoke := NewAutomaticRevocation(revoker, interval, zap.NewNop())
 
 	// Start automatic revocation
 	autoRevoke.Start()
