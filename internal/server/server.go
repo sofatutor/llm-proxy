@@ -113,14 +113,14 @@ func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectSto
 		logger.Info("Connecting to Redis", zap.String("addr", cfg.RedisAddr), zap.Int("db", cfg.RedisDB))
 		pong, err := client.Ping(context.Background()).Result()
 		if err != nil {
-			logger.Fatal("Failed to ping Redis", 
-				zap.String("addr", cfg.RedisAddr), 
-				zap.Int("db", cfg.RedisDB), 
+			logger.Fatal("Failed to ping Redis",
+				zap.String("addr", cfg.RedisAddr),
+				zap.Int("db", cfg.RedisDB),
 				zap.Error(err))
 		}
-		logger.Info("Successfully pinged Redis", 
-			zap.String("addr", cfg.RedisAddr), 
-			zap.Int("db", cfg.RedisDB), 
+		logger.Info("Successfully pinged Redis",
+			zap.String("addr", cfg.RedisAddr),
+			zap.Int("db", cfg.RedisDB),
 			zap.String("response", pong))
 		err = client.Set(context.Background(), "llm-proxy-debug", "hello", 0).Err()
 		if err != nil {
@@ -211,8 +211,8 @@ func (s *Server) initializeAPIRoutes() error {
 	apiConfig, err := proxy.LoadAPIConfigFromFile(s.config.APIConfigPath)
 	if err != nil {
 		// If the config file doesn't exist or has errors, fall back to a default OpenAI configuration
-		s.logger.Warn("Failed to load API config, using default OpenAI configuration", 
-			zap.String("config_path", s.config.APIConfigPath), 
+		s.logger.Warn("Failed to load API config, using default OpenAI configuration",
+			zap.String("config_path", s.config.APIConfigPath),
 			zap.Error(err))
 
 		// Create a default API configuration
@@ -276,8 +276,8 @@ func (s *Server) initializeAPIRoutes() error {
 	// Register proxy routes
 	s.server.Handler.(*http.ServeMux).Handle("/v1/", proxyHandler.Handler())
 
-	s.logger.Info("Initialized proxy", 
-		zap.String("target_base_url", proxyConfig.TargetBaseURL), 
+	s.logger.Info("Initialized proxy",
+		zap.String("target_base_url", proxyConfig.TargetBaseURL),
 		zap.Int("allowed_endpoints", len(proxyConfig.AllowedEndpoints)))
 
 	return nil
