@@ -1,0 +1,98 @@
+---
+alwaysApply: true
+description: General agent workflow rules for tool use, planning, progress updates, and validation in this repository
+---
+
+# Agent Workflow Guidance (Cursor Rule)
+
+These are model-agnostic agent rules for this repository. Use them to steer behavior, discovery, and execution quality.
+
+## Control agentic eagerness
+
+- Less eagerness (optimize for speed/latency; minimal exploration):
+
+```
+<context_gathering>
+Goal: Get enough context fast. Parallelize discovery and stop as soon as you can act.
+
+Method:
+- Start broad, then fan out to focused subqueries.
+- In parallel, launch varied queries; read top hits per query. Deduplicate paths and cache; don’t repeat queries.
+- Avoid over searching for context. If needed, run targeted searches in one parallel batch.
+
+Early stop criteria:
+- You can name exact content to change.
+- Top hits converge (~70%) on one area/path.
+
+Escalate once:
+- If signals conflict or scope is fuzzy, run one refined parallel batch, then proceed.
+
+Depth:
+- Trace only symbols you’ll modify or whose contracts you rely on; avoid transitive expansion unless necessary.
+
+Loop:
+- Batch search → minimal plan → complete task.
+- Search again only if validation fails or new unknowns appear. Prefer acting over more searching.
+</context_gathering>
+```
+
+- More eagerness (maximize autonomy; persist until done):
+
+```
+<persistence>
+- You are an agent - please keep going until the user's query is completely resolved, before ending your turn and yielding back to the user.
+- Only terminate your turn when you are sure that the problem is solved.
+- Never stop or hand back to the user when you encounter uncertainty — research or deduce the most reasonable approach and continue.
+- Do not ask the human to confirm or clarify assumptions, as you can always adjust later — decide what the most reasonable assumption is, proceed with it, and document it for the user's reference after you finish acting
+</persistence>
+```
+
+Optional fixed-budget variant for low-depth tasks:
+
+```
+<context_gathering>
+- Search depth: very low
+- Bias strongly towards providing a correct answer as quickly as possible, even if it might not be fully correct.
+- Absolute maximum of 2 tool calls unless explicitly told otherwise.
+- If more discovery seems needed, surface the latest findings and open questions before proceeding.
+</context_gathering>
+```
+
+## Tool preambles (concise, high-signal)
+
+```
+<tool_preambles>
+- Rephrase the user's goal in one sentence, then outline a short plan (discovery → edits/tests → validation).
+- While executing, narrate only major steps succinctly.
+- Finish with a short summary of concrete changes and validation status (tests, lint, coverage).
+</tool_preambles>
+```
+
+## Stop conditions and success criteria (repo-specific)
+
+- Tests pass: `make test` green, including `-race`.
+- Coverage ≥ 90% using CI-style aggregation (see [testing-and-quality.mdc](mdc:.cursor/rules/testing-and-quality.mdc)).
+- Linters clean: `make lint` returns 0; no unrelated formatting; preserve indentation style.
+- Minimal, focused edits; no unresolved review items.
+
+## Safe vs risky actions
+
+- Safe: searches, reading files, small edits, table-driven tests, adding imports, non-breaking refactors.
+- Risky: deleting/renaming files or packages, changing public APIs, adding heavy deps, altering DB schemas. Perform only with explicit rationale and tests.
+
+## Context gathering and parallelization
+
+- Batch discovery in parallel: combine semantic code search with targeted exact matches.
+- Prefer one parallel batch of focused queries over serial probing; cache results and stop early once specific edits are known.
+
+## Execution checklist (minimal and verifiable)
+
+1) Brief plan and assumptions; identify target files/functions.
+2) Make minimal edits; preserve indentation and formatting of untouched lines.
+3) Add/adjust tests first when feasible (TDD), then implement.
+4) Validate locally: tests, coverage, lint, formatting.
+5) Summarize concrete changes and their impact.
+
+## References
+- Prompting guide (OpenAI Cookbook): [cookbook.openai.com/examples/gpt-5/gpt-5_prompting_guide](https://cookbook.openai.com/examples/gpt-5/gpt-5_prompting_guide)
+

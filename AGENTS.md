@@ -266,6 +266,15 @@ Fixes #issue-number
 - Respect nested AGENTS.md files if present in subfolders
 - When in doubt, update documentation and ask for clarification
 
+### Global agent workflow rules (model-agnostic)
+- Control eagerness explicitly per task:
+  - Less eagerness: parallelize a single discovery batch, stop as soon as precise edits are known; avoid over-searching; escalate once if signals conflict.
+  - More eagerness: persist until the task is fully resolved; proceed under reasonable assumptions and document them.
+- Tool preambles: restate the goal, outline a short plan, provide brief progress notes during execution, and end with a short summary of changes and validation status.
+- Stop conditions: tests green (including `-race`), coverage ≥ 90%, linters clean, no unrelated formatting, minimal diffs, no unresolved review items.
+- Safe vs risky actions: small edits and tests are safe; deleting/renaming files, changing public APIs, or adding heavy dependencies are risky and require explicit rationale and tests.
+- Context gathering and parallelization: batch semantic/code searches in parallel; cache results; avoid repeated reads; stop early once specific edits are identified.
+
 ---
 
 ## 🔗 Quick Links for Context Extension
