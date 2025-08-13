@@ -1,5 +1,7 @@
 # Phase 7: Header Whitelist Per Token (Token Metadata Enforcement)
 
+Tracking: [Issue #50](https://github.com/sofatutor/llm-proxy/issues/50)
+
 ## Motivation
 To enable fine-grained access control and security, we want to restrict token usage based on custom metadata. This allows us to require and validate specific headers (e.g., user ID, client IP) for each token, ensuring tokens are only usable in the intended context.
 
@@ -37,6 +39,8 @@ This feature will enable per-token header-based restrictions for enhanced securi
 ---
 
 # Phase 8: Project-Level Param Whitelist Restriction and Provider Opt-Out
+
+Tracking: [Issue #51](https://github.com/sofatutor/llm-proxy/issues/51)
 
 ## Motivation
 Some projects may require stricter or more flexible parameter validation than what is defined globally per API provider. To support this, we need to allow projects to:

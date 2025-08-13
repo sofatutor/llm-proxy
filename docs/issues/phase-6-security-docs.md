@@ -1,5 +1,7 @@
 # Security Documentation
 
+Tracking: [Issue #53](https://github.com/sofatutor/llm-proxy/issues/53)
+
 ## Summary
 Document security considerations for the LLM proxy, including token security, API key management, network security, and data protection. This issue can be worked on in parallel with other documentation and deployment issues.
 

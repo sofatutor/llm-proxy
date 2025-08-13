@@ -1,5 +1,7 @@
 # User Documentation
 
+Tracking: [Issue #55](https://github.com/sofatutor/llm-proxy/issues/55)
+
 ## Summary
 Update and expand the README and user documentation for the LLM proxy. This includes installation guides, configuration options, token management, Admin UI usage, and troubleshooting. This issue can be worked on in parallel with other documentation and deployment issues.
 
