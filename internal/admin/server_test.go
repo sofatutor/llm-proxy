@@ -411,6 +411,38 @@ func TestServer_HandleTokensCreate_Errors(t *testing.T) {
 	}
 }
 
+func TestServer_HandleTokensCreate_APIError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tokensFile := filepath.Join(testTemplateDir(), "tokens", "new.html")
+	_ = os.WriteFile(tokensFile, []byte("<html><body>tokens new</body></html>"), 0644)
+	defer func() {
+		if err := os.Remove(tokensFile); err != nil {
+			t.Errorf("failed to remove %s: %v", tokensFile, err)
+		}
+	}()
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens", "*.html"))
+
+	// Bind succeeds, but API returns error → expect 500 branch
+	s.engine.POST("/tokens", func(c *gin.Context) {
+		client := &mockAPIClient{DashboardErr: errFake}
+		c.Set("apiClient", client)
+		s.handleTokensCreate(c)
+	})
+
+	form := strings.NewReader("project_id=1&duration_minutes=60")
+	req, _ := http.NewRequest("POST", "/tokens", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 for API error after valid bind, got %d", w.Code)
+	}
+}
+
 func TestServer_HandleProjectsShow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	projectsShowFile := filepath.Join(testTemplateDir(), "projects-show.html")
@@ -1477,6 +1509,89 @@ func TestServer_templateFuncs_MoreEdgeCases(t *testing.T) {
 			t.Error("contains any string, empty substr should be true")
 		}
 	})
+}
+
+func TestServer_templateFuncs_Int64AndTime(t *testing.T) {
+	s := &Server{}
+	funcs := s.templateFuncs()
+
+	// int64 comparisons
+	lt := funcs["lt"].(func(any, any) bool)
+	gt := funcs["gt"].(func(any, any) bool)
+	le := funcs["le"].(func(any, any) bool)
+	ge := funcs["ge"].(func(any, any) bool)
+
+	var a, b int64 = 1, 2
+	if !lt(a, b) || lt(b, a) {
+		t.Error("lt int64 failed")
+	}
+	if !gt(b, a) || gt(a, b) {
+		t.Error("gt int64 failed")
+	}
+	if !le(a, b) || !le(a, a) || le(b, a) {
+		t.Error("le int64 failed")
+	}
+	if !ge(b, a) || !ge(b, b) || ge(a, b) {
+		t.Error("ge int64 failed")
+	}
+
+	// time.Time comparisons, including equality branches for le/ge
+	t1 := time.Now()
+	t2 := t1.Add(time.Second)
+	if !lt(t1, t2) || lt(t2, t1) {
+		t.Error("lt time failed")
+	}
+	if !gt(t2, t1) || gt(t1, t2) {
+		t.Error("gt time failed")
+	}
+	if !le(t1, t2) || !le(t1, t1) || le(t2, t1) {
+		t.Error("le time failed")
+	}
+	if !ge(t2, t1) || !ge(t2, t2) || ge(t1, t2) {
+		t.Error("ge time failed")
+	}
+}
+
+func TestServer_HandleLogin_RememberMe(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	loginFile := filepath.Join(testTemplateDir(), "login.html")
+	_ = os.WriteFile(loginFile, []byte("<html><body>login</body></html>"), 0644)
+	defer func() {
+		if err := os.Remove(loginFile); err != nil {
+			t.Errorf("failed to remove %s: %v", loginFile, err)
+		}
+	}()
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "login.html"))
+	store := cookie.NewStore([]byte("secret"))
+	s.engine.Use(sessions.Sessions("mysession", store))
+	s.ValidateTokenWithAPI = func(_ context.Context, token string) bool { return token == "valid-token" }
+
+	s.engine.POST("/auth/login", func(c *gin.Context) { s.handleLogin(c) })
+
+	form := strings.NewReader("management_token=valid-token&remember_me=true")
+	req, _ := http.NewRequest("POST", "/auth/login", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected redirect, got %d", w.Code)
+	}
+	// Ensure cookie reflects remember_me (Max-Age set to 30 days)
+	cookies := w.Result().Header["Set-Cookie"]
+	found := false
+	for _, c := range cookies {
+		if strings.Contains(c, "Max-Age=2592000") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected session cookie with Max-Age=2592000, got: %v", cookies)
+	}
 }
 
 func TestAdminHealthEndpoint(t *testing.T) {

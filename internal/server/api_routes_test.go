@@ -54,6 +54,7 @@ apis:
 		RequestTimeout:     30 * time.Second,
 		APIConfigPath:      tmpFile.Name(),
 		DefaultAPIProvider: "test_api",
+		EventBusBackend:    "in-memory",
 	}
 	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
 	require.NoError(t, err)
@@ -115,6 +116,7 @@ func TestDefaultOpenAIFallback(t *testing.T) {
 		APIConfigPath:      "/non/existent/path.yaml",
 		DefaultAPIProvider: "openai",
 		OpenAIAPIURL:       "https://api.openai.com",
+		EventBusBackend:    "in-memory",
 	}
 	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
 	require.NoError(t, err)

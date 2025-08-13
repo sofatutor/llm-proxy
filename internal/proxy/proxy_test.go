@@ -14,6 +14,7 @@ import (
 
 	"errors"
 
+	"github.com/sofatutor/llm-proxy/internal/middleware"
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -1442,4 +1443,49 @@ func TestValidateRequestMiddleware_EdgeCases(t *testing.T) {
 		h2.ServeHTTP(w, r)
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
+}
+
+func TestNewTransparentProxyWithObservability(t *testing.T) {
+	mockValidator := &MockTokenValidator{}
+	mockStore := &MockProjectStore{}
+
+	config := ProxyConfig{
+		TargetBaseURL: "https://api.example.com",
+		LogLevel:      "info",
+		LogFormat:     "text",
+		LogFile:       "",
+	}
+
+	obsCfg := middleware.ObservabilityConfig{
+		Enabled:  true,
+		EventBus: nil, // Can be nil for this test
+	}
+
+	proxy, err := NewTransparentProxyWithObservability(config, mockValidator, mockStore, obsCfg)
+	require.NoError(t, err)
+	require.NotNil(t, proxy)
+	assert.NotNil(t, proxy.obsMiddleware)
+}
+
+func TestNewTransparentProxyWithLoggerAndObservability(t *testing.T) {
+	mockValidator := &MockTokenValidator{}
+	mockStore := &MockProjectStore{}
+	logger := zap.NewNop()
+
+	config := ProxyConfig{
+		TargetBaseURL: "https://api.example.com",
+		LogLevel:      "info",
+		LogFormat:     "text",
+		LogFile:       "",
+	}
+
+	obsCfg := middleware.ObservabilityConfig{
+		Enabled:  true,
+		EventBus: nil, // Can be nil for this test
+	}
+
+	proxy, err := NewTransparentProxyWithLoggerAndObservability(config, mockValidator, mockStore, logger, obsCfg)
+	require.NoError(t, err)
+	require.NotNil(t, proxy)
+	assert.NotNil(t, proxy.obsMiddleware)
 }

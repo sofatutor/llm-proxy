@@ -58,7 +58,7 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 
 4. **Observability & Logging System**
    - All backend API instrumentation (OpenAI log events, traces, token usage, etc.) is handled via a fully **asynchronous event bus** and **dispatcher(s)**.
-   - The event bus now supports multiple subscribers (fan-out), batching, retry logic, and graceful shutdown. Both **InMemoryEventBus** and **RedisEventBus** implementations are available for local and distributed event delivery.
+   - The event bus now supports multiple subscribers (fan-out) for in-memory, and a publisher/subscriber split for Redis. The **RedisEventBus** has two modes: publisher-only (used by the proxy/server, which only publishes events to Redis and does not consume), and subscriber (used by dispatcher(s), which consume events from Redis using BRPOP). Multiple dispatchers are supported as competing consumers (work queue pattern: each event is delivered to exactly one dispatcher). Batching, retry logic, and graceful shutdown are supported. Both **InMemoryEventBus** and **RedisEventBus** implementations are available for local and distributed event delivery.
    - The event bus is always enabled by default, with a larger buffer for high-throughput scenarios.
    - Middleware captures and restores the request body for all events, and the event context is richer for diagnostics and debugging.
    - The proxy/middleware emits events to the event bus; one or more dispatcher services subscribe and deliver events to their respective backends (file, Helicone, Lunary, AWS EventBridge, etc.).

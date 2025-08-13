@@ -142,23 +142,68 @@ llm-proxy manage token generate --project-id <project-id> --duration 24 --manage
 - `--management-token` — Provide the management token (or set `MANAGEMENT_TOKEN` env)
 - `--json` — Output results as JSON (optional)
 
-## Persistent Event Logging & Dispatcher CLI
+## Event Dispatcher CLI
 
-All API instrumentation events are now handled asynchronously via the event bus. For persistent event logging, use either:
-- The `--file-event-log` flag when running the server (writes all events to a JSONL file)
-- The standalone dispatcher CLI (`cmd/eventdispatcher/`) to subscribe to the event bus and write events to a file or other backends
+The LLM Proxy includes a powerful, pluggable dispatcher system for sending observability events to external services. The dispatcher supports multiple backends and can be run as a separate service.
 
-### Example: File Event Logging
+### Supported Backends
+- **file**: Write events to JSONL file
+- **lunary**: Send events to Lunary.ai platform
+- **helicone**: Send events to Helicone platform
+
+### Basic Usage
 ```bash
-llm-proxy server --file-event-log ./data/events.jsonl
+# File output  
+llm-proxy dispatcher --service file --endpoint events.jsonl
+
+# Lunary integration
+export LLM_PROXY_API_KEY="your-lunary-api-key"
+llm-proxy dispatcher --service lunary
+
+# Helicone integration
+llm-proxy dispatcher --service helicone --api-key your-helicone-key
+
+# Custom batch size and buffer
+llm-proxy dispatcher --service lunary --api-key $API_KEY --batch-size 50 --buffer 2000
 ```
 
-### Example: Dispatcher CLI
-```bash
-llm-proxy dispatcher --backend file --file ./data/events.jsonl
+### Deployment Options
+The dispatcher can be deployed in multiple ways:
+- **Standalone Process**: Run as a separate service for production
+- **Sidecar Container**: Deploy alongside the main proxy in Kubernetes
+- **Background Mode**: Use `--detach` flag for daemon-like operation
+
+See [docs/instrumentation.md](docs/instrumentation.md) for detailed configuration and architecture.
+
+> Warning: Event loss can occur if the Redis event log is configured with TTL/max length values that are too low for your dispatcher lag and throughput. In production, increase Redis TTL and list length to cover worst-case backlogs and keep the dispatcher running with sufficient batch size/throughput. For strict guarantees, use a durable queue (e.g., Redis Streams with consumer groups or Kafka). See the Production Reliability section in `docs/instrumentation.md`.
+
+## Using Redis for Distributed Event Bus (Local Development)
+
+> **Note:** The in-memory event bus only works within a single process. For multi-process setups (e.g., running the proxy and dispatcher as separate processes or containers), you must use Redis as the event bus backend.
+
+### Local Setup with Docker Compose
+
+A `redis` service is included in the `docker-compose.yml` for local development:
+
+```yaml
+db:
+  image: redis:7
+  container_name: llm-proxy-redis
+  ports:
+    - "6379:6379"
+  restart: unless-stopped
 ```
 
-See PLAN.md and [docs/instrumentation.md](docs/instrumentation.md) for architectural details and advanced usage.
+### Configuring the Proxy and Dispatcher to Use Redis
+
+Set the event bus backend to Redis by using the appropriate environment variable or CLI flag (see documentation for exact flag):
+
+```bash
+LLM_PROXY_EVENT_BUS=redis llm-proxy ...
+LLM_PROXY_EVENT_BUS=redis llm-proxy dispatcher ...
+```
+
+This ensures both the proxy and dispatcher share events via Redis, enabling full async pipeline testing and production-like operation.
 
 ## Project Structure
 - `/cmd` — Entrypoints (`proxy`, `eventdispatcher`)

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/logging"
@@ -75,9 +76,32 @@ func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.Pro
 	metrics := Metrics{StartTime: time.Now()}
 
 	var bus eventbus.EventBus
-	if cfg.ObservabilityEnabled {
-		log.Printf("Initializing observability with buffer size %d", cfg.ObservabilityBufferSize)
+	switch cfg.EventBusBackend {
+	case "redis":
+		client := redis.NewClient(&redis.Options{
+			Addr: cfg.RedisAddr,
+			DB:   cfg.RedisDB,
+		})
+		// Redis diagnostics
+		log.Printf("[eventbus] Connecting to Redis at %s (db %d)", cfg.RedisAddr, cfg.RedisDB)
+		pong, err := client.Ping(context.Background()).Result()
+		if err != nil {
+			log.Fatalf("[eventbus] Failed to ping Redis at %s (db %d): %v", cfg.RedisAddr, cfg.RedisDB, err)
+		}
+		log.Printf("[eventbus] Successfully pinged Redis at %s (db %d): %s", cfg.RedisAddr, cfg.RedisDB, pong)
+		err = client.Set(context.Background(), "llm-proxy-debug", "hello", 0).Err()
+		if err != nil {
+			log.Fatalf("[eventbus] Failed to set test key in Redis: %v", err)
+		}
+		log.Printf("[eventbus] Successfully set test key 'llm-proxy-debug' in Redis")
+		adapter := &eventbus.RedisGoClientAdapter{Client: client}
+		bus = eventbus.NewRedisEventBusPublisher(adapter, "llm-proxy-events")
+		log.Printf("Using Redis event bus at %s (db %d)", cfg.RedisAddr, cfg.RedisDB)
+	case "in-memory":
+		log.Printf("Using in-memory event bus (single-process only)")
 		bus = eventbus.NewInMemoryEventBus(cfg.ObservabilityBufferSize)
+	default:
+		return nil, fmt.Errorf("unknown event bus backend: %s", cfg.EventBusBackend)
 	}
 
 	s := &Server{
@@ -684,13 +708,23 @@ func (s *Server) logRequestMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		next(rw, r.WithContext(ctx))
 
 		duration := time.Since(startTime)
-		s.logger.Info("request completed",
-			zap.String("request_id", requestID),
-			zap.String("method", r.Method),
-			zap.String("path", r.URL.Path),
-			zap.Int("status_code", rw.statusCode),
-			zap.Duration("duration", duration),
-		)
+		if rw.statusCode >= 500 {
+			s.logger.Error("request completed with server error",
+				zap.String("request_id", requestID),
+				zap.String("method", r.Method),
+				zap.String("path", r.URL.Path),
+				zap.Int("status_code", rw.statusCode),
+				zap.Duration("duration", duration),
+			)
+		} else {
+			s.logger.Info("request completed",
+				zap.String("request_id", requestID),
+				zap.String("method", r.Method),
+				zap.String("path", r.URL.Path),
+				zap.Int("status_code", rw.statusCode),
+				zap.Duration("duration", duration),
+			)
+		}
 	}
 }
 

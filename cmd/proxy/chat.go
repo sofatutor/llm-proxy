@@ -8,6 +8,7 @@ import (
 
 	"github.com/chzyer/readline"
 	"github.com/sofatutor/llm-proxy/internal/client"
+	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -37,14 +38,14 @@ var chatCmd = &cobra.Command{
 
 func init() {
 	// Chat command flags
-	chatCmd.Flags().StringVar(&proxyURL, "proxy", "http://localhost:8080", "LLM Proxy URL")
-	chatCmd.Flags().StringVar(&proxyToken, "token", "", "LLM Proxy token")
-	chatCmd.Flags().StringVar(&model, "model", "gpt-4.1-mini", "Model to use")
-	chatCmd.Flags().Float64Var(&temperature, "temperature", 0.7, "Temperature for generation")
-	chatCmd.Flags().IntVar(&maxTokens, "max-tokens", 0, "Maximum tokens to generate (0 = no limit)")
-	chatCmd.Flags().StringVar(&systemPrompt, "system", "You are a helpful assistant.", "System prompt")
-	chatCmd.Flags().BoolVarP(&verboseMode, "verbose", "v", false, "Show detailed timing information")
-	chatCmd.Flags().BoolVar(&useStreaming, "stream", true, "Use streaming for responses")
+	chatCmd.Flags().StringVar(&proxyURL, "proxy", config.EnvOrDefault("PROXY_URL", "http://localhost:8080"), "LLM Proxy URL")
+	chatCmd.Flags().StringVar(&proxyToken, "token", config.EnvOrDefault("PROXY_TOKEN", ""), "LLM Proxy token")
+	chatCmd.Flags().StringVar(&model, "model", config.EnvOrDefault("MODEL", "gpt-4.1-mini"), "Model to use")
+	chatCmd.Flags().Float64Var(&temperature, "temperature", config.EnvFloat64OrDefault("TEMPERATURE", 0.7), "Temperature for generation")
+	chatCmd.Flags().IntVar(&maxTokens, "max-tokens", config.EnvIntOrDefault("MAX_TOKENS", 0), "Maximum tokens to generate (0 = no limit)")
+	chatCmd.Flags().StringVar(&systemPrompt, "system", config.EnvOrDefault("SYSTEM_PROMPT", "You are a helpful assistant."), "System prompt")
+	chatCmd.Flags().BoolVarP(&verboseMode, "verbose", "v", config.EnvBoolOrDefault("VERBOSE", false), "Show detailed timing information")
+	chatCmd.Flags().BoolVar(&useStreaming, "stream", config.EnvBoolOrDefault("USE_STREAMING", true), "Use streaming for responses")
 
 	// Make token required
 	if err := chatCmd.MarkFlagRequired("token"); err != nil {

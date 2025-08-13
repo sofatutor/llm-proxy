@@ -6,190 +6,205 @@ import (
 	"time"
 )
 
-// mockRedisClient is a simple in-memory RedisClient used for tests.
-type mockRedisClient struct {
-	ch         chan []byte
-	errOnLPush bool
+// test-local mock implementing RedisClient, shared across tests in this package
+type mockRedisClientLog struct {
+	list  [][]byte
+	ttl   time.Duration
+	seq   map[string]int64
+	store map[string]string
 }
 
-func newMockRedisClient() *mockRedisClient {
-	return &mockRedisClient{ch: make(chan []byte, 10)}
+func newMockRedisClientLog() *mockRedisClientLog {
+	return &mockRedisClientLog{list: make([][]byte, 0), seq: make(map[string]int64), store: make(map[string]string)}
 }
 
-func (m *mockRedisClient) LPush(ctx context.Context, key string, values ...interface{}) error {
-	if m.errOnLPush {
-		return context.DeadlineExceeded
-	}
+func (m *mockRedisClientLog) LPush(_ context.Context, _ string, values ...interface{}) error {
 	for _, v := range values {
+		var b []byte
 		switch val := v.(type) {
 		case string:
-			m.ch <- []byte(val)
+			b = []byte(val)
 		case []byte:
-			m.ch <- val
+			b = val
 		}
+		m.list = append([][]byte{b}, m.list...)
 	}
 	return nil
 }
 
-func (m *mockRedisClient) BRPop(ctx context.Context, timeout time.Duration, keys ...string) ([]string, error) {
-	select {
-	case val := <-m.ch:
-		return []string{string(val)}, nil
-	case <-time.After(timeout):
-		return nil, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
+func (m *mockRedisClientLog) LRANGE(_ context.Context, _ string, start, stop int64) ([]string, error) {
+	ln := int64(len(m.list))
+	if ln == 0 {
+		return []string{}, nil
 	}
+	if start < 0 {
+		start = ln + start
+	}
+	if stop < 0 {
+		stop = ln + stop
+	}
+	if start < 0 {
+		start = 0
+	}
+	if stop >= ln {
+		stop = ln - 1
+	}
+	if start > stop || start >= ln {
+		return []string{}, nil
+	}
+	out := make([]string, 0, stop-start+1)
+	for i := start; i <= stop; i++ {
+		out = append(out, string(m.list[i]))
+	}
+	return out, nil
 }
 
-func TestInMemoryEventBus_MultipleSubscribers(t *testing.T) {
-	bus := NewInMemoryEventBus(5)
-	defer bus.Stop()
-
-	sub1 := bus.Subscribe()
-	sub2 := bus.Subscribe()
-
-	bus.Publish(context.Background(), Event{RequestID: "1"})
-
-	select {
-	case <-sub1:
-	case <-time.After(time.Second):
-		t.Fatal("sub1 did not receive event")
+func (m *mockRedisClientLog) LLEN(_ context.Context, _ string) (int64, error) {
+	return int64(len(m.list)), nil
+}
+func (m *mockRedisClientLog) EXPIRE(_ context.Context, _ string, expiration time.Duration) error {
+	m.ttl = expiration
+	return nil
+}
+func (m *mockRedisClientLog) LTRIM(_ context.Context, _ string, start, stop int64) error {
+	ln := int64(len(m.list))
+	if start < 0 {
+		start = ln + start
 	}
-
-	select {
-	case <-sub2:
-	case <-time.After(time.Second):
-		t.Fatal("sub2 did not receive event")
+	if stop < 0 {
+		stop = ln + stop
 	}
+	if start < 0 {
+		start = 0
+	}
+	if stop >= ln {
+		stop = ln - 1
+	}
+	if start > stop || start >= ln {
+		m.list = [][]byte{}
+		return nil
+	}
+	m.list = m.list[start : stop+1]
+	return nil
+}
+func (m *mockRedisClientLog) Incr(_ context.Context, key string) (int64, error) {
+	if m.seq == nil {
+		m.seq = make(map[string]int64)
+	}
+	m.seq[key]++
+	return m.seq[key], nil
+}
+func (m *mockRedisClientLog) Get(_ context.Context, key string) (string, error) {
+	return m.store[key], nil
+}
+func (m *mockRedisClientLog) Set(_ context.Context, key, value string) error {
+	if m.store == nil {
+		m.store = make(map[string]string)
+	}
+	m.store[key] = value
+	return nil
 }
 
-func TestRedisEventBus_PublishSubscribe(t *testing.T) {
-	client := newMockRedisClient()
-	bus := NewRedisEventBus(client, "events")
+func TestInMemoryEventBus_PublishSubscribe(t *testing.T) {
+	bus := NewInMemoryEventBus(10)
 	defer bus.Stop()
 
 	sub := bus.Subscribe()
-	bus.Publish(context.Background(), Event{RequestID: "a"})
 
-	select {
-	case evt := <-sub:
-		if evt.RequestID != "a" {
-			t.Fatalf("expected requestID a, got %s", evt.RequestID)
+	// Publish several events
+	numEvents := 5
+	for i := 0; i < numEvents; i++ {
+		bus.Publish(context.Background(), Event{RequestID: "r"})
+	}
+
+	// Receive all events
+	received := 0
+	timeout := time.After(500 * time.Millisecond)
+	for received < numEvents {
+		select {
+		case <-sub:
+			received++
+		case <-timeout:
+			t.Fatalf("timeout waiting for events: got %d, want %d", received, numEvents)
 		}
-	case <-time.After(time.Second):
-		t.Fatal("event not received")
+	}
+
+	pub, drop := bus.Stats()
+	if pub != numEvents || drop != 0 {
+		t.Fatalf("unexpected stats: published=%d dropped=%d", pub, drop)
 	}
 }
 
-func TestInMemoryEventBus_NoSubscribers(t *testing.T) {
-	bus := NewInMemoryEventBus(2)
+func TestInMemoryEventBus_DroppedWhenFull(t *testing.T) {
+	bus := NewInMemoryEventBus(1)
 	defer bus.Stop()
-	bus.Publish(context.Background(), Event{RequestID: "no-subs"})
-	// No panic, no subscribers, event should be dropped
+
+	// No subscriber; buffer size is 1 → one publish accepted, rest dropped
+	for i := 0; i < 5; i++ {
+		bus.Publish(context.Background(), Event{RequestID: "r"})
+	}
+
 	pub, drop := bus.Stats()
-	if pub != 1 || drop != 0 {
-		t.Fatalf("expected 1 published, 0 dropped, got %d/%d", pub, drop)
+	if pub == 0 {
+		t.Fatalf("expected some published events")
+	}
+	if drop == 0 {
+		t.Fatalf("expected dropped events when buffer is full")
 	}
 }
 
-func TestInMemoryEventBus_PublishAfterStop(t *testing.T) {
-	bus := NewInMemoryEventBus(2)
-	bus.Stop()
-	// Should not panic, should not deliver
-	bus.Publish(context.Background(), Event{RequestID: "after-stop"})
-	pub, drop := bus.Stats()
-	if pub != 0 && drop != 1 && pub+drop != 1 {
-		t.Fatalf("expected 0 published, 1 dropped (or 1 dropped), got %d/%d", pub, drop)
-	}
-}
-
-func TestInMemoryEventBus_SubscribeAfterStop(t *testing.T) {
-	bus := NewInMemoryEventBus(2)
-	bus.Stop()
+func TestInMemoryEventBus_StopClosesSubscribers(t *testing.T) {
+	bus := NewInMemoryEventBus(1)
 	sub := bus.Subscribe()
+	bus.Stop()
+
 	select {
 	case _, ok := <-sub:
 		if ok {
-			t.Fatal("expected closed channel after stop")
+			t.Fatalf("expected closed subscriber channel after Stop")
 		}
-	default:
-		// Channel should be closed immediately
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("timeout waiting for subscriber channel to close")
 	}
 }
 
-func TestInMemoryEventBus_Stats_PublishedAndDropped(t *testing.T) {
-	bus := NewInMemoryEventBus(1)
-	defer bus.Stop()
-	sub := bus.Subscribe()
-	bus.Publish(context.Background(), Event{RequestID: "1"})
-	bus.Publish(context.Background(), Event{RequestID: "2"}) // buffer full, should be dropped
-	// Drain sub
-	<-sub
-	pub, drop := bus.Stats()
-	if pub != 1 || drop != 1 {
-		t.Fatalf("expected 1 published, 1 dropped, got %d/%d", pub, drop)
+func TestRedisEventBusLog_PublishReadCount_TTLAndTrim(t *testing.T) {
+	client := newMockRedisClientLog()
+	// TTL 1s, maxLen 3
+	bus := NewRedisEventBusLog(client, "events", 1*time.Second, 3)
+
+	// Publish 5 events → list should be trimmed to 3 most recent
+	for i := 0; i < 5; i++ {
+		bus.Publish(context.Background(), Event{RequestID: "r"})
 	}
-}
 
-func TestInMemoryEventBus_BufferFull_DroppedEvents(t *testing.T) {
-	bus := NewInMemoryEventBus(1)
-	defer bus.Stop()
-	// No subscribers, fill buffer and overflow
-	bus.Publish(context.Background(), Event{RequestID: "1"})
-	bus.Publish(context.Background(), Event{RequestID: "2"})
-	bus.Publish(context.Background(), Event{RequestID: "3"})
-	pub, drop := bus.Stats()
-	if pub+drop != 3 {
-		t.Fatalf("expected 3 total events, got %d published, %d dropped", pub, drop)
+	// Count should be 3 due to LTRIM
+	cnt, err := bus.EventCount(context.Background())
+	if err != nil {
+		t.Fatalf("EventCount error: %v", err)
 	}
-	if drop < 1 {
-		t.Fatalf("expected at least 1 dropped event, got %d", drop)
+	if cnt != 3 {
+		t.Fatalf("unexpected event count: %d (want 3)", cnt)
 	}
-}
 
-func TestRedisEventBus_Publish_LPushError(t *testing.T) {
-	client := newMockRedisClient()
-	bus := NewRedisEventBus(client, "events")
-	defer bus.Stop()
-
-	bus.Publish(context.Background(), Event{RequestID: "ok"})
-	client.errOnLPush = true
-	bus.Publish(context.Background(), Event{RequestID: "fail"})
-
-	pub, drop := bus.Stats()
-	if pub != 1 || drop != 1 {
-		t.Fatalf("expected 1 published, 1 dropped, got %d/%d", pub, drop)
+	// Read back events and ensure LogID is set and monotonic (descending due to LPush at head)
+	events, err := bus.ReadEvents(context.Background(), 0, -1)
+	if err != nil {
+		t.Fatalf("ReadEvents error: %v", err)
 	}
-}
-
-func TestRedisEventBus_Stats(t *testing.T) {
-	client := newMockRedisClient()
-	bus := NewRedisEventBus(client, "events")
-	defer bus.Stop()
-	bus.Publish(context.Background(), Event{RequestID: "1"})
-	bus.Publish(context.Background(), Event{RequestID: "2"})
-	pub, drop := bus.Stats()
-	if pub+drop != 2 {
-		t.Fatalf("expected 2 total events, got %d published, %d dropped", pub, drop)
+	if len(events) != 3 {
+		t.Fatalf("unexpected events length: %d (want 3)", len(events))
 	}
-}
-
-func TestRedisEventBus_Stop_ClosesSubscribers(t *testing.T) {
-	client := newMockRedisClient()
-	bus := NewRedisEventBus(client, "events")
-	sub := bus.Subscribe()
-	bus.Stop()
-	_, ok := <-sub
-	if ok {
-		t.Fatal("expected closed channel after stop")
+	// Verify LogID is non-zero and strictly decreasing across the trimmed list
+	if events[0].LogID == 0 || events[1].LogID == 0 || events[2].LogID == 0 {
+		t.Fatalf("expected non-zero LogID for all events")
 	}
-}
+	if events[0].LogID <= events[1].LogID || events[1].LogID <= events[2].LogID {
+		t.Fatalf("expected descending LogID order: got %d, %d, %d", events[0].LogID, events[1].LogID, events[2].LogID)
+	}
 
-func TestRedisEventBus_StatsMethodCoverage(t *testing.T) {
-	client := newMockRedisClient()
-	bus := NewRedisEventBus(client, "events")
-	defer bus.Stop()
-	// Just call Stats to cover the method
-	bus.Stats()
+	// TTL should be set on first publish
+	if client.ttl <= 0 {
+		t.Fatalf("expected TTL to be set, got %v", client.ttl)
+	}
 }

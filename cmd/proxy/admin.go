@@ -32,10 +32,10 @@ var adminCmd = &cobra.Command{
 
 func init() {
 	// Admin command flags
-	adminCmd.Flags().StringVar(&adminListenAddr, "listen", ":8081", "Admin UI server listen address")
-	adminCmd.Flags().StringVar(&adminAPIBaseURL, "api-base-url", "http://localhost:8080", "Base URL for Management API")
-	adminCmd.Flags().StringVar(&adminManagementToken, "management-token", "", "Management token for API access")
-	adminCmd.Flags().StringVar(&adminEnvFile, "env", ".env", "Path to .env file")
+	adminCmd.Flags().StringVar(&adminListenAddr, "listen", config.EnvOrDefault("ADMIN_UI_LISTEN_ADDR", ":8081"), "Admin UI server listen address")
+	adminCmd.Flags().StringVar(&adminAPIBaseURL, "api-base-url", config.EnvOrDefault("ADMIN_UI_API_BASE_URL", "http://localhost:8080"), "Base URL for Management API")
+	adminCmd.Flags().StringVar(&adminManagementToken, "management-token", config.EnvOrDefault("MANAGEMENT_TOKEN", ""), "Management token for API access")
+	adminCmd.Flags().StringVar(&adminEnvFile, "env", config.EnvOrDefault("ENV", ".env"), "Path to .env file")
 }
 
 // runAdmin starts the Admin UI server

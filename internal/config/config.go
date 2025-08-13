@@ -64,6 +64,11 @@ type Config struct {
 
 	// Cleanup
 	TokenCleanupInterval time.Duration // Interval for cleaning up expired tokens
+
+	// Event bus configuration
+	EventBusBackend string // Backend for event bus: "redis" or "in-memory"
+	RedisAddr       string // Redis server address (e.g., "localhost:6379")
+	RedisDB         int    // Redis database number (default: 0)
 }
 
 // AdminUIConfig holds configuration for the Admin UI server
@@ -139,6 +144,11 @@ func New() (*Config, error) {
 
 		// Cleanup defaults
 		TokenCleanupInterval: getEnvDuration("TOKEN_CLEANUP_INTERVAL", time.Hour),
+
+		// Event bus configuration
+		EventBusBackend: getEnvString("LLM_PROXY_EVENT_BUS", "redis"),
+		RedisAddr:       getEnvString("REDIS_ADDR", "localhost:6379"),
+		RedisDB:         getEnvInt("REDIS_DB", 0),
 	}
 
 	// Validate required settings
@@ -286,5 +296,10 @@ func DefaultConfig() *Config {
 
 		// Cleanup defaults
 		TokenCleanupInterval: time.Hour,
+
+		// Event bus configuration
+		EventBusBackend: "redis",
+		RedisAddr:       "localhost:6379",
+		RedisDB:         0,
 	}
 }

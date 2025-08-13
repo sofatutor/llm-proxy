@@ -1,0 +1,80 @@
+---
+alwaysApply: true
+description: Testing, coverage, lint, and pre-push quality rules for this repository
+---
+
+## Testing, Coverage, and Lint Rules (Go)
+
+Use these commands before committing/pushing. They match CI behavior in `.github/workflows/test.yml`.
+
+- **Unit tests (fast)**
+  - `make test`
+  - Equivalent (CI-style coverage replication):
+    - `go test -v -race -parallel=4 -coverprofile=coverage_ci.txt -covermode=atomic -coverpkg=./internal/... ./...`
+    - View summary: `go tool cover -func=coverage_ci.txt | tail -n 1`
+
+- **Coverage report**
+  - `make test-coverage` for local overview
+  - CI treats coverage across all `./internal/...` packages (via `-coverpkg=./internal/...`). Numbers can differ from per-package local reports. Target: **≥ 90%**.
+
+- **Integration tests**
+  - `go test -v -race -parallel=4 -tags=integration -timeout=5m -run=Integration ./...`
+  - These require a minimal real SQLite DB and full HTTP stack; they should pass locally.
+
+- **Linters and formatting**
+  - `make lint` (runs `golangci-lint`, `gofmt` checks, etc.)
+  - Format all files: `gofmt -w -s .`
+  - Verify nothing unformatted: `gofmt -l .` must print nothing.
+
+## Pre-push checklist (must be green)
+
+- **All tests pass**: `make test` (and integration tests when modified areas touch server endpoints).
+- **Coverage ≥ 90%** (CI-style): run the CI-equivalent coverage command and verify `go tool cover -func=coverage_ci.txt` summary meets threshold.
+- **Linters clean**: `make lint` returns 0 issues.
+- **No unformatted files**: `gofmt -l .` shows empty output.
+- **No .env/.key/secret artifacts** are added (see ignore rules).
+
+If any step is red, do not push. Fix first.
+
+## When numbers don’t match CI
+
+- CI aggregates coverage with `-coverpkg=./internal/...` across all internal packages. To reproduce locally, use the exact command above.
+- If coverage drops below 90%, add tests focusing on the lowest-covered files/functions.
+
+## Handy references
+
+- Project plan and quality gates: [PLAN.md](mdc:PLAN.md)
+- Architecture and components: [docs/architecture.md](mdc:docs/architecture.md)
+- CLI reference: [docs/cli-reference.md](mdc:docs/cli-reference.md)
+- Instrumentation/dispatcher: [docs/instrumentation.md](mdc:docs/instrumentation.md)
+
+## Optional pre-push hook
+
+Add `.git/hooks/pre-push` (make it executable) to block pushes on red states:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Format check
+if [ -n "$(gofmt -l .)" ]; then
+  echo "The following files are not formatted with gofmt:" >&2
+  gofmt -l . >&2
+  exit 1
+fi
+
+# Lint
+make lint
+
+# Unit tests + CI-style coverage
+go test -v -race -parallel=4 -coverprofile=coverage_ci.txt -covermode=atomic -coverpkg=./internal/... ./...
+COV=$(go tool cover -func=coverage_ci.txt | tail -n 1 | awk '{print $3}' | tr -d '%')
+REQ=90
+if [ "${COV%.*}" -lt "$REQ" ]; then
+  echo "Coverage ${COV}% is below required ${REQ}%" >&2
+  exit 1
+fi
+
+# Integration tests (optional / adjust as needed)
+go test -v -race -parallel=4 -tags=integration -timeout=5m -run=Integration ./...
+```

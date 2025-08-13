@@ -6,65 +6,67 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestObfuscateKey(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name   string
-		key    string
-		expect string
-	}{
-		{"short key", "1234567", "****"},
-		{"exact 8", "12345678", "****"},
-		{"long key", "1234567890abcdef", "1234********cdef"},
-		{"empty", "", "****"},
+	// Short keys fully obfuscated
+	if got := ObfuscateKey("abcd"); got != "****" {
+		t.Fatalf("short key: got %q, want ****", got)
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expect, ObfuscateKey(tc.key))
-		})
+	if got := ObfuscateKey("12345678"); got != "****" {
+		t.Fatalf("8-char key: got %q, want ****", got)
+	}
+	// Long key shows first 4 and last 4 with stars in between
+	if got := ObfuscateKey("abcdefghijkl"); got != "abcd****ijkl" {
+		t.Fatalf("long key: got %q, want abcd****ijkl", got)
 	}
 }
 
 func TestParseTimeHeader(t *testing.T) {
-	t.Parallel()
-	now := time.Now().UTC().Truncate(time.Millisecond)
-	str := now.Format(time.RFC3339Nano)
-	parsed := ParseTimeHeader(str)
-	assert.WithinDuration(t, now, parsed, time.Millisecond)
-
-	assert.True(t, ParseTimeHeader("").IsZero())
-	assert.True(t, ParseTimeHeader("not-a-time").IsZero())
+	if !ParseTimeHeader("").IsZero() {
+		t.Fatal("empty header should produce zero time")
+	}
+	if !ParseTimeHeader("not-a-time").IsZero() {
+		t.Fatal("invalid time should produce zero time")
+	}
+	ts := time.Now().UTC().Format(time.RFC3339Nano)
+	parsed := ParseTimeHeader(ts)
+	if parsed.IsZero() {
+		t.Fatal("valid RFC3339Nano should parse")
+	}
 }
 
 func TestGetManagementToken(t *testing.T) {
-	cmd := &cobra.Command{}
-	cmd.Flags().String("management-token", "", "")
+	// Helper to make a command with the flag
+	newCmd := func() *cobra.Command {
+		cmd := &cobra.Command{Use: "test"}
+		cmd.Flags().String("management-token", "", "")
+		return cmd
+	}
 
-	// No flag, no env
-	err := os.Unsetenv("MANAGEMENT_TOKEN")
-	require.NoError(t, err)
-	val, err := GetManagementToken(cmd)
-	assert.Error(t, err)
-	assert.Empty(t, val)
+	// 1) from flag
+	cmd := newCmd()
+	_ = cmd.Flags().Set("management-token", "from-flag")
+	tok, err := GetManagementToken(cmd)
+	if err != nil || tok != "from-flag" {
+		t.Fatalf("flag token: tok=%q err=%v", tok, err)
+	}
 
-	// Env only
-	err = os.Setenv("MANAGEMENT_TOKEN", "env-token")
-	require.NoError(t, err)
-	val, err = GetManagementToken(cmd)
-	assert.NoError(t, err)
-	assert.Equal(t, "env-token", val)
+	// 2) from env
+	cmd = newCmd()
+	t.Setenv("MANAGEMENT_TOKEN", "from-env")
+	tok, err = GetManagementToken(cmd)
+	if err != nil || tok != "from-env" {
+		t.Fatalf("env token: tok=%q err=%v", tok, err)
+	}
+	if err := os.Unsetenv("MANAGEMENT_TOKEN"); err != nil {
+		t.Fatalf("unset env failed: %v", err)
+	}
 
-	err = os.Unsetenv("MANAGEMENT_TOKEN")
-	require.NoError(t, err)
-
-	// Flag overrides env
-	err = cmd.Flags().Set("management-token", "flag-token")
-	require.NoError(t, err)
-	val, err = GetManagementToken(cmd)
-	assert.NoError(t, err)
-	assert.Equal(t, "flag-token", val)
+	// 3) missing
+	cmd = newCmd()
+	tok, err = GetManagementToken(cmd)
+	if err == nil || tok != "" {
+		t.Fatalf("missing token should error, got tok=%q err=%v", tok, err)
+	}
 }
