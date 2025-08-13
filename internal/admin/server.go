@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -50,6 +51,8 @@ type APIClientInterface interface {
 	UpdateProject(ctx context.Context, projectID string, name string, openAIAPIKey string) (*Project, error)
 	DeleteProject(ctx context.Context, projectID string) error
 	CreateProject(ctx context.Context, name string, openAIAPIKey string) (*Project, error)
+	GetAuditEvents(ctx context.Context, filters map[string]string, page, pageSize int) ([]AuditEvent, *Pagination, error)
+	GetAuditEvent(ctx context.Context, id string) (*AuditEvent, error)
 }
 
 // Server represents the Admin UI HTTP server.
@@ -199,6 +202,13 @@ func (s *Server) setupRoutes() {
 			tokens.GET("/new", s.handleTokensNew)
 			tokens.POST("", s.handleTokensCreate)
 			tokens.GET("/:token", s.handleTokensShow)
+		}
+
+		// Audit routes
+		audit := protected.Group("/audit")
+		{
+			audit.GET("", s.handleAuditList)
+			audit.GET("/:id", s.handleAuditShow)
 		}
 	}
 
@@ -759,6 +769,39 @@ func (s *Server) templateFuncs() template.FuncMap {
 		"contains": func(s, substr string) bool {
 			return strings.Contains(s, substr)
 		},
+		"pageRange": func(current, total int) []int {
+			// Show up to 7 page numbers around current page
+			start := current - 3
+			end := current + 3
+			
+			if start < 1 {
+				start = 1
+			}
+			if end > total {
+				end = total
+			}
+			
+			// Adjust if we have fewer than 7 pages to show
+			if end-start < 6 && total > 6 {
+				if start == 1 {
+					end = start + 6
+					if end > total {
+						end = total
+					}
+				} else if end == total {
+					start = end - 6
+					if start < 1 {
+						start = 1
+					}
+				}
+			}
+			
+			pages := make([]int, 0, end-start+1)
+			for i := start; i <= end; i++ {
+				pages = append(pages, i)
+			}
+			return pages
+		},
 	}
 }
 
@@ -903,4 +946,128 @@ func getFormFieldNames(form map[string][]string) []string {
 // obfuscateToken returns a partially masked version of a token for logging
 func obfuscateToken(token string) string {
 	return obfuscate.ObfuscateTokenSimple(token)
+}
+
+// Audit handlers
+func (s *Server) handleAuditList(c *gin.Context) {
+	// Get API client from context
+	apiClientIface := c.MustGet("apiClient").(APIClientInterface)
+
+	// Parse query parameters for filtering
+	filters := make(map[string]string)
+	query := c.Request.URL.Query()
+	
+	// Filter parameters
+	if action := query.Get("action"); action != "" {
+		filters["action"] = action
+	}
+	if outcome := query.Get("outcome"); outcome != "" {
+		filters["outcome"] = outcome
+	}
+	if projectID := query.Get("project_id"); projectID != "" {
+		filters["project_id"] = projectID
+	}
+	if actor := query.Get("actor"); actor != "" {
+		filters["actor"] = actor
+	}
+	if clientIP := query.Get("client_ip"); clientIP != "" {
+		filters["client_ip"] = clientIP
+	}
+	if requestID := query.Get("request_id"); requestID != "" {
+		filters["request_id"] = requestID
+	}
+	if method := query.Get("method"); method != "" {
+		filters["method"] = method
+	}
+	if path := query.Get("path"); path != "" {
+		filters["path"] = path
+	}
+	if search := query.Get("search"); search != "" {
+		filters["search"] = search
+	}
+	if startTime := query.Get("start_time"); startTime != "" {
+		filters["start_time"] = startTime
+	}
+	if endTime := query.Get("end_time"); endTime != "" {
+		filters["end_time"] = endTime
+	}
+
+	// Parse pagination
+	page := 1
+	if pageStr := query.Get("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+	pageSize := 20
+	if pageSizeStr := query.Get("page_size"); pageSizeStr != "" {
+		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= 100 {
+			pageSize = ps
+		}
+	}
+
+	// Get audit events with forwarded browser metadata
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	
+	events, pagination, err := apiClientIface.GetAuditEvents(ctx, filters, page, pageSize)
+	if err != nil {
+		log.Printf("Failed to get audit events: %v", err)
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"error":   "Failed to load audit events",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.HTML(http.StatusOK, "audit/list.html", gin.H{
+		"events":     events,
+		"pagination": pagination,
+		"filters":    filters,
+		"query":      query,
+	})
+}
+
+func (s *Server) handleAuditShow(c *gin.Context) {
+	// Get API client from context
+	apiClientIface := c.MustGet("apiClient").(APIClientInterface)
+
+	// Get audit event ID from URL
+	id := c.Param("id")
+	if id == "" {
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"error":   "Invalid audit event ID",
+			"details": "Audit event ID is required",
+		})
+		return
+	}
+
+	// Get audit event with forwarded browser metadata
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	
+	event, err := apiClientIface.GetAuditEvent(ctx, id)
+	if err != nil {
+		log.Printf("Failed to get audit event %s: %v", id, err)
+		if strings.Contains(err.Error(), "not found") {
+			c.HTML(http.StatusNotFound, "error.html", gin.H{
+				"error":   "Audit event not found",
+				"details": fmt.Sprintf("Audit event with ID %s was not found", id),
+			})
+		} else {
+			c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+				"error":   "Failed to load audit event",
+				"details": err.Error(),
+			})
+		}
+		return
+	}
+
+	c.HTML(http.StatusOK, "audit/show.html", gin.H{
+		"event": event,
+	})
 }

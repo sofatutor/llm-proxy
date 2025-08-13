@@ -1,0 +1,217 @@
+{{ define "content" }}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="bi bi-shield-check"></i>
+                Audit Event Details
+            </h1>
+            <a href="/audit" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i>
+                Back to List
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Event Information</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">Event ID:</dt>
+                            <dd class="col-sm-8"><code>{{ .event.ID }}</code></dd>
+                            
+                            <dt class="col-sm-4">Timestamp:</dt>
+                            <dd class="col-sm-8">{{ .event.Timestamp.Format "2006-01-02 15:04:05 MST" }}</dd>
+                            
+                            <dt class="col-sm-4">Action:</dt>
+                            <dd class="col-sm-8"><code>{{ .event.Action }}</code></dd>
+                            
+                            <dt class="col-sm-4">Actor:</dt>
+                            <dd class="col-sm-8"><span class="badge bg-secondary">{{ .event.Actor }}</span></dd>
+                            
+                            <dt class="col-sm-4">Outcome:</dt>
+                            <dd class="col-sm-8">
+                                {{ if eq .event.Outcome "success" }}
+                                    <span class="badge bg-success">Success</span>
+                                {{ else }}
+                                    <span class="badge bg-danger">Failure</span>
+                                {{ end }}
+                            </dd>
+                        </dl>
+                    </div>
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">Project ID:</dt>
+                            <dd class="col-sm-8">
+                                {{ if .event.ProjectID }}
+                                    <code>{{ .event.ProjectID }}</code>
+                                {{ else }}
+                                    <span class="text-muted">Not specified</span>
+                                {{ end }}
+                            </dd>
+                            
+                            <dt class="col-sm-4">Request ID:</dt>
+                            <dd class="col-sm-8">
+                                {{ if .event.RequestID }}
+                                    <code class="small">{{ .event.RequestID }}</code>
+                                {{ else }}
+                                    <span class="text-muted">Not specified</span>
+                                {{ end }}
+                            </dd>
+                            
+                            <dt class="col-sm-4">Correlation ID:</dt>
+                            <dd class="col-sm-8">
+                                {{ if .event.CorrelationID }}
+                                    <code class="small">{{ .event.CorrelationID }}</code>
+                                {{ else }}
+                                    <span class="text-muted">Not specified</span>
+                                {{ end }}
+                            </dd>
+                            
+                            <dt class="col-sm-4">Client IP:</dt>
+                            <dd class="col-sm-8">
+                                {{ if .event.ClientIP }}
+                                    <code>{{ .event.ClientIP }}</code>
+                                {{ else }}
+                                    <span class="text-muted">Not specified</span>
+                                {{ end }}
+                            </dd>
+                            
+                            <dt class="col-sm-4">Token ID:</dt>
+                            <dd class="col-sm-8">
+                                {{ if .event.TokenID }}
+                                    <code class="small">{{ .event.TokenID }}</code>
+                                {{ else }}
+                                    <span class="text-muted">Not specified</span>
+                                {{ end }}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">HTTP Details</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row">
+                    <dt class="col-sm-4">Method:</dt>
+                    <dd class="col-sm-8">
+                        {{ if .event.Method }}
+                            <span class="badge bg-info">{{ .event.Method }}</span>
+                        {{ else }}
+                            <span class="text-muted">Not specified</span>
+                        {{ end }}
+                    </dd>
+                    
+                    <dt class="col-sm-4">Path:</dt>
+                    <dd class="col-sm-8">
+                        {{ if .event.Path }}
+                            <code>{{ .event.Path }}</code>
+                        {{ else }}
+                            <span class="text-muted">Not specified</span>
+                        {{ end }}
+                    </dd>
+                    
+                    <dt class="col-sm-4">User Agent:</dt>
+                    <dd class="col-sm-8">
+                        {{ if .event.UserAgent }}
+                            <small class="text-muted">{{ .event.UserAgent }}</small>
+                        {{ else }}
+                            <span class="text-muted">Not specified</span>
+                        {{ end }}
+                    </dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{ if .event.Reason }}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    Reason
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    {{ .event.Reason }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{ end }}
+
+{{ if .event.ParsedMeta }}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-code-square"></i>
+                    Metadata
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Key</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {{ range $key, $value := .event.ParsedMeta }}
+                            <tr>
+                                <td><code>{{ $key }}</code></td>
+                                <td>
+                                    {{ if eq (printf "%T" $value) "string" }}
+                                        {{ $value }}
+                                    {{ else }}
+                                        <code class="small">{{ printf "%v" $value }}</code>
+                                    {{ end }}
+                                </td>
+                            </tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{ else if .event.Metadata }}
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-code-square"></i>
+                    Raw Metadata
+                </h5>
+            </div>
+            <div class="card-body">
+                <pre class="bg-light p-3 rounded"><code>{{ .event.Metadata }}</code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{{ end }}
+{{ end }}
