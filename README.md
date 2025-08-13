@@ -19,14 +19,14 @@ A transparent, secure proxy for OpenAI's API with token management, rate limitin
 
 ### Docker (Recommended)
 ```bash
-docker pull sofatutor/llm-proxy:latest
+docker pull ghcr.io/sofatutor/llm-proxy:latest
 mkdir -p ./llm-proxy/data
 docker run -d \
   --name llm-proxy \
   -p 8080:8080 \
   -v ./llm-proxy/data:/app/data \
   -e MANAGEMENT_TOKEN=your-secure-management-token \
-  sofatutor/llm-proxy:latest
+  ghcr.io/sofatutor/llm-proxy:latest
 ```
 
 ### From Source
@@ -219,6 +219,25 @@ This ensures both the proxy and dispatcher share events via Redis, enabling full
 - Logs stored locally and/or sent to external backends
 - Use HTTPS in production (via reverse proxy)
 - See `docs/security.md` and `docs/production.md` for best practices
+
+### Containerization Notes
+- Multi-stage Dockerfile builds a static binary and ships a minimal Alpine runtime
+- Runs as non-root user `appuser` with read-only filesystem by default
+- Healthcheck hits `/health`; see `docker-compose.yml` or Dockerfile `HEALTHCHECK`
+- Volumes: `/app/data`, `/app/logs`, `/app/config`, `/app/certs`
+- Example local build/test:
+```bash
+make docker-build
+make docker-run
+make docker-smoke
+```
+
+### Publishing
+Images are built and published to GitHub Container Registry on pushes to `main` and tags `v*`.
+
+Registry: `ghcr.io/sofatutor/llm-proxy`
+
+Workflow: `.github/workflows/docker.yml` builds for `linux/amd64` and `linux/arm64` and pushes labels/tags.
 
 ## Documentation
 

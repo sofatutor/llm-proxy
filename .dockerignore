@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
+
+# Go build artifacts
+bin/
+*.out
+*.cover
+coverage*
+internal_coverage.out
+
+# Local data and logs
+data/
+tmp/
+logs/
+*.db
+
+# Node/web caches
+node_modules/
+web/static/*.map
+
+# Env and config secrets
+.env
+.env.*
+config/api_providers.yaml
+
+# Test artifacts
+playwright-codegen/
+**/*.log
+
+# Misc
+*.swp
+
+

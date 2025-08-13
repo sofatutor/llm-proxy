@@ -1,4 +1,4 @@
-.PHONY: all build test test-coverage lint clean tools dev-setup db-setup run docker swag test-benchmark coverage
+.PHONY: all build test test-coverage lint clean tools dev-setup db-setup run docker docker-build docker-run docker-smoke docker-stop swag test-benchmark coverage
 
 # Go parameters
 GOCMD=go
@@ -50,8 +50,43 @@ clean:
 run: build
 	./$(PROXY_BINARY)
 
-docker:
-	docker build -t llm-proxy .
+docker: docker-build
+
+docker-build:
+	docker build -t llm-proxy:latest .
+
+docker-run:
+	@mkdir -p $(PWD)/tmp/llm-proxy-data
+	docker run --rm -d \
+	  --name llm-proxy \
+	  -p 8080:8080 \
+	  -v $(PWD)/tmp/llm-proxy-data:/app/data \
+	  -e MANAGEMENT_TOKEN=$${MANAGEMENT_TOKEN:-dev-management-token} \
+	  -e LLM_PROXY_EVENT_BUS=in-memory \
+	  llm-proxy:latest server
+
+docker-stop:
+	@docker rm -f llm-proxy >/dev/null 2>&1 || true
+	@echo "llm-proxy container stopped"
+
+docker-smoke:
+	# Wait for container to be healthy and test /health
+	@# Start container if not running
+	@if [ -z "$$(docker ps -q -f name=^/llm-proxy$$ -f status=running)" ]; then \
+	  echo "Starting llm-proxy container..."; \
+	  $(MAKE) docker-run; \
+	  sleep 2; \
+	fi
+	@echo "Waiting for llm-proxy to become healthy..."
+	@for i in `seq 1 20`; do \
+	  if curl -sf http://localhost:8080/health >/dev/null; then \
+	    echo "Healthcheck OK"; \
+	    exit 0; \
+	  fi; \
+	  sleep 1; \
+	done; \
+	echo "Healthcheck failed"; \
+	exit 1
 
 # API documentation
 swag:

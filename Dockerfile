@@ -20,12 +20,8 @@ RUN CGO_ENABLED=1 GOOS=linux \
 # Use a small alpine image for the final container
 FROM alpine:3.18
 
-# Security: Update packages and add CA certificates
-RUN apk update && \
-    apk upgrade && \
-    apk --no-cache add ca-certificates tzdata sqlite-libs && \
-    apk --no-cache add redis && \
-    rm -rf /var/cache/apk/*
+# Security: Add only required runtime libraries
+RUN apk --no-cache add ca-certificates tzdata sqlite-libs wget
 
 # Security: Create non-root user and group
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
@@ -44,9 +40,6 @@ COPY --from=builder --chown=appuser:appgroup /llm-proxy /app/bin/llm-proxy
 # Security: Set restrictive permissions
 RUN chmod 550 /app/bin/llm-proxy && \
     chmod -R 750 /app/data /app/logs /app/config /app/certs
-
-# Create default config
-COPY --chown=appuser:appgroup .env.example /app/config/.env.example
 
 # Copy entrypoint script
 COPY --chown=appuser:appgroup entrypoint.sh /app/entrypoint.sh
