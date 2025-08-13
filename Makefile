@@ -76,7 +76,7 @@ docker-smoke:
 	@# Start container if not running
 	@if [ -z "$$(docker ps -q -f name=^/llm-proxy$$ -f status=running)" ]; then \
 	  echo "Starting llm-proxy container..."; \
-	  $(MAKE) docker-run; \
+	  $(MAKE) docker-run RUN_FLAGS=; \
 	  sleep 2; \
 	fi
 	@echo "Waiting for llm-proxy to become healthy..."
