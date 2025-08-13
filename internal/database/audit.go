@@ -1,0 +1,204 @@
+package database
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/google/uuid"
+	"github.com/sofatutor/llm-proxy/internal/audit"
+)
+
+// AuditStore defines the interface for persisting audit events to database
+type AuditStore interface {
+	StoreAuditEvent(ctx context.Context, event *audit.Event) error
+	ListAuditEvents(ctx context.Context, filters AuditEventFilters) ([]AuditEvent, error)
+}
+
+// AuditEventFilters provides filtering options for audit event queries
+type AuditEventFilters struct {
+	Action    string
+	ClientIP  string
+	ProjectID string
+	StartTime *string // RFC3339 format
+	EndTime   *string // RFC3339 format
+	Outcome   string
+	Limit     int
+	Offset    int
+}
+
+// StoreAuditEvent persists an audit event to the database
+func (d *DB) StoreAuditEvent(ctx context.Context, event *audit.Event) error {
+	if event == nil {
+		return fmt.Errorf("audit event cannot be nil")
+	}
+
+	// Generate UUID for the audit event
+	id := uuid.New().String()
+
+	// Convert metadata to JSON string if present
+	var metadataJSON *string
+	if event.Details != nil && len(event.Details) > 0 {
+		metadataBytes, err := json.Marshal(event.Details)
+		if err != nil {
+			return fmt.Errorf("failed to marshal audit event metadata: %w", err)
+		}
+		metadataStr := string(metadataBytes)
+		metadataJSON = &metadataStr
+	}
+
+	// Extract common fields from details for first-class columns
+	var method, path, userAgent, reason, tokenID *string
+	if event.Details != nil {
+		if v, ok := event.Details["http_method"].(string); ok {
+			method = &v
+		}
+		if v, ok := event.Details["endpoint"].(string); ok {
+			path = &v
+		}
+		if v, ok := event.Details["user_agent"].(string); ok {
+			userAgent = &v
+		}
+		if v, ok := event.Details["error"].(string); ok {
+			reason = &v
+		}
+		if v, ok := event.Details["token_id"].(string); ok {
+			tokenID = &v
+		}
+	}
+
+	// Convert optional string fields to pointers
+	var projectID, requestID, correlationID, clientIP *string
+	if event.ProjectID != "" {
+		projectID = &event.ProjectID
+	}
+	if event.RequestID != "" {
+		requestID = &event.RequestID
+	}
+	if event.CorrelationID != "" {
+		correlationID = &event.CorrelationID
+	}
+	if event.ClientIP != "" {
+		clientIP = &event.ClientIP
+	}
+
+	query := `
+		INSERT INTO audit_events (
+			id, timestamp, action, actor, project_id, request_id, correlation_id,
+			client_ip, method, path, user_agent, outcome, reason, token_id, metadata
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	_, err := d.db.ExecContext(ctx, query,
+		id,
+		event.Timestamp,
+		event.Action,
+		event.Actor,
+		projectID,
+		requestID,
+		correlationID,
+		clientIP,
+		method,
+		path,
+		userAgent,
+		string(event.Result),
+		reason,
+		tokenID,
+		metadataJSON,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to insert audit event: %w", err)
+	}
+
+	return nil
+}
+
+// ListAuditEvents retrieves audit events from the database with optional filtering
+func (d *DB) ListAuditEvents(ctx context.Context, filters AuditEventFilters) ([]AuditEvent, error) {
+	query := "SELECT id, timestamp, action, actor, project_id, request_id, correlation_id, client_ip, method, path, user_agent, outcome, reason, token_id, metadata FROM audit_events WHERE 1=1"
+	args := []interface{}{}
+	argIndex := 1
+
+	// Apply filters
+	if filters.Action != "" {
+		query += " AND action = ?"
+		args = append(args, filters.Action)
+		argIndex++
+	}
+	if filters.ClientIP != "" {
+		query += " AND client_ip = ?"
+		args = append(args, filters.ClientIP)
+		argIndex++
+	}
+	if filters.ProjectID != "" {
+		query += " AND project_id = ?"
+		args = append(args, filters.ProjectID)
+		argIndex++
+	}
+	if filters.Outcome != "" {
+		query += " AND outcome = ?"
+		args = append(args, filters.Outcome)
+		argIndex++
+	}
+	if filters.StartTime != nil {
+		query += " AND timestamp >= ?"
+		args = append(args, *filters.StartTime)
+		argIndex++
+	}
+	if filters.EndTime != nil {
+		query += " AND timestamp <= ?"
+		args = append(args, *filters.EndTime)
+		argIndex++
+	}
+
+	// Order by timestamp descending
+	query += " ORDER BY timestamp DESC"
+
+	// Apply limit and offset
+	if filters.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, filters.Limit)
+		if filters.Offset > 0 {
+			query += " OFFSET ?"
+			args = append(args, filters.Offset)
+		}
+	}
+
+	rows, err := d.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query audit events: %w", err)
+	}
+	defer rows.Close()
+
+	var events []AuditEvent
+	for rows.Next() {
+		var event AuditEvent
+		err := rows.Scan(
+			&event.ID,
+			&event.Timestamp,
+			&event.Action,
+			&event.Actor,
+			&event.ProjectID,
+			&event.RequestID,
+			&event.CorrelationID,
+			&event.ClientIP,
+			&event.Method,
+			&event.Path,
+			&event.UserAgent,
+			&event.Outcome,
+			&event.Reason,
+			&event.TokenID,
+			&event.Metadata,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan audit event: %w", err)
+		}
+		events = append(events, event)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating audit events: %w", err)
+	}
+
+	return events, nil
+}

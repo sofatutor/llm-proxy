@@ -86,3 +86,51 @@ func TestGenerateSecureTokenUniqueness(t *testing.T) {
 		tokens[token] = true
 	}
 }
+
+func TestObfuscateToken(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "empty token",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "very short token",
+			input:    "abc",
+			expected: "***",
+		},
+		{
+			name:     "short token",
+			input:    "abcdef",
+			expected: "ab****",
+		},
+		{
+			name:     "medium token",
+			input:    "tk_1234567890",
+			expected: "tk_12345...7890",
+		},
+		{
+			name:     "long token",
+			input:    "sk-1234567890abcdefghijklmnop",
+			expected: "sk-12345...mnop",
+		},
+		{
+			name:     "exactly 12 chars",
+			input:    "123456789012",
+			expected: "12**********",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ObfuscateToken(tt.input)
+			if result != tt.expected {
+				t.Errorf("ObfuscateToken(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}

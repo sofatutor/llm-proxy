@@ -26,14 +26,14 @@ func TestAuditLogging_Integration(t *testing.T) {
 
 	// Create configuration with audit logging enabled
 	cfg := &config.Config{
-		ListenAddr:         ":8080",
-		ManagementToken:    "test-management-token",
-		AuditEnabled:       true,
-		AuditLogFile:       auditLogPath,
-		AuditCreateDir:     true,
-		LogLevel:           "info",
-		LogFormat:          "json",
-		EventBusBackend:    "in-memory",
+		ListenAddr:              ":8080",
+		ManagementToken:         "test-management-token",
+		AuditEnabled:            true,
+		AuditLogFile:            auditLogPath,
+		AuditCreateDir:          true,
+		LogLevel:                "info",
+		LogFormat:               "json",
+		EventBusBackend:         "in-memory",
 		ObservabilityBufferSize: 100,
 	}
 
@@ -137,13 +137,13 @@ func TestAuditLogging_Integration(t *testing.T) {
 func TestAuditLogging_Disabled(t *testing.T) {
 	// Create configuration with audit logging disabled
 	cfg := &config.Config{
-		ListenAddr:         ":8080",
-		ManagementToken:    "test-management-token",
-		AuditEnabled:       false,
-		AuditLogFile:       "",
-		LogLevel:           "info",
-		LogFormat:          "json",
-		EventBusBackend:    "in-memory",
+		ListenAddr:              ":8080",
+		ManagementToken:         "test-management-token",
+		AuditEnabled:            false,
+		AuditLogFile:            "",
+		LogLevel:                "info",
+		LogFormat:               "json",
+		EventBusBackend:         "in-memory",
 		ObservabilityBufferSize: 100,
 	}
 
@@ -185,14 +185,14 @@ func TestAuditLogging_FailureEvents(t *testing.T) {
 
 	// Create configuration with audit logging enabled
 	cfg := &config.Config{
-		ListenAddr:         ":8080",
-		ManagementToken:    "test-management-token",
-		AuditEnabled:       true,
-		AuditLogFile:       auditLogPath,
-		AuditCreateDir:     true,
-		LogLevel:           "info",
-		LogFormat:          "json",
-		EventBusBackend:    "in-memory",
+		ListenAddr:              ":8080",
+		ManagementToken:         "test-management-token",
+		AuditEnabled:            true,
+		AuditLogFile:            auditLogPath,
+		AuditCreateDir:          true,
+		LogLevel:                "info",
+		LogFormat:               "json",
+		EventBusBackend:         "in-memory",
 		ObservabilityBufferSize: 100,
 	}
 

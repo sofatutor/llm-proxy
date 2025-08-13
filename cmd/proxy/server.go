@@ -256,8 +256,8 @@ func runServerForeground() {
 	tokenStore := database.NewDBTokenStoreAdapter(db)
 	projectStore := db
 
-	// Create server
-	s, err := server.New(cfg, tokenStore, projectStore)
+	// Create server with database support for audit logging
+	s, err := server.NewWithDatabase(cfg, tokenStore, projectStore, db)
 	if err != nil {
 		zapLogger.Fatal("Failed to initialize server", zap.Error(err))
 	}

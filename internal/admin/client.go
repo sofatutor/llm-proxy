@@ -12,6 +12,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/sofatutor/llm-proxy/internal/utils"
 )
 
 // APIClient handles communication with the Management API
@@ -49,17 +51,9 @@ func ObfuscateAPIKey(apiKey string) string {
 
 // ObfuscateToken obfuscates a token for display purposes
 // Shows first 8 characters followed by dots and last 4 characters
+// Deprecated: Use utils.ObfuscateToken instead
 func ObfuscateToken(token string) string {
-	if len(token) <= 12 {
-		// For short tokens, show first few chars + dots
-		if len(token) <= 4 {
-			return strings.Repeat("*", len(token))
-		}
-		return token[:2] + strings.Repeat("*", len(token)-2)
-	}
-
-	// For longer tokens, show first 8 and last 4
-	return token[:8] + "..." + token[len(token)-4:]
+	return utils.ObfuscateToken(token)
 }
 
 // Project represents a project from the Management API

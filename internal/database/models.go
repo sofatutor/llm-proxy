@@ -25,6 +25,25 @@ type Token struct {
 	LastUsedAt   *time.Time `json:"last_used_at,omitempty"`
 }
 
+// AuditEvent represents an audit log entry in the database.
+type AuditEvent struct {
+	ID            string    `json:"id"`
+	Timestamp     time.Time `json:"timestamp"`
+	Action        string    `json:"action"`
+	Actor         string    `json:"actor"`
+	ProjectID     *string   `json:"project_id,omitempty"`
+	RequestID     *string   `json:"request_id,omitempty"`
+	CorrelationID *string   `json:"correlation_id,omitempty"`
+	ClientIP      *string   `json:"client_ip,omitempty"`
+	Method        *string   `json:"method,omitempty"`
+	Path          *string   `json:"path,omitempty"`
+	UserAgent     *string   `json:"user_agent,omitempty"`
+	Outcome       string    `json:"outcome"`
+	Reason        *string   `json:"reason,omitempty"`
+	TokenID       *string   `json:"token_id,omitempty"`
+	Metadata      *string   `json:"metadata,omitempty"` // JSON string
+}
+
 // IsExpired returns true if the token has expired.
 func (t *Token) IsExpired() bool {
 	if t.ExpiresAt == nil {

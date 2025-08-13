@@ -62,7 +62,7 @@ type Server struct {
 
 	// For testability: allow injection of token validation logic
 	ValidateTokenWithAPI func(context.Context, string) bool
-	
+
 	// Audit logger for admin actions
 	auditLogger *audit.Logger
 }

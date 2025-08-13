@@ -6,7 +6,7 @@ package audit
 import (
 	"time"
 
-	"github.com/sofatutor/llm-proxy/internal/admin"
+	"github.com/sofatutor/llm-proxy/internal/utils"
 )
 
 // Event represents a security audit event with canonical fields.
@@ -29,6 +29,9 @@ type Event struct {
 
 	// CorrelationID for tracing across services
 	CorrelationID string `json:"correlation_id,omitempty"`
+
+	// ClientIP is the IP address of the client making the request
+	ClientIP string `json:"client_ip,omitempty"`
 
 	// Result indicates success or failure of the operation
 	Result ResultType `json:"result"`
@@ -73,10 +76,10 @@ const (
 
 // Actor types for common audit actors
 const (
-	ActorSystem      = "system"
-	ActorAnonymous   = "anonymous"
-	ActorAdmin       = "admin"
-	ActorManagement  = "management_api"
+	ActorSystem     = "system"
+	ActorAnonymous  = "anonymous"
+	ActorAdmin      = "admin"
+	ActorManagement = "management_api"
 )
 
 // NewEvent creates a new audit event with the specified action and result.
@@ -109,6 +112,12 @@ func (e *Event) WithCorrelationID(correlationID string) *Event {
 	return e
 }
 
+// WithClientIP sets the client IP address for the audit event
+func (e *Event) WithClientIP(clientIP string) *Event {
+	e.ClientIP = clientIP
+	return e
+}
+
 // WithDetail adds a detail key-value pair to the audit event.
 // Secrets and sensitive information should be obfuscated before calling this method.
 func (e *Event) WithDetail(key string, value interface{}) *Event {
@@ -121,7 +130,7 @@ func (e *Event) WithDetail(key string, value interface{}) *Event {
 
 // WithTokenID adds an obfuscated token ID to the audit event details
 func (e *Event) WithTokenID(token string) *Event {
-	return e.WithDetail("token_id", admin.ObfuscateToken(token))
+	return e.WithDetail("token_id", utils.ObfuscateToken(token))
 }
 
 // WithError adds error information to the audit event details
@@ -133,6 +142,7 @@ func (e *Event) WithError(err error) *Event {
 }
 
 // WithIPAddress adds the client IP address to the audit event details
+// Deprecated: Use WithClientIP instead for first-class IP field support
 func (e *Event) WithIPAddress(ip string) *Event {
 	return e.WithDetail("ip_address", ip)
 }

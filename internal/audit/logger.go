@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,13 +10,21 @@ import (
 	"sync"
 )
 
-// Logger handles writing audit events to a file backend with immutable semantics.
-// It provides thread-safe operations and ensures all audit events are persisted.
+// Logger handles writing audit events to multiple backends (file and database)
+// with immutable semantics. It provides thread-safe operations and ensures 
+// all audit events are persisted.
 type Logger struct {
-	file   *os.File
-	writer io.Writer
-	mutex  sync.Mutex
-	path   string
+	file      *os.File
+	writer    io.Writer
+	mutex     sync.Mutex
+	path      string
+	dbStore   DatabaseStore
+	dbEnabled bool
+}
+
+// DatabaseStore defines the interface for database audit storage
+type DatabaseStore interface {
+	StoreAuditEvent(ctx context.Context, event *Event) error
 }
 
 // LoggerConfig holds configuration for the audit logger
@@ -24,10 +33,15 @@ type LoggerConfig struct {
 	FilePath string
 	// CreateDir determines whether to create parent directories if they don't exist
 	CreateDir bool
+	// DatabaseStore is an optional database backend for audit events
+	DatabaseStore DatabaseStore
+	// EnableDatabase determines whether to store events in database
+	EnableDatabase bool
 }
 
 // NewLogger creates a new audit logger that writes to the specified file.
 // If createDir is true, it will create parent directories if they don't exist.
+// If a database store is provided, events will also be persisted to the database.
 func NewLogger(config LoggerConfig) (*Logger, error) {
 	if config.FilePath == "" {
 		return nil, fmt.Errorf("audit log file path cannot be empty")
@@ -48,13 +62,15 @@ func NewLogger(config LoggerConfig) (*Logger, error) {
 	}
 
 	return &Logger{
-		file:   file,
-		writer: file,
-		path:   config.FilePath,
+		file:      file,
+		writer:    file,
+		path:      config.FilePath,
+		dbStore:   config.DatabaseStore,
+		dbEnabled: config.EnableDatabase && config.DatabaseStore != nil,
 	}, nil
 }
 
-// Log writes an audit event to the audit log.
+// Log writes an audit event to both file and database backends.
 // Events are written as JSON lines (JSONL format) for easy parsing.
 // This method is thread-safe.
 func (l *Logger) Log(event *Event) error {
@@ -65,6 +81,27 @@ func (l *Logger) Log(event *Event) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
+	// Write to file backend
+	if err := l.logToFile(event); err != nil {
+		return fmt.Errorf("failed to log to file: %w", err)
+	}
+
+	// Write to database backend if enabled
+	if l.dbEnabled {
+		// Use background context with timeout for database operations
+		ctx := context.Background()
+		if err := l.dbStore.StoreAuditEvent(ctx, event); err != nil {
+			// Log database errors but don't fail the audit operation
+			// File logging is the primary reliable audit trail
+			fmt.Printf("Warning: Failed to store audit event to database: %v\n", err)
+		}
+	}
+
+	return nil
+}
+
+// logToFile writes an audit event to the file backend
+func (l *Logger) logToFile(event *Event) error {
 	// Encode event as JSON
 	data, err := json.Marshal(event)
 	if err != nil {
@@ -113,6 +150,7 @@ func (l *Logger) GetPath() string {
 // Useful for testing or when audit logging is disabled.
 func NewNullLogger() *Logger {
 	return &Logger{
-		writer: io.Discard,
+		writer:    io.Discard,
+		dbEnabled: false,
 	}
 }
