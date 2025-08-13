@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
+	"github.com/sofatutor/llm-proxy/internal/logging"
 	"go.uber.org/zap"
 )
 
@@ -63,8 +64,19 @@ func (m *ObservabilityMiddleware) Middleware() Middleware {
 
 			next.ServeHTTP(crw, r)
 
+			// Resolve request ID from header, then context, then response headers
+			reqID := r.Header.Get("X-Request-ID")
+			if reqID == "" {
+				if v, ok := logging.GetRequestID(r.Context()); ok {
+					reqID = v
+				}
+			}
+			if reqID == "" {
+				reqID = crw.Header().Get("X-Request-ID")
+			}
+
 			evt := eventbus.Event{
-				RequestID:       r.Header.Get("X-Request-ID"),
+				RequestID:       reqID,
 				Method:          r.Method,
 				Path:            r.URL.Path,
 				Status:          crw.statusCode,

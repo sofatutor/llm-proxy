@@ -481,7 +481,8 @@ func TestTransparentProxy_HandleValidationError(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			proxy.handleValidationError(w, tc.err)
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			proxy.handleValidationError(w, r, tc.err)
 			resp := w.Result()
 			if err := resp.Body.Close(); err != nil {
 				t.Logf("Failed to close response body: %v", err)

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/stretchr/testify/assert"
@@ -542,8 +543,8 @@ func TestHandleTokens(t *testing.T) {
 }
 
 func TestGetRequestID(t *testing.T) {
-	// With request ID in context
-	ctx := context.WithValue(context.Background(), ctxKeyRequestID, "test-id")
+	// With request ID in context using new logging helpers
+	ctx := logging.WithRequestID(context.Background(), "test-id")
 	id := getRequestID(ctx)
 	assert.Equal(t, "test-id", id)
 
@@ -644,8 +645,8 @@ func TestHandleListProjects_Error(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer test_management_token")
 	w := httptest.NewRecorder()
 
-	// Use custom context key type
-	ctx := context.WithValue(context.Background(), ctxKeyRequestID, "test-id")
+	// Use new logging context helpers
+	ctx := logging.WithRequestID(context.Background(), "test-id")
 	req = req.WithContext(ctx)
 
 	server.handleListProjects(w, req)

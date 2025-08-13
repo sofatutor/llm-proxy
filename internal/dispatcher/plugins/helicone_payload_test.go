@@ -50,11 +50,17 @@ func TestHeliconePayloadFromEvent_JSONAndNonJSON(t *testing.T) {
 		t.Fatalf("heliconePayloadFromEvent error: %v", err)
 	}
 	pr2 := payload2["providerResponse"].(map[string]interface{})
-	if _, hasJSON := pr2["json"]; hasJSON {
-		t.Fatalf("did not expect json for non-JSON output")
+	if _, hasJSON := pr2["json"]; !hasJSON {
+		t.Fatalf("expected json object for non-JSON output")
+	}
+	if _, ok := pr2["json"].(map[string]interface{}); !ok {
+		t.Fatalf("expected json to be an object for non-JSON output")
 	}
 	if pr2["base64"].(string) != "bm90IGpzb24=" {
 		t.Fatalf("expected base64 field present")
+	}
+	if note, ok := pr2["note"].(string); !ok || note == "" {
+		t.Fatalf("expected note for non-JSON output")
 	}
 }
 

@@ -23,10 +23,6 @@ import (
 	"go.uber.org/zap"
 )
 
-type ctxKey string
-
-const ctxKeyRequestID ctxKey = "request_id"
-
 // Server represents the HTTP server for the LLM Proxy.
 // It encapsulates the underlying http.Server along with application configuration
 // and handles request routing and server lifecycle management.
@@ -678,29 +674,51 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 }
 
 func getRequestID(ctx context.Context) string {
-	if v := ctx.Value(ctxKeyRequestID); v != nil {
-		if id, ok := v.(string); ok && id != "" {
-			return id
-		}
+	if requestID, ok := logging.GetRequestID(ctx); ok && requestID != "" {
+		return requestID
 	}
 	return uuid.New().String()
 }
 
-// logRequestMiddleware logs all incoming requests with timing information
+// logRequestMiddleware logs all incoming requests with timing information using structured logging
 func (s *Server) logRequestMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		startTime := time.Now()
-		requestID := uuid.New().String()
-		ctx := context.WithValue(r.Context(), ctxKeyRequestID, requestID)
+
+		// Get or generate request ID from header
+		requestID := r.Header.Get("X-Request-ID")
+		if requestID == "" {
+			requestID = uuid.New().String()
+		}
+
+		// Get or generate correlation ID from header
+		correlationID := r.Header.Get("X-Correlation-ID")
+		if correlationID == "" {
+			correlationID = uuid.New().String()
+		}
+
+		// Add to context using our new context helpers
+		ctx := logging.WithRequestID(r.Context(), requestID)
+		ctx = logging.WithCorrelationID(ctx, correlationID)
+
+		// Set response headers
+		w.Header().Set("X-Request-ID", requestID)
+		w.Header().Set("X-Correlation-ID", correlationID)
 
 		// Create a response writer that captures status code
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 
-		s.logger.Info("request started",
-			zap.String("request_id", requestID),
+		// Get client IP
+		clientIP := s.getClientIP(r)
+
+		// Create logger with request context
+		reqLogger := logging.WithRequestContext(ctx, s.logger)
+		reqLogger = logging.WithCorrelationContext(ctx, reqLogger)
+
+		reqLogger.Info("request started",
+			logging.ClientIP(clientIP),
 			zap.String("method", r.Method),
 			zap.String("path", r.URL.Path),
-			zap.String("remote_addr", r.RemoteAddr),
 			zap.String("user_agent", r.UserAgent()),
 		)
 
@@ -708,24 +726,42 @@ func (s *Server) logRequestMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		next(rw, r.WithContext(ctx))
 
 		duration := time.Since(startTime)
+		durationMs := int(duration.Milliseconds())
+
+		// Log completion with canonical fields
 		if rw.statusCode >= 500 {
-			s.logger.Error("request completed with server error",
-				zap.String("request_id", requestID),
-				zap.String("method", r.Method),
-				zap.String("path", r.URL.Path),
-				zap.Int("status_code", rw.statusCode),
-				zap.Duration("duration", duration),
+			reqLogger.Error("request completed with server error",
+				logging.RequestFields(requestID, r.Method, r.URL.Path, rw.statusCode, durationMs)...,
 			)
 		} else {
-			s.logger.Info("request completed",
-				zap.String("request_id", requestID),
-				zap.String("method", r.Method),
-				zap.String("path", r.URL.Path),
-				zap.Int("status_code", rw.statusCode),
-				zap.Duration("duration", duration),
+			reqLogger.Info("request completed",
+				logging.RequestFields(requestID, r.Method, r.URL.Path, rw.statusCode, durationMs)...,
 			)
 		}
 	}
+}
+
+// getClientIP extracts the client IP address from the request
+func (s *Server) getClientIP(r *http.Request) string {
+	// Check for X-Forwarded-For header first (in case of proxy)
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// Take the first IP in the list
+		if idx := strings.Index(xff, ","); idx != -1 {
+			return strings.TrimSpace(xff[:idx])
+		}
+		return strings.TrimSpace(xff)
+	}
+
+	// Check for X-Real-IP header
+	if xri := r.Header.Get("X-Real-IP"); xri != "" {
+		return strings.TrimSpace(xri)
+	}
+
+	// Fall back to RemoteAddr
+	if idx := strings.LastIndex(r.RemoteAddr, ":"); idx != -1 {
+		return r.RemoteAddr[:idx]
+	}
+	return r.RemoteAddr
 }
 
 // responseWriter wraps http.ResponseWriter to capture status code

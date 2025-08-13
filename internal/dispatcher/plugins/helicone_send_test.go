@@ -82,4 +82,27 @@ func TestHelicone_sendHeliconeEvent_StatusHandling(t *testing.T) {
 			t.Fatalf("did not expect PermanentBackendError for non-500: %v", err)
 		}
 	})
+
+	// 400 -> PermanentBackendError with body logged
+	t.Run("status 400 bad request permanent", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":"bad payload"}`))
+		}))
+		defer srv.Close()
+
+		p := NewHeliconePlugin()
+		if err := p.Init(map[string]string{"api-key": "test-key", "endpoint": srv.URL}); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+		p.client = srv.Client()
+
+		err := p.sendHeliconeEvent(context.Background(), map[string]any{"a": 1})
+		if err == nil {
+			t.Fatalf("expected PermanentBackendError for 400")
+		}
+		if _, ok := err.(*dispatcher.PermanentBackendError); !ok {
+			t.Fatalf("expected PermanentBackendError, got %T: %v", err, err)
+		}
+	})
 }

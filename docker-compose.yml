@@ -46,6 +46,8 @@ services:
     <<: *llm-proxy-base
     container_name: llm-proxy-file-logger
     command: ["dispatcher", "--service", "file", "--endpoint", "/app/logs/events.jsonl"]
+    volumes:
+      - ./tmp/llm-proxy-logs:/app/logs
     depends_on:
       - redis
 

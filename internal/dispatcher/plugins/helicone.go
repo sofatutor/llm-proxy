@@ -80,6 +80,9 @@ func heliconePayloadFromEvent(event dispatcher.EventPayload) (map[string]interfa
 	if len(event.Input) > 0 {
 		_ = json.Unmarshal(event.Input, &reqBody)
 	}
+	if reqBody == nil {
+		reqBody = map[string]interface{}{}
+	}
 	if len(event.Output) > 0 {
 		if err := json.Unmarshal(event.Output, &respBody); err == nil {
 			isJSON = true
@@ -113,11 +116,26 @@ func heliconePayloadFromEvent(event dispatcher.EventPayload) (map[string]interfa
 				meta[k] = s
 			}
 		}
+		// Ensure request_id is propagated if present in metadata
+		if rid, ok := event.Metadata["request_id"].(string); ok && rid != "" {
+			meta["request_id"] = rid
+		}
+	}
+	// Help Helicone infer pricing/provider when using manual logger
+	if _, ok := meta["provider"]; !ok {
+		meta["provider"] = "openai"
 	}
 
 	// ProviderRequest
+	// Prefer actual API path from metadata if present so Helicone can infer provider
+	urlPath := "custom-model-nopath"
+	if event.Metadata != nil {
+		if pth, ok := event.Metadata["path"].(string); ok && pth != "" {
+			urlPath = pth
+		}
+	}
 	providerRequest := map[string]interface{}{
-		"url":  "custom-model-nopath",
+		"url":  urlPath,
 		"json": reqBody,
 		"meta": meta,
 	}
@@ -131,10 +149,32 @@ func heliconePayloadFromEvent(event dispatcher.EventPayload) (map[string]interfa
 		"status":  status,
 		"headers": map[string]string{}, // Optionally fill from event.Metadata
 	}
-	if isJSON {
+	// Ensure Helicone sees the provider as non-CUSTOM when using manual logger
+	if _, ok := meta["Helicone-Provider"]; !ok {
+		// Mirror meta["provider"] if set, otherwise default to openai
+		prov := meta["provider"]
+		if prov == "" {
+			prov = "openai"
+		}
+		meta["Helicone-Provider"] = prov
+	}
+
+	// Helicone requires providerResponse.json to be present; ensure it's always an object
+	if isJSON && respBody != nil {
 		providerResponse["json"] = respBody
 	} else {
+		providerResponse["json"] = map[string]interface{}{}
 		providerResponse["note"] = "response was not JSON; omitted"
+	}
+	// Inject usage if we computed it so Helicone can compute cost
+	if event.TokensUsage != nil {
+		if m, ok := providerResponse["json"].(map[string]interface{}); ok {
+			m["usage"] = map[string]int{
+				"prompt_tokens":     event.TokensUsage.Prompt,
+				"completion_tokens": event.TokensUsage.Completion,
+				"total_tokens":      event.TokensUsage.Prompt + event.TokensUsage.Completion,
+			}
+		}
 	}
 	// If OutputBase64 is set, include as base64
 	if event.OutputBase64 != "" {
@@ -170,6 +210,12 @@ func (p *HeliconePlugin) sendHeliconeEvent(ctx context.Context, payload map[stri
 		_, _ = buf.ReadFrom(resp.Body)
 		log.Printf("Helicone API error %d: %s", resp.StatusCode, buf.String())
 		return &dispatcher.PermanentBackendError{Msg: fmt.Sprintf("helicone API returned status 500: %s", buf.String())}
+	}
+	if resp.StatusCode == http.StatusBadRequest { // 400: treat as permanent (payload/schema issue)
+		buf := new(bytes.Buffer)
+		_, _ = buf.ReadFrom(resp.Body)
+		log.Printf("Helicone API error %d: %s", resp.StatusCode, buf.String())
+		return &dispatcher.PermanentBackendError{Msg: fmt.Sprintf("helicone API returned status 400: %s", buf.String())}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		buf := new(bytes.Buffer)

@@ -410,7 +410,7 @@ func (p *TransparentProxy) parseOpenAIResponseMetadata(bodyBytes []byte) (map[st
 func (p *TransparentProxy) errorHandler(w http.ResponseWriter, r *http.Request, err error) {
 	// Check if there was a validation error
 	if validationErr, ok := r.Context().Value(ctxKeyValidationError).(error); ok {
-		p.handleValidationError(w, validationErr)
+		p.handleValidationError(w, r, validationErr)
 		return
 	}
 
@@ -450,20 +450,14 @@ func (p *TransparentProxy) errorHandler(w http.ResponseWriter, r *http.Request, 
 }
 
 // handleValidationError handles errors specific to token validation
-func (p *TransparentProxy) handleValidationError(w http.ResponseWriter, err error) {
-	// Try to get request ID from context if available
-	var requestID string
+func (p *TransparentProxy) handleValidationError(w http.ResponseWriter, r *http.Request, err error) {
+	// Get request ID and token directly from the request
+	requestID, _ := r.Context().Value(ctxKeyRequestID).(string)
 	var obfuscatedToken string
-	if w != nil {
-		if req, ok := w.(interface{ Request() *http.Request }); ok && req.Request() != nil {
-			requestID, _ = req.Request().Context().Value(ctxKeyRequestID).(string)
-			// Try to get the token from the Authorization header
-			authHeader := req.Request().Header.Get("Authorization")
-			if len(authHeader) > 7 && strings.HasPrefix(authHeader, "Bearer ") {
-				tok := strings.TrimSpace(authHeader[7:])
-				obfuscatedToken = token.ObfuscateToken(tok)
-			}
-		}
+	authHeader := r.Header.Get("Authorization")
+	if len(authHeader) > 7 && strings.HasPrefix(authHeader, "Bearer ") {
+		tok := strings.TrimSpace(authHeader[7:])
+		obfuscatedToken = token.ObfuscateToken(tok)
 	}
 
 	statusCode := http.StatusUnauthorized
@@ -551,10 +545,12 @@ func (p *TransparentProxy) Handler() http.Handler {
 		// Generate request ID and add to context
 		requestID := uuid.New().String()
 		ctx := context.WithValue(r.Context(), ctxKeyRequestID, requestID)
+		// Also add to shared logging context so middlewares can read it
+		ctx = logging.WithRequestID(ctx, requestID)
 		r = r.WithContext(ctx)
 
-		// Set X-Request-ID header
-		w.Header().Set("X-Request-ID", requestID)
+		// Set request header so observability/file logger can capture it (response header is still set in ModifyResponse only)
+		r.Header.Set("X-Request-ID", requestID)
 
 		// Record when proxy receives the request
 		receivedAt := time.Now().UTC()
@@ -565,19 +561,19 @@ func (p *TransparentProxy) Handler() http.Handler {
 		authHeader := r.Header.Get("Authorization")
 		tokenStr := extractTokenFromHeader(authHeader)
 		if tokenStr == "" {
-			p.handleValidationError(w, errors.New("missing or invalid authorization header"))
+			p.handleValidationError(w, r, errors.New("missing or invalid authorization header"))
 			return
 		}
 		projectID, err := p.tokenValidator.ValidateTokenWithTracking(r.Context(), tokenStr)
 		if err != nil {
-			p.handleValidationError(w, err)
+			p.handleValidationError(w, r, err)
 			return
 		}
 		ctx = context.WithValue(r.Context(), ctxKeyProjectID, projectID)
 		r = r.WithContext(ctx)
 		apiKey, err := p.projectStore.GetAPIKeyForProject(r.Context(), projectID)
 		if err != nil {
-			p.handleValidationError(w, fmt.Errorf("failed to get API key: %w", err))
+			p.handleValidationError(w, r, fmt.Errorf("failed to get API key: %w", err))
 			return
 		}
 		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
@@ -777,6 +773,9 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 					zap.String("method", r.Method),
 					zap.String("path", r.URL.Path))
 				w.WriteHeader(http.StatusMethodNotAllowed)
+				if requestID != "" {
+					w.Header().Set("X-Request-ID", requestID)
+				}
 				w.Header().Set("Content-Type", "application/json")
 				if err := json.NewEncoder(w).Encode(ErrorResponse{
 					Error: "Method not allowed",
