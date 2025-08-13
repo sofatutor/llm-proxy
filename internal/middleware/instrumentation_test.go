@@ -23,18 +23,18 @@ func TestObservabilityMiddleware_NonStreaming(t *testing.T) {
 		_, _ = w.Write([]byte("ok"))
 	})
 
-    wrapped := mw.Middleware()(handler)
+	wrapped := mw.Middleware()(handler)
 
-    req := httptest.NewRequest(http.MethodGet, "/test", nil)
-    req.Header.Set("X-Request-ID", "req1")
-    rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set("X-Request-ID", "req1")
+	rr := httptest.NewRecorder()
 
-    // Subscribe before invoking handler to avoid racing with async publish
-    ch := bus.Subscribe()
-    wrapped.ServeHTTP(rr, req)
+	// Subscribe before invoking handler to avoid racing with async publish
+	ch := bus.Subscribe()
+	wrapped.ServeHTTP(rr, req)
 
-    select {
-    case evt := <-ch:
+	select {
+	case evt := <-ch:
 		require.Equal(t, "req1", evt.RequestID)
 		require.Equal(t, http.StatusOK, evt.Status)
 		require.Equal(t, "ok", string(evt.ResponseBody))
