@@ -39,6 +39,7 @@ jobs:
             type=sha
       
       - name: Set up QEMU
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
         uses: docker/setup-qemu-action@v2
       
       - name: Set up Docker Buildx
@@ -85,7 +86,6 @@ jobs:
           docker tag ghcr.io/${{ github.repository }}:${BRANCH_TAG} llm-proxy:latest
 
       - name: Smoke test using Makefile (run + health)
-        if: github.event_name != 'pull_request'
         run: |
           make docker-smoke
         env:
