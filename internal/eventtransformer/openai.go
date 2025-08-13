@@ -3,12 +3,12 @@ package eventtransformer
 import (
 	"encoding/base64"
 	"encoding/json"
-	"log"
 	"os"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 // IsOpenAIStreaming detects if the response body is a sequence of OpenAI streaming chunks (data: ... lines).
@@ -108,7 +108,7 @@ func MergeOpenAIStreamingChunks(body string) (map[string]any, error) {
 			"total_tokens":      usage.TotalTokens,
 		}
 	}
-	log.Printf("[eventtransformer] [streaming] Merged OpenAI chunks (len=%d)", content.Len())
+	logger.Debug("Merged OpenAI chunks", zap.Int("content_length", content.Len()))
 	return merged, nil
 }
 
@@ -242,7 +242,9 @@ func MergeThreadStreamingChunks(body string) (map[string]any, error) {
 			"total_tokens":      usage.TotalTokens,
 		}
 	}
-	log.Printf("[eventtransformer] [streaming] Merged thread.run chunks (len=%d, used_completed=%v)", contentB.Len(), foundCompleted)
+	logger.Debug("Merged thread.run chunks", 
+		zap.Int("content_length", contentB.Len()),
+		zap.Bool("used_completed", foundCompleted))
 	return merged, nil
 }
 
@@ -365,7 +367,7 @@ func (t *OpenAITransformer) TransformEvent(evt map[string]any) (map[string]any, 
 						evt["TokenUsage"] = usage
 					}
 				} else {
-					log.Printf("[eventtransformer] merge stream error: %v", err)
+					logger.Error("Merge stream error", zap.Error(err))
 					evt["response_body"] = decoded
 				}
 			} else {

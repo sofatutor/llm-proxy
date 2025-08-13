@@ -6,12 +6,31 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
-	"log"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/andybalholm/brotli"
+	"github.com/sofatutor/llm-proxy/internal/logging"
+	"go.uber.org/zap"
 )
+
+// Package-level logger for event transformer
+var logger *zap.Logger
+
+func init() {
+	// Initialize with a default logger, can be overridden with SetLogger
+	var err error
+	logger, err = logging.NewComponentLogger("info", "json", "", logging.ComponentEventBus)
+	if err != nil {
+		// Fallback to a no-op logger if initialization fails
+		logger = zap.NewNop()
+	}
+}
+
+// SetLogger allows setting a custom logger for the package
+func SetLogger(l *zap.Logger) {
+	logger = l.With(zap.String(logging.FieldComponent, logging.ComponentEventBus))
+}
 
 // DecompressAndDecode attempts to decompress (gzip, brotli) if needed, then base64 decode if needed, and returns the decoded string and true if decoding was successful.
 func DecompressAndDecode(val string, headers map[string]interface{}) (string, bool) {
@@ -42,7 +61,7 @@ func DecompressAndDecode(val string, headers map[string]interface{}) (string, bo
 	}
 	// Only log binary skipping
 	if strings.HasPrefix(contentType, "audio/") || strings.HasPrefix(contentType, "image/") || contentType == "application/octet-stream" {
-		log.Printf("[decoder] skipping decode for binary content-type: %q", contentType)
+		logger.Debug("Skipping decode for binary content-type", zap.String("content_type", contentType))
 		return val, false
 	}
 
@@ -140,8 +159,8 @@ func DecompressAndDecode(val string, headers map[string]interface{}) (string, bo
 		return val, true
 	}
 	if utf8.Valid([]byte(val)) {
-		return val, true
+			return val, true
 	}
-	log.Printf("[decoder] fallback: returning original input, could not decode")
+	logger.Debug("Fallback: returning original input, could not decode", zap.String("input_length", string(rune(len(val)))))
 	return val, false
 }

@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -21,10 +20,6 @@ import (
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"go.uber.org/zap"
 )
-
-type ctxKey string
-
-const ctxKeyRequestID ctxKey = "request_id"
 
 // Server represents the HTTP server for the LLM Proxy.
 // It encapsulates the underlying http.Server along with application configuration
@@ -76,7 +71,7 @@ func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.Pro
 
 	var bus eventbus.EventBus
 	if cfg.ObservabilityEnabled {
-		log.Printf("Initializing observability with buffer size %d", cfg.ObservabilityBufferSize)
+		logger.Info("Initializing observability", zap.Int("buffer_size", cfg.ObservabilityBufferSize))
 		bus = eventbus.NewInMemoryEventBus(cfg.ObservabilityBufferSize)
 	}
 
@@ -129,7 +124,7 @@ func (s *Server) Start() error {
 		return fmt.Errorf("failed to initialize components: %w", err)
 	}
 
-	log.Printf("Server starting on %s\n", s.config.ListenAddr)
+	s.logger.Info("Server starting", zap.String("listen_addr", s.config.ListenAddr))
 
 	return s.server.ListenAndServe()
 }
@@ -153,8 +148,9 @@ func (s *Server) initializeAPIRoutes() error {
 	apiConfig, err := proxy.LoadAPIConfigFromFile(s.config.APIConfigPath)
 	if err != nil {
 		// If the config file doesn't exist or has errors, fall back to a default OpenAI configuration
-		log.Printf("Warning: Failed to load API config from %s: %v", s.config.APIConfigPath, err)
-		log.Printf("Using default OpenAI configuration")
+		s.logger.Warn("Failed to load API config, using default OpenAI configuration", 
+			zap.String("config_path", s.config.APIConfigPath), 
+			zap.Error(err))
 
 		// Create a default API configuration
 		apiConfig = &proxy.APIConfig{
@@ -194,7 +190,10 @@ func (s *Server) initializeAPIRoutes() error {
 	proxyConfig, err := apiConfig.GetProxyConfigForAPI(s.config.DefaultAPIProvider)
 	if err != nil {
 		// If specified provider doesn't exist, use the default one
-		log.Printf("Warning: %v", err)
+		s.logger.Warn("Specified API provider not found, using default", 
+			zap.String("requested_provider", s.config.DefaultAPIProvider),
+			zap.String("default_provider", apiConfig.DefaultAPI),
+			zap.Error(err))
 		proxyConfig, err = apiConfig.GetProxyConfigForAPI(apiConfig.DefaultAPI)
 		if err != nil {
 			return fmt.Errorf("failed to get proxy configuration: %w", err)
@@ -217,8 +216,9 @@ func (s *Server) initializeAPIRoutes() error {
 	// Register proxy routes
 	s.server.Handler.(*http.ServeMux).Handle("/v1/", proxyHandler.Handler())
 
-	log.Printf("Initialized proxy for %s with %d allowed endpoints",
-		proxyConfig.TargetBaseURL, len(proxyConfig.AllowedEndpoints))
+	s.logger.Info("Initialized proxy", 
+		zap.String("target_base_url", proxyConfig.TargetBaseURL),
+		zap.Int("allowed_endpoints", len(proxyConfig.AllowedEndpoints)))
 
 	return nil
 }
@@ -248,8 +248,8 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(response); err != nil {
+		s.logger.Error("Failed to encode health response", zap.Error(err))
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-		log.Printf("Error encoding health response: %v\n", err)
 		return
 	}
 	// Status code 200 OK is set implicitly when the response is written successfully
@@ -654,43 +654,76 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 }
 
 func getRequestID(ctx context.Context) string {
-	if v := ctx.Value(ctxKeyRequestID); v != nil {
-		if id, ok := v.(string); ok && id != "" {
-			return id
-		}
+	if id := logging.GetRequestID(ctx); id != "" {
+		return id
 	}
 	return uuid.New().String()
 }
 
-// logRequestMiddleware logs all incoming requests with timing information
+// logRequestMiddleware logs all incoming requests with timing information and context propagation
 func (s *Server) logRequestMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		startTime := time.Now()
-		requestID := uuid.New().String()
-		ctx := context.WithValue(r.Context(), ctxKeyRequestID, requestID)
+		
+		// Extract or generate request ID - check headers first for external correlation
+		requestID := r.Header.Get("X-Request-ID")
+		if requestID == "" {
+			requestID = r.Header.Get("X-Correlation-ID")
+		}
+		if requestID == "" {
+			requestID = uuid.New().String()
+		}
+		
+		// Extract correlation ID if different from request ID
+		correlationID := r.Header.Get("X-Correlation-ID")
+		if correlationID == "" && r.Header.Get("X-Request-ID") != "" {
+			correlationID = r.Header.Get("X-Request-ID")
+		}
+		
+		// Build context with all available fields
+		ctx := r.Context()
+		ctx = logging.WithRequestID(ctx, requestID)
+		if correlationID != "" && correlationID != requestID {
+			ctx = logging.WithCorrelationID(ctx, correlationID)
+		}
+		
+		// Extract client IP
+		clientIP := r.RemoteAddr
+		if idx := strings.LastIndex(clientIP, ":"); idx != -1 {
+			clientIP = clientIP[:idx]
+		}
+		ctx = logging.WithClientIP(ctx, clientIP)
+		ctx = logging.WithUserAgent(ctx, r.UserAgent())
+		ctx = logging.WithComponent(ctx, logging.ComponentServer)
 
 		// Create a response writer that captures status code
 		rw := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		
+		// Set response headers for correlation
+		rw.Header().Set("X-Request-ID", requestID)
+		if correlationID != "" {
+			rw.Header().Set("X-Correlation-ID", correlationID)
+		}
 
-		s.logger.Info("request started",
-			zap.String("request_id", requestID),
-			zap.String("method", r.Method),
-			zap.String("path", r.URL.Path),
-			zap.String("remote_addr", r.RemoteAddr),
-			zap.String("user_agent", r.UserAgent()),
-		)
+		// Create context-aware logger
+		ctxLogger := logging.WithContext(s.logger, ctx)
+		
+		ctxLogger.Info("Request started",
+			zap.String(logging.FieldMethod, r.Method),
+			zap.String(logging.FieldPath, r.URL.Path),
+			zap.String(logging.FieldRemoteAddr, r.RemoteAddr))
 
-		// Call the next handler
+		// Call the next handler with enhanced context
 		next(rw, r.WithContext(ctx))
 
 		duration := time.Since(startTime)
-		s.logger.Info("request completed",
-			zap.String("request_id", requestID),
-			zap.String("method", r.Method),
-			zap.String("path", r.URL.Path),
-			zap.Int("status_code", rw.statusCode),
-			zap.Duration("duration", duration),
-		)
+		durationMs := float64(duration.Nanoseconds()) / 1e6
+		
+		ctxLogger.Info("Request completed",
+			zap.String(logging.FieldMethod, r.Method),
+			zap.String(logging.FieldPath, r.URL.Path),
+			zap.Int(logging.FieldStatusCode, rw.statusCode),
+			zap.Float64(logging.FieldDurationMs, durationMs))
 	}
 }
 
