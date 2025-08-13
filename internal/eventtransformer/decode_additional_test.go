@@ -24,7 +24,7 @@ func TestDecompressAndDecode_GzipJSONAndFallback(t *testing.T) {
 	}
 
 	// Fallback: non-decodable binary
-	out, ok = DecompressAndDecode(base64.StdEncoding.EncodeToString([]byte{0xff, 0xfe}), map[string]any{"Content-Type": "application/octet-stream"})
+	_, ok = DecompressAndDecode(base64.StdEncoding.EncodeToString([]byte{0xff, 0xfe}), map[string]any{"Content-Type": "application/octet-stream"})
 	if ok {
 		t.Fatalf("expected not ok for binary content")
 	}
