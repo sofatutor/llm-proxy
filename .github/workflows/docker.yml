@@ -4,6 +4,7 @@ on:
   push:
     branches: [ main ]
     tags: [ 'v*' ]
+  pull_request:
 
 jobs:
   docker:
@@ -36,28 +37,75 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha
+
+      - name: Compute sanitized image tag
+        id: set_tag
+        run: |
+          RAW_TAG="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          # Sanitize: lowercase, replace invalid chars with '-', trim leading/trailing '.' or '-'
+          TAG=$(echo "$RAW_TAG" | tr '[:upper:]' '[:lower:]' | sed -E 's|[^a-z0-9_.-]|-|g; s|^[.-]+||; s|[.-]+$||')
+          echo "name=$TAG" >> "$GITHUB_OUTPUT"
       
       - name: Set up QEMU
+        if: github.event_name == 'push' || startsWith(github.ref, 'refs/tags/')
         uses: docker/setup-qemu-action@v2
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       
       - name: Login to GitHub Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Build and push
+      - name: Build and push PR branch - linux/amd64
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/${{ github.repository }}:${{ steps.set_tag.outputs.name }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push (branches/tags) - linux/amd64,linux/arm64
+        if: github.event_name == 'push' || startsWith(github.ref, 'refs/tags/')
         uses: docker/build-push-action@v4
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max 
+          cache-to: type=gha,mode=max
+
+      - name: Pull pushed image and tag for Makefile
+        run: |
+          # Use the same sanitized tag computed earlier
+          TAG="${{ steps.set_tag.outputs.name }}"
+          echo "Pulling ghcr.io/${{ github.repository }}:${TAG}"
+          docker pull ghcr.io/${{ github.repository }}:${TAG}
+          docker tag ghcr.io/${{ github.repository }}:${TAG} llm-proxy:${TAG}
+
+      - name: Smoke test using Makefile (run + health)
+        run: |
+          make docker-smoke IMAGE=llm-proxy:${{ steps.set_tag.outputs.name }}
+        env:
+          MANAGEMENT_TOKEN: smoke-token
+
+      - name: Debug logs
+        if: failure()
+        run: |
+          echo "docker ps -a:" && docker ps -a || true
+          echo "docker logs (tail 300):" && docker logs --tail 300 llm-proxy || true
+          echo "Exit code:" && docker inspect llm-proxy --format='{{.State.ExitCode}}' || true
+          echo "State:" && docker inspect llm-proxy --format='{{json .State}}' || true
+
+      - name: Stop container (cleanup)
+        if: always()
+        run: make docker-stop

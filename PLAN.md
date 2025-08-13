@@ -135,6 +135,7 @@ _Optional/experimental features (e.g., alerting, tracing, benchmarks) are tracke
 
 ### Phase 5: Core Features
 - Implement proxy logic, logging/observability, admin UI, token management, database, and core tests.
+- Add opt-in PostgreSQL support while keeping SQLite default. See `docs/issues/phase-5-postgres-support.md`.
 - See: `phase-5-generic-async-middleware.md`, `phase-5-async-event-bus.md`, `phase-5-event-dispatcher-service.md`, `phase-5-log-integration.md`, `phase-5-ui-tests.md`, etc.
 
 ### Phase 6: Production Readiness
