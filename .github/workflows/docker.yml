@@ -36,6 +36,14 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha
+
+      - name: Compute sanitized image tag
+        id: set_tag
+        run: |
+          RAW_TAG="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          # Sanitize: lowercase, replace invalid chars with '-', trim leading/trailing '.' or '-'
+          TAG=$(echo "$RAW_TAG" | tr '[:upper:]' '[:lower:]' | sed -E 's|[^a-z0-9_.-]|-|g; s|^[.-]+||; s|[.-]+$||')
+          echo "name=$TAG" >> "$GITHUB_OUTPUT"
       
       - name: Set up QEMU
         if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
@@ -59,7 +67,7 @@ jobs:
           context: .
           platforms: linux/amd64
           load: true
-          tags: llm-proxy:${{ github.head_ref || github.ref_name }}
+          tags: llm-proxy:${{ steps.set_tag.outputs.name }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -79,15 +87,16 @@ jobs:
       - name: Pull pushed image and tag for Makefile
         if: github.event_name != 'pull_request'
         run: |
-          # Use sanitized branch tag (ref name with slashes replaced by '-')
-          BRANCH_TAG="${GITHUB_REF_NAME//\//-}"
+          # Compute sanitized branch tag (lowercase, replace invalid chars)
+          BR_RAW="${GITHUB_REF_NAME}"
+          BRANCH_TAG=$(echo "$BR_RAW" | tr '[:upper:]' '[:lower:]' | sed -E 's|[^a-z0-9_.-]|-|g; s|^[.-]+||; s|[.-]+$||')
           echo "Pulling ghcr.io/${{ github.repository }}:${BRANCH_TAG}"
           docker pull ghcr.io/${{ github.repository }}:${BRANCH_TAG}
           docker tag ghcr.io/${{ github.repository }}:${BRANCH_TAG} llm-proxy:${BRANCH_TAG}
 
       - name: Smoke test using Makefile (run + health)
         run: |
-          make docker-smoke IMAGE=llm-proxy:${{ github.head_ref || github.ref_name }}
+          make docker-smoke IMAGE=llm-proxy:${{ steps.set_tag.outputs.name }}
         env:
           MANAGEMENT_TOKEN: smoke-token
 
