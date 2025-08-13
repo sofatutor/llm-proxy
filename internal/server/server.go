@@ -126,7 +126,7 @@ func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectSto
 		if err != nil {
 			logger.Fatal("Failed to set test key in Redis", zap.Error(err))
 		}
-		logger.Debug("Successfully set test key in Redis")
+		logger.Debug("Successfully set test key in Redis", zap.String("key", "llm-proxy-debug"))
 		adapter := &eventbus.RedisGoClientAdapter{Client: client}
 		bus = eventbus.NewRedisEventBusPublisher(adapter, "llm-proxy-events")
 		logger.Info("Using Redis event bus", zap.String("addr", cfg.RedisAddr), zap.Int("db", cfg.RedisDB))
