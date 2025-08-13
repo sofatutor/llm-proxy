@@ -747,6 +747,80 @@ func TestHandleTokens_Create_DurationTooLong(t *testing.T) {
 	}
 }
 
+func TestInitializeAPIRoutes_FallbackToDefaultWhenProviderMissing(t *testing.T) {
+	// Create a real config file where DefaultAPI is test_api
+	tmpFile, err := os.CreateTemp("", "api_config_*.yaml")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer func() {
+		_ = os.Remove(tmpFile.Name())
+	}()
+	configYAML := `
+default_api: test_api
+apis:
+  test_api:
+    base_url: https://api.example.com
+    allowed_endpoints:
+      - /v1/test
+    allowed_methods:
+      - GET
+`
+	if _, err := tmpFile.Write([]byte(configYAML)); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+	_ = tmpFile.Close()
+
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, APIConfigPath: tmpFile.Name(), DefaultAPIProvider: "missing_api", EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	if err := srv.initializeAPIRoutes(); err != nil {
+		t.Fatalf("initializeAPIRoutes failed: %v", err)
+	}
+
+	// Verify the route from default provider exists
+	req := httptest.NewRequest("GET", "/v1/test", nil)
+	rr := httptest.NewRecorder()
+	srv.server.Handler.ServeHTTP(rr, req)
+	if rr.Code == http.StatusNotFound {
+		t.Fatalf("expected /v1/test to be registered via default provider fallback")
+	}
+}
+
+func TestLogRequestMiddleware_ServerError(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	called := false
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("error"))
+	})
+	mw := srv.logRequestMiddleware(h)
+	req := httptest.NewRequest("GET", "/err", nil)
+	rr := httptest.NewRecorder()
+	mw.ServeHTTP(rr, req)
+	if !called {
+		t.Fatalf("handler not called")
+	}
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rr.Code)
+	}
+}
+
+func TestNew_UnknownEventBusBackend_ReturnsError(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "unknown-backend"}
+	_, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	if err == nil {
+		t.Fatalf("expected error for unknown event bus backend")
+	}
+	if !strings.Contains(err.Error(), "unknown event bus backend") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 // mockEventBus implements the eventbus.EventBus interface for testing
 type mockEventBus struct{}
 
