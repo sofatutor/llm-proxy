@@ -163,6 +163,80 @@ The dispatcher transforms internal events into a rich format suitable for extern
 - **Graceful Shutdown**: SIGINT/SIGTERM handling
 - **Extensible**: Easy to add new backends
 
+## Helicone Manual Logger Integration
+
+The Helicone dispatcher plugin transforms LLM Proxy events into Helicone's [Manual Logger format](https://docs.helicone.ai/features/advanced-usage/custom-models). This enables detailed cost tracking, analytics, and monitoring of custom model endpoints through Helicone.
+
+### Payload Mapping Details
+
+Our implementation maps LLM Proxy events to the Helicone Manual Logger format as follows:
+
+```json
+{
+  "providerRequest": {
+    "url": "/v1/chat/completions",
+    "json": { "model": "gpt-4", "messages": [...] },
+    "meta": {
+      "Helicone-Provider": "openai",
+      "Helicone-User-Id": "user-123",
+      "request_id": "req-456",
+      "provider": "openai"
+    }
+  },
+  "providerResponse": {
+    "status": 200,
+    "headers": {},
+    "json": { "choices": [...], "usage": {...} },
+    "base64": "..." // for non-JSON responses
+  },
+  "timing": {
+    "startTime": { "seconds": 1640995200, "milliseconds": 0 },
+    "endTime": { "seconds": 1640995201, "milliseconds": 250 }
+  }
+}
+```
+
+### Key Features
+
+**Provider Detection**: Automatically sets `Helicone-Provider` header to prevent categorization as "CUSTOM" model, enabling proper cost calculation.
+
+**Usage Injection**: Injects computed token usage into response JSON when available:
+```json
+{
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 25,
+    "total_tokens": 35
+  }
+}
+```
+
+**Request ID Propagation**: Preserves `request_id` from middleware context for correlation.
+
+**Non-JSON Response Handling**: For binary or non-JSON responses:
+- Sets `providerResponse.json` to empty object with explanatory note
+- Includes `base64` field for binary data when available
+
+**Metadata Enrichment**: Forwards relevant metadata fields and user properties to Helicone headers.
+
+### Configuration
+
+```bash
+# Basic usage
+llm-proxy dispatcher --service helicone --api-key $HELICONE_API_KEY
+
+# Custom endpoint (e.g., for EU region)
+llm-proxy dispatcher --service helicone \
+  --api-key $HELICONE_API_KEY \
+  --endpoint https://eu.api.helicone.ai/custom/v1/log
+```
+
+### References
+
+- [Helicone Manual Logger Documentation](https://docs.helicone.ai/features/advanced-usage/custom-models)
+- [Implementation](../internal/dispatcher/plugins/helicone.go): `heliconePayloadFromEvent` function
+- [Tests](../internal/dispatcher/plugins/helicone_payload_test.go): Payload transformation examples
+
 ## Important: In-Memory vs. Redis Event Bus
 
 - The **in-memory event bus** only works within a single process. If you run the proxy and dispatcher as separate processes or containers, they will not share events.

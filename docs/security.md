@@ -233,6 +233,77 @@ The following operations generate audit events:
 - **Authentication**: successful and failed authentication attempts
 - **Management API**: all administrative operations
 
+#### Usage Examples
+
+**Basic Audit Logger Setup**:
+```go
+// File-only audit logging
+auditConfig := audit.LoggerConfig{
+    FilePath:  "./data/audit.log",
+    CreateDir: true,
+}
+auditLogger, err := audit.NewLogger(auditConfig)
+if err != nil {
+    log.Fatal(err)
+}
+defer auditLogger.Close()
+
+// Log a token creation event
+event := audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultSuccess).
+    WithProjectID("proj-123").
+    WithRequestID("req-456").
+    WithTokenID("tok-1234567890abcdef").
+    WithDetail("duration_minutes", 60)
+
+err = auditLogger.Log(event)
+if err != nil {
+    log.Printf("Failed to log audit event: %v", err)
+}
+```
+
+**Dual Storage (File + Database)**:
+```go
+// Enable both file and database storage
+auditConfig := audit.LoggerConfig{
+    FilePath:       "./data/audit.log",
+    CreateDir:      true,
+    DatabaseStore:  db,
+    EnableDatabase: true,
+}
+auditLogger, err := audit.NewLogger(auditConfig)
+```
+
+**Audit Event Correlation**:
+```go
+// Create audit event with request context
+func (s *Server) auditTokenAccess(r *http.Request, tokenID, projectID string, result audit.ResultType) {
+    requestID, _ := logging.GetRequestID(r.Context())
+    clientIP := s.getClientIP(r)
+    
+    event := audit.NewEvent(audit.ActionTokenAccess, audit.ActorClient, result).
+        WithRequestID(requestID).
+        WithProjectID(projectID).
+        WithTokenID(tokenID).
+        WithClientIP(clientIP).
+        WithHTTPMethod(r.Method).
+        WithEndpoint(r.URL.Path)
+    
+    _ = s.auditLogger.Log(event)
+}
+```
+
+**Query Audit Events**:
+```bash
+# Search audit log file for token events
+grep "token\." /data/audit.log | jq '.timestamp, .action, .result'
+
+# Find all failed authentication attempts
+grep '"result":"failure"' /data/audit.log | grep "token.access"
+
+# Extract events for specific project
+grep '"project_id":"proj-123"' /data/audit.log
+```
+
 ### Security Monitoring
 
 - Monitor for unusual access patterns
