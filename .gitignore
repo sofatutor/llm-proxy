@@ -69,6 +69,10 @@ Thumbs.db
 coverage.*
 /coverage/
 
+# Coverage outputs
+coverage.out
+coverage.html
+
 # Node (for admin UI, if applicable)
 node_modules/
 npm-debug.log*
