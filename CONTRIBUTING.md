@@ -54,7 +54,6 @@ This project **strictly follows** test-driven development (TDD) principles:
 
 **Coverage Requirements:**
 - **Minimum**: 90% code coverage for all packages under `internal/`
-- **Current**: 75.4% (needs improvement to reach target)
 - **Enforcement**: CI fails if coverage drops below minimum
 - **New Code**: Must maintain or improve overall coverage percentage
 
