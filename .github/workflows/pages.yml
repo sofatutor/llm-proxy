@@ -44,7 +44,7 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Build with Jekyll (source: docs → public)
+      - name: "Build with Jekyll (source: docs → public)"
         uses: actions/jekyll-build-pages@v1
         with:
           source: ./docs
