@@ -1,4 +1,4 @@
-name: Deploy Coverage to Pages
+name: Build & Deploy Site (with Coverage)
 
 on:
   push:
@@ -17,15 +17,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Build job
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.23'
           cache: true
@@ -33,24 +32,29 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
-      - name: Run tests with coverage
-        run: go test -v -race -parallel=4 -coverprofile=coverage.txt -covermode=atomic -coverpkg=./internal/... ./...
+      - name: Run tests with coverage (CI-style)
+        run: go test -v -race -parallel=4 -coverprofile=coverage_ci.txt -covermode=atomic -coverpkg=./internal/... ./...
 
-      - name: Generate HTML coverage report
+      - name: Generate HTML coverage into docs/coverage/
         run: |
-          mkdir -p public
-          go tool cover -html=coverage.txt -o public/index.html
-          echo "📊 Coverage report generated for GitHub Pages"
+          mkdir -p docs/coverage
+          go tool cover -html=coverage_ci.txt -o docs/coverage/index.html
+          echo "📊 Coverage report generated at docs/coverage/index.html"
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+
+      - name: "Build with Jekyll (source: docs → public)"
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./docs
+          destination: ./public
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: './public'
 
-  # Deployment job
   deploy:
     runs-on: ubuntu-latest
     needs: build
