@@ -50,7 +50,7 @@ RUN groupadd -f -g ${GID} ${USER} || true \
 	&& grep -q "^${USER} ALL=(ALL) NOPASSWD: ALL$" /etc/sudoers || echo "${USER} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 # Install Go (1.23.x) and set up PATH for all users
-RUN curl -fsSL https://go.dev/dl/go1.23.0.linux-amd64.tar.gz -o /tmp/go.tgz \
+RUN curl -fsSL https://go.dev/dl/go1.23.9.linux-amd64.tar.gz -o /tmp/go.tgz \
 	&& rm -rf /usr/local/go \
 	&& tar -C /usr/local -xzf /tmp/go.tgz \
 	&& ln -sf /usr/local/go/bin/go /usr/local/bin/go \
@@ -63,19 +63,23 @@ ENV GOPATH=/home/${USER}/go
 ENV PATH=/usr/local/go/bin:${GOPATH}/bin:${PATH}
 ENV GOMODCACHE=/home/${USER}/go/pkg/mod
 ENV GOCACHE=/home/${USER}/.cache/go-build
+ENV GOTOOLCHAIN=local
 
-RUN mkdir -p ${GOPATH} ${GOMODCACHE} ${GOCACHE} \
+RUN mkdir -p ${GOPATH} ${GOMODCACHE} ${GOCACHE} ${GOPATH}/pkg/sumdb \
 	&& chown -R ${UID}:${GID} ${GOPATH} /home/${USER}/.cache
 
 # Important for background agents: do NOT copy source code here.
 # The agent will clone the repository into the workspace later.
 
 COPY --chown=${UID}:${GID} go.mod go.sum /home/${USER}/modcache/
-RUN --mount=type=cache,target=/home/${USER}/go/pkg/mod,sharing=locked \
-	--mount=type=cache,target=/home/${USER}/.cache/go-build,sharing=locked \
-	cd /home/${USER}/modcache && go mod download
 
+# Switch to non-root user before running Go commands so GOPATH/cache
+# directories are created with correct ownership and remain writable at runtime
 USER ${USER}
+
+RUN --mount=type=cache,target=/home/${USER}/go/pkg/mod,sharing=locked \
+    --mount=type=cache,target=/home/${USER}/.cache/go-build,sharing=locked \
+    cd /home/${USER}/modcache && go mod download
 WORKDIR /home/${USER}
 
 # Default shell
