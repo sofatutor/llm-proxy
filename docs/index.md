@@ -12,7 +12,7 @@ Open-source reverse proxy for LLM APIs with withering tokens, management UI, and
 - Admin UI for projects, tokens, and audit trails
 - Async event system with pluggable dispatcher integrations (file, Lunary, Helicone)
 
-Get the big picture in the [Architecture](./architecture.md) and jump to the [Quickstart](./quickstart.md).
+Get the big picture in the [Architecture](./architecture.md), try the [Quickstart](./quickstart.md), and explore the [Admin UI]({{ site.baseurl }}/admin/).
 
 ### Contributors welcome
 
