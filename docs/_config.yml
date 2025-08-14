@@ -1,7 +1,7 @@
 title: "LLM Proxy"
 description: "Open-source reverse proxy for LLM APIs with withering tokens, management UI, and observability"
-url: "https://sofatutor.github.io/llm-proxy"
-baseurl: ""
+url: "https://sofatutor.github.io"
+baseurl: "/llm-proxy"
 
 # GitHub Pages defaults
 markdown: kramdown

@@ -1,4 +1,4 @@
-[Home](./index.md) | [Features](./features.md) | [Screenshots](./screenshots.md) | [Quickstart](./quickstart.md) | [CLI Reference](./cli-reference.md) | [Architecture](./architecture.md) | [Contributing](./contributing.md) | [Coverage](./coverage/) | [Roadmap](../PLAN.md)
+[Home]({{ site.baseurl }}/) | [Features]({{ site.baseurl }}/features) | [Screenshots]({{ site.baseurl }}/screenshots) | [Quickstart]({{ site.baseurl }}/quickstart) | [CLI Reference]({{ site.baseurl }}/cli-reference) | [Architecture]({{ site.baseurl }}/architecture) | [Contributing]({{ site.baseurl }}/contributing) | [Coverage]({{ site.baseurl }}/coverage/) | [Roadmap](https://github.com/sofatutor/llm-proxy/blob/main/PLAN.md)
 
 ## Quickstart
 
