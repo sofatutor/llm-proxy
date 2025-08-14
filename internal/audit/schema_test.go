@@ -91,6 +91,16 @@ func TestEvent_WithCorrelationID(t *testing.T) {
 	assert.Same(t, event, result)
 }
 
+func TestEvent_WithClientIP(t *testing.T) {
+	event := NewEvent(ActionTokenCreate, ActorManagement, ResultSuccess)
+	clientIP := "192.168.1.100"
+
+	result := event.WithClientIP(clientIP)
+
+	assert.Equal(t, clientIP, result.ClientIP)
+	assert.Same(t, event, result) // Should return same instance for chaining
+}
+
 func TestEvent_WithDetail(t *testing.T) {
 	tests := []struct {
 		name  string

@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"io"
 	"net"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
+	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/stretchr/testify/require"
 )
 
@@ -259,4 +261,152 @@ func TestCaptureResponseWriter_Flush(t *testing.T) {
 	crw := &captureResponseWriter{ResponseWriter: rw}
 	// Should not panic
 	crw.Flush()
+}
+
+func TestObservabilityMiddleware_RequestBodyHandling(t *testing.T) {
+	bus := eventbus.NewInMemoryEventBus(10)
+	mw := NewObservabilityMiddleware(ObservabilityConfig{Enabled: true, EventBus: bus}, nil)
+
+	tests := []struct {
+		name        string
+		method      string
+		body        string
+		expectBody  bool
+	}{
+		{"POST with body", http.MethodPost, `{"test": "data"}`, true},
+		{"PUT with body", http.MethodPut, `{"test": "data"}`, true},
+		{"PATCH with body", http.MethodPatch, `{"test": "data"}`, true},
+		{"GET no body capture", http.MethodGet, `{"test": "data"}`, false},
+		{"DELETE no body capture", http.MethodDelete, `{"test": "data"}`, false},
+		{"POST with empty body", http.MethodPost, "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("ok"))
+			})
+
+			wrapped := mw.Middleware()(handler)
+
+			var req *http.Request
+			if tt.body != "" {
+				req = httptest.NewRequest(tt.method, "/test", bytes.NewBufferString(tt.body))
+			} else {
+				req = httptest.NewRequest(tt.method, "/test", nil)
+			}
+			req.Header.Set("X-Request-ID", "req1")
+			rr := httptest.NewRecorder()
+
+			ch := bus.Subscribe()
+			wrapped.ServeHTTP(rr, req)
+
+			select {
+			case evt := <-ch:
+				if tt.expectBody && tt.body != "" {
+					require.Equal(t, tt.body, string(evt.RequestBody))
+				} else if !tt.expectBody {
+					require.Empty(t, evt.RequestBody)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("event not received")
+			}
+		})
+	}
+}
+
+func TestObservabilityMiddleware_RequestIDResolution(t *testing.T) {
+	bus := eventbus.NewInMemoryEventBus(10)
+	mw := NewObservabilityMiddleware(ObservabilityConfig{Enabled: true, EventBus: bus}, nil)
+
+	tests := []struct {
+		name           string
+		headerReqID    string
+		contextReqID   string
+		responseReqID  string
+		expectedReqID  string
+	}{
+		{"from request header", "req-header", "", "", "req-header"},
+		{"from context when no header", "", "req-context", "", "req-context"},
+		{"from response header when no header or context", "", "", "req-response", "req-response"},
+		{"header takes precedence", "req-header", "req-context", "req-response", "req-header"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tt.responseReqID != "" {
+					w.Header().Set("X-Request-ID", tt.responseReqID)
+				}
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("ok"))
+			})
+
+			wrapped := mw.Middleware()(handler)
+
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			if tt.headerReqID != "" {
+				req.Header.Set("X-Request-ID", tt.headerReqID)
+			}
+			if tt.contextReqID != "" {
+				ctx := logging.WithRequestID(req.Context(), tt.contextReqID)
+				req = req.WithContext(ctx)
+			}
+			rr := httptest.NewRecorder()
+
+			ch := bus.Subscribe()
+			wrapped.ServeHTTP(rr, req)
+
+			select {
+			case evt := <-ch:
+				require.Equal(t, tt.expectedReqID, evt.RequestID)
+			case <-time.After(time.Second):
+				t.Fatal("event not received")
+			}
+		})
+	}
+}
+
+func TestObservabilityMiddleware_RequestBodyReadError(t *testing.T) {
+	bus := eventbus.NewInMemoryEventBus(10)
+	mw := NewObservabilityMiddleware(ObservabilityConfig{Enabled: true, EventBus: bus}, nil)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	wrapped := mw.Middleware()(handler)
+
+	// Create a reader that will error on read
+	errorReader := &errorReader{err: io.ErrUnexpectedEOF}
+	req := httptest.NewRequest(http.MethodPost, "/test", errorReader)
+	req.Header.Set("X-Request-ID", "req1")
+	rr := httptest.NewRecorder()
+
+	ch := bus.Subscribe()
+	wrapped.ServeHTTP(rr, req)
+
+	select {
+	case evt := <-ch:
+		// Should still emit event even with body read error
+		require.Equal(t, "req1", evt.RequestID)
+		require.Empty(t, evt.RequestBody) // Body should be empty due to read error
+	case <-time.After(time.Second):
+		t.Fatal("event not received")
+	}
+}
+
+// errorReader simulates a reader that fails
+type errorReader struct {
+	err error
+}
+
+func (e *errorReader) Read(p []byte) (n int, err error) {
+	return 0, e.err
+}
+
+func (e *errorReader) Close() error {
+	return nil
 }

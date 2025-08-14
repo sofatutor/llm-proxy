@@ -270,6 +270,17 @@ func TestRedisEventBus_StopIsNoop(t *testing.T) {
 	bus.Stop()
 }
 
+func TestRedisEventBus_StopDirect(t *testing.T) {
+	client := newMockRedisClientLog()
+	// Create RedisEventBus directly to ensure Stop method is called
+	bus := &RedisEventBus{
+		client: client,
+		key:    "test-events",
+	}
+	// Stop should be a no-op and not panic
+	bus.Stop()
+}
+
 func TestRedisEventBus_SubscribeReturnsClosedChannel(t *testing.T) {
 	client := newMockRedisClientLog()
 	bus := NewRedisEventBusPublisher(client, "events")
