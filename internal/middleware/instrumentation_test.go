@@ -63,10 +63,12 @@ func TestObservabilityMiddleware_Streaming(t *testing.T) {
 	req.Header.Set("X-Request-ID", "req2")
 	rr := httptest.NewRecorder()
 
+	// Subscribe before invoking handler to avoid racing with async publish
+	ch := bus.Subscribe()
 	wrapped.ServeHTTP(rr, req)
 
 	select {
-	case evt := <-bus.Subscribe():
+	case evt := <-ch:
 		require.Equal(t, 3*len("data: foo\n\n"), len(evt.ResponseBody))
 		require.Equal(t, "req2", evt.RequestID)
 	case <-time.After(time.Second):

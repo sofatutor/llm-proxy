@@ -945,6 +945,89 @@ func TestHandleMetrics_EncodeError(t *testing.T) {
 	}
 }
 
+// initializeComponents error path via bad API config (no default_api and missing provider)
+func TestInitializeComponents_ErrorPath(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "api_bad_*.yaml")
+	require.NoError(t, err)
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	// Valid YAML with APIs but missing default_api
+	configYAML := `
+apis:
+  test_api:
+    base_url: https://api.example.com
+    allowed_endpoints:
+      - /v1/test
+    allowed_methods:
+      - GET
+`
+	_, err = tmpFile.Write([]byte(configYAML))
+	require.NoError(t, err)
+	require.NoError(t, tmpFile.Close())
+
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, APIConfigPath: tmpFile.Name(), DefaultAPIProvider: "missing_api", EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	if err := srv.initializeComponents(); err == nil {
+		t.Fatalf("expected initializeComponents to error with bad API config")
+	}
+}
+
+// Start should return an initialization error when components fail to init
+func TestServer_Start_InitializationFailure(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "api_bad_*.yaml")
+	require.NoError(t, err)
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	configYAML := `
+apis:
+  test_api:
+    base_url: https://api.example.com
+    allowed_endpoints:
+      - /v1/test
+    allowed_methods:
+      - GET
+`
+	_, err = tmpFile.Write([]byte(configYAML))
+	require.NoError(t, err)
+	require.NoError(t, tmpFile.Close())
+
+	cfg := &config.Config{ListenAddr: "127.0.0.1:0", RequestTimeout: time.Second, APIConfigPath: tmpFile.Name(), DefaultAPIProvider: "missing_api", EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	// Start should fail fast due to initializeComponents error
+	if err := srv.Start(); err == nil {
+		t.Fatalf("expected Start to fail due to initialization error")
+	}
+}
+
+// Encode error paths for list endpoints
+func TestHandleListProjects_EncodeError(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, ManagementToken: "tok", EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	// Auth passes
+	r := httptest.NewRequest(http.MethodGet, "/manage/projects", nil)
+	r.Header.Set("Authorization", "Bearer "+cfg.ManagementToken)
+	rr := httptest.NewRecorder()
+	failing := &mockFailingResponseWriter{ResponseWriter: rr, failOnFirstWrite: true}
+	srv.handleProjects(failing, r)
+	if failing.statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when projects encode fails, got %d", failing.statusCode)
+	}
+}
+
+func TestHandleTokens_ListEncodeError(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	r := httptest.NewRequest(http.MethodGet, "/manage/tokens", nil)
+	rr := httptest.NewRecorder()
+	failing := &mockFailingResponseWriter{ResponseWriter: rr, failOnFirstWrite: true}
+	srv.handleTokens(failing, r)
+	if failing.statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when tokens list encode fails, got %d", failing.statusCode)
+	}
+}
+
 func Test_parseInt(t *testing.T) {
 	if parseInt("", 7) != 7 {
 		t.Fatal("empty returns default")
