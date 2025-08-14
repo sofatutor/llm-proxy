@@ -53,5 +53,3 @@ SHELL ["/bin/bash", "-lc"]
 ## Start Redis server on container startup for dev terminals
 ## Note: background agents may override CMD; we keep Redis launched via a profile script
 RUN echo 'if ! pgrep -x redis-server >/dev/null 2>&1; then nohup redis-server --daemonize yes >/dev/null 2>&1 || true; fi' >> ~/.bashrc
-
-

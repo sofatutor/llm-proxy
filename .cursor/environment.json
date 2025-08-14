@@ -5,7 +5,7 @@
     "dockerfile": "Dockerfile",
     "context": ".."
   },
-  "install": "go mod download",
+  "install": "sh -lc 'if ! command -v go >/dev/null 2>&1; then curl -fsSL https://go.dev/dl/go1.23.0.linux-amd64.tar.gz -o /tmp/go.tgz && (command -v sudo >/dev/null 2>&1 && sudo rm -rf /usr/local/go || rm -rf /usr/local/go) && (command -v sudo >/dev/null 2>&1 && sudo tar -C /usr/local -xzf /tmp/go.tgz || tar -C /usr/local -xzf /tmp/go.tgz) && (command -v sudo >/dev/null 2>&1 && sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go || ln -sf /usr/local/go/bin/go /usr/local/bin/go); fi; export PATH=\"$PATH:/usr/local/go/bin\"; go version; go mod download'",
   "ports": [
     { "name": "proxy", "port": 8080 },
     { "name": "admin", "port": 8081 },
