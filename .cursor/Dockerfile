@@ -8,7 +8,7 @@ ARG GID=1000
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 	--mount=type=cache,target=/var/lib/apt,sharing=locked \
-	apt-get update \
+	apt-get -o Acquire::Check-Valid-Until=false update \
 	&& DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
 		bash \
 		ca-certificates \
