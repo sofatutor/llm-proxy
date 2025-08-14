@@ -9,6 +9,7 @@ Start with the main [README](../README.md) for a quick overview, installation, a
 ## Architecture & Design
 
 - **[Architecture Overview](architecture.md)** - Complete system architecture, components, and data flow
+- **[Code Organization Guide](code-organization.md)** - Package structure, layering, and dependency management  
 - **[Proxy Design](proxy-design.md)** - Transparent proxy implementation details
 - **[Caching Strategy](caching-strategy.md)** - Token caching and performance optimization
 
@@ -38,8 +39,10 @@ The [OpenAPI specification](../api/openapi.yaml) provides machine-readable API d
 
 ## Development & Contribution
 
+- **[Contributing Guidelines](../CONTRIBUTING.md)** - How to contribute, TDD workflow, and PR process
+- **[Testing Guide](testing-guide.md)** - Comprehensive testing practices, TDD workflow, and coverage requirements  
+- **[Code Organization Guide](code-organization.md)** - Package structure, layering, and architectural boundaries
 - **[Development Setup](copilot-agent-setup.md)** - Development environment and tooling
-- **[Contributing Guidelines](../CONTRIBUTING.md)** - How to contribute to the project
 
 ## Implementation Details
 

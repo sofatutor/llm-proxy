@@ -40,9 +40,11 @@ flowchart LR
     Clients["Clients"] --> Proxy
     Admin["Admin"] --> Proxy
     
-    subgraph Proxy["LLM Proxy"]
+    subgraph Proxy["LLM Proxy Server"]
         AuthSystem["Auth System"] --> TokenManager["Token Manager"]
         TokenManager --> ReverseProxy["Reverse Proxy"]
+        ReverseProxy --> EventBus["Event Bus"]
+        EventBus --> EventDispatcher["Event Dispatcher"]
         ReverseProxy <--> LoggingSystem["Logging System"]
         ReverseProxy <--> AuditLogger["Audit Logger"]
         AdminUI["Admin UI"] --> TokenManager
@@ -50,6 +52,24 @@ flowchart LR
         DB <--> AuditLogger
         AuditLogger --> AuditFile[("Audit Log File")]
     end
+    
+    subgraph EventSystem["Async Event System"]
+        EventBus
+        EventDispatcher --> FilePlugin["File Backend"]
+        EventDispatcher --> LunaryPlugin["Lunary Backend"]
+        EventDispatcher --> HeliconePlugin["Helicone Backend"]
+        EventDispatcher --> CustomPlugin["Custom Backends"]
+    end
+    
+    subgraph Storage["Data Storage"]
+        DB
+        AuditFile
+        Redis[("Redis Cache")]
+        EventLogs[("Event Logs")]
+    end
+    
+    EventBus -.-> Redis
+    EventDispatcher --> EventLogs
     
     Proxy --> API["Target API"]
 ```
@@ -61,14 +81,20 @@ flowchart TD
     Request["Client Request"] --> Middleware
     
     subgraph Middleware["Middleware Chain"]
-        Logging["Logging Middleware"] --> Audit["Audit Middleware"]
-        Audit --> Validation["Validation Middleware"] 
+        RequestID["Request ID Middleware"] --> Logging["Logging Middleware"]
+        Logging --> Instrumentation["Instrumentation Middleware"]
+        Instrumentation --> Audit["Audit Middleware"]
+        Audit --> Validation["Token Validation Middleware"] 
         Validation --> Timeout["Timeout Middleware"]
         Timeout --> Metrics["Metrics Middleware"]
     end
     
     Middleware --> Director["Director Function"] --> Transport["HTTP Transport"] --> TargetAPI["Target API"]
     TargetAPI --> Response["API Response"] --> ModifyResponse["ModifyResponse Function"] --> Client["Client"]
+    
+    Instrumentation -.-> EventBus["Event Bus (Async)"]
+    EventBus --> EventDispatcher["Event Dispatcher"]
+    EventDispatcher --> Plugins["Backend Plugins"]
     
     Audit -.-> AuditLogger["Audit Logger"]
     AuditLogger --> AuditFile[("Audit Log File")]
@@ -78,6 +104,70 @@ flowchart TD
     Director -.-> |"Error"| ErrorHandler
     Transport -.-> |"Error"| ErrorHandler
 ```
+
+## Async Event System Architecture
+
+The LLM Proxy implements a sophisticated async event system that allows for non-blocking observability and monitoring without affecting request latency.
+
+### Event Bus Design
+
+```mermaid
+flowchart TB
+    subgraph EventFlow["Event Processing Flow"]
+        Request["HTTP Request"] --> Instrumentation["Instrumentation Middleware"]
+        Instrumentation --> EventGen["Event Generation"]
+        EventGen --> Publish["Async Publish"]
+        Publish --> EventBus["Event Bus"]
+        
+        subgraph EventBus["Event Bus (In-Memory/Redis)"]
+            Buffer["Buffered Channel"]
+            Subscribers["Fan-out Subscribers"]
+            Buffer --> Subscribers
+        end
+        
+        Subscribers --> Dispatcher["Event Dispatcher"]
+        
+        subgraph Dispatcher["Event Dispatcher Service"]
+            Batching["Event Batching"]
+            Transform["Event Transformation"]
+            Routing["Backend Routing"]
+            Retry["Retry Logic"]
+            Batching --> Transform --> Routing --> Retry
+        end
+        
+        Routing --> FileBackend["File Backend"]
+        Routing --> LunaryBackend["Lunary Backend"]
+        Routing --> HeliconeBackend["Helicone Backend"]
+        Routing --> CustomBackend["Custom Backends"]
+    end
+```
+
+### Event Bus Implementations
+
+1. **In-Memory Event Bus**
+   - Uses buffered Go channels for high performance
+   - Fan-out broadcasting to multiple subscribers
+   - Configurable buffer size (default: 1000)
+   - Best for single-process deployments
+
+2. **Redis Event Bus**
+   - Redis Streams for persistent event storage
+   - Supports multi-process deployments
+   - Consumer groups for load balancing
+   - Automatic failover and recovery
+
+### Event Dispatcher Service
+
+The Event Dispatcher is a standalone service that can run:
+- **Embedded**: Within the main proxy process
+- **Standalone**: As a separate process using `llm-proxy dispatcher`
+- **Distributed**: Multiple dispatcher instances with Redis
+
+**Key Features:**
+- Pluggable backend architecture
+- Configurable batching and retry logic
+- Circuit breaker pattern for backend failures
+- Graceful shutdown with event preservation
 
 ## Core Implementation: ReverseProxy
 
