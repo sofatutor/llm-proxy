@@ -457,27 +457,27 @@ func TestMemoryRateLimiter_Reset_NonExistent(t *testing.T) {
 func TestMemoryRateLimiter_Reset_Existing(t *testing.T) {
 	limiter := NewMemoryRateLimiter(1, 5)
 	validToken, _ := GenerateToken()
-	
+
 	// First, use some quota
 	limiter.SetLimit(validToken, 1, 5)
 	allowed := limiter.Allow(validToken)
 	if !allowed {
 		t.Fatal("Expected first request to be allowed")
 	}
-	
+
 	// Use more quota to reduce available tokens
 	for i := 0; i < 4; i++ {
 		limiter.Allow(validToken)
 	}
-	
+
 	// Verify we're at capacity
 	if limiter.Allow(validToken) {
 		t.Fatal("Expected request to be rate limited")
 	}
-	
+
 	// Reset should restore full capacity
 	limiter.Reset(validToken)
-	
+
 	// Should now allow requests again
 	if !limiter.Allow(validToken) {
 		t.Fatal("Expected request to be allowed after reset")

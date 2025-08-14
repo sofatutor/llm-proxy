@@ -200,7 +200,7 @@ func TestDB_CountAuditEvents_and_GetAuditEventByID(t *testing.T) {
 	ctx := context.Background()
 	startTimeStr := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
 	endTimeStr := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
-	
+
 	// Insert multiple events with different fields to exercise search and lookups
 	e1 := audit.NewEvent(audit.ActionProjectCreate, audit.ActorManagement, audit.ResultSuccess).
 		WithProjectID("p1").WithRequestID("req-123").WithCorrelationID("corr-abc").WithDetail("http_method", "POST").WithDetail("endpoint", "/manage/projects").WithClientIP("198.51.100.1")
@@ -208,7 +208,7 @@ func TestDB_CountAuditEvents_and_GetAuditEventByID(t *testing.T) {
 		WithProjectID("p2").WithRequestID("req-456").WithCorrelationID("corr-def").WithDetail("http_method", "POST").WithDetail("endpoint", "/manage/tokens").WithClientIP("198.51.100.2").WithDetail("error", "boom")
 	e3 := audit.NewEvent(audit.ActionProjectDelete, audit.ActorSystem, audit.ResultSuccess).
 		WithProjectID("p3").WithRequestID("req-789").WithCorrelationID("corr-ghi").WithDetail("http_method", "DELETE").WithDetail("endpoint", "/manage/projects/p3").WithClientIP("198.51.100.3")
-		
+
 	if err := db.StoreAuditEvent(ctx, e1); err != nil {
 		t.Fatalf("store e1: %v", err)
 	}
@@ -227,8 +227,8 @@ func TestDB_CountAuditEvents_and_GetAuditEventByID(t *testing.T) {
 
 	// Count with various filters to improve coverage
 	tests := []struct {
-		name   string
-		filter AuditEventFilters
+		name        string
+		filter      AuditEventFilters
 		minExpected int
 	}{
 		{"search request_id", AuditEventFilters{Search: "req-123"}, 1},

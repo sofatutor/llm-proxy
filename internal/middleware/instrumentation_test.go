@@ -268,10 +268,10 @@ func TestObservabilityMiddleware_RequestBodyHandling(t *testing.T) {
 	mw := NewObservabilityMiddleware(ObservabilityConfig{Enabled: true, EventBus: bus}, nil)
 
 	tests := []struct {
-		name        string
-		method      string
-		body        string
-		expectBody  bool
+		name       string
+		method     string
+		body       string
+		expectBody bool
 	}{
 		{"POST with body", http.MethodPost, `{"test": "data"}`, true},
 		{"PUT with body", http.MethodPut, `{"test": "data"}`, true},
@@ -321,11 +321,11 @@ func TestObservabilityMiddleware_RequestIDResolution(t *testing.T) {
 	mw := NewObservabilityMiddleware(ObservabilityConfig{Enabled: true, EventBus: bus}, nil)
 
 	tests := []struct {
-		name           string
-		headerReqID    string
-		contextReqID   string
-		responseReqID  string
-		expectedReqID  string
+		name          string
+		headerReqID   string
+		contextReqID  string
+		responseReqID string
+		expectedReqID string
 	}{
 		{"from request header", "req-header", "", "", "req-header"},
 		{"from context when no header", "", "req-context", "", "req-context"},

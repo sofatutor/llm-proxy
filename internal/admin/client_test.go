@@ -358,6 +358,32 @@ func TestAPIClient_DeleteProject(t *testing.T) {
 	}
 }
 
+func TestAPIClient_DeleteProject_Error(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	client := NewAPIClient(server.URL, "test-token")
+	ctx := context.Background()
+
+	err := client.DeleteProject(ctx, "1")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestAPIClient_DeleteProject_InvalidURL(t *testing.T) {
+	// Test with malformed baseURL to trigger newRequest error
+	client := NewAPIClient("://invalid-url", "test-token")
+	ctx := context.Background()
+
+	err := client.DeleteProject(ctx, "1")
+	if err == nil {
+		t.Fatal("expected error for invalid URL, got nil")
+	}
+}
+
 func TestAPIClient_GetTokens(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tokens := []Token{

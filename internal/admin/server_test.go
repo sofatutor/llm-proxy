@@ -31,6 +31,170 @@ func TestGetSessionSecret(t *testing.T) {
 	}
 }
 
+func TestNewServer_Success(t *testing.T) {
+	// Create a temporary template directory for testing
+	tmpDir := t.TempDir()
+	templateDir := filepath.Join(tmpDir, "templates")
+	err := os.MkdirAll(templateDir, 0755)
+	require.NoError(t, err)
+
+	// Create subdirectories and templates to avoid template loading errors
+	subDirs := []string{"projects", "tokens", "audit"}
+	for _, subDir := range subDirs {
+		err = os.MkdirAll(filepath.Join(templateDir, subDir), 0755)
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(templateDir, subDir, "test.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+		require.NoError(t, err)
+	}
+
+	// Create minimal template files to avoid template loading errors
+	err = os.WriteFile(filepath.Join(templateDir, "base.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+	require.NoError(t, err)
+
+	cfg := &config.Config{
+		LogLevel:     "info",
+		LogFormat:    "json",
+		LogFile:      "",
+		AuditEnabled: false,
+		AdminUI: config.AdminUIConfig{
+			ListenAddr:      ":8081",
+			ManagementToken: "test-token",
+			APIBaseURL:      "http://localhost:8080",
+			TemplateDir:     templateDir,
+		},
+	}
+
+	server, err := NewServer(cfg)
+	require.NoError(t, err)
+	assert.NotNil(t, server)
+	assert.NotNil(t, server.engine)
+	assert.NotNil(t, server.apiClient)
+	assert.NotNil(t, server.logger)
+	assert.NotNil(t, server.auditLogger)
+	assert.Equal(t, cfg.AdminUI.ListenAddr, server.server.Addr)
+}
+
+func TestNewServer_NoManagementToken(t *testing.T) {
+	// Create a temporary template directory for testing
+	tmpDir := t.TempDir()
+	templateDir := filepath.Join(tmpDir, "templates")
+	err := os.MkdirAll(templateDir, 0755)
+	require.NoError(t, err)
+
+	// Create subdirectories and templates to avoid template loading errors
+	subDirs := []string{"projects", "tokens", "audit"}
+	for _, subDir := range subDirs {
+		err = os.MkdirAll(filepath.Join(templateDir, subDir), 0755)
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(templateDir, subDir, "test.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+		require.NoError(t, err)
+	}
+
+	// Create minimal template files to avoid template loading errors
+	err = os.WriteFile(filepath.Join(templateDir, "base.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+	require.NoError(t, err)
+
+	cfg := &config.Config{
+		LogLevel:     "info",
+		LogFormat:    "text",
+		LogFile:      "",
+		AuditEnabled: false,
+		AdminUI: config.AdminUIConfig{
+			ListenAddr:      ":8081",
+			ManagementToken: "", // No token
+			APIBaseURL:      "http://localhost:8080",
+			TemplateDir:     templateDir,
+		},
+	}
+
+	server, err := NewServer(cfg)
+	require.NoError(t, err)
+	assert.NotNil(t, server)
+	assert.Nil(t, server.apiClient) // Should be nil when no token
+}
+
+func TestNewServer_AuditEnabled(t *testing.T) {
+	// Create temporary directory for audit log
+	tempDir := t.TempDir()
+	auditFile := filepath.Join(tempDir, "audit.log")
+	templateDir := filepath.Join(tempDir, "templates")
+	err := os.MkdirAll(templateDir, 0755)
+	require.NoError(t, err)
+
+	// Create subdirectories and templates to avoid template loading errors
+	subDirs := []string{"projects", "tokens", "audit"}
+	for _, subDir := range subDirs {
+		err = os.MkdirAll(filepath.Join(templateDir, subDir), 0755)
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(templateDir, subDir, "test.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+		require.NoError(t, err)
+	}
+
+	// Create minimal template files to avoid template loading errors
+	err = os.WriteFile(filepath.Join(templateDir, "base.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+	require.NoError(t, err)
+
+	cfg := &config.Config{
+		LogLevel:       "debug", // Test debug mode
+		LogFormat:      "json",
+		LogFile:        "",
+		AuditEnabled:   true,
+		AuditLogFile:   auditFile,
+		AuditCreateDir: true,
+		AdminUI: config.AdminUIConfig{
+			ListenAddr:      ":8081",
+			ManagementToken: "test-token",
+			APIBaseURL:      "http://localhost:8080",
+			TemplateDir:     templateDir,
+		},
+	}
+
+	server, err := NewServer(cfg)
+	require.NoError(t, err)
+	assert.NotNil(t, server)
+	assert.NotNil(t, server.auditLogger)
+}
+
+func TestNewServer_AuditLoggerError(t *testing.T) {
+	tmpDir := t.TempDir()
+	templateDir := filepath.Join(tmpDir, "templates")
+	err := os.MkdirAll(templateDir, 0755)
+	require.NoError(t, err)
+
+	// Create subdirectories and templates to avoid template loading errors
+	subDirs := []string{"projects", "tokens", "audit"}
+	for _, subDir := range subDirs {
+		err = os.MkdirAll(filepath.Join(templateDir, subDir), 0755)
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(templateDir, subDir, "test.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+		require.NoError(t, err)
+	}
+
+	// Create minimal template files to avoid template loading errors
+	err = os.WriteFile(filepath.Join(templateDir, "base.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+	require.NoError(t, err)
+
+	cfg := &config.Config{
+		LogLevel:       "info",
+		LogFormat:      "json",
+		LogFile:        "",
+		AuditEnabled:   true,
+		AuditLogFile:   "/invalid/path/audit.log", // Invalid path
+		AuditCreateDir: false,
+		AdminUI: config.AdminUIConfig{
+			ListenAddr:      ":8081",
+			ManagementToken: "test-token",
+			APIBaseURL:      "http://localhost:8080",
+			TemplateDir:     templateDir,
+		},
+	}
+
+	server, err := NewServer(cfg)
+	assert.Error(t, err)
+	assert.Nil(t, server)
+	assert.Contains(t, err.Error(), "failed to initialize admin audit logger")
+}
+
 // testTemplateDir returns the absolute path to the test template directory, robust to CWD.
 func testTemplateDir() string {
 	_, filename, _, ok := runtime.Caller(0)
@@ -238,6 +402,58 @@ func TestServer_HandleDashboard_Error(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500 for dashboard error, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleDashboard_WithHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dashboardFile := createTestTemplate(t, "dashboard.html", "<html><body>dashboard</body></html>")
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(dashboardFile)
+
+	s.engine.GET("/dashboard", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{DashboardData: &DashboardData{TotalProjects: 1, TotalTokens: 2, ActiveTokens: 1, ExpiredTokens: 0, TotalRequests: 10, RequestsToday: 5, RequestsThisWeek: 7}}
+		c.Set("apiClient", client)
+		s.handleDashboard(c)
+	})
+
+	// Test with X-Forwarded-For header
+	req, _ := http.NewRequest("GET", "/dashboard", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.1,10.0.0.1")
+	req.Header.Set("User-Agent", "Test Browser")
+	req.Header.Set("Referer", "https://example.com")
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 with X-Forwarded-For, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleDashboard_WithRealIP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dashboardFile := createTestTemplate(t, "dashboard.html", "<html><body>dashboard</body></html>")
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(dashboardFile)
+
+	s.engine.GET("/dashboard", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{DashboardData: &DashboardData{TotalProjects: 1, TotalTokens: 2, ActiveTokens: 1, ExpiredTokens: 0, TotalRequests: 10, RequestsToday: 5, RequestsThisWeek: 7}}
+		c.Set("apiClient", client)
+		s.handleDashboard(c)
+	})
+
+	// Test with X-Real-IP header (when X-Forwarded-For is not present)
+	req, _ := http.NewRequest("GET", "/dashboard", nil)
+	req.Header.Set("X-Real-IP", "192.168.1.100")
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 with X-Real-IP, got %d", w.Code)
 	}
 }
 
