@@ -189,6 +189,49 @@ func TestDB_ListAuditEvents(t *testing.T) {
 	}
 }
 
+func TestDB_CountAuditEvents_and_GetAuditEventByID(t *testing.T) {
+    db, err := New(Config{Path: ":memory:"})
+    if err != nil {
+        t.Fatalf("Failed to create test database: %v", err)
+    }
+    defer func() { _ = db.Close() }()
+
+    ctx := context.Background()
+    // Insert multiple events with different fields to exercise search and lookups
+    e1 := audit.NewEvent(audit.ActionProjectCreate, audit.ActorManagement, audit.ResultSuccess).
+        WithProjectID("p1").WithRequestID("req-123").WithDetail("http_method", "POST").WithDetail("endpoint", "/manage/projects").WithClientIP("198.51.100.1")
+    e2 := audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure).
+        WithProjectID("p2").WithRequestID("req-456").WithDetail("http_method", "POST").WithDetail("endpoint", "/manage/tokens").WithClientIP("198.51.100.2").WithDetail("error", "boom")
+    if err := db.StoreAuditEvent(ctx, e1); err != nil { t.Fatalf("store e1: %v", err) }
+    if err := db.StoreAuditEvent(ctx, e2); err != nil { t.Fatalf("store e2: %v", err) }
+
+    // Count without filters
+    n, err := db.CountAuditEvents(ctx, AuditEventFilters{})
+    if err != nil || n < 2 {
+        t.Fatalf("CountAuditEvents all: n=%d err=%v", n, err)
+    }
+
+    // Count with search matching request_id and path
+    n2, err := db.CountAuditEvents(ctx, AuditEventFilters{Search: "req-123"})
+    if err != nil || n2 < 1 {
+        t.Fatalf("CountAuditEvents search req-123: n=%d err=%v", n2, err)
+    }
+    n3, err := db.CountAuditEvents(ctx, AuditEventFilters{Search: "/manage/tokens"})
+    if err != nil || n3 < 1 {
+        t.Fatalf("CountAuditEvents search path: n=%d err=%v", n3, err)
+    }
+
+    // Verify we can fetch a concrete ID via List then GetAuditEventByID
+    items, err := db.ListAuditEvents(ctx, AuditEventFilters{ProjectID: "p1", Limit: 1})
+    if err != nil || len(items) == 0 {
+        t.Fatalf("ListAuditEvents p1: items=%d err=%v", len(items), err)
+    }
+    got, err := db.GetAuditEventByID(ctx, items[0].ID)
+    if err != nil || got == nil {
+        t.Fatalf("GetAuditEventByID: err=%v", err)
+    }
+}
+
 func TestAuditLogger_DatabaseIntegration(t *testing.T) {
 	// Create test database
 	db, err := New(Config{Path: ":memory:"})

@@ -15,6 +15,7 @@ import (
 
 	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/database"
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/sofatutor/llm-proxy/internal/token"
@@ -679,6 +680,81 @@ func TestHandleNotFound_WriteHeader_Flush_EventBus(t *testing.T) {
 	srv.eventBus = &mockEventBus{}
 	if srv.EventBus() == nil {
 		t.Error("EventBus() returned nil")
+	}
+}
+
+// Minimal mocks to exercise audit management endpoints
+type mockAuditStore struct {
+	listFunc  func(ctx context.Context, f database.AuditEventFilters) ([]database.AuditEvent, error)
+	countFunc func(ctx context.Context, f database.AuditEventFilters) (int, error)
+	getFunc   func(ctx context.Context, id string) (*database.AuditEvent, error)
+}
+
+func (m *mockAuditStore) StoreAuditEvent(ctx context.Context, e *audit.Event) error { return nil }
+func (m *mockAuditStore) ListAuditEvents(ctx context.Context, f database.AuditEventFilters) ([]database.AuditEvent, error) {
+	if m.listFunc != nil {
+		return m.listFunc(ctx, f)
+	}
+	return []database.AuditEvent{}, nil
+}
+func (m *mockAuditStore) CountAuditEvents(ctx context.Context, f database.AuditEventFilters) (int, error) {
+	if m.countFunc != nil {
+		return m.countFunc(ctx, f)
+	}
+	return 0, nil
+}
+func (m *mockAuditStore) GetAuditEventByID(ctx context.Context, id string) (*database.AuditEvent, error) {
+	if m.getFunc != nil {
+		return m.getFunc(ctx, id)
+	}
+	return &database.AuditEvent{ID: id}, nil
+}
+
+// mockDB wraps database.DB to inject a custom AuditStore in tests
+type mockDB struct{ database.AuditStore }
+
+func TestHandleAuditEvents_And_ByID(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	// Use a real in-memory DB and seed deterministic rows used by the handlers
+	realDB, err := database.New(database.Config{Path: ":memory:"})
+	require.NoError(t, err)
+	srv.db = realDB
+	ctx := context.Background()
+	// Insert deterministic event for show
+	_, err = srv.db.DB().ExecContext(ctx, "INSERT INTO audit_events (id,timestamp,action,actor,outcome) VALUES (?,?,?,?,?)", "evt-1", time.Now(), "x", "y", "success")
+	require.NoError(t, err)
+
+	// List
+	r := httptest.NewRequest(http.MethodGet, "/manage/audit?search=abc&page=1&page_size=20", nil)
+	r.Header.Set("Authorization", "Bearer "+cfg.ManagementToken)
+	w := httptest.NewRecorder()
+	srv.handleAuditEvents(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list expected 200, got %d", w.Code)
+	}
+
+	// Show
+	r2 := httptest.NewRequest(http.MethodGet, "/manage/audit/evt-1", nil)
+	r2.Header.Set("Authorization", "Bearer "+cfg.ManagementToken)
+	w2 := httptest.NewRecorder()
+	srv.handleAuditEventByID(w2, r2)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("show expected 200, got %d", w2.Code)
+	}
+}
+
+func Test_parseInt(t *testing.T) {
+	if parseInt("", 7) != 7 {
+		t.Fatal("empty returns default")
+	}
+	if parseInt("abc", 7) != 7 {
+		t.Fatal("invalid returns default")
+	}
+	if parseInt("42", 7) != 42 {
+		t.Fatal("valid parsed")
 	}
 }
 

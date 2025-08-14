@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -803,5 +804,71 @@ func TestAPIClient_CreateToken_Errors(t *testing.T) {
 	_, err = client3.CreateToken(ctx, "id", 1)
 	if err == nil || !strings.Contains(err.Error(), "decode") {
 		t.Errorf("expected decode error, got %v", err)
+	}
+}
+
+func TestAPIClient_GetAuditEvents_and_GetAuditEvent(t *testing.T) {
+	// Mock management API
+	var lastQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/manage/audit":
+			lastQuery = r.URL.RawQuery
+			io.WriteString(w, `{
+                "events": [
+                    {"id":"evt-1","outcome":"success","metadata":"{\"k\":\"v\"}"}
+                ],
+                "pagination": {"page":1, "page_size":20, "total_items":1, "total_pages":1}
+            }`)
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/manage/audit/"):
+			io.WriteString(w, `{"id":"evt-2","outcome":"failure","metadata":"{\"a\":\"b\"}"}`)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	c := &APIClient{baseURL: srv.URL, httpClient: srv.Client()}
+
+	// list
+	events, p, err := c.GetAuditEvents(context.Background(), map[string]string{"search": "req-123"}, 1, 20)
+	if err != nil {
+		t.Fatalf("GetAuditEvents error: %v", err)
+	}
+	if p == nil || p.Page != 1 || len(events) != 1 {
+		t.Fatalf("unexpected pagination/events: %+v len=%d", p, len(events))
+	}
+	if events[0].ParsedMeta == nil || (*events[0].ParsedMeta)["k"] != "v" {
+		t.Fatalf("ParsedMeta not decoded: %#v", events[0].ParsedMeta)
+	}
+	if !strings.Contains(lastQuery, "search=req-123") {
+		t.Fatalf("filters were not forwarded: %q", lastQuery)
+	}
+
+	// show
+	ev, err := c.GetAuditEvent(context.Background(), "evt-2")
+	if err != nil {
+		t.Fatalf("GetAuditEvent error: %v", err)
+	}
+	if ev.ID != "evt-2" || ev.Outcome != "failure" {
+		t.Fatalf("unexpected event: %+v", ev)
+	}
+	if ev.ParsedMeta == nil || (*ev.ParsedMeta)["a"] != "b" {
+		t.Fatalf("ParsedMeta not decoded on show: %#v", ev.ParsedMeta)
+	}
+}
+
+func TestAPIClient_GetAuditEvents_Error(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		io.WriteString(w, `{"error":"boom"}`)
+	}))
+	defer srv.Close()
+
+	c := &APIClient{baseURL: srv.URL, httpClient: srv.Client()}
+	_, _, err := c.GetAuditEvents(context.Background(), nil, 1, 20)
+	if err == nil {
+		t.Fatal("expected error for 500 response")
 	}
 }

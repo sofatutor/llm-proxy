@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
@@ -830,6 +831,107 @@ func TestServer_HandleTokensNew_Error(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500 for API error, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleAuditList(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	// minimal templates
+	_ = os.MkdirAll(filepath.Join(testTemplateDir(), "audit"), 0755)
+	_ = os.WriteFile(filepath.Join(testTemplateDir(), "audit", "list.html"), []byte("<html><body>audit list</body></html>"), 0644)
+	t.Cleanup(func() { _ = os.Remove(filepath.Join(testTemplateDir(), "audit", "list.html")) })
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "audit", "*.html"))
+
+	s.engine.GET("/audit", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleAuditList(c)
+	})
+
+	req, _ := http.NewRequest("GET", "/audit", nil)
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleAuditList_Error(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	_ = os.MkdirAll(filepath.Join(testTemplateDir(), "audit"), 0755)
+	_ = os.WriteFile(filepath.Join(testTemplateDir(), "audit", "list.html"), []byte("<html><body>audit list</body></html>"), 0644)
+	t.Cleanup(func() { _ = os.Remove(filepath.Join(testTemplateDir(), "audit", "list.html")) })
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "audit", "*.html"))
+
+	s.engine.GET("/audit", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{DashboardErr: errFake}
+		c.Set("apiClient", client)
+		s.handleAuditList(c)
+	})
+
+	req, _ := http.NewRequest("GET", "/audit", nil)
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleAuditShow(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	_ = os.MkdirAll(filepath.Join(testTemplateDir(), "audit"), 0755)
+	_ = os.WriteFile(filepath.Join(testTemplateDir(), "audit", "show.html"), []byte("<html><body>audit show</body></html>"), 0644)
+	t.Cleanup(func() { _ = os.Remove(filepath.Join(testTemplateDir(), "audit", "show.html")) })
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "audit", "*.html"))
+
+	s.engine.GET("/audit/:id", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleAuditShow(c)
+	})
+
+	req, _ := http.NewRequest("GET", "/audit/evt-1", nil)
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleAuditShow_Error(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	_ = os.MkdirAll(filepath.Join(testTemplateDir(), "audit"), 0755)
+	_ = os.WriteFile(filepath.Join(testTemplateDir(), "audit", "show.html"), []byte("<html><body>audit show</body></html>"), 0644)
+	t.Cleanup(func() { _ = os.Remove(filepath.Join(testTemplateDir(), "audit", "show.html")) })
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "audit", "*.html"))
+
+	s.engine.GET("/audit/:id", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{DashboardErr: errors.New("not found")}
+		c.Set("apiClient", client)
+		s.handleAuditShow(c)
+	})
+
+	req, _ := http.NewRequest("GET", "/audit/missing", nil)
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
 	}
 }
 
