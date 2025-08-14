@@ -1,0 +1,69 @@
+---
+alwaysApply: false
+description: Specification and workflow for generating PRDs, aligned with this Go repo's processes (planning, quality gates, and next steps)
+---
+# Rule: Generating a Product Requirements Document (PRD)
+
+## Goal
+
+Create a clear, actionable PRD in Markdown for this Go-based LLM Proxy. The PRD should be understandable to a junior developer and align with the repository’s architecture and workflow described in `AGENTS.md` and `README.md`.
+
+## Process
+
+1.  **Receive Initial Prompt:** The user provides a short description of the feature or change.
+2.  **Ask Clarifying Questions:** Before writing the PRD, ask questions to understand the "what" and "why" (not the detailed "how"). Present options using letters/numbers for easy replies.
+3.  **Generate PRD:** Use the structure below, referencing repo docs where relevant.
+4.  **Save PRD:** Save as `prd-[feature-name].md` under `docs/tasks/`.
+
+## Clarifying Questions (Examples)
+
+Tailor questions to this project’s domains:
+
+* **Problem/Goal:** What user or operational problem does this solve in the proxy or admin/CLI flows?
+* **Target User:** Which persona is affected (CLI user, admin UI user, SRE/ops, downstream client)?
+* **Scope in LLM Proxy:** Which area(s) are impacted? Options: (A) Proxy routing/`internal/proxy` (B) Token lifecycle/`internal/token` (C) Management API/`internal/server` + `internal/admin` (D) Event bus/dispatcher/`internal/eventbus`+`internal/dispatcher` (E) Database models/`internal/database` (F) Logging/`internal/logging` (G) Obfuscation/security (H) Web admin templates under `web/templates`
+* **Functional Surface:** New endpoints? Changes to existing management routes? CLI flags? Config additions? Any template/UI changes?
+* **Data & Storage:** What data is created/read/updated/deleted? SQLite vs PostgreSQL considerations? Migrations needed?
+* **Observability:** Which events must be emitted? Should dispatcher integrations (file, Lunary, Helicone) be updated?
+* **Constraints:** Performance, rate limits, streaming, concurrency, or compatibility with `httputil.ReverseProxy`?
+* **Security:** Access control, token scopes, obfuscation, audit logging requirements?
+* **Acceptance Criteria:** What behavior and validations prove success?
+* **Non‑Goals:** What’s out of scope for this iteration?
+
+## PRD Structure
+
+1. **Introduction/Overview**: Describe the feature and problem it solves in the context of LLM Proxy.
+2. **Goals**: Measurable objectives (e.g., latency bound, correctness, admin UX improvement).
+3. **User Stories**: Narratives for CLI/admin/proxy users.
+4. **Functional Requirements**: Numbered list, explicit behavior for endpoints, CLI flags, token rules, events, logging.
+5. **Non‑Goals (Out of Scope)**: Keep scope tight.
+6. **Design Considerations (Optional)**: Reference `docs/architecture.md`, `docs/instrumentation.md`, `docs/api-configuration.md`, `PLAN.md` if applicable.
+7. **Technical Considerations (Optional)**: Go 1.23+, SQLite→PostgreSQL, reverse proxy behavior, concurrency model, config loading.
+8. **Success Metrics**: e.g., tests ≥ 90% coverage, `make test` green (with `-race`), `make lint` clean; performance or correctness metrics if relevant.
+9. **Open Questions**: Track items needing decisions.
+
+## Target Audience
+
+Assume a **junior Go developer**. Use explicit, unambiguous requirements and point to concrete repo files and packages where helpful.
+
+## Output
+
+* **Format:** Markdown (`.md`)
+* **Location:** `docs/tasks/`
+* **Filename:** `prd-[feature-name].md`
+
+## Final instructions
+
+1. Do NOT implement the feature in this document
+2. Ask clarifying questions first
+3. Refine the PRD after receiving answers
+
+## Follow-up & Cross-links
+
+- **Next step**: After PRD approval, create an implementation task list using [task-breakdown](mdc:.cursor/rules/task-breakdown.mdc).
+- **Project workflow**: Follow `AGENTS.md` for tests, coverage (≥ 90%), linting, and CI expectations.
+- **Key docs**: `README.md`, `PLAN.md`, `docs/architecture.md`, `docs/instrumentation.md`, `docs/cli-reference.md`, `docs/api-configuration.md`, `docs/security.md`.
+- **Quality gates**: Ensure `make test` (with `-race`) and `make lint` are green. For CI-style coverage locally:
+  - `go test -v -race -parallel=4 -coverprofile=coverage_ci.txt -covermode=atomic -coverpkg=./internal/... ./...`
+  - `go tool cover -func=coverage_ci.txt | tail -n 1`
+- **PRs**: Use GitHub as described in `AGENTS.md` (GitHub MCP recommended for PR metadata; conventional commits).
