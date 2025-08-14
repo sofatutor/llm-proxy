@@ -25,6 +25,7 @@ Get the big picture in the [Architecture](./architecture.md) and jump to the [Qu
 <!-- Replace with real badges after CI wiring -->
 ![Build](https://img.shields.io/github/actions/workflow/status/sofatutor/llm-proxy/pages.yml?branch=main)
 ![Coverage](https://img.shields.io/badge/coverage-TBD-lightgrey)
+[![GitHub](https://img.shields.io/badge/GitHub-Repo-black?logo=github)](https://github.com/sofatutor/llm-proxy)
 
 View the live coverage report on the [Coverage page](./coverage/).
 
