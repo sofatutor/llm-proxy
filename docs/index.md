@@ -1,5 +1,5 @@
 <!-- Simple cross-page nav -->
-[Home](./index.md) | [Features](./features.md) | [Screenshots](./screenshots.md) | [Quickstart](./quickstart.md) | [Architecture](./architecture.md) | [Contributing](./contributing.md) | [Coverage](./coverage/) | [Roadmap](../PLAN.md)
+[Home](./index.md) | [Features](./features.md) | [Screenshots](./screenshots.md) | [Quickstart](./quickstart.md) | [CLI Reference](./cli-reference.md) | [Architecture](./architecture.md) | [Contributing](./contributing.md) | [Coverage](./coverage/) | [Roadmap](../PLAN.md)
 
 ## LLM Proxy
 

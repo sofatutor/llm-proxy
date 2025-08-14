@@ -41,11 +41,13 @@ Use the following commands to run tests:
   - [x] 1.2 Create page stubs: `docs/index.md`, `docs/features.md`, `docs/screenshots.md`, `docs/quickstart.md`, `docs/contributing.md`
   - [x] 1.3 Add a simple cross-page navbar section to each page header (Markdown links) matching nav: Home, Features, Screenshots, Quickstart, Architecture, Contributing, Coverage, Roadmap
   - [x] 1.4 Link to existing architecture doc: add prominent link to `docs/architecture.md` from Home and Features
+  - [x] 1.5 Add nav link to `docs/cli-reference.md` on all site pages
 
 - [ ] 2.0 Author core pages content (Home, Features, Screenshots, Quickstart, Contributing)
   - [x] 2.1 Homepage: concise value prop, feature bullets, contributor CTA, quick links to issues (`good first issue`) and CONTRIBUTING
   - [x] 2.2 Features: bullets for Transparent Proxy, Withering Tokens, Project-based ACL, Async Events/Dispatcher, Admin UI, Observability; link into deeper docs
   - [x] 2.3 Screenshots: embed images from `docs/assets/screenshots/` with alt text and captions (Login, Dashboard, Projects, Project Create, Project Show, Tokens, Token Created, Audit, Audit Detail)
+  - [ ] 2.6 Ensure `docs/cli-reference.md` renders well (brief intro, anchors)
   - [ ] 2.2 Features: bullets for Transparent Proxy, Withering Tokens, Project-based ACL, Async Events/Dispatcher, Admin UI, Observability; link into deeper docs
   - [ ] 2.3 Screenshots: embed images from `docs/assets/screenshots/` with alt text and captions (Login, Dashboard, Projects, Project Create, Project Show, Tokens, Token Created, Audit, Audit Detail)
   - [ ] 2.4 Quickstart: minimal steps to run `llm-proxy server` and `llm-proxy admin`, sample curl and `openai chat` through proxy, links to `docs/cli-reference.md`
