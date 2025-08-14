@@ -308,3 +308,122 @@ func TestCRUD_ClosedDB(t *testing.T) {
 		t.Error("expected error for ListProjects on closed DB")
 	}
 }
+
+func TestDBInitForTests_NilDB(t *testing.T) {
+	// Test with nil DB - should be no-op
+	err := DBInitForTests(nil)
+	if err != nil {
+		t.Errorf("DBInitForTests with nil DB should not error, got: %v", err)
+	}
+
+	// Test with DB with nil internal db
+	db := &DB{db: nil}
+	err = DBInitForTests(db)
+	if err != nil {
+		t.Errorf("DBInitForTests with nil internal DB should not error, got: %v", err)
+	}
+}
+
+func TestTransaction_NilDBVariants(t *testing.T) {
+	// Test with nil DB struct
+	var db *DB
+	err := db.Transaction(context.Background(), func(tx *sql.Tx) error { return nil })
+	if err == nil {
+		t.Error("expected error for nil DB struct in Transaction")
+	}
+}
+
+func TestMigrations_AddColumn(t *testing.T) {
+	// Create a temporary database file
+	dbFile, err := os.CreateTemp("", "llm-proxy-migration-test-*.db")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	dbPath := dbFile.Name()
+	_ = dbFile.Close()
+	defer func() { _ = os.Remove(dbPath) }()
+
+	// Open raw database connection
+	rawDB, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatalf("Failed to open database: %v", err)
+	}
+	defer func() { _ = rawDB.Close() }()
+
+	// Create basic schema without the new columns
+	basicSchema := `
+		CREATE TABLE IF NOT EXISTS projects (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL,
+			openai_api_key TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+		
+		CREATE TABLE IF NOT EXISTS tokens (
+			token TEXT PRIMARY KEY,
+			project_id TEXT NOT NULL,
+			is_active BOOLEAN NOT NULL DEFAULT 1,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			expires_at DATETIME,
+			max_requests INTEGER,
+			used_requests INTEGER DEFAULT 0,
+			FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+		);
+	`
+	_, err = rawDB.Exec(basicSchema)
+	if err != nil {
+		t.Fatalf("Failed to create basic schema: %v", err)
+	}
+
+	// Check columns don't exist yet
+	var count int
+	err = rawDB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'deactivated_at'").Scan(&count)
+	if err != nil {
+		t.Fatalf("Failed to check column existence: %v", err)
+	}
+	if count != 0 {
+		t.Error("deactivated_at column should not exist yet")
+	}
+
+	// Close raw DB and open with our DB wrapper to trigger migrations
+	_ = rawDB.Close()
+
+	db, err := New(Config{
+		Path:            dbPath,
+		MaxOpenConns:    5,
+		MaxIdleConns:    2,
+		ConnMaxLifetime: time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create database: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	// Check that migrations added the column
+	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'deactivated_at'").Scan(&count)
+	if err != nil {
+		t.Fatalf("Failed to check column existence after migration: %v", err)
+	}
+	if count != 1 {
+		t.Error("deactivated_at column should exist after migration")
+	}
+
+	// Check is_active column was also added to projects
+	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'is_active'").Scan(&count)
+	if err != nil {
+		t.Fatalf("Failed to check is_active column existence: %v", err)
+	}
+	if count != 1 {
+		t.Error("is_active column should exist after migration")
+	}
+
+	// Check deactivated_at column was added to tokens
+	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tokens') WHERE name = 'deactivated_at'").Scan(&count)
+	if err != nil {
+		t.Fatalf("Failed to check tokens deactivated_at column existence: %v", err)
+	}
+	if count != 1 {
+		t.Error("deactivated_at column should exist in tokens table after migration")
+	}
+}
