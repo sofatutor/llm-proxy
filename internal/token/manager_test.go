@@ -24,6 +24,15 @@ func (s *CompleteStore) CreateToken(ctx context.Context, token TokenData) error 
 	return nil
 }
 
+func (s *CompleteStore) UpdateToken(ctx context.Context, token TokenData) error {
+	if _, exists := s.tokens[token.Token]; !exists {
+		return errors.New("token not found")
+	}
+
+	s.tokens[token.Token] = token
+	return nil
+}
+
 func (s *CompleteStore) GetTokenUnsafe(tokenID string) (TokenData, bool) {
 	return s.MockStore.GetTokenUnsafe(tokenID)
 }
@@ -52,6 +61,7 @@ func (m *mockManagerStore) UpdateTokenLimit(ctx context.Context, tokenID string,
 	return nil
 }
 func (m *mockManagerStore) CreateToken(ctx context.Context, token TokenData) error { return nil }
+func (m *mockManagerStore) UpdateToken(ctx context.Context, token TokenData) error { return nil }
 func (m *mockManagerStore) DeleteToken(ctx context.Context, tokenID string) error  { return nil }
 func (m *mockManagerStore) RevokeToken(ctx context.Context, tokenID string) error  { return nil }
 func (m *mockManagerStore) RevokeBatchTokens(ctx context.Context, tokenIDs []string) (int, error) {

@@ -437,6 +437,10 @@ func (m *StrictMockTokenStore) CreateToken(ctx context.Context, td TokenData) er
 	return nil
 }
 
+func (m *StrictMockTokenStore) UpdateToken(ctx context.Context, td TokenData) error {
+	return nil
+}
+
 func (m *StrictMockTokenStore) GetTokensByProjectID(ctx context.Context, projectID string) ([]TokenData, error) {
 	return nil, nil
 }

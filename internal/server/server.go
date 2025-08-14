@@ -553,7 +553,12 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid project id"}`, http.StatusBadRequest)
 		return
 	}
-	var req map[string]string
+	var req struct {
+		Name           *string `json:"name,omitempty"`
+		OpenAIAPIKey   *string `json:"openai_api_key,omitempty"`
+		IsActive       *bool   `json:"is_active,omitempty"`
+		RevokeTokens   *bool   `json:"revoke_tokens,omitempty"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.logger.Error("invalid request body for update", zap.Error(err))
 
@@ -582,14 +587,39 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 
 	// Track what fields are being updated
 	var updatedFields []string
-	if name, ok := req["name"]; ok {
-		project.Name = name
+	if req.Name != nil {
+		project.Name = *req.Name
 		updatedFields = append(updatedFields, "name")
 	}
-	if key, ok := req["openai_api_key"]; ok {
-		project.OpenAIAPIKey = key
+	if req.OpenAIAPIKey != nil {
+		project.OpenAIAPIKey = *req.OpenAIAPIKey
 		updatedFields = append(updatedFields, "openai_api_key")
 	}
+	
+	// Handle project activation/deactivation
+	var shouldRevokeTokens bool
+	if req.IsActive != nil {
+		if *req.IsActive != project.IsActive {
+			project.IsActive = *req.IsActive
+			updatedFields = append(updatedFields, "is_active")
+			
+			// If deactivating project, set deactivated timestamp
+			if !*req.IsActive {
+				now := time.Now().UTC()
+				project.DeactivatedAt = &now
+				updatedFields = append(updatedFields, "deactivated_at")
+				
+				// Check if tokens should be revoked when deactivating
+				if req.RevokeTokens != nil && *req.RevokeTokens {
+					shouldRevokeTokens = true
+				}
+			} else {
+				// Reactivating project, clear deactivated timestamp
+				project.DeactivatedAt = nil
+			}
+		}
+	}
+	
 	project.UpdatedAt = time.Now().UTC()
 	if err := s.projectStore.UpdateProject(ctx, project); err != nil {
 		s.logger.Error("failed to update project", zap.String("id", id), zap.Error(err))
@@ -603,13 +633,44 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to update project"}`, http.StatusInternalServerError)
 		return
 	}
-	s.logger.Info("project updated", zap.String("id", id))
+	
+	// Revoke project tokens if requested
+	var revokedTokensCount int
+	if shouldRevokeTokens {
+		tokens, err := s.tokenStore.GetTokensByProjectID(ctx, id)
+		if err != nil {
+			s.logger.Warn("failed to get project tokens for revocation", zap.String("project_id", id), zap.Error(err))
+		} else {
+			// Revoke all active tokens for this project
+			for _, token := range tokens {
+				if token.IsActive {
+					token.IsActive = false
+					token.DeactivatedAt = func() *time.Time { t := time.Now().UTC(); return &t }()
+					if err := s.tokenStore.UpdateToken(ctx, token); err != nil {
+						s.logger.Warn("failed to revoke token during project deactivation", 
+							zap.String("token_id", token.Token), 
+							zap.String("project_id", id), 
+							zap.Error(err))
+					} else {
+						revokedTokensCount++
+					}
+				}
+			}
+		}
+	}
+	
+	s.logger.Info("project updated", zap.String("id", id), zap.Strings("updated_fields", updatedFields))
 
 	// Audit: project update success
-	_ = s.auditLogger.Log(s.auditEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultSuccess, r, requestID).
+	auditEvent := s.auditEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultSuccess, r, requestID).
 		WithProjectID(id).
 		WithDetail("updated_fields", updatedFields).
-		WithDetail("project_name", project.Name))
+		WithDetail("project_name", project.Name)
+	
+	if shouldRevokeTokens {
+		auditEvent.WithDetail("tokens_revoked", revokedTokensCount)
+	}
+	_ = s.auditLogger.Log(auditEvent)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(project); err != nil {
@@ -632,6 +693,114 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Allow", "GET, PATCH")
 	http.Error(w, `{"error":"method not allowed","message":"project deletion is not permitted"}`, http.StatusMethodNotAllowed)
+}
+
+// POST /manage/projects/{id}/tokens/revoke - Bulk revoke all tokens for a project
+func (s *Server) handleBulkRevokeProjectTokens(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	requestID := getRequestID(ctx)
+	
+	// Extract project ID from path
+	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/manage/projects/"), "/")
+	if len(pathParts) != 2 || pathParts[0] == "" || pathParts[1] != "tokens/revoke" {
+		s.logger.Error("invalid bulk revoke path", zap.String("path", r.URL.Path), zap.String("request_id", requestID))
+		http.Error(w, `{"error":"invalid path"}`, http.StatusBadRequest)
+		return
+	}
+	projectID := pathParts[0]
+
+	// Verify project exists
+	_, err := s.projectStore.GetProjectByID(ctx, projectID)
+	if err != nil {
+		s.logger.Error("project not found for bulk token revoke", zap.String("project_id", projectID), zap.Error(err), zap.String("request_id", requestID))
+
+		// Audit: bulk revoke failure - project not found
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenRevoke, audit.ActorManagement, audit.ResultFailure, r, requestID).
+			WithProjectID(projectID).
+			WithError(err).
+			WithDetail("error_type", "project not found").
+			WithDetail("operation", "bulk_revoke"))
+
+		http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// Get all tokens for the project
+	tokens, err := s.tokenStore.GetTokensByProjectID(ctx, projectID)
+	if err != nil {
+		s.logger.Error("failed to get tokens for bulk revoke", zap.String("project_id", projectID), zap.Error(err), zap.String("request_id", requestID))
+
+		// Audit: bulk revoke failure - failed to get tokens
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenRevoke, audit.ActorManagement, audit.ResultFailure, r, requestID).
+			WithProjectID(projectID).
+			WithError(err).
+			WithDetail("error_type", "failed to get tokens").
+			WithDetail("operation", "bulk_revoke"))
+
+		http.Error(w, `{"error":"failed to get project tokens"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Count and revoke active tokens
+	var revokedCount, alreadyRevokedCount int
+	var failedRevocations []string
+	
+	for _, token := range tokens {
+		if !token.IsActive {
+			alreadyRevokedCount++
+			continue
+		}
+
+		// Revoke the token
+		token.IsActive = false
+		token.DeactivatedAt = func() *time.Time { t := time.Now().UTC(); return &t }()
+		
+		if err := s.tokenStore.UpdateToken(ctx, token); err != nil {
+			s.logger.Warn("failed to revoke individual token during bulk revoke", 
+				zap.String("token_id", token.Token), 
+				zap.String("project_id", projectID), 
+				zap.Error(err))
+			failedRevocations = append(failedRevocations, token.Token)
+		} else {
+			revokedCount++
+		}
+	}
+
+	s.logger.Info("bulk token revocation completed",
+		zap.String("project_id", projectID),
+		zap.Int("revoked_count", revokedCount),
+		zap.Int("already_revoked_count", alreadyRevokedCount),
+		zap.Int("failed_count", len(failedRevocations)),
+		zap.String("request_id", requestID),
+	)
+
+	// Audit: bulk revoke success
+	_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenRevoke, audit.ActorManagement, audit.ResultSuccess, r, requestID).
+		WithProjectID(projectID).
+		WithRequestID(requestID).
+		WithHTTPMethod(r.Method).
+		WithEndpoint(r.URL.Path).
+		WithDetail("operation", "bulk_revoke").
+		WithDetail("total_tokens", len(tokens)).
+		WithDetail("revoked_count", revokedCount).
+		WithDetail("already_revoked_count", alreadyRevokedCount).
+		WithDetail("failed_count", len(failedRevocations)))
+
+	// Return summary response
+	response := map[string]interface{}{
+		"revoked_count":          revokedCount,
+		"already_revoked_count":  alreadyRevokedCount,
+		"total_tokens":          len(tokens),
+	}
+	
+	if len(failedRevocations) > 0 {
+		response["failed_count"] = len(failedRevocations)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		s.logger.Error("failed to encode bulk revoke response", zap.Error(err))
+	}
 }
 
 // generateUUID generates a random UUID (v4)
