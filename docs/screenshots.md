@@ -2,34 +2,36 @@
 
 ## Screenshots
 
-Login
-![Login](./assets/screenshots/login.png)
+> The following screenshots illustrate key Admin UI flows. Images are optimized and stored under `docs/assets/screenshots/`.
 
-Dashboard
-![Dashboard](./assets/screenshots/dashboard.png)
+### Login
+![Login screen showing management token input](./assets/screenshots/login.png)
 
-Projects
-![Projects](./assets/screenshots/projects.png)
+### Dashboard
+![Dashboard view after login](./assets/screenshots/dashboard.png)
 
-Project Create
-![Project Create](./assets/screenshots/project-new.png)
+### Projects
+![Projects list with actions](./assets/screenshots/projects.png)
 
-Project Show
-![Project Show](./assets/screenshots/project-show.png)
+### Project Create
+![Create Project form](./assets/screenshots/project-new.png)
 
-Tokens
-![Tokens](./assets/screenshots/tokens.png)
+### Project Show
+![Project details view](./assets/screenshots/project-show.png)
 
-Token Create
-![Token New](./assets/screenshots/token-new.png)
+### Tokens
+![Tokens list with filters](./assets/screenshots/tokens.png)
 
-Token Created
-![Token Created](./assets/screenshots/token-created.png)
+### Token Create
+![Generate Token form](./assets/screenshots/token-new.png)
 
-Audit
-![Audit](./assets/screenshots/audit.png)
+### Token Created
+![Token created confirmation with usage tips](./assets/screenshots/token-created.png)
 
-Audit Detail
-![Audit Detail](./assets/screenshots/audit-show.png)
+### Audit
+![Audit list with search](./assets/screenshots/audit.png)
+
+### Audit Detail
+![Audit event detail view](./assets/screenshots/audit-show.png)
 
 
