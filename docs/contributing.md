@@ -15,4 +15,13 @@ Helpful links:
 - Architecture: `docs/architecture.md`
 - CLI Reference: `docs/cli-reference.md`
 
+### Local validation
+
+```bash
+make lint
+go test -v -race ./...
+go test -v -race -parallel=4 -coverprofile=coverage_ci.txt -covermode=atomic -coverpkg=./internal/... ./...
+go tool cover -func=coverage_ci.txt | tail -n 1
+```
+
 
