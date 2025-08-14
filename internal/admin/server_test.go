@@ -182,16 +182,18 @@ func (m *mockAPIClient) GetAuditEvent(ctx context.Context, id string) (*AuditEve
 var _ APIClientInterface = (*mockAPIClient)(nil) // Ensure interface compliance
 
 // capturingAuditClient records the filters passed to GetAuditEvents for assertions
-type capturingAuditClient struct{ mockAPIClient; lastFilters map[string]string }
-
-func (m *capturingAuditClient) GetAuditEvents(ctx context.Context, filters map[string]string, page, pageSize int) ([]AuditEvent, *Pagination, error) {
-    m.lastFilters = filters
-    if m.DashboardErr != nil {
-        return nil, nil, m.DashboardErr
-    }
-    return []AuditEvent{{ID: "evt-1", Outcome: "success"}}, &Pagination{Page: page, PageSize: pageSize, TotalItems: 1, TotalPages: 1}, nil
+type capturingAuditClient struct {
+	mockAPIClient
+	lastFilters map[string]string
 }
 
+func (m *capturingAuditClient) GetAuditEvents(ctx context.Context, filters map[string]string, page, pageSize int) ([]AuditEvent, *Pagination, error) {
+	m.lastFilters = filters
+	if m.DashboardErr != nil {
+		return nil, nil, m.DashboardErr
+	}
+	return []AuditEvent{{ID: "evt-1", Outcome: "success"}}, &Pagination{Page: page, PageSize: pageSize, TotalItems: 1, TotalPages: 1}, nil
+}
 
 func TestServer_HandleDashboard(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -853,13 +855,14 @@ func TestServer_HandleAuditList(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(testTemplateDir(), "audit", "list.html"), []byte("<html><body>audit list</body></html>"), 0644)
 	t.Cleanup(func() { _ = os.Remove(filepath.Join(testTemplateDir(), "audit", "list.html")) })
 
-    s := &Server{engine: gin.New()}
+	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
 	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "audit", "*.html"))
 
-    s.engine.GET("/audit", func(c *gin.Context) {
-        cap := &capturingAuditClient{}
-        var client APIClientInterface = cap
+	var capClient *capturingAuditClient
+	s.engine.GET("/audit", func(c *gin.Context) {
+		capClient = &capturingAuditClient{}
+		var client APIClientInterface = capClient
 		c.Set("apiClient", client)
 		s.handleAuditList(c)
 	})
@@ -870,6 +873,17 @@ func TestServer_HandleAuditList(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	// With search param: ensure it is forwarded to API client
+	req2, _ := http.NewRequest("GET", "/audit?search=req-123", nil)
+	w2 := httptest.NewRecorder()
+	s.engine.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected 200 with search, got %d", w2.Code)
+	}
+	if capClient == nil || capClient.lastFilters == nil || capClient.lastFilters["search"] != "req-123" {
+		t.Fatalf("expected search filter to be forwarded, got %#v", capClient)
 	}
 }
 

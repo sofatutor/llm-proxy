@@ -832,6 +832,119 @@ func TestHandleAuditEventByID_EncodeError(t *testing.T) {
 	}
 }
 
+func TestHandleAuditEvents_MethodNotAllowed(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	// Real DB so handler progresses when method would be GET
+	realDB, err := database.New(database.Config{Path: ":memory:"})
+	require.NoError(t, err)
+	srv.db = realDB
+
+	r := httptest.NewRequest(http.MethodPost, "/manage/audit", nil)
+	w := httptest.NewRecorder()
+	srv.handleAuditEvents(w, r)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", w.Code)
+	}
+}
+
+func TestHandleAuditEvents_DBUnavailable(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	// Force DB unavailable branch
+	srv.db = nil
+
+	r := httptest.NewRequest(http.MethodGet, "/manage/audit", nil)
+	w := httptest.NewRecorder()
+	srv.handleAuditEvents(w, r)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+func TestHandleAuditEvents_EncodeError(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	realDB, err := database.New(database.Config{Path: ":memory:"})
+	require.NoError(t, err)
+	srv.db = realDB
+
+	// Seed one row so encoding is attempted
+	ctx := context.Background()
+	_, err = srv.db.DB().ExecContext(ctx, "INSERT INTO audit_events (id,timestamp,action,actor,outcome) VALUES (?,?,?,?,?)", "evt-enc-list", time.Now(), "x", "y", "success")
+	require.NoError(t, err)
+
+	r := httptest.NewRequest(http.MethodGet, "/manage/audit?page=1&page_size=20", nil)
+	rr := httptest.NewRecorder()
+	failing := &mockFailingResponseWriter{ResponseWriter: rr, failOnFirstWrite: true}
+	srv.handleAuditEvents(failing, r)
+	if failing.statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when encoding list fails, got %d", failing.statusCode)
+	}
+}
+
+func TestManagementAuthMiddleware_Direct(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, ManagementToken: "tok", EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	nextCalled := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mw := srv.managementAuthMiddleware(next)
+
+	// Missing header
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	mw.ServeHTTP(w, r)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for missing header, got %d", w.Code)
+	}
+
+	// Wrong token
+	r = httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("Authorization", "Bearer wrong")
+	w = httptest.NewRecorder()
+	mw.ServeHTTP(w, r)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for wrong token, got %d", w.Code)
+	}
+
+	// Correct token
+	r = httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("Authorization", "Bearer "+cfg.ManagementToken)
+	w = httptest.NewRecorder()
+	mw.ServeHTTP(w, r)
+	if w.Code != http.StatusNoContent || !nextCalled {
+		t.Fatalf("expected 204 and next called, got %d, nextCalled=%v", w.Code, nextCalled)
+	}
+}
+
+func TestHandleMetrics_EncodeError(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory", EnableMetrics: true, MetricsPath: "/metrics"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	// Ensure some proxy metrics to exercise data path
+	p := &proxy.TransparentProxy{}
+	p.SetMetrics(&proxy.ProxyMetrics{RequestCount: 10, ErrorCount: 2})
+	srv.proxy = p
+
+	r := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rr := httptest.NewRecorder()
+	failing := &mockFailingResponseWriter{ResponseWriter: rr, failOnFirstWrite: true}
+	srv.handleMetrics(failing, r)
+	if failing.statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when metrics encode fails, got %d", failing.statusCode)
+	}
+}
+
 func Test_parseInt(t *testing.T) {
 	if parseInt("", 7) != 7 {
 		t.Fatal("empty returns default")
