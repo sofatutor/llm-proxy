@@ -1,5 +1,21 @@
 # CLI Reference
 
+This document is a snapshot of the LLM Proxy CLI capabilities and flags intended for GitHub Pages consumption. Use it as a quick reference while exploring or contributing. For examples and full workflows, see the sections below.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Commands](#commands)
+  - [`llm-proxy server`](#llm-proxy-server)
+  - [`llm-proxy setup`](#llm-proxy-setup)
+  - [`llm-proxy manage`](#llm-proxy-manage)
+  - [`llm-proxy dispatcher`](#llm-proxy-dispatcher)
+  - [`llm-proxy openai chat`](#llm-proxy-openai-chat)
+- [Configuration Files](#configuration-files)
+- [Exit Codes](#exit-codes)
+- [Tips and Best Practices](#tips-and-best-practices)
+- [Examples and Workflows](#examples-and-workflows)
+
 This document provides a comprehensive reference for all LLM Proxy command-line interface (CLI) commands.
 
 ## Overview

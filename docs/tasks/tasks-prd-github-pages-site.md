@@ -49,7 +49,7 @@ Use the following commands to run tests:
   - [x] 2.3 Screenshots: embed images from `docs/assets/screenshots/` with alt text and captions (Login, Dashboard, Projects, Project Create, Project Show, Tokens, Token Created, Audit, Audit Detail)
   - [x] 2.4 Quickstart: minimal steps to run `llm-proxy server` and `llm-proxy admin`, sample curl and `openai chat` through proxy, links to `docs/cli-reference.md`
   - [x] 2.5 Contributing: summarize from `CONTRIBUTING.md` and `AGENTS.md` (tests, lint, ≥90% coverage), link to roadmap `PLAN.md` and issues
-  - [ ] 2.6 Ensure `docs/cli-reference.md` renders well (brief intro, anchors)
+  - [x] 2.6 Ensure `docs/cli-reference.md` renders well (brief intro, anchors)
   - [ ] 2.2 Features: bullets for Transparent Proxy, Withering Tokens, Project-based ACL, Async Events/Dispatcher, Admin UI, Observability; link into deeper docs
   - [ ] 2.3 Screenshots: embed images from `docs/assets/screenshots/` with alt text and captions (Login, Dashboard, Projects, Project Create, Project Show, Tokens, Token Created, Audit, Audit Detail)
   - [ ] 2.4 Quickstart: minimal steps to run `llm-proxy server` and `llm-proxy admin`, sample curl and `openai chat` through proxy, links to `docs/cli-reference.md`
