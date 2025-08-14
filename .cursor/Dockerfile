@@ -77,8 +77,8 @@ COPY --chown=${UID}:${GID} go.mod go.sum /home/${USER}/modcache/
 # directories are created with correct ownership and remain writable at runtime
 USER ${USER}
 
-RUN --mount=type=cache,target=/home/${USER}/go/pkg/mod,sharing=locked \
-    --mount=type=cache,target=/home/${USER}/.cache/go-build,sharing=locked \
+RUN --mount=type=cache,target=/home/${USER}/go/pkg/mod,sharing=locked,uid=${UID},gid=${GID} \
+    --mount=type=cache,target=/home/${USER}/.cache/go-build,sharing=locked,uid=${UID},gid=${GID} \
     cd /home/${USER}/modcache && go mod download
 WORKDIR /home/${USER}
 
