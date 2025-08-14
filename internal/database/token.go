@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/token"
@@ -20,8 +21,8 @@ var (
 // CreateToken creates a new token in the database.
 func (d *DB) CreateToken(ctx context.Context, token Token) error {
 	query := `
-	INSERT INTO tokens (token, project_id, expires_at, is_active, request_count, max_requests, created_at, last_used_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO tokens (token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := d.db.ExecContext(
@@ -31,6 +32,7 @@ func (d *DB) CreateToken(ctx context.Context, token Token) error {
 		token.ProjectID,
 		token.ExpiresAt,
 		token.IsActive,
+		nil,
 		token.RequestCount,
 		token.MaxRequests,
 		token.CreatedAt,
@@ -46,13 +48,13 @@ func (d *DB) CreateToken(ctx context.Context, token Token) error {
 // GetTokenByID retrieves a token by ID.
 func (d *DB) GetTokenByID(ctx context.Context, tokenID string) (Token, error) {
 	query := `
-	SELECT token, project_id, expires_at, is_active, request_count, max_requests, created_at, last_used_at
+	SELECT token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at
 	FROM tokens
 	WHERE token = ?
 	`
 
 	var token Token
-	var expiresAt, lastUsedAt sql.NullTime
+	var expiresAt, lastUsedAt, deactivatedAt sql.NullTime
 	var maxRequests sql.NullInt32
 
 	err := d.db.QueryRowContext(ctx, query, tokenID).Scan(
@@ -60,6 +62,7 @@ func (d *DB) GetTokenByID(ctx context.Context, tokenID string) (Token, error) {
 		&token.ProjectID,
 		&expiresAt,
 		&token.IsActive,
+		&deactivatedAt,
 		&token.RequestCount,
 		&maxRequests,
 		&token.CreatedAt,
@@ -77,6 +80,9 @@ func (d *DB) GetTokenByID(ctx context.Context, tokenID string) (Token, error) {
 	}
 	if lastUsedAt.Valid {
 		token.LastUsedAt = &lastUsedAt.Time
+	}
+	if deactivatedAt.Valid {
+		token.DeactivatedAt = &deactivatedAt.Time
 	}
 	if maxRequests.Valid {
 		maxReq := int(maxRequests.Int32)
@@ -148,7 +154,7 @@ func (d *DB) DeleteToken(ctx context.Context, tokenID string) error {
 // ListTokens retrieves all tokens from the database.
 func (d *DB) ListTokens(ctx context.Context) ([]Token, error) {
 	query := `
-	SELECT token, project_id, expires_at, is_active, request_count, max_requests, created_at, last_used_at
+	SELECT token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at
 	FROM tokens
 	ORDER BY created_at DESC
 	`
@@ -159,7 +165,7 @@ func (d *DB) ListTokens(ctx context.Context) ([]Token, error) {
 // GetTokensByProjectID retrieves all tokens for a project.
 func (d *DB) GetTokensByProjectID(ctx context.Context, projectID string) ([]Token, error) {
 	query := `
-	SELECT token, project_id, expires_at, is_active, request_count, max_requests, created_at, last_used_at
+	SELECT token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at
 	FROM tokens
 	WHERE project_id = ?
 	ORDER BY created_at DESC
@@ -228,7 +234,7 @@ func (d *DB) queryTokens(ctx context.Context, query string, args ...interface{})
 	var tokens []Token
 	for rows.Next() {
 		var token Token
-		var expiresAt, lastUsedAt sql.NullTime
+		var expiresAt, lastUsedAt, deactivatedAt sql.NullTime
 		var maxRequests sql.NullInt32
 
 		if err := rows.Scan(
@@ -236,6 +242,7 @@ func (d *DB) queryTokens(ctx context.Context, query string, args ...interface{})
 			&token.ProjectID,
 			&expiresAt,
 			&token.IsActive,
+			&deactivatedAt,
 			&token.RequestCount,
 			&maxRequests,
 			&token.CreatedAt,
@@ -249,6 +256,9 @@ func (d *DB) queryTokens(ctx context.Context, query string, args ...interface{})
 		}
 		if lastUsedAt.Valid {
 			token.LastUsedAt = &lastUsedAt.Time
+		}
+		if deactivatedAt.Valid {
+			token.DeactivatedAt = &deactivatedAt.Time
 		}
 		if maxRequests.Valid {
 			maxReq := int(maxRequests.Int32)
@@ -321,26 +331,145 @@ func (a *DBTokenStoreAdapter) GetTokensByProjectID(ctx context.Context, projectI
 // ImportTokenData and ExportTokenData helpers
 func ImportTokenData(td token.TokenData) Token {
 	return Token{
-		Token:        td.Token,
-		ProjectID:    td.ProjectID,
-		ExpiresAt:    td.ExpiresAt,
-		IsActive:     td.IsActive,
-		RequestCount: td.RequestCount,
-		MaxRequests:  td.MaxRequests,
-		CreatedAt:    td.CreatedAt,
-		LastUsedAt:   td.LastUsedAt,
+		Token:         td.Token,
+		ProjectID:     td.ProjectID,
+		ExpiresAt:     td.ExpiresAt,
+		IsActive:      td.IsActive,
+		DeactivatedAt: td.DeactivatedAt,
+		RequestCount:  td.RequestCount,
+		MaxRequests:   td.MaxRequests,
+		CreatedAt:     td.CreatedAt,
+		LastUsedAt:    td.LastUsedAt,
 	}
 }
 
 func ExportTokenData(t Token) token.TokenData {
 	return token.TokenData{
-		Token:        t.Token,
-		ProjectID:    t.ProjectID,
-		ExpiresAt:    t.ExpiresAt,
-		IsActive:     t.IsActive,
-		RequestCount: t.RequestCount,
-		MaxRequests:  t.MaxRequests,
-		CreatedAt:    t.CreatedAt,
-		LastUsedAt:   t.LastUsedAt,
+		Token:         t.Token,
+		ProjectID:     t.ProjectID,
+		ExpiresAt:     t.ExpiresAt,
+		IsActive:      t.IsActive,
+		DeactivatedAt: t.DeactivatedAt,
+		RequestCount:  t.RequestCount,
+		MaxRequests:   t.MaxRequests,
+		CreatedAt:     t.CreatedAt,
+		LastUsedAt:    t.LastUsedAt,
 	}
+}
+
+// --- RevocationStore interface implementation ---
+
+// RevokeToken disables a token by setting is_active to false and deactivated_at to current time
+func (a *DBTokenStoreAdapter) RevokeToken(ctx context.Context, tokenID string) error {
+	if tokenID == "" {
+		return token.ErrTokenNotFound
+	}
+
+	now := time.Now()
+	query := `UPDATE tokens SET is_active = ?, deactivated_at = COALESCE(deactivated_at, ?) WHERE token = ? AND is_active = ?`
+	result, err := a.db.db.ExecContext(ctx, query, false, now, tokenID, true)
+	if err != nil {
+		return fmt.Errorf("failed to revoke token: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		// Check if token exists at all (could be already inactive)
+		var exists bool
+		checkQuery := `SELECT 1 FROM tokens WHERE token = ? LIMIT 1`
+		err = a.db.db.QueryRowContext(ctx, checkQuery, tokenID).Scan(&exists)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return token.ErrTokenNotFound
+			}
+			return fmt.Errorf("failed to check token existence: %w", err)
+		}
+		// Token exists but was already inactive - this is idempotent, no error
+	}
+
+	return nil
+}
+
+// DeleteToken completely removes a token from storage
+func (a *DBTokenStoreAdapter) DeleteToken(ctx context.Context, tokenID string) error {
+	if tokenID == "" {
+		return token.ErrTokenNotFound
+	}
+	result, err := a.db.db.ExecContext(ctx, "DELETE FROM tokens WHERE token = ?", tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to delete token: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return token.ErrTokenNotFound
+	}
+	return nil
+}
+
+// RevokeBatchTokens revokes multiple tokens at once
+func (a *DBTokenStoreAdapter) RevokeBatchTokens(ctx context.Context, tokenIDs []string) (int, error) {
+	if len(tokenIDs) == 0 {
+		return 0, nil
+	}
+	now := time.Now()
+	placeholders := make([]string, len(tokenIDs))
+	args := make([]interface{}, len(tokenIDs)+3)
+	args[0] = false
+	args[1] = now
+	for i, tokenID := range tokenIDs {
+		placeholders[i] = "?"
+		args[i+2] = tokenID
+	}
+	// Append active-state filter parameter
+	args[len(args)-1] = true
+	query := fmt.Sprintf(`UPDATE tokens SET is_active = ?, deactivated_at = COALESCE(deactivated_at, ?) WHERE token IN (%s) AND is_active = ?`, strings.Join(placeholders, ","))
+	result, err := a.db.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to revoke batch tokens: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	return int(rowsAffected), nil
+}
+
+// RevokeProjectTokens revokes all tokens for a project
+func (a *DBTokenStoreAdapter) RevokeProjectTokens(ctx context.Context, projectID string) (int, error) {
+	if projectID == "" {
+		return 0, nil
+	}
+	now := time.Now()
+	query := `UPDATE tokens SET is_active = ?, deactivated_at = COALESCE(deactivated_at, ?) WHERE project_id = ? AND is_active = ?`
+	result, err := a.db.db.ExecContext(ctx, query, false, now, projectID, true)
+	if err != nil {
+		return 0, fmt.Errorf("failed to revoke project tokens: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	return int(rowsAffected), nil
+}
+
+// RevokeExpiredTokens revokes all tokens that have expired
+func (a *DBTokenStoreAdapter) RevokeExpiredTokens(ctx context.Context) (int, error) {
+	now := time.Now()
+	query := `UPDATE tokens SET is_active = ?, deactivated_at = COALESCE(deactivated_at, ?) WHERE expires_at IS NOT NULL AND expires_at < ? AND is_active = ?`
+	result, err := a.db.db.ExecContext(ctx, query, false, now, now, true)
+	if err != nil {
+		return 0, fmt.Errorf("failed to revoke expired tokens: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	return int(rowsAffected), nil
 }

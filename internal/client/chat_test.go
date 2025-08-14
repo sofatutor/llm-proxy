@@ -369,3 +369,15 @@ func TestHandleNonStreamingResponse_Errors(t *testing.T) {
 		}
 	})
 }
+
+// Additional test to improve coverage - network request failure
+func TestChatClient_SendChatRequest_NetworkError(t *testing.T) {
+	client := NewChatClient("http://localhost:1", "test-token") // Invalid port
+	messages := []ChatMessage{{Role: "user", Content: "test"}}
+	options := ChatOptions{Model: "gpt-4.1-mini"}
+
+	_, err := client.SendChatRequest(messages, options, nil)
+	if err == nil || !strings.Contains(err.Error(), "request failed") {
+		t.Errorf("expected network error, got %v", err)
+	}
+}

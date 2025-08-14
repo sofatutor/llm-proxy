@@ -6,23 +6,26 @@ import (
 
 // Project represents a project in the database.
 type Project struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	OpenAIAPIKey string    `json:"-"` // Sensitive data, not included in JSON
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID            string     `json:"id"`
+	Name          string     `json:"name"`
+	OpenAIAPIKey  string     `json:"-"` // Sensitive data, not included in JSON
+	IsActive      bool       `json:"is_active"`
+	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 // Token represents a token in the database.
 type Token struct {
-	Token        string     `json:"token"`
-	ProjectID    string     `json:"project_id"`
-	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
-	IsActive     bool       `json:"is_active"`
-	RequestCount int        `json:"request_count"`
-	MaxRequests  *int       `json:"max_requests,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	LastUsedAt   *time.Time `json:"last_used_at,omitempty"`
+	Token         string     `json:"token"`
+	ProjectID     string     `json:"project_id"`
+	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
+	IsActive      bool       `json:"is_active"`
+	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
+	RequestCount  int        `json:"request_count"`
+	MaxRequests   *int       `json:"max_requests,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	LastUsedAt    *time.Time `json:"last_used_at,omitempty"`
 }
 
 // AuditEvent represents an audit log entry in the database.
@@ -63,4 +66,14 @@ func (t *Token) IsRateLimited() bool {
 // IsValid returns true if the token is active, not expired, and not rate limited.
 func (t *Token) IsValid() bool {
 	return t.IsActive && !t.IsExpired() && !t.IsRateLimited()
+}
+
+// IsDeactivated returns true if the token has been explicitly deactivated.
+func (t *Token) IsDeactivated() bool {
+	return t.DeactivatedAt != nil
+}
+
+// IsDeactivated returns true if the project has been explicitly deactivated.
+func (p *Project) IsDeactivated() bool {
+	return p.DeactivatedAt != nil
 }

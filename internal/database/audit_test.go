@@ -162,6 +162,35 @@ func TestDB_ListAuditEvents(t *testing.T) {
 			},
 			wantCount: 1,
 		},
+		{
+			name: "filter by actor",
+			filters: AuditEventFilters{
+				Actor: audit.ActorManagement,
+			},
+			wantCount: 2,
+		},
+		{
+			name: "filter by actor admin",
+			filters: AuditEventFilters{
+				Actor: audit.ActorAdmin,
+			},
+			wantCount: 1,
+		},
+		{
+			name: "search functionality",
+			filters: AuditEventFilters{
+				Search: "management",
+			},
+			wantCount: 2,
+		},
+		{
+			name: "limit with offset",
+			filters: AuditEventFilters{
+				Limit:  1,
+				Offset: 1,
+			},
+			wantCount: 1,
+		},
 	}
 
 	for _, tt := range tests {

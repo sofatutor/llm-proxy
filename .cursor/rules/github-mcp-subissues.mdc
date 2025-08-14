@@ -1,0 +1,50 @@
+---
+alwaysApply: false
+description: GitHub MCP – create and link sub-issues to a parent using REST Sub-issues API (with gh CLI), and verify links
+---
+
+## GitHub MCP: Sub-issues (Link child issues to a parent)
+
+Use GitHub's Sub-issues REST API to link child issues to a parent issue. MCP currently lacks dedicated endpoints for sub-issues, so prefer the REST API via `gh api`.
+
+References: [GitHub REST – Sub-issues](https://docs.github.com/en/rest/issues/sub-issues?apiVersion=2022-11-28)
+
+### Add sub-issues
+- The API requires the database-level `sub_issue_id` (an integer), not the issue number.
+- Headers required: `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`.
+
+```bash
+# Link a single child to parent
+PARENT=75
+CHILD=78
+SUB_ID=$(gh api repos/sofatutor/llm-proxy/issues/$CHILD --jq .id)
+gh api -X POST repos/sofatutor/llm-proxy/issues/$PARENT/sub_issues \
+  -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  -F sub_issue_id=$SUB_ID
+```
+
+```bash
+# Link multiple children at once
+PARENT=75
+for n in 78 79 80 81 82 83 84; do \
+  sub_id=$(gh api repos/sofatutor/llm-proxy/issues/$n --jq .id); \
+  gh api -X POST repos/sofatutor/llm-proxy/issues/$PARENT/sub_issues \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    -F sub_issue_id=$sub_id; \
+done
+```
+
+### Verify sub-issues
+```bash
+PARENT=75
+gh api repos/sofatutor/llm-proxy/issues/$PARENT/sub_issues \
+  -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2022-11-28"
+```
+
+### Notes
+- If sub-issues also appear as a markdown task list in the parent body (e.g., `- [ ] #123`), keep both in sync. The REST sub-issues linkage is the source of truth for GitHub’s sub-issue UI and progress.
+- Use MCP for creating/updating issues; use `gh api` specifically for linking/unlinking sub-issues until MCP adds first-class support.
+

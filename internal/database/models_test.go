@@ -71,3 +71,59 @@ func TestToken_IsValid(t *testing.T) {
 		})
 	}
 }
+
+func TestToken_IsDeactivated(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name        string
+		token       Token
+		deactivated bool
+	}{
+		{"not deactivated", Token{DeactivatedAt: nil}, false},
+		{"deactivated", Token{DeactivatedAt: &now}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.token.IsDeactivated(); got != tt.deactivated {
+				t.Errorf("IsDeactivated() = %v, want %v", got, tt.deactivated)
+			}
+		})
+	}
+}
+
+func TestProject_IsActive(t *testing.T) {
+	tests := []struct {
+		name    string
+		project Project
+		active  bool
+	}{
+		{"active project", Project{IsActive: true}, true},
+		{"inactive project", Project{IsActive: false}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.project.IsActive; got != tt.active {
+				t.Errorf("IsActive = %v, want %v", got, tt.active)
+			}
+		})
+	}
+}
+
+func TestProject_IsDeactivated(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name        string
+		project     Project
+		deactivated bool
+	}{
+		{"not deactivated", Project{DeactivatedAt: nil}, false},
+		{"deactivated", Project{DeactivatedAt: &now}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.project.IsDeactivated(); got != tt.deactivated {
+				t.Errorf("IsDeactivated() = %v, want %v", got, tt.deactivated)
+			}
+		})
+	}
+}

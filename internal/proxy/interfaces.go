@@ -142,9 +142,11 @@ const (
 // Project represents a project for the management API and proxy
 // (copied from database/models.go)
 type Project struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	OpenAIAPIKey string    `json:"openai_api_key"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID            string     `json:"id"`
+	Name          string     `json:"name"`
+	OpenAIAPIKey  string     `json:"openai_api_key"`
+	IsActive      bool       `json:"is_active"`
+	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
