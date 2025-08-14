@@ -35,6 +35,9 @@ type TokenStore interface {
 	// CreateToken creates a new token in the store
 	CreateToken(ctx context.Context, token TokenData) error
 
+	// UpdateToken updates an existing token
+	UpdateToken(ctx context.Context, token TokenData) error
+
 	// ListTokens retrieves all tokens from the store
 	ListTokens(ctx context.Context) ([]TokenData, error)
 

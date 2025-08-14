@@ -45,6 +45,20 @@ func (m *MockTokenStoreExtended) CreateToken(ctx context.Context, td token.Token
 	return args.Error(0)
 }
 
+func (m *MockTokenStoreExtended) UpdateToken(ctx context.Context, td token.TokenData) error {
+	args := m.Called(ctx, td)
+	if args.Error(0) == nil {
+		// Update token in mock storage
+		for i, token := range m.tokens {
+			if token.Token == td.Token {
+				m.tokens[i] = td
+				break
+			}
+		}
+	}
+	return args.Error(0)
+}
+
 func (m *MockTokenStoreExtended) GetTokensByProjectID(ctx context.Context, projectID string) ([]token.TokenData, error) {
 	args := m.Called(ctx, projectID)
 	return args.Get(0).([]token.TokenData), args.Error(1)

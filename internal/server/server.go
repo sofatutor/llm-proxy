@@ -163,6 +163,7 @@ func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectSto
 	mux.HandleFunc("/manage/projects", s.logRequestMiddleware(s.handleProjects))
 	mux.HandleFunc("/manage/projects/", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleProjectByID)))
 	mux.HandleFunc("/manage/tokens", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleTokens)))
+	mux.HandleFunc("/manage/tokens/", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleTokenByID)))
 	mux.HandleFunc("/manage/audit", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleAuditEvents)))
 	mux.HandleFunc("/manage/audit/", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleAuditEventByID)))
 
@@ -617,39 +618,20 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 }
 
 // DELETE /manage/projects/{id}
+// DELETE /manage/projects/{id} - Returns 405 Method Not Allowed
 func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	requestID := getRequestID(ctx)
 	id := strings.TrimPrefix(r.URL.Path, "/manage/projects/")
-	if id == "" || strings.Contains(id, "/") {
-		s.logger.Error("invalid project id for delete", zap.String("id", id), zap.String("request_id", requestID))
 
-		// Audit: project delete failure - invalid ID
-		_ = s.auditLogger.Log(s.auditEvent(audit.ActionProjectDelete, audit.ActorManagement, audit.ResultFailure, r, requestID).
-			WithDetail("validation_error", "invalid project id").
-			WithDetail("provided_id", id))
+	// Audit: project delete attempt - method not allowed
+	_ = s.auditLogger.Log(s.auditEvent(audit.ActionProjectDelete, audit.ActorManagement, audit.ResultFailure, r, requestID).
+		WithProjectID(id).
+		WithDetail("error_type", "method not allowed").
+		WithDetail("reason", "project deletion is not permitted"))
 
-		http.Error(w, `{"error":"invalid project id"}`, http.StatusBadRequest)
-		return
-	}
-	if err := s.projectStore.DeleteProject(ctx, id); err != nil {
-		s.logger.Error("project not found for delete", zap.String("id", id), zap.Error(err), zap.String("request_id", requestID))
-
-		// Audit: project delete failure - not found or store error
-		_ = s.auditLogger.Log(s.auditEvent(audit.ActionProjectDelete, audit.ActorManagement, audit.ResultFailure, r, requestID).
-			WithProjectID(id).
-			WithError(err))
-
-		http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
-		return
-	}
-	s.logger.Info("project deleted", zap.String("id", id), zap.String("request_id", requestID))
-
-	// Audit: project delete success
-	_ = s.auditLogger.Log(s.auditEvent(audit.ActionProjectDelete, audit.ActorManagement, audit.ResultSuccess, r, requestID).
-		WithProjectID(id))
-
-	w.WriteHeader(http.StatusNoContent)
+	w.Header().Set("Allow", "GET, PATCH")
+	http.Error(w, `{"error":"method not allowed","message":"project deletion is not permitted"}`, http.StatusMethodNotAllowed)
 }
 
 // generateUUID generates a random UUID (v4)
@@ -693,6 +675,12 @@ func (s *Server) checkManagementAuth(w http.ResponseWriter, r *http.Request) boo
 
 // Add the handler function
 func (s *Server) handleProjectByID(w http.ResponseWriter, r *http.Request) {
+	// Check if this is a bulk token revoke request
+	if strings.HasSuffix(r.URL.Path, "/tokens/revoke") && r.Method == http.MethodPost {
+		s.handleBulkRevokeProjectTokens(w, r)
+		return
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		s.handleGetProject(w, r)
@@ -897,6 +885,263 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+// Handler for /manage/tokens/{id} (GET: retrieve, PATCH: update, DELETE: revoke)
+func (s *Server) handleTokenByID(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	requestID := getRequestID(ctx)
+	
+	// Extract token ID from path
+	tokenID := strings.TrimPrefix(r.URL.Path, "/manage/tokens/")
+	if tokenID == "" || tokenID == "/" {
+		s.logger.Error("invalid token ID in path", zap.String("path", r.URL.Path), zap.String("request_id", requestID))
+		http.Error(w, `{"error":"token ID is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		s.handleGetToken(w, r, tokenID)
+	case http.MethodPatch:
+		s.handleUpdateToken(w, r, tokenID)
+	case http.MethodDelete:
+		s.handleRevokeToken(w, r, tokenID)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+// GET /manage/tokens/{id}
+func (s *Server) handleGetToken(w http.ResponseWriter, r *http.Request, tokenID string) {
+	ctx := r.Context()
+	requestID := getRequestID(ctx)
+
+	// Get token from store
+	tokenData, err := s.tokenStore.GetTokenByID(ctx, tokenID)
+	if err != nil {
+		s.logger.Error("failed to get token", zap.String("token_id", tokenID), zap.Error(err), zap.String("request_id", requestID))
+
+		// Audit: token get failure
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenRead, audit.ActorManagement, audit.ResultFailure, r, requestID).
+			WithTokenID(tokenID).
+			WithError(err).
+			WithDetail("error_type", "token not found"))
+
+		http.Error(w, `{"error":"token not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// Audit: token get success
+	_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenRead, audit.ActorManagement, audit.ResultSuccess, r, requestID).
+		WithTokenID(tokenID).
+		WithProjectID(tokenData.ProjectID).
+		WithRequestID(requestID).
+		WithHTTPMethod(r.Method).
+		WithEndpoint(r.URL.Path))
+
+	// Create sanitized response without the actual token value
+	response := TokenListResponse{
+		ProjectID:    tokenData.ProjectID,
+		ExpiresAt:    tokenData.ExpiresAt,
+		IsActive:     tokenData.IsActive,
+		RequestCount: tokenData.RequestCount,
+		MaxRequests:  tokenData.MaxRequests,
+		CreatedAt:    tokenData.CreatedAt,
+		LastUsedAt:   tokenData.LastUsedAt,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		s.logger.Error("failed to encode token response", zap.Error(err))
+	}
+}
+
+// PATCH /manage/tokens/{id}
+func (s *Server) handleUpdateToken(w http.ResponseWriter, r *http.Request, tokenID string) {
+	ctx := r.Context()
+	requestID := getRequestID(ctx)
+
+	// Parse request body
+	var req struct {
+		IsActive    *bool `json:"is_active,omitempty"`
+		MaxRequests *int  `json:"max_requests,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.logger.Error("invalid token update request body", zap.Error(err), zap.String("request_id", requestID))
+
+		// Audit: token update failure - invalid request
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenUpdate, audit.ActorManagement, audit.ResultFailure, r, requestID).
+			WithTokenID(tokenID).
+			WithError(err).
+			WithDetail("validation_error", "invalid request body"))
+
+		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Get existing token
+	tokenData, err := s.tokenStore.GetTokenByID(ctx, tokenID)
+	if err != nil {
+		s.logger.Error("failed to get token for update", zap.String("token_id", tokenID), zap.Error(err), zap.String("request_id", requestID))
+
+		// Audit: token update failure - token not found
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenUpdate, audit.ActorManagement, audit.ResultFailure, r, requestID).
+			WithTokenID(tokenID).
+			WithError(err).
+			WithDetail("error_type", "token not found"))
+
+		http.Error(w, `{"error":"token not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// Update fields if provided
+	updated := false
+	if req.IsActive != nil {
+		tokenData.IsActive = *req.IsActive
+		updated = true
+	}
+	if req.MaxRequests != nil {
+		tokenData.MaxRequests = req.MaxRequests
+		updated = true
+	}
+
+	if !updated {
+		s.logger.Error("no fields to update", zap.String("token_id", tokenID), zap.String("request_id", requestID))
+
+		// Audit: token update failure - no fields
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenUpdate, audit.ActorManagement, audit.ResultFailure, r, requestID).
+			WithTokenID(tokenID).
+			WithDetail("validation_error", "no fields to update"))
+
+		http.Error(w, `{"error":"no fields to update"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Update token in store
+	if err := s.tokenStore.UpdateToken(ctx, tokenData); err != nil {
+		s.logger.Error("failed to update token", zap.String("token_id", tokenID), zap.Error(err), zap.String("request_id", requestID))
+
+		// Audit: token update failure - storage error
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenUpdate, audit.ActorManagement, audit.ResultFailure, r, requestID).
+			WithTokenID(tokenID).
+			WithProjectID(tokenData.ProjectID).
+			WithError(err).
+			WithDetail("error_type", "storage failed"))
+
+		http.Error(w, `{"error":"failed to update token"}`, http.StatusInternalServerError)
+		return
+	}
+
+	s.logger.Info("token updated",
+		zap.String("token_id", tokenID),
+		zap.String("project_id", tokenData.ProjectID),
+		zap.String("request_id", requestID),
+	)
+
+	// Audit: token update success
+	auditEvent := s.auditEvent(audit.ActionTokenUpdate, audit.ActorManagement, audit.ResultSuccess, r, requestID).
+		WithTokenID(tokenID).
+		WithProjectID(tokenData.ProjectID).
+		WithRequestID(requestID).
+		WithHTTPMethod(r.Method).
+		WithEndpoint(r.URL.Path)
+	
+	if req.IsActive != nil {
+		auditEvent.WithDetail("updated_is_active", *req.IsActive)
+	}
+	if req.MaxRequests != nil {
+		auditEvent.WithDetail("updated_max_requests", *req.MaxRequests)
+	}
+	_ = s.auditLogger.Log(auditEvent)
+
+	// Return updated token (sanitized)
+	response := TokenListResponse{
+		ProjectID:    tokenData.ProjectID,
+		ExpiresAt:    tokenData.ExpiresAt,
+		IsActive:     tokenData.IsActive,
+		RequestCount: tokenData.RequestCount,
+		MaxRequests:  tokenData.MaxRequests,
+		CreatedAt:    tokenData.CreatedAt,
+		LastUsedAt:   tokenData.LastUsedAt,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		s.logger.Error("failed to encode updated token response", zap.Error(err))
+	}
+}
+
+// DELETE /manage/tokens/{id} (revoke token)
+func (s *Server) handleRevokeToken(w http.ResponseWriter, r *http.Request, tokenID string) {
+	ctx := r.Context()
+	requestID := getRequestID(ctx)
+
+	// Get existing token first to verify it exists and get project ID
+	tokenData, err := s.tokenStore.GetTokenByID(ctx, tokenID)
+	if err != nil {
+		s.logger.Error("failed to get token for revocation", zap.String("token_id", tokenID), zap.Error(err), zap.String("request_id", requestID))
+
+		// Audit: token revoke failure - token not found
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenRevoke, audit.ActorManagement, audit.ResultFailure, r, requestID).
+			WithTokenID(tokenID).
+			WithError(err).
+			WithDetail("error_type", "token not found"))
+
+		http.Error(w, `{"error":"token not found"}`, http.StatusNotFound)
+		return
+	}
+
+	// Check if already inactive
+	if !tokenData.IsActive {
+		s.logger.Warn("token already revoked", zap.String("token_id", tokenID), zap.String("request_id", requestID))
+
+		// Audit: token revoke success (idempotent)
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenRevoke, audit.ActorManagement, audit.ResultSuccess, r, requestID).
+			WithTokenID(tokenID).
+			WithProjectID(tokenData.ProjectID).
+			WithRequestID(requestID).
+			WithHTTPMethod(r.Method).
+			WithEndpoint(r.URL.Path).
+			WithDetail("already_revoked", true))
+
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// Revoke token by setting is_active to false
+	tokenData.IsActive = false
+	tokenData.DeactivatedAt = func() *time.Time { t := time.Now().UTC(); return &t }()
+
+	if err := s.tokenStore.UpdateToken(ctx, tokenData); err != nil {
+		s.logger.Error("failed to revoke token", zap.String("token_id", tokenID), zap.Error(err), zap.String("request_id", requestID))
+
+		// Audit: token revoke failure - storage error
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenRevoke, audit.ActorManagement, audit.ResultFailure, r, requestID).
+			WithTokenID(tokenID).
+			WithProjectID(tokenData.ProjectID).
+			WithError(err).
+			WithDetail("error_type", "storage failed"))
+
+		http.Error(w, `{"error":"failed to revoke token"}`, http.StatusInternalServerError)
+		return
+	}
+
+	s.logger.Info("token revoked",
+		zap.String("token_id", tokenID),
+		zap.String("project_id", tokenData.ProjectID),
+		zap.String("request_id", requestID),
+	)
+
+	// Audit: token revoke success
+	_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenRevoke, audit.ActorManagement, audit.ResultSuccess, r, requestID).
+		WithTokenID(tokenID).
+		WithProjectID(tokenData.ProjectID).
+		WithRequestID(requestID).
+		WithHTTPMethod(r.Method).
+		WithEndpoint(r.URL.Path))
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func getRequestID(ctx context.Context) string {
