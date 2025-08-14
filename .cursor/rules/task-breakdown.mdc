@@ -1,0 +1,135 @@
+---
+alwaysApply: false
+description: Task list generation from a PRD for this Go repo (process, docs, changelog, and quality gates)
+---
+# Rule: Generating a Task List from a PRD
+
+## Goal
+
+Create a detailed, step-by-step implementation task list in Markdown based on a PRD, aligned with `AGENTS.md` and repository practices.
+
+## Output
+
+- **Format:** Markdown (`.md`)
+- **Location:** `docs/tasks/`
+- **Filename:** `tasks-[prd-file-name].md` (e.g., `tasks-prd-token-revocation.md`)
+
+## Process
+
+1. **Receive PRD Reference:** The user points to an existing PRD file in `docs/tasks/`.
+2. **Analyze PRD:** Read functional requirements, user stories, and constraints.
+3. **Phase 1 – Parent Tasks:** Generate 4–7 high-level tasks that cover all work. Present them without sub-tasks. Say: "I have generated the high-level tasks based on the PRD. Ready to generate the sub-tasks? Respond with 'Go' to proceed."
+4. **Wait for Confirmation:** Pause until the user says "Go".
+5. **Phase 2 – Sub-Tasks:** Break down each parent task into actionable sub-tasks.
+6. **Identify Relevant Files:** List files likely to be created/modified, including `_test.go` counterparts.
+7. **Include Documentation Tasks:** Always include updates to repo docs (see below).
+8. **Generate Final Output:** Combine sections in the prescribed format.
+9. **Save Task List:** Save in `docs/tasks/` as `tasks-[prd-file-name].md`.
+
+### Cross-links
+- **Project workflow**: `AGENTS.md` (tests, coverage ≥ 90%, linting, CI)
+- **PRs**: Use GitHub as in `AGENTS.md` (MCP tools recommended for PR metadata)
+- **Reference docs**: `README.md`, `PLAN.md`, `docs/architecture.md`, `docs/instrumentation.md`, `docs/cli-reference.md`, `docs/api-configuration.md`, `docs/security.md`
+
+## Output Format
+
+The generated task list must follow this structure:
+
+```markdown
+## Relevant Files
+
+- `internal/<package>/file.go` - Why this file/package is relevant.
+- `internal/<package>/file_test.go` - Unit tests for `file.go`.
+- `cmd/<entrypoint>/main.go` - CLI/server entrypoint changes if applicable.
+- `cmd/<entrypoint>/main_test.go` - Tests for the entrypoint behavior.
+- `docs/tasks/prd-<feature>.md` - The PRD that drives this work.
+- `docs/architecture.md` - Architecture updates if design changes.
+- `docs/instrumentation.md` - Event/dispatcher instrumentation updates if relevant.
+- `PLAN.md` - Project plan updates if scope or roadmap changes.
+
+### Notes
+
+- Go unit tests live alongside code as `*_test.go` in the same package.
+- Prefer targeted test runs during iteration.
+
+Use the following commands to run tests:
+
+#### Unit tests (fast)
+- `make test`
+- Equivalent (CI-style coverage aggregation):
+  - `go test -v -race -parallel=4 -coverprofile=coverage_ci.txt -covermode=atomic -coverpkg=./internal/... ./...`
+  - View summary: `go tool cover -func=coverage_ci.txt | tail -n 1`
+
+#### Targeted tests
+- By package: `go test ./internal/token -v -race`
+- Single test regex: `go test ./internal/token -v -race -run TestName`
+
+#### Integration tests
+- `go test -v -race -parallel=4 -tags=integration -timeout=5m -run Integration ./...`
+
+## Tasks
+
+- [ ] 1.0 Parent Task Title
+  - [ ] 1.1 [Sub-task description 1.1]
+  - [ ] 1.2 [Sub-task description 1.2]
+- [ ] 2.0 Parent Task Title
+  - [ ] 2.1 [Sub-task description 2.1]
+- [ ] 3.0 Parent Task Title (purely structural/configuration tasks may omit sub-tasks)
+- [ ] X.0 Update Documentation for [Feature Name]
+  - [ ] X.1 Update `docs/instrumentation.md` or relevant docs with [feature] details
+  - [ ] X.2 Update `docs/architecture.md`/`PLAN.md` with high-level design decisions
+  - [ ] X.3 Update `README.md` or `docs/cli-reference.md` if CLI/server usage changes
+  - [ ] X.4 Add/refresh `docs/tasks/prd-[feature].md` links and cross-references
+```
+
+## Interaction Model
+
+Pause after generating parent tasks. Proceed to sub-tasks only after the user replies "Go".
+
+## Commit and Push Strategy
+
+### Logical Commits
+- Group related changes into focused commits
+- Commit after completing a sub-task
+- Use conventional commits (`feat:`, `fix:`, `test:`, `docs:`, `refactor:`)
+
+### Commit Message Format
+Use multi-line commit messages with `-m` flags:
+```bash
+git commit -m "feat: primary change description" \
+           -m "- Detailed change 1" \
+           -m "- Detailed change 2" \
+           -m "- Reference to task/PRD context"
+```
+
+### Examples of Good Commit Groups
+1. **API/Type Changes**: `git add internal/token/token.go && git commit -m "feat(token): extend token with new property"`
+2. **Implementation Changes**: `git add internal/proxy/proxy.go && git commit -m "feat(proxy): implement new middleware"`
+3. **Test Changes**: `git add internal/token/token_test.go && git commit -m "test(token): add edge case tests"`
+4. **Documentation**: `git add docs/tasks/*.md && git commit -m "docs(tasks): update task completion status"`
+
+### Task Completion Workflow
+1. Complete sub-task → run targeted tests → commit
+2. After all sub-tasks of a parent are complete → run `make test` (and integration tests if touched) → push
+3. Never commit broken code
+
+### Testing Before Commits
+- Prefer targeted `go test` for affected packages/files
+- Ensure `make test` and `make lint` are green before pushing
+
+## Quality Gates Reminder
+- All tests pass (`make test`), including `-race`
+- Coverage ≥ 90% (use CI-style aggregation command above)
+- Linters pass (`make lint`)
+
+## Documentation Strategy
+
+Always include documentation tasks for:
+
+1. `docs/instrumentation.md` when events/dispatcher change
+2. `docs/architecture.md` for structural changes
+3. `README.md` and/or `docs/cli-reference.md` for user/CLI changes
+4. `PLAN.md` for roadmap/scope updates
+5. `docs/tasks/` PRD/task files for traceability
+
+Target audience is a **junior Go developer**.
