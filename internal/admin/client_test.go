@@ -815,14 +815,18 @@ func TestAPIClient_GetAuditEvents_and_GetAuditEvent(t *testing.T) {
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/manage/audit":
 			lastQuery = r.URL.RawQuery
-			io.WriteString(w, `{
+			if _, err := io.WriteString(w, `{
                 "events": [
                     {"id":"evt-1","outcome":"success","metadata":"{\"k\":\"v\"}"}
                 ],
                 "pagination": {"page":1, "page_size":20, "total_items":1, "total_pages":1}
-            }`)
+            }`); err != nil {
+				t.Errorf("failed to write response: %v", err)
+			}
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/manage/audit/"):
-			io.WriteString(w, `{"id":"evt-2","outcome":"failure","metadata":"{\"a\":\"b\"}"}`)
+			if _, err := io.WriteString(w, `{"id":"evt-2","outcome":"failure","metadata":"{\"a\":\"b\"}"}`); err != nil {
+				t.Errorf("failed to write response: %v", err)
+			}
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -862,7 +866,9 @@ func TestAPIClient_GetAuditEvents_and_GetAuditEvent(t *testing.T) {
 func TestAPIClient_GetAuditEvents_Error(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		io.WriteString(w, `{"error":"boom"}`)
+		if _, err := io.WriteString(w, `{"error":"boom"}`); err != nil {
+			t.Errorf("failed to write response: %v", err)
+		}
 	}))
 	defer srv.Close()
 

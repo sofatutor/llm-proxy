@@ -7,16 +7,28 @@ import (
 )
 
 func TestEnvHelpers(t *testing.T) {
-	os.Setenv("X", "val")
-	t.Cleanup(func() { os.Unsetenv("X") })
+	if err := os.Setenv("X", "val"); err != nil {
+		t.Fatalf("Setenv X: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Unsetenv("X"); err != nil {
+			t.Errorf("Unsetenv X: %v", err)
+		}
+	})
 	if got := envOrDefault("X", "fallback"); got != "val" {
 		t.Fatalf("envOrDefault got %q", got)
 	}
 	if got := envOrDefault("MISSING", "fb"); got != "fb" {
 		t.Fatalf("envOrDefault fallback got %q", got)
 	}
-	os.Setenv("N", "42")
-	t.Cleanup(func() { os.Unsetenv("N") })
+	if err := os.Setenv("N", "42"); err != nil {
+		t.Fatalf("Setenv N: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := os.Unsetenv("N"); err != nil {
+			t.Errorf("Unsetenv N: %v", err)
+		}
+	})
 	if got := envIntOrDefault("N", 7); got != 42 {
 		t.Fatalf("envIntOrDefault got %d", got)
 	}
@@ -27,8 +39,14 @@ func TestEnvHelpers(t *testing.T) {
 
 func TestRun_NoFilePermission(t *testing.T) {
 	// set file path to an invalid directory to trigger open error
-	os.Setenv("EVENTDISPATCHER_FILE", "/dev/null/dir/notafile.jsonl")
-	defer os.Unsetenv("EVENTDISPATCHER_FILE")
+	if err := os.Setenv("EVENTDISPATCHER_FILE", "/dev/null/dir/notafile.jsonl"); err != nil {
+		t.Fatalf("Setenv EVENTDISPATCHER_FILE: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("EVENTDISPATCHER_FILE"); err != nil {
+			t.Errorf("Unsetenv EVENTDISPATCHER_FILE: %v", err)
+		}
+	}()
 	code := run()
 	if code != 1 {
 		t.Fatalf("expected exit code 1, got %d", code)

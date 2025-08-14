@@ -683,35 +683,7 @@ func TestHandleNotFound_WriteHeader_Flush_EventBus(t *testing.T) {
 	}
 }
 
-// Minimal mocks to exercise audit management endpoints
-type mockAuditStore struct {
-	listFunc  func(ctx context.Context, f database.AuditEventFilters) ([]database.AuditEvent, error)
-	countFunc func(ctx context.Context, f database.AuditEventFilters) (int, error)
-	getFunc   func(ctx context.Context, id string) (*database.AuditEvent, error)
-}
-
-func (m *mockAuditStore) StoreAuditEvent(ctx context.Context, e *audit.Event) error { return nil }
-func (m *mockAuditStore) ListAuditEvents(ctx context.Context, f database.AuditEventFilters) ([]database.AuditEvent, error) {
-	if m.listFunc != nil {
-		return m.listFunc(ctx, f)
-	}
-	return []database.AuditEvent{}, nil
-}
-func (m *mockAuditStore) CountAuditEvents(ctx context.Context, f database.AuditEventFilters) (int, error) {
-	if m.countFunc != nil {
-		return m.countFunc(ctx, f)
-	}
-	return 0, nil
-}
-func (m *mockAuditStore) GetAuditEventByID(ctx context.Context, id string) (*database.AuditEvent, error) {
-	if m.getFunc != nil {
-		return m.getFunc(ctx, id)
-	}
-	return &database.AuditEvent{ID: id}, nil
-}
-
-// mockDB wraps database.DB to inject a custom AuditStore in tests
-type mockDB struct{ database.AuditStore }
+// (removed unused mockAuditStore and mockDB)
 
 func TestHandleAuditEvents_And_ByID(t *testing.T) {
 	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
