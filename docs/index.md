@@ -1,5 +1,5 @@
 <!-- Simple cross-page nav -->
-[Home]({{ site.baseurl }}/) | [Features]({{ site.baseurl }}/features) | [Screenshots]({{ site.baseurl }}/screenshots) | [Quickstart]({{ site.baseurl }}/quickstart) | [CLI Reference]({{ site.baseurl }}/cli-reference) | [Architecture]({{ site.baseurl }}/architecture) | [Contributing]({{ site.baseurl }}/contributing) | [Coverage]({{ site.baseurl }}/coverage/) | [Roadmap](https://github.com/sofatutor/llm-proxy/blob/main/PLAN.md)
+<!-- Minima will render nav from _config.yml nav_pages; local inline nav not needed. -->
 
 ## LLM Proxy
 

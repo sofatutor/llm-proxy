@@ -20,4 +20,17 @@ exclude:
   - issues/
   - done/
 
+# Minima theme configuration
+minima:
+  skin: auto
+  nav_pages:
+    - index.md
+    - features.md
+    - screenshots.md
+    - quickstart.md
+    - cli-reference.md
+    - architecture.md
+    - contributing.md
+    - coverage.md
+
 
