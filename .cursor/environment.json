@@ -1,0 +1,51 @@
+{
+  "$schema": "https://cursor.com/schemas/environment.schema.json",
+  "name": "llm-proxy dev",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "install": "go mod download",
+  "ports": [
+    { "name": "proxy", "port": 8080 },
+    { "name": "admin", "port": 8081 },
+    { "name": "redis", "port": 6379 }
+  ],
+  "terminals": [
+    {
+      "name": "setup (interactive)",
+      "command": "go run ./cmd/proxy setup --interactive",
+      "description": "Guided setup to create .env, management token, and seed project/token."
+    },
+    {
+      "name": "server",
+      "command": "mkdir -p ./logs ./data && LISTEN_ADDR=:8080 DATABASE_PATH=./data/llm-proxy.db LOG_LEVEL=${LOG_LEVEL:-info} FILE_EVENT_LOG=./logs/events.jsonl go run ./cmd/proxy server",
+      "description": "Run HTTP server on :8080. Writes transformed events to logs/events.jsonl."
+    },
+    {
+      "name": "admin ui",
+      "command": "ADMIN_UI_API_BASE_URL=http://localhost:8080 MANAGEMENT_TOKEN=${MANAGEMENT_TOKEN:-dev-admin-token} go run ./cmd/proxy admin",
+      "description": "Run Admin UI on :8081 (requires MANAGEMENT_TOKEN)."
+    },
+    {
+      "name": "dispatcher:redis",
+      "command": "LLM_PROXY_EVENT_BUS=redis REDIS_ADDR=localhost:6379 go run ./cmd/proxy dispatcher --service file --endpoint ./logs/events.jsonl",
+      "description": "File dispatcher backed by Redis event bus (default dev setup)."
+    },
+    {
+      "name": "redis (ensure running)",
+      "command": "(pgrep -x redis-server >/dev/null 2>&1) || (redis-server --daemonize yes && echo 'redis started')",
+      "description": "Start Redis locally in the container if not already running."
+    },
+    {
+      "name": "dispatcher:helicone",
+      "command": "LLM_PROXY_EVENT_BUS=redis REDIS_ADDR=${REDIS_ADDR:-localhost:6379} go run ./cmd/proxy dispatcher --service helicone --api-key ${HELICONE_API_KEY:-set-me}",
+      "description": "Helicone dispatcher (requires Redis and HELICONE_API_KEY)."
+    },
+    {
+      "name": "dispatcher:lunary",
+      "command": "LLM_PROXY_EVENT_BUS=redis REDIS_ADDR=${REDIS_ADDR:-localhost:6379} go run ./cmd/proxy dispatcher --service lunary --api-key ${LUNARY_API_KEY:-set-me}",
+      "description": "Lunary dispatcher (requires Redis and LUNARY_API_KEY)."
+    }
+  ]
+}
