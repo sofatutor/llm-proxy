@@ -44,14 +44,15 @@ type TokenStore interface {
 
 // TokenData represents the data associated with a token
 type TokenData struct {
-	Token        string     // The token ID
-	ProjectID    string     // The associated project ID
-	ExpiresAt    *time.Time // When the token expires (nil for no expiration)
-	IsActive     bool       // Whether the token is active
-	RequestCount int        // Number of requests made with this token
-	MaxRequests  *int       // Maximum number of requests allowed (nil for unlimited)
-	CreatedAt    time.Time  // When the token was created
-	LastUsedAt   *time.Time // When the token was last used (nil if never used)
+	Token         string     // The token ID
+	ProjectID     string     // The associated project ID
+	ExpiresAt     *time.Time // When the token expires (nil for no expiration)
+	IsActive      bool       // Whether the token is active
+	DeactivatedAt *time.Time // When the token was deactivated (nil if not deactivated)
+	RequestCount  int        // Number of requests made with this token
+	MaxRequests   *int       // Maximum number of requests allowed (nil for unlimited)
+	CreatedAt     time.Time  // When the token was created
+	LastUsedAt    *time.Time // When the token was last used (nil if never used)
 }
 
 // IsValid returns true if the token is active, not expired, and not rate limited
