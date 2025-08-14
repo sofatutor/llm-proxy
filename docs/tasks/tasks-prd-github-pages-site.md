@@ -38,7 +38,7 @@ Use the following commands to run tests:
 
 - [ ] 1.0 Scaffold GitHub Pages structure and navigation
   - [x] 1.1 Create `docs/_config.yml` with site metadata (title, description) and simple theme (optional: `minima`)
-  - [ ] 1.2 Create page stubs: `docs/index.md`, `docs/features.md`, `docs/screenshots.md`, `docs/quickstart.md`, `docs/contributing.md`
+  - [x] 1.2 Create page stubs: `docs/index.md`, `docs/features.md`, `docs/screenshots.md`, `docs/quickstart.md`, `docs/contributing.md`
   - [ ] 1.3 Add a simple cross-page navbar section to each page header (Markdown links) matching nav: Home, Features, Screenshots, Quickstart, Architecture, Contributing, Coverage, Roadmap
   - [ ] 1.4 Link to existing architecture doc: add prominent link to `docs/architecture.md` from Home and Features
 
