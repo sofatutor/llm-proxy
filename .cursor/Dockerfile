@@ -37,10 +37,10 @@ RUN mkdir -p ${GOPATH} ${GOMODCACHE} ${GOCACHE} \
 # Important for background agents: do NOT copy source code here.
 # The agent will clone the repository into the workspace later.
 
-COPY --chown=${UID}:${GID} go.mod go.sum /tmp/
+COPY --chown=${UID}:${GID} go.mod go.sum /home/${USER}/modcache/
 RUN --mount=type=cache,target=/home/${USER}/go/pkg/mod,sharing=locked \
 	--mount=type=cache,target=/home/${USER}/.cache/go-build,sharing=locked \
-	cd /tmp && go mod download
+	cd /home/${USER}/modcache && go mod download
 
 USER ${USER}
 WORKDIR /home/${USER}
