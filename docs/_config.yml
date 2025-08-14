@@ -1,0 +1,21 @@
+title: "LLM Proxy"
+description: "Open-source reverse proxy for LLM APIs with withering tokens, management UI, and observability"
+url: "https://sofatutor.github.io/llm-proxy"
+baseurl: ""
+
+# GitHub Pages defaults
+markdown: kramdown
+theme: minima
+plugins:
+  - jekyll-seo-tag
+
+# Build settings
+exclude:
+  - vendor
+  - node_modules
+  - README.md
+  - PLAN.md
+  - CONTRIBUTING.md
+  - LICENSE
+
+
