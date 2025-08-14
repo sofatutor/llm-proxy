@@ -20,8 +20,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 		sqlite3 \
 		libsqlite3-dev \
 		redis-server \
+		xvfb \
 	&& groupadd -g ${GID} ${USER} \
-	&& useradd -m -u ${UID} -g ${GID} -s /bin/bash ${USER}
+	&& useradd -m -u ${UID} -g ${GID} -s /bin/bash ${USER} \
+	&& printf 'Acquire::Check-Valid-Until "false";\nAcquire::Check-Date "false";\n' > /etc/apt/apt.conf.d/99no-check-valid-until
 
 # Enable CGO for go-sqlite3 and set GOPATH for the non-root user
 ENV CGO_ENABLED=1
