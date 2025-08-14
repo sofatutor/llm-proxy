@@ -554,10 +554,10 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Name           *string `json:"name,omitempty"`
-		OpenAIAPIKey   *string `json:"openai_api_key,omitempty"`
-		IsActive       *bool   `json:"is_active,omitempty"`
-		RevokeTokens   *bool   `json:"revoke_tokens,omitempty"`
+		Name         *string `json:"name,omitempty"`
+		OpenAIAPIKey *string `json:"openai_api_key,omitempty"`
+		IsActive     *bool   `json:"is_active,omitempty"`
+		RevokeTokens *bool   `json:"revoke_tokens,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.logger.Error("invalid request body for update", zap.Error(err))
@@ -595,20 +595,20 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		project.OpenAIAPIKey = *req.OpenAIAPIKey
 		updatedFields = append(updatedFields, "openai_api_key")
 	}
-	
+
 	// Handle project activation/deactivation
 	var shouldRevokeTokens bool
 	if req.IsActive != nil {
 		if *req.IsActive != project.IsActive {
 			project.IsActive = *req.IsActive
 			updatedFields = append(updatedFields, "is_active")
-			
+
 			// If deactivating project, set deactivated timestamp
 			if !*req.IsActive {
 				now := time.Now().UTC()
 				project.DeactivatedAt = &now
 				updatedFields = append(updatedFields, "deactivated_at")
-				
+
 				// Check if tokens should be revoked when deactivating
 				if req.RevokeTokens != nil && *req.RevokeTokens {
 					shouldRevokeTokens = true
@@ -619,7 +619,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	
+
 	project.UpdatedAt = time.Now().UTC()
 	if err := s.projectStore.UpdateProject(ctx, project); err != nil {
 		s.logger.Error("failed to update project", zap.String("id", id), zap.Error(err))
@@ -633,7 +633,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"failed to update project"}`, http.StatusInternalServerError)
 		return
 	}
-	
+
 	// Revoke project tokens if requested
 	var revokedTokensCount int
 	if shouldRevokeTokens {
@@ -647,9 +647,9 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 					token.IsActive = false
 					token.DeactivatedAt = func() *time.Time { t := time.Now().UTC(); return &t }()
 					if err := s.tokenStore.UpdateToken(ctx, token); err != nil {
-						s.logger.Warn("failed to revoke token during project deactivation", 
-							zap.String("token_id", token.Token), 
-							zap.String("project_id", id), 
+						s.logger.Warn("failed to revoke token during project deactivation",
+							zap.String("token_id", token.Token),
+							zap.String("project_id", id),
 							zap.Error(err))
 					} else {
 						revokedTokensCount++
@@ -658,7 +658,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	
+
 	s.logger.Info("project updated", zap.String("id", id), zap.Strings("updated_fields", updatedFields))
 
 	// Audit: project update success
@@ -666,7 +666,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		WithProjectID(id).
 		WithDetail("updated_fields", updatedFields).
 		WithDetail("project_name", project.Name)
-	
+
 	if shouldRevokeTokens {
 		auditEvent.WithDetail("tokens_revoked", revokedTokensCount)
 	}
@@ -699,7 +699,7 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleBulkRevokeProjectTokens(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	requestID := getRequestID(ctx)
-	
+
 	// Extract project ID from path
 	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/manage/projects/"), "/")
 	if len(pathParts) != 2 || pathParts[0] == "" || pathParts[1] != "tokens/revoke" {
@@ -744,7 +744,7 @@ func (s *Server) handleBulkRevokeProjectTokens(w http.ResponseWriter, r *http.Re
 	// Count and revoke active tokens
 	var revokedCount, alreadyRevokedCount int
 	var failedRevocations []string
-	
+
 	for _, token := range tokens {
 		if !token.IsActive {
 			alreadyRevokedCount++
@@ -754,11 +754,11 @@ func (s *Server) handleBulkRevokeProjectTokens(w http.ResponseWriter, r *http.Re
 		// Revoke the token
 		token.IsActive = false
 		token.DeactivatedAt = func() *time.Time { t := time.Now().UTC(); return &t }()
-		
+
 		if err := s.tokenStore.UpdateToken(ctx, token); err != nil {
-			s.logger.Warn("failed to revoke individual token during bulk revoke", 
-				zap.String("token_id", token.Token), 
-				zap.String("project_id", projectID), 
+			s.logger.Warn("failed to revoke individual token during bulk revoke",
+				zap.String("token_id", token.Token),
+				zap.String("project_id", projectID),
 				zap.Error(err))
 			failedRevocations = append(failedRevocations, token.Token)
 		} else {
@@ -788,11 +788,11 @@ func (s *Server) handleBulkRevokeProjectTokens(w http.ResponseWriter, r *http.Re
 
 	// Return summary response
 	response := map[string]interface{}{
-		"revoked_count":          revokedCount,
-		"already_revoked_count":  alreadyRevokedCount,
+		"revoked_count":         revokedCount,
+		"already_revoked_count": alreadyRevokedCount,
 		"total_tokens":          len(tokens),
 	}
-	
+
 	if len(failedRevocations) > 0 {
 		response["failed_count"] = len(failedRevocations)
 	}
@@ -1060,7 +1060,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTokenByID(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	requestID := getRequestID(ctx)
-	
+
 	// Extract token ID from path
 	tokenID := strings.TrimPrefix(r.URL.Path, "/manage/tokens/")
 	if tokenID == "" || tokenID == "/" {
@@ -1215,7 +1215,7 @@ func (s *Server) handleUpdateToken(w http.ResponseWriter, r *http.Request, token
 		WithRequestID(requestID).
 		WithHTTPMethod(r.Method).
 		WithEndpoint(r.URL.Path)
-	
+
 	if req.IsActive != nil {
 		auditEvent.WithDetail("updated_is_active", *req.IsActive)
 	}
