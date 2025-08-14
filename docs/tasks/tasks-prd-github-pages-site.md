@@ -61,12 +61,12 @@ Use the following commands to run tests:
   - [ ] 3.3 Optimize image sizes (target ≤ 200 KB each) without visible quality loss
 
 - [ ] 4.0 Implement CI job to generate and publish HTML coverage to `docs/coverage/` on `main`
-  - [ ] 4.1 Create `.github/workflows/coverage-pages.yml` triggered on push to `main`
+  - [x] 4.1 Create unified `.github/workflows/pages.yml` (temporary branch target for testing; later switch to `main`)
   - [ ] 4.2 Run CI-style coverage aggregation:
         `go test -v -race -parallel=4 -coverprofile=coverage_ci.txt -covermode=atomic -coverpkg=./internal/... ./...`
-  - [ ] 4.3 Generate HTML report: `mkdir -p docs/coverage && go tool cover -html=coverage_ci.txt -o docs/coverage/index.html`
-  - [ ] 4.4 Commit back to `main` with a distinct message tag (e.g., `chore(coverage): update [skip ci][coverage]`)
-  - [ ] 4.5 Prevent loops: configure workflow conditionals and/or `paths-ignore` in other workflows to ignore `docs/coverage/**` or `[coverage]` commits
+  - [x] 4.3 Generate HTML report: `mkdir -p docs/coverage && go tool cover -html=coverage_ci.txt -o docs/coverage/index.html`
+  - [x] 4.4 Build full site from `docs/` with Jekyll and deploy via Pages
+  - [ ] 4.5 Flip branch filter from `feat/phase-5-github-pages-site` to `main` before merge
   - [ ] 4.6 Verify `https://sofatutor.github.io/llm-proxy/coverage/` serves the generated report
 
 - [ ] 5.0 Add build/test/coverage badges and contributor CTAs (homepage and `README.md`)
