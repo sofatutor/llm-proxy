@@ -1,0 +1,8 @@
+/* Minimal spacing and mermaid container tweaks */
+.mermaid{
+  margin: 1.25rem 0;
+}
+pre code.language-mermaid, pre code.mermaid{
+  display: none;
+}
+

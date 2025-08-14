@@ -1,0 +1,29 @@
+<!-- Custom head injections: Mermaid support and custom styles -->
+<link rel="stylesheet" href="{{ site.baseurl }}/assets/css/custom.css">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!window.mermaid) return;
+    try {
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: prefersDark ? 'dark' : 'default' });
+
+      // Convert fenced code blocks ```mermaid into <div class="mermaid"> nodes
+      document.querySelectorAll('pre > code.language-mermaid, pre > code.mermaid').forEach(function (code) {
+        const graph = code.textContent;
+        const container = document.createElement('div');
+        container.className = 'mermaid';
+        container.textContent = graph;
+        const pre = code.parentElement;
+        pre.replaceWith(container);
+      });
+
+      // Also render any existing <div class="mermaid"> blocks
+      mermaid.run();
+    } catch (e) {
+      console.error('Mermaid init failed', e);
+    }
+  });
+</script>
+
+
