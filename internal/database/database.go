@@ -112,6 +112,8 @@ func initDatabase(db *sql.DB) error {
 		id TEXT PRIMARY KEY,
 		name TEXT NOT NULL UNIQUE,
 		openai_api_key TEXT NOT NULL,
+		is_active BOOLEAN NOT NULL DEFAULT 1,
+		deactivated_at DATETIME,
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
@@ -125,6 +127,7 @@ func initDatabase(db *sql.DB) error {
 		project_id TEXT NOT NULL,
 		expires_at DATETIME,
 		is_active BOOLEAN NOT NULL DEFAULT 1,
+		deactivated_at DATETIME,
 		request_count INTEGER NOT NULL DEFAULT 0,
 		max_requests INTEGER,
 		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -167,6 +170,55 @@ func initDatabase(db *sql.DB) error {
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create schema: %w", err)
+	}
+
+	// Apply schema migrations for existing databases
+	if err := applyMigrations(db); err != nil {
+		return fmt.Errorf("failed to apply migrations: %w", err)
+	}
+
+	return nil
+}
+
+// applyMigrations applies database schema changes for existing databases
+func applyMigrations(db *sql.DB) error {
+	// Add is_active and deactivated_at columns to projects table if they don't exist
+	err := addColumnIfNotExists(db, "projects", "is_active", "BOOLEAN NOT NULL DEFAULT 1")
+	if err != nil {
+		return fmt.Errorf("failed to add is_active column to projects: %w", err)
+	}
+
+	err = addColumnIfNotExists(db, "projects", "deactivated_at", "DATETIME")
+	if err != nil {
+		return fmt.Errorf("failed to add deactivated_at column to projects: %w", err)
+	}
+
+	// Add deactivated_at column to tokens table if it doesn't exist
+	err = addColumnIfNotExists(db, "tokens", "deactivated_at", "DATETIME")
+	if err != nil {
+		return fmt.Errorf("failed to add deactivated_at column to tokens: %w", err)
+	}
+
+	return nil
+}
+
+// addColumnIfNotExists adds a column to a table if it doesn't already exist
+func addColumnIfNotExists(db *sql.DB, tableName, columnName, columnType string) error {
+	// Check if column exists
+	query := `SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`
+	var count int
+	err := db.QueryRow(query, tableName, columnName).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("failed to check if column exists: %w", err)
+	}
+
+	// Add column if it doesn't exist
+	if count == 0 {
+		alterQuery := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", tableName, columnName, columnType)
+		_, err = db.Exec(alterQuery)
+		if err != nil {
+			return fmt.Errorf("failed to add column %s to table %s: %w", columnName, tableName, err)
+		}
 	}
 
 	return nil

@@ -20,8 +20,8 @@ var (
 // CreateToken creates a new token in the database.
 func (d *DB) CreateToken(ctx context.Context, token Token) error {
 	query := `
-	INSERT INTO tokens (token, project_id, expires_at, is_active, request_count, max_requests, created_at, last_used_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO tokens (token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := d.db.ExecContext(
@@ -31,6 +31,7 @@ func (d *DB) CreateToken(ctx context.Context, token Token) error {
 		token.ProjectID,
 		token.ExpiresAt,
 		token.IsActive,
+		token.DeactivatedAt,
 		token.RequestCount,
 		token.MaxRequests,
 		token.CreatedAt,
@@ -46,13 +47,13 @@ func (d *DB) CreateToken(ctx context.Context, token Token) error {
 // GetTokenByID retrieves a token by ID.
 func (d *DB) GetTokenByID(ctx context.Context, tokenID string) (Token, error) {
 	query := `
-	SELECT token, project_id, expires_at, is_active, request_count, max_requests, created_at, last_used_at
+	SELECT token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at
 	FROM tokens
 	WHERE token = ?
 	`
 
 	var token Token
-	var expiresAt, lastUsedAt sql.NullTime
+	var expiresAt, lastUsedAt, deactivatedAt sql.NullTime
 	var maxRequests sql.NullInt32
 
 	err := d.db.QueryRowContext(ctx, query, tokenID).Scan(
@@ -60,6 +61,7 @@ func (d *DB) GetTokenByID(ctx context.Context, tokenID string) (Token, error) {
 		&token.ProjectID,
 		&expiresAt,
 		&token.IsActive,
+		&deactivatedAt,
 		&token.RequestCount,
 		&maxRequests,
 		&token.CreatedAt,
@@ -77,6 +79,9 @@ func (d *DB) GetTokenByID(ctx context.Context, tokenID string) (Token, error) {
 	}
 	if lastUsedAt.Valid {
 		token.LastUsedAt = &lastUsedAt.Time
+	}
+	if deactivatedAt.Valid {
+		token.DeactivatedAt = &deactivatedAt.Time
 	}
 	if maxRequests.Valid {
 		maxReq := int(maxRequests.Int32)
@@ -148,7 +153,7 @@ func (d *DB) DeleteToken(ctx context.Context, tokenID string) error {
 // ListTokens retrieves all tokens from the database.
 func (d *DB) ListTokens(ctx context.Context) ([]Token, error) {
 	query := `
-	SELECT token, project_id, expires_at, is_active, request_count, max_requests, created_at, last_used_at
+	SELECT token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at
 	FROM tokens
 	ORDER BY created_at DESC
 	`
@@ -159,7 +164,7 @@ func (d *DB) ListTokens(ctx context.Context) ([]Token, error) {
 // GetTokensByProjectID retrieves all tokens for a project.
 func (d *DB) GetTokensByProjectID(ctx context.Context, projectID string) ([]Token, error) {
 	query := `
-	SELECT token, project_id, expires_at, is_active, request_count, max_requests, created_at, last_used_at
+	SELECT token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at
 	FROM tokens
 	WHERE project_id = ?
 	ORDER BY created_at DESC
@@ -228,7 +233,7 @@ func (d *DB) queryTokens(ctx context.Context, query string, args ...interface{})
 	var tokens []Token
 	for rows.Next() {
 		var token Token
-		var expiresAt, lastUsedAt sql.NullTime
+		var expiresAt, lastUsedAt, deactivatedAt sql.NullTime
 		var maxRequests sql.NullInt32
 
 		if err := rows.Scan(
@@ -236,6 +241,7 @@ func (d *DB) queryTokens(ctx context.Context, query string, args ...interface{})
 			&token.ProjectID,
 			&expiresAt,
 			&token.IsActive,
+			&deactivatedAt,
 			&token.RequestCount,
 			&maxRequests,
 			&token.CreatedAt,
@@ -249,6 +255,9 @@ func (d *DB) queryTokens(ctx context.Context, query string, args ...interface{})
 		}
 		if lastUsedAt.Valid {
 			token.LastUsedAt = &lastUsedAt.Time
+		}
+		if deactivatedAt.Valid {
+			token.DeactivatedAt = &deactivatedAt.Time
 		}
 		if maxRequests.Valid {
 			maxReq := int(maxRequests.Int32)

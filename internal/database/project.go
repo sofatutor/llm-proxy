@@ -20,16 +20,19 @@ var (
 // GetProjectByName retrieves a project by name.
 func (d *DB) GetProjectByName(ctx context.Context, name string) (Project, error) {
 	query := `
-	SELECT id, name, openai_api_key, created_at, updated_at
+	SELECT id, name, openai_api_key, is_active, deactivated_at, created_at, updated_at
 	FROM projects
 	WHERE name = ?
 	`
 
 	var project Project
+	var deactivatedAt sql.NullTime
 	err := d.db.QueryRowContext(ctx, query, name).Scan(
 		&project.ID,
 		&project.Name,
 		&project.OpenAIAPIKey,
+		&project.IsActive,
+		&deactivatedAt,
 		&project.CreatedAt,
 		&project.UpdatedAt,
 	)
@@ -40,35 +43,43 @@ func (d *DB) GetProjectByName(ctx context.Context, name string) (Project, error)
 		return Project{}, fmt.Errorf("failed to get project: %w", err)
 	}
 
+	if deactivatedAt.Valid {
+		project.DeactivatedAt = &deactivatedAt.Time
+	}
+
 	return project, nil
 }
 
 // ToProxyProject converts a database.Project to a proxy.Project
 func ToProxyProject(dbProject Project) proxy.Project {
 	return proxy.Project{
-		ID:           dbProject.ID,
-		Name:         dbProject.Name,
-		OpenAIAPIKey: dbProject.OpenAIAPIKey,
-		CreatedAt:    dbProject.CreatedAt,
-		UpdatedAt:    dbProject.UpdatedAt,
+		ID:            dbProject.ID,
+		Name:          dbProject.Name,
+		OpenAIAPIKey:  dbProject.OpenAIAPIKey,
+		IsActive:      dbProject.IsActive,
+		DeactivatedAt: dbProject.DeactivatedAt,
+		CreatedAt:     dbProject.CreatedAt,
+		UpdatedAt:     dbProject.UpdatedAt,
 	}
 }
 
 // ToDBProject converts a proxy.Project to a database.Project
 func ToDBProject(proxyProject proxy.Project) Project {
 	return Project{
-		ID:           proxyProject.ID,
-		Name:         proxyProject.Name,
-		OpenAIAPIKey: proxyProject.OpenAIAPIKey,
-		CreatedAt:    proxyProject.CreatedAt,
-		UpdatedAt:    proxyProject.UpdatedAt,
+		ID:            proxyProject.ID,
+		Name:          proxyProject.Name,
+		OpenAIAPIKey:  proxyProject.OpenAIAPIKey,
+		IsActive:      proxyProject.IsActive,
+		DeactivatedAt: proxyProject.DeactivatedAt,
+		CreatedAt:     proxyProject.CreatedAt,
+		UpdatedAt:     proxyProject.UpdatedAt,
 	}
 }
 
 // Rename CRUD methods for DB store
 func (d *DB) DBListProjects(ctx context.Context) ([]Project, error) {
 	query := `
-	SELECT id, name, openai_api_key, created_at, updated_at
+	SELECT id, name, openai_api_key, is_active, deactivated_at, created_at, updated_at
 	FROM projects
 	ORDER BY name ASC
 	`
@@ -84,14 +95,20 @@ func (d *DB) DBListProjects(ctx context.Context) ([]Project, error) {
 	var projects []Project
 	for rows.Next() {
 		var project Project
+		var deactivatedAt sql.NullTime
 		if err := rows.Scan(
 			&project.ID,
 			&project.Name,
 			&project.OpenAIAPIKey,
+			&project.IsActive,
+			&deactivatedAt,
 			&project.CreatedAt,
 			&project.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan project: %w", err)
+		}
+		if deactivatedAt.Valid {
+			project.DeactivatedAt = &deactivatedAt.Time
 		}
 		projects = append(projects, project)
 	}
@@ -105,8 +122,8 @@ func (d *DB) DBListProjects(ctx context.Context) ([]Project, error) {
 
 func (d *DB) DBCreateProject(ctx context.Context, project Project) error {
 	query := `
-	INSERT INTO projects (id, name, openai_api_key, created_at, updated_at)
-	VALUES (?, ?, ?, ?, ?)
+	INSERT INTO projects (id, name, openai_api_key, is_active, deactivated_at, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := d.db.ExecContext(
@@ -115,6 +132,8 @@ func (d *DB) DBCreateProject(ctx context.Context, project Project) error {
 		project.ID,
 		project.Name,
 		project.OpenAIAPIKey,
+		project.IsActive,
+		project.DeactivatedAt,
 		project.CreatedAt,
 		project.UpdatedAt,
 	)
@@ -127,16 +146,19 @@ func (d *DB) DBCreateProject(ctx context.Context, project Project) error {
 
 func (d *DB) DBGetProjectByID(ctx context.Context, projectID string) (Project, error) {
 	query := `
-	SELECT id, name, openai_api_key, created_at, updated_at
+	SELECT id, name, openai_api_key, is_active, deactivated_at, created_at, updated_at
 	FROM projects
 	WHERE id = ?
 	`
 
 	var project Project
+	var deactivatedAt sql.NullTime
 	err := d.db.QueryRowContext(ctx, query, projectID).Scan(
 		&project.ID,
 		&project.Name,
 		&project.OpenAIAPIKey,
+		&project.IsActive,
+		&deactivatedAt,
 		&project.CreatedAt,
 		&project.UpdatedAt,
 	)
@@ -147,6 +169,10 @@ func (d *DB) DBGetProjectByID(ctx context.Context, projectID string) (Project, e
 		return Project{}, fmt.Errorf("failed to get project: %w", err)
 	}
 
+	if deactivatedAt.Valid {
+		project.DeactivatedAt = &deactivatedAt.Time
+	}
+
 	return project, nil
 }
 
@@ -155,7 +181,7 @@ func (d *DB) DBUpdateProject(ctx context.Context, project Project) error {
 
 	query := `
 	UPDATE projects
-	SET name = ?, openai_api_key = ?, updated_at = ?
+	SET name = ?, openai_api_key = ?, is_active = ?, deactivated_at = ?, updated_at = ?
 	WHERE id = ?
 	`
 
@@ -164,6 +190,8 @@ func (d *DB) DBUpdateProject(ctx context.Context, project Project) error {
 		query,
 		project.Name,
 		project.OpenAIAPIKey,
+		project.IsActive,
+		project.DeactivatedAt,
 		project.UpdatedAt,
 		project.ID,
 	)
