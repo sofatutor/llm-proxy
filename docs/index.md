@@ -23,7 +23,7 @@ Get the big picture in the [Architecture](./architecture.md) and jump to the [Qu
 ### Status & Coverage
 
 <!-- Replace with real badges after CI wiring -->
-![Build](https://img.shields.io/badge/build-pending-lightgrey)
+![Build](https://img.shields.io/github/actions/workflow/status/sofatutor/llm-proxy/pages.yml?branch=main)
 ![Coverage](https://img.shields.io/badge/coverage-TBD-lightgrey)
 
 View the live coverage report on the [Coverage page](./coverage/).

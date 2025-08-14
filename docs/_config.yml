@@ -17,5 +17,7 @@ exclude:
   - PLAN.md
   - CONTRIBUTING.md
   - LICENSE
+  - issues/
+  - done/
 
 
