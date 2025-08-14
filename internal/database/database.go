@@ -214,7 +214,7 @@ func addColumnIfNotExists(db *sql.DB, tableName, columnName, columnType string) 
 
 	// Add column if it doesn't exist
 	if count == 0 {
-		alterQuery := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", tableName, columnName, columnType)
+		alterQuery := fmt.Sprintf("ALTER TABLE \"%s\" ADD COLUMN \"%s\" %s", tableName, columnName, columnType)
 		_, err = db.Exec(alterQuery)
 		if err != nil {
 			return fmt.Errorf("failed to add column %s to table %s: %w", columnName, tableName, err)

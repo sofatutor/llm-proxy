@@ -366,8 +366,8 @@ func (a *DBTokenStoreAdapter) RevokeToken(ctx context.Context, tokenID string) e
 	}
 
 	now := time.Now()
-	query := `UPDATE tokens SET is_active = 0, deactivated_at = COALESCE(deactivated_at, ?) WHERE token = ? AND is_active = 1`
-	result, err := a.db.db.ExecContext(ctx, query, now, tokenID)
+	query := `UPDATE tokens SET is_active = ?, deactivated_at = COALESCE(deactivated_at, ?) WHERE token = ? AND is_active = 1`
+	result, err := a.db.db.ExecContext(ctx, query, false, now, tokenID)
 	if err != nil {
 		return fmt.Errorf("failed to revoke token: %w", err)
 	}
@@ -420,13 +420,14 @@ func (a *DBTokenStoreAdapter) RevokeBatchTokens(ctx context.Context, tokenIDs []
 	}
 	now := time.Now()
 	placeholders := make([]string, len(tokenIDs))
-	args := make([]interface{}, len(tokenIDs)+1)
-	args[0] = now
+	args := make([]interface{}, len(tokenIDs)+2)
+	args[0] = false
+	args[1] = now
 	for i, tokenID := range tokenIDs {
 		placeholders[i] = "?"
-		args[i+1] = tokenID
+		args[i+2] = tokenID
 	}
-	query := fmt.Sprintf(`UPDATE tokens SET is_active = 0, deactivated_at = COALESCE(deactivated_at, ?) WHERE token IN (%s) AND is_active = 1`, strings.Join(placeholders, ","))
+	query := fmt.Sprintf(`UPDATE tokens SET is_active = ?, deactivated_at = COALESCE(deactivated_at, ?) WHERE token IN (%s) AND is_active = 1`, strings.Join(placeholders, ","))
 	result, err := a.db.db.ExecContext(ctx, query, args...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to revoke batch tokens: %w", err)
@@ -444,8 +445,8 @@ func (a *DBTokenStoreAdapter) RevokeProjectTokens(ctx context.Context, projectID
 		return 0, nil
 	}
 	now := time.Now()
-	query := `UPDATE tokens SET is_active = 0, deactivated_at = COALESCE(deactivated_at, ?) WHERE project_id = ? AND is_active = 1`
-	result, err := a.db.db.ExecContext(ctx, query, now, projectID)
+	query := `UPDATE tokens SET is_active = ?, deactivated_at = COALESCE(deactivated_at, ?) WHERE project_id = ? AND is_active = 1`
+	result, err := a.db.db.ExecContext(ctx, query, false, now, projectID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to revoke project tokens: %w", err)
 	}
@@ -459,8 +460,8 @@ func (a *DBTokenStoreAdapter) RevokeProjectTokens(ctx context.Context, projectID
 // RevokeExpiredTokens revokes all tokens that have expired
 func (a *DBTokenStoreAdapter) RevokeExpiredTokens(ctx context.Context) (int, error) {
 	now := time.Now()
-	query := `UPDATE tokens SET is_active = 0, deactivated_at = COALESCE(deactivated_at, ?) WHERE expires_at IS NOT NULL AND expires_at < ? AND is_active = 1`
-	result, err := a.db.db.ExecContext(ctx, query, now, now)
+	query := `UPDATE tokens SET is_active = ?, deactivated_at = COALESCE(deactivated_at, ?) WHERE expires_at IS NOT NULL AND expires_at < ? AND is_active = 1`
+	result, err := a.db.db.ExecContext(ctx, query, false, now, now)
 	if err != nil {
 		return 0, fmt.Errorf("failed to revoke expired tokens: %w", err)
 	}
