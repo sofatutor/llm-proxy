@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sofatutor/llm-proxy/internal/token"
+	"github.com/sofatutor/llm-proxy/internal/proxy"
 )
 
 func TestDBTokenStoreAdapter_RevokeToken(t *testing.T) {
@@ -14,6 +14,21 @@ func TestDBTokenStoreAdapter_RevokeToken(t *testing.T) {
 
 	adapter := NewDBTokenStoreAdapter(db)
 
+	ctx := context.Background()
+
+	// Create a test project first
+	project := proxy.Project{
+		ID:           "test-project-456",
+		Name:         "Test Project",
+		OpenAIAPIKey: "test-api-key",
+		CreatedAt:    time.Now().UTC().Truncate(time.Second),
+		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+	}
+	err := db.CreateProject(ctx, project)
+	if err != nil {
+		t.Fatalf("Failed to create test project: %v", err)
+	}
+
 	// Create a test token
 	testToken := Token{
 		Token:     "test-token-123",
@@ -21,7 +36,7 @@ func TestDBTokenStoreAdapter_RevokeToken(t *testing.T) {
 		IsActive:  true,
 		CreatedAt: time.Now(),
 	}
-	err := db.CreateToken(context.Background(), testToken)
+	err = db.CreateToken(ctx, testToken)
 	if err != nil {
 		t.Fatalf("Failed to create test token: %v", err)
 	}
@@ -38,14 +53,14 @@ func TestDBTokenStoreAdapter_RevokeToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := adapter.RevokeToken(context.Background(), tt.tokenID)
+			err := adapter.RevokeToken(ctx, tt.tokenID)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("RevokeToken() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
 			// If successful, verify token is deactivated
 			if !tt.wantErr && err == nil {
-				dbToken, getErr := db.GetTokenByID(context.Background(), tt.tokenID)
+				dbToken, getErr := db.GetTokenByID(ctx, tt.tokenID)
 				if getErr != nil {
 					t.Errorf("Failed to get revoked token: %v", getErr)
 				} else if dbToken.IsActive {
@@ -64,6 +79,33 @@ func TestDBTokenStoreAdapter_RevokeBatchTokens(t *testing.T) {
 
 	adapter := NewDBTokenStoreAdapter(db)
 
+	ctx := context.Background()
+
+	// Create test projects first
+	projects := []proxy.Project{
+		{
+			ID:           "project-1",
+			Name:         "Test Project 1",
+			OpenAIAPIKey: "test-api-key-1",
+			CreatedAt:    time.Now().UTC().Truncate(time.Second),
+			UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		},
+		{
+			ID:           "project-2",
+			Name:         "Test Project 2",
+			OpenAIAPIKey: "test-api-key-2",
+			CreatedAt:    time.Now().UTC().Truncate(time.Second),
+			UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		},
+	}
+
+	for _, project := range projects {
+		err := db.CreateProject(ctx, project)
+		if err != nil {
+			t.Fatalf("Failed to create test project %s: %v", project.ID, err)
+		}
+	}
+
 	// Create test tokens
 	tokens := []Token{
 		{Token: "token-1", ProjectID: "project-1", IsActive: true, CreatedAt: time.Now()},
@@ -72,7 +114,7 @@ func TestDBTokenStoreAdapter_RevokeBatchTokens(t *testing.T) {
 	}
 
 	for _, token := range tokens {
-		err := db.CreateToken(context.Background(), token)
+		err := db.CreateToken(ctx, token)
 		if err != nil {
 			t.Fatalf("Failed to create test token %s: %v", token.Token, err)
 		}
@@ -92,7 +134,7 @@ func TestDBTokenStoreAdapter_RevokeBatchTokens(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			revokedCount, err := adapter.RevokeBatchTokens(context.Background(), tt.tokenIDs)
+			revokedCount, err := adapter.RevokeBatchTokens(ctx, tt.tokenIDs)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("RevokeBatchTokens() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -109,6 +151,33 @@ func TestDBTokenStoreAdapter_RevokeProjectTokens(t *testing.T) {
 
 	adapter := NewDBTokenStoreAdapter(db)
 
+	ctx := context.Background()
+
+	// Create test projects first
+	projects := []proxy.Project{
+		{
+			ID:           "project-1",
+			Name:         "Test Project 1",
+			OpenAIAPIKey: "test-api-key-1",
+			CreatedAt:    time.Now().UTC().Truncate(time.Second),
+			UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		},
+		{
+			ID:           "project-2",
+			Name:         "Test Project 2",
+			OpenAIAPIKey: "test-api-key-2",
+			CreatedAt:    time.Now().UTC().Truncate(time.Second),
+			UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		},
+	}
+
+	for _, project := range projects {
+		err := db.CreateProject(ctx, project)
+		if err != nil {
+			t.Fatalf("Failed to create test project %s: %v", project.ID, err)
+		}
+	}
+
 	// Create test tokens
 	tokens := []Token{
 		{Token: "token-proj1-1", ProjectID: "project-1", IsActive: true, CreatedAt: time.Now()},
@@ -117,7 +186,7 @@ func TestDBTokenStoreAdapter_RevokeProjectTokens(t *testing.T) {
 	}
 
 	for _, token := range tokens {
-		err := db.CreateToken(context.Background(), token)
+		err := db.CreateToken(ctx, token)
 		if err != nil {
 			t.Fatalf("Failed to create test token %s: %v", token.Token, err)
 		}
@@ -136,7 +205,7 @@ func TestDBTokenStoreAdapter_RevokeProjectTokens(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			revokedCount, err := adapter.RevokeProjectTokens(context.Background(), tt.projectID)
+			revokedCount, err := adapter.RevokeProjectTokens(ctx, tt.projectID)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("RevokeProjectTokens() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -153,6 +222,21 @@ func TestDBTokenStoreAdapter_RevokeExpiredTokens(t *testing.T) {
 
 	adapter := NewDBTokenStoreAdapter(db)
 
+	ctx := context.Background()
+
+	// Create a test project first
+	project := proxy.Project{
+		ID:           "project-1",
+		Name:         "Test Project",
+		OpenAIAPIKey: "test-api-key",
+		CreatedAt:    time.Now().UTC().Truncate(time.Second),
+		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+	}
+	err := db.CreateProject(ctx, project)
+	if err != nil {
+		t.Fatalf("Failed to create test project: %v", err)
+	}
+
 	now := time.Now()
 	past := now.Add(-time.Hour)
 	future := now.Add(time.Hour)
@@ -166,13 +250,13 @@ func TestDBTokenStoreAdapter_RevokeExpiredTokens(t *testing.T) {
 	}
 
 	for _, token := range tokens {
-		err := db.CreateToken(context.Background(), token)
+		err := db.CreateToken(ctx, token)
 		if err != nil {
 			t.Fatalf("Failed to create test token %s: %v", token.Token, err)
 		}
 	}
 
-	revokedCount, err := adapter.RevokeExpiredTokens(context.Background())
+	revokedCount, err := adapter.RevokeExpiredTokens(ctx)
 	if err != nil {
 		t.Errorf("RevokeExpiredTokens() error = %v", err)
 	}
@@ -185,7 +269,7 @@ func TestDBTokenStoreAdapter_RevokeExpiredTokens(t *testing.T) {
 	// Verify expired tokens are revoked
 	expiredTokens := []string{"token-expired-1", "token-expired-2"}
 	for _, tokenID := range expiredTokens {
-		dbToken, getErr := db.GetTokenByID(context.Background(), tokenID)
+		dbToken, getErr := db.GetTokenByID(ctx, tokenID)
 		if getErr != nil {
 			t.Errorf("Failed to get token %s: %v", tokenID, getErr)
 		} else if dbToken.IsActive {
@@ -196,7 +280,7 @@ func TestDBTokenStoreAdapter_RevokeExpiredTokens(t *testing.T) {
 	// Verify non-expired tokens are still active
 	activeTokens := []string{"token-active", "token-no-expiry"}
 	for _, tokenID := range activeTokens {
-		dbToken, getErr := db.GetTokenByID(context.Background(), tokenID)
+		dbToken, getErr := db.GetTokenByID(ctx, tokenID)
 		if getErr != nil {
 			t.Errorf("Failed to get token %s: %v", tokenID, getErr)
 		} else if !dbToken.IsActive {
@@ -211,6 +295,21 @@ func TestDBTokenStoreAdapter_RevokeToken_Idempotency(t *testing.T) {
 
 	adapter := NewDBTokenStoreAdapter(db)
 
+	ctx := context.Background()
+
+	// Create a test project first
+	project := proxy.Project{
+		ID:           "test-project",
+		Name:         "Test Project",
+		OpenAIAPIKey: "test-api-key",
+		CreatedAt:    time.Now().UTC().Truncate(time.Second),
+		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+	}
+	err := db.CreateProject(ctx, project)
+	if err != nil {
+		t.Fatalf("Failed to create test project: %v", err)
+	}
+
 	// Create a test token
 	testToken := Token{
 		Token:     "test-token-idem",
@@ -218,31 +317,31 @@ func TestDBTokenStoreAdapter_RevokeToken_Idempotency(t *testing.T) {
 		IsActive:  true,
 		CreatedAt: time.Now(),
 	}
-	err := db.CreateToken(context.Background(), testToken)
+	err = db.CreateToken(ctx, testToken)
 	if err != nil {
 		t.Fatalf("Failed to create test token: %v", err)
 	}
 
 	// First revocation
-	err = adapter.RevokeToken(context.Background(), "test-token-idem")
+	err = adapter.RevokeToken(ctx, "test-token-idem")
 	if err != nil {
 		t.Errorf("First revocation failed: %v", err)
 	}
 
 	// Get the deactivated_at time from first revocation
-	firstRevoke, err := db.GetTokenByID(context.Background(), "test-token-idem")
+	firstRevoke, err := db.GetTokenByID(ctx, "test-token-idem")
 	if err != nil {
 		t.Fatalf("Failed to get token after first revocation: %v", err)
 	}
 
 	// Second revocation (should be idempotent)
-	err = adapter.RevokeToken(context.Background(), "test-token-idem")
+	err = adapter.RevokeToken(ctx, "test-token-idem")
 	if err != nil {
 		t.Errorf("Second revocation should be idempotent but failed: %v", err)
 	}
 
 	// Verify deactivated_at didn't change
-	secondRevoke, err := db.GetTokenByID(context.Background(), "test-token-idem")
+	secondRevoke, err := db.GetTokenByID(ctx, "test-token-idem")
 	if err != nil {
 		t.Fatalf("Failed to get token after second revocation: %v", err)
 	}

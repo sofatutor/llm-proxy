@@ -364,12 +364,33 @@ func (a *DBTokenStoreAdapter) RevokeToken(ctx context.Context, tokenID string) e
 	if tokenID == "" {
 		return token.ErrTokenNotFound
 	}
+
 	now := time.Now()
 	query := `UPDATE tokens SET is_active = 0, deactivated_at = COALESCE(deactivated_at, ?) WHERE token = ? AND is_active = 1`
-	_, err := a.db.db.ExecContext(ctx, query, now, tokenID)
+	result, err := a.db.db.ExecContext(ctx, query, now, tokenID)
 	if err != nil {
 		return fmt.Errorf("failed to revoke token: %w", err)
 	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		// Check if token exists at all (could be already inactive)
+		var exists bool
+		checkQuery := `SELECT 1 FROM tokens WHERE token = ? LIMIT 1`
+		err = a.db.db.QueryRowContext(ctx, checkQuery, tokenID).Scan(&exists)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return token.ErrTokenNotFound
+			}
+			return fmt.Errorf("failed to check token existence: %w", err)
+		}
+		// Token exists but was already inactive - this is idempotent, no error
+	}
+
 	return nil
 }
 
