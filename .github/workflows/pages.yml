@@ -2,7 +2,7 @@ name: Build & Deploy Site (with Coverage)
 
 on:
   push:
-    branches: [ feat/phase-5-github-pages-site ] # TEMP for testing; switch to [ main ] when ready
+    branches: [ main ]
   workflow_dispatch:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
