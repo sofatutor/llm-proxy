@@ -403,7 +403,8 @@ func TestHandleProjectByID(t *testing.T) {
 
 		server.handleProjectByID(w, req)
 
-		assert.Equal(t, http.StatusNoContent, w.Code)
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+		assert.Contains(t, w.Header().Get("Allow"), "GET, PATCH")
 	})
 
 	t.Run("DELETE_Project_NotFound", func(t *testing.T) {
@@ -413,7 +414,8 @@ func TestHandleProjectByID(t *testing.T) {
 
 		server.handleProjectByID(w, req)
 
-		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+		assert.Contains(t, w.Header().Get("Allow"), "GET, PATCH")
 	})
 
 	t.Run("Invalid_Method", func(t *testing.T) {
@@ -758,16 +760,15 @@ func TestHandleDeleteProject_InvalidID(t *testing.T) {
 	req := httptest.NewRequest("DELETE", "/manage/projects/", nil)
 	w := httptest.NewRecorder()
 	server.handleDeleteProject(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 }
 
 func TestHandleDeleteProject_StoreError(t *testing.T) {
-	server, _, projectStore := setupServerAndMocks(t)
-	projectStore.On("DeleteProject", mock.Anything, "id").Return(errors.New("not found"))
+	server, _, _ := setupServerAndMocks(t)
 	req := httptest.NewRequest("DELETE", "/manage/projects/id", nil)
 	w := httptest.NewRecorder()
 	server.handleDeleteProject(w, req)
-	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 }
 
 func TestHandleTokens_InvalidMethod(t *testing.T) {
