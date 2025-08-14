@@ -2,7 +2,7 @@
   "$schema": "https://cursor.com/schemas/environment.schema.json",
   "name": "llm-proxy dev",
   "build": {
-    "dockerfile": ".cursor/Dockerfile",
+    "dockerfile": "Dockerfile",
     "context": ".."
   },
   "install": "go mod download",
