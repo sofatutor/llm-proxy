@@ -1,15 +1,20 @@
 title: "LLM Proxy"
-description: "Open-source reverse proxy for LLM APIs with withering tokens, management UI, and observability"
+description: "Open‑source reverse proxy for LLM APIs with withering tokens, management UI and observability"
 url: "https://sofatutor.github.io"
 baseurl: "/llm-proxy"
 
-# GitHub Pages defaults
+# Use the Just the Docs remote theme for a modern documentation site.
+# See: https://just-the-docs.com/ for theme details.
+remote_theme: just-the-docs/just-the-docs
+color_scheme: light
+search_enabled: true
+
+# Plugins remain for additional metadata (SEO, etc.)
 markdown: kramdown
-theme: minima
 plugins:
   - jekyll-seo-tag
 
-# Build settings
+# Files and directories to exclude from the build
 exclude:
   - vendor
   - node_modules
@@ -20,18 +25,9 @@ exclude:
   - issues/
   - done/
 
-# Minima theme configuration
-minima:
-  skin: auto
-  nav_pages:
-    - index.md
-    - features.md
-    - screenshots.md
-    - quickstart.md
-    - cli-reference.md
-    - architecture.md
-    - contributing.md
-    - coverage.md
-    - github.md
+# Auxiliary links shown in the top navigation bar
+aux_links:
+  "LLM Proxy on GitHub": "https://github.com/sofatutor/llm-proxy"
 
-
+# The navigation sidebar is built automatically from your pages.
+# To control the order of pages, add `nav_order` and `title` in each page's front matter.
