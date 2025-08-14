@@ -72,7 +72,7 @@ flowchart LR
     EventDispatcher --> EventLogs
     
     Proxy --> API["Target API"]
-```
+ ```
 
 ### Proxy Component Architecture
 
