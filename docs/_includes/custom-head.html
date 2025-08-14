@@ -1,25 +1,3 @@
-<!-- Custom head injections: Mermaid support and custom styles -->
-<link rel="stylesheet" href="{{ site.baseurl }}/assets/css/custom.css">
-<script src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
-<script>
-  document.addEventListener('DOMContentLoaded', function () {
-    if (!window.mermaid) return;
-    try {
-      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: prefersDark ? 'dark' : 'default' });
-
-      // Render fenced mermaid blocks produced by Kramdown/Rouge (container has class .language-mermaid)
-      if (window.mermaid.init) {
-        window.mermaid.init(undefined, document.querySelectorAll('.language-mermaid'));
-      }
-      // Also render any <div class="mermaid"> blocks
-      if (window.mermaid.run) {
-        window.mermaid.run();
-      }
-    } catch (e) {
-      console.error('Mermaid init failed', e);
-    }
-  });
-  </script>
+<!-- Intentionally left minimal; Just the Docs will handle assets per configuration. -->
 
 

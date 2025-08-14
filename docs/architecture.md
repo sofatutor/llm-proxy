@@ -72,21 +72,7 @@ flowchart LR
     EventDispatcher --> EventLogs
     
     Proxy --> API["Target API"]
-```
-
-<!-- Mermaid bootstrap (page-local fallback in case custom-head isn't picked up by the theme build) -->
-<script src="https://unpkg.com/mermaid@10/dist/mermaid.min.js"></script>
-<script>
-  document.addEventListener('DOMContentLoaded', function () {
-    try {
-      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      mermaid.initialize({ startOnLoad: true, securityLevel: 'loose', theme: prefersDark ? 'dark' : 'default' });
-      if (window.mermaid.init) {
-        window.mermaid.init(undefined, document.querySelectorAll('.language-mermaid'));
-      }
-    } catch (e) { console.error(e); }
-  });
-  </script>
+ ```
 
 ### Proxy Component Architecture
 
