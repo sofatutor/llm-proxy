@@ -106,3 +106,118 @@ func TestHelicone_sendHeliconeEvent_StatusHandling(t *testing.T) {
 		}
 	})
 }
+
+func TestHelicone_SendEvents_EdgeCases(t *testing.T) {
+	t.Parallel()
+
+	// Test empty events slice
+	t.Run("empty events", func(t *testing.T) {
+		p := NewHeliconePlugin()
+		if err := p.Init(map[string]string{"api-key": "test-key", "endpoint": "http://test.example"}); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+
+		err := p.SendEvents(context.Background(), []dispatcher.EventPayload{})
+		if err != nil {
+			t.Fatalf("SendEvents with empty slice should not error, got %v", err)
+		}
+	})
+
+	// Test events with empty output
+	t.Run("events with empty output", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Fatalf("Should not receive any requests for events with empty output")
+		}))
+		defer srv.Close()
+
+		p := NewHeliconePlugin()
+		if err := p.Init(map[string]string{"api-key": "test-key", "endpoint": srv.URL}); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+		p.client = srv.Client()
+
+		// Event with empty output and empty OutputBase64
+		events := []dispatcher.EventPayload{
+			{
+				RunID:        "test-run-1",
+				Output:       []byte{},
+				OutputBase64: "",
+				Metadata:     map[string]any{"path": "/v1/chat/completions"},
+			},
+		}
+
+		err := p.SendEvents(context.Background(), events)
+		if err != nil {
+			t.Fatalf("SendEvents should succeed even when skipping events, got %v", err)
+		}
+	})
+
+	// Test mixed events (some with output, some without)
+	t.Run("mixed events", func(t *testing.T) {
+		requestCount := 0
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCount++
+			if r.Header.Get("Authorization") == "Bearer test-key" {
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(`ok`))
+				return
+			}
+			w.WriteHeader(http.StatusBadRequest)
+		}))
+		defer srv.Close()
+
+		p := NewHeliconePlugin()
+		if err := p.Init(map[string]string{"api-key": "test-key", "endpoint": srv.URL}); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+		p.client = srv.Client()
+
+		events := []dispatcher.EventPayload{
+			{
+				RunID:        "test-run-1",
+				Output:       []byte{}, // Empty output - should be skipped
+				OutputBase64: "",
+				Metadata:     map[string]any{"path": "/v1/chat/completions"},
+			},
+			{
+				RunID:        "test-run-2",
+				Output:       []byte(`{"choices":[{"message":{"content":"Hello"}}]}`),
+				OutputBase64: "",
+				Metadata:     map[string]any{"path": "/v1/chat/completions"},
+			},
+		}
+
+		err := p.SendEvents(context.Background(), events)
+		if err != nil {
+			t.Fatalf("SendEvents should succeed, got %v", err)
+		}
+
+		// Should only receive 1 request (for the event with output)
+		if requestCount != 1 {
+			t.Fatalf("Expected 1 request, got %d", requestCount)
+		}
+	})
+
+	// Test error in payload creation
+	t.Run("payload creation error", func(t *testing.T) {
+		p := NewHeliconePlugin()
+		if err := p.Init(map[string]string{"api-key": "test-key", "endpoint": "http://test.example"}); err != nil {
+			t.Fatalf("init: %v", err)
+		}
+
+		// Create an event that will cause payload creation to fail
+		events := []dispatcher.EventPayload{
+			{
+				RunID:        "test-run-1",
+				Output:       []byte(`invalid json`),
+				OutputBase64: "",
+				Metadata:     map[string]any{"path": "/v1/chat/completions"},
+			},
+		}
+
+		err := p.SendEvents(context.Background(), events)
+		if err == nil {
+			t.Fatal("Expected error from payload creation")
+		}
+	})
+}

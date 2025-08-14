@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
@@ -28,6 +29,170 @@ func TestGetSessionSecret(t *testing.T) {
 	if string(secret) != string(want) {
 		t.Errorf("getSessionSecret() = %q, want %q", secret, want)
 	}
+}
+
+func TestNewServer_Success(t *testing.T) {
+	// Create a temporary template directory for testing
+	tmpDir := t.TempDir()
+	templateDir := filepath.Join(tmpDir, "templates")
+	err := os.MkdirAll(templateDir, 0755)
+	require.NoError(t, err)
+
+	// Create subdirectories and templates to avoid template loading errors
+	subDirs := []string{"projects", "tokens", "audit"}
+	for _, subDir := range subDirs {
+		err = os.MkdirAll(filepath.Join(templateDir, subDir), 0755)
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(templateDir, subDir, "test.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+		require.NoError(t, err)
+	}
+
+	// Create minimal template files to avoid template loading errors
+	err = os.WriteFile(filepath.Join(templateDir, "base.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+	require.NoError(t, err)
+
+	cfg := &config.Config{
+		LogLevel:     "info",
+		LogFormat:    "json",
+		LogFile:      "",
+		AuditEnabled: false,
+		AdminUI: config.AdminUIConfig{
+			ListenAddr:      ":8081",
+			ManagementToken: "test-token",
+			APIBaseURL:      "http://localhost:8080",
+			TemplateDir:     templateDir,
+		},
+	}
+
+	server, err := NewServer(cfg)
+	require.NoError(t, err)
+	assert.NotNil(t, server)
+	assert.NotNil(t, server.engine)
+	assert.NotNil(t, server.apiClient)
+	assert.NotNil(t, server.logger)
+	assert.NotNil(t, server.auditLogger)
+	assert.Equal(t, cfg.AdminUI.ListenAddr, server.server.Addr)
+}
+
+func TestNewServer_NoManagementToken(t *testing.T) {
+	// Create a temporary template directory for testing
+	tmpDir := t.TempDir()
+	templateDir := filepath.Join(tmpDir, "templates")
+	err := os.MkdirAll(templateDir, 0755)
+	require.NoError(t, err)
+
+	// Create subdirectories and templates to avoid template loading errors
+	subDirs := []string{"projects", "tokens", "audit"}
+	for _, subDir := range subDirs {
+		err = os.MkdirAll(filepath.Join(templateDir, subDir), 0755)
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(templateDir, subDir, "test.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+		require.NoError(t, err)
+	}
+
+	// Create minimal template files to avoid template loading errors
+	err = os.WriteFile(filepath.Join(templateDir, "base.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+	require.NoError(t, err)
+
+	cfg := &config.Config{
+		LogLevel:     "info",
+		LogFormat:    "text",
+		LogFile:      "",
+		AuditEnabled: false,
+		AdminUI: config.AdminUIConfig{
+			ListenAddr:      ":8081",
+			ManagementToken: "", // No token
+			APIBaseURL:      "http://localhost:8080",
+			TemplateDir:     templateDir,
+		},
+	}
+
+	server, err := NewServer(cfg)
+	require.NoError(t, err)
+	assert.NotNil(t, server)
+	assert.Nil(t, server.apiClient) // Should be nil when no token
+}
+
+func TestNewServer_AuditEnabled(t *testing.T) {
+	// Create temporary directory for audit log
+	tempDir := t.TempDir()
+	auditFile := filepath.Join(tempDir, "audit.log")
+	templateDir := filepath.Join(tempDir, "templates")
+	err := os.MkdirAll(templateDir, 0755)
+	require.NoError(t, err)
+
+	// Create subdirectories and templates to avoid template loading errors
+	subDirs := []string{"projects", "tokens", "audit"}
+	for _, subDir := range subDirs {
+		err = os.MkdirAll(filepath.Join(templateDir, subDir), 0755)
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(templateDir, subDir, "test.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+		require.NoError(t, err)
+	}
+
+	// Create minimal template files to avoid template loading errors
+	err = os.WriteFile(filepath.Join(templateDir, "base.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+	require.NoError(t, err)
+
+	cfg := &config.Config{
+		LogLevel:       "debug", // Test debug mode
+		LogFormat:      "json",
+		LogFile:        "",
+		AuditEnabled:   true,
+		AuditLogFile:   auditFile,
+		AuditCreateDir: true,
+		AdminUI: config.AdminUIConfig{
+			ListenAddr:      ":8081",
+			ManagementToken: "test-token",
+			APIBaseURL:      "http://localhost:8080",
+			TemplateDir:     templateDir,
+		},
+	}
+
+	server, err := NewServer(cfg)
+	require.NoError(t, err)
+	assert.NotNil(t, server)
+	assert.NotNil(t, server.auditLogger)
+}
+
+func TestNewServer_AuditLoggerError(t *testing.T) {
+	tmpDir := t.TempDir()
+	templateDir := filepath.Join(tmpDir, "templates")
+	err := os.MkdirAll(templateDir, 0755)
+	require.NoError(t, err)
+
+	// Create subdirectories and templates to avoid template loading errors
+	subDirs := []string{"projects", "tokens", "audit"}
+	for _, subDir := range subDirs {
+		err = os.MkdirAll(filepath.Join(templateDir, subDir), 0755)
+		require.NoError(t, err)
+		err = os.WriteFile(filepath.Join(templateDir, subDir, "test.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+		require.NoError(t, err)
+	}
+
+	// Create minimal template files to avoid template loading errors
+	err = os.WriteFile(filepath.Join(templateDir, "base.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+	require.NoError(t, err)
+
+	cfg := &config.Config{
+		LogLevel:       "info",
+		LogFormat:      "json",
+		LogFile:        "",
+		AuditEnabled:   true,
+		AuditLogFile:   "/invalid/path/audit.log", // Invalid path
+		AuditCreateDir: false,
+		AdminUI: config.AdminUIConfig{
+			ListenAddr:      ":8081",
+			ManagementToken: "test-token",
+			APIBaseURL:      "http://localhost:8080",
+			TemplateDir:     templateDir,
+		},
+	}
+
+	server, err := NewServer(cfg)
+	assert.Error(t, err)
+	assert.Nil(t, server)
+	assert.Contains(t, err.Error(), "failed to initialize admin audit logger")
 }
 
 // testTemplateDir returns the absolute path to the test template directory, robust to CWD.
@@ -163,7 +328,36 @@ func (m *mockAPIClient) CreateProject(ctx context.Context, name, apiKey string) 
 	return &Project{ID: "new-id", Name: name, OpenAIAPIKey: apiKey}, nil
 }
 
+// Implement audit methods to satisfy APIClientInterface
+func (m *mockAPIClient) GetAuditEvents(ctx context.Context, filters map[string]string, page, pageSize int) ([]AuditEvent, *Pagination, error) {
+	if m.DashboardErr != nil {
+		return nil, nil, m.DashboardErr
+	}
+	return []AuditEvent{{ID: "evt-1", Outcome: "success"}}, &Pagination{Page: page, PageSize: pageSize, TotalItems: 1, TotalPages: 1}, nil
+}
+
+func (m *mockAPIClient) GetAuditEvent(ctx context.Context, id string) (*AuditEvent, error) {
+	if m.DashboardErr != nil {
+		return nil, m.DashboardErr
+	}
+	return &AuditEvent{ID: id, Outcome: "success"}, nil
+}
+
 var _ APIClientInterface = (*mockAPIClient)(nil) // Ensure interface compliance
+
+// capturingAuditClient records the filters passed to GetAuditEvents for assertions
+type capturingAuditClient struct {
+	mockAPIClient
+	lastFilters map[string]string
+}
+
+func (m *capturingAuditClient) GetAuditEvents(ctx context.Context, filters map[string]string, page, pageSize int) ([]AuditEvent, *Pagination, error) {
+	m.lastFilters = filters
+	if m.DashboardErr != nil {
+		return nil, nil, m.DashboardErr
+	}
+	return []AuditEvent{{ID: "evt-1", Outcome: "success"}}, &Pagination{Page: page, PageSize: pageSize, TotalItems: 1, TotalPages: 1}, nil
+}
 
 func TestServer_HandleDashboard(t *testing.T) {
 	gin.SetMode(gin.TestMode)
@@ -211,9 +405,61 @@ func TestServer_HandleDashboard_Error(t *testing.T) {
 	}
 }
 
+func TestServer_HandleDashboard_WithHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dashboardFile := createTestTemplate(t, "dashboard.html", "<html><body>dashboard</body></html>")
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(dashboardFile)
+
+	s.engine.GET("/dashboard", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{DashboardData: &DashboardData{TotalProjects: 1, TotalTokens: 2, ActiveTokens: 1, ExpiredTokens: 0, TotalRequests: 10, RequestsToday: 5, RequestsThisWeek: 7}}
+		c.Set("apiClient", client)
+		s.handleDashboard(c)
+	})
+
+	// Test with X-Forwarded-For header
+	req, _ := http.NewRequest("GET", "/dashboard", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.1,10.0.0.1")
+	req.Header.Set("User-Agent", "Test Browser")
+	req.Header.Set("Referer", "https://example.com")
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 with X-Forwarded-For, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleDashboard_WithRealIP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	dashboardFile := createTestTemplate(t, "dashboard.html", "<html><body>dashboard</body></html>")
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(dashboardFile)
+
+	s.engine.GET("/dashboard", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{DashboardData: &DashboardData{TotalProjects: 1, TotalTokens: 2, ActiveTokens: 1, ExpiredTokens: 0, TotalRequests: 10, RequestsToday: 5, RequestsThisWeek: 7}}
+		c.Set("apiClient", client)
+		s.handleDashboard(c)
+	})
+
+	// Test with X-Real-IP header (when X-Forwarded-For is not present)
+	req, _ := http.NewRequest("GET", "/dashboard", nil)
+	req.Header.Set("X-Real-IP", "192.168.1.100")
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 with X-Real-IP, got %d", w.Code)
+	}
+}
+
 func TestServer_HandleProjectsList(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	projectsFile := createTestTemplate(t, "projects-list-complete.html", "<html><body>projects</body></html>")
+	projectsFile := createTestTemplate(t, "projects/list.html", "<html><body>projects</body></html>")
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -236,7 +482,7 @@ func TestServer_HandleProjectsList(t *testing.T) {
 
 func TestServer_HandleProjectsList_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	projectsFile := createTestTemplate(t, "projects-list-complete.html", "<html><body>projects</body></html>")
+	projectsFile := createTestTemplate(t, "projects/list.html", "<html><body>projects</body></html>")
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
@@ -259,7 +505,7 @@ func TestServer_HandleProjectsList_Error(t *testing.T) {
 
 func TestServer_HandleTokensList(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	tokensFile := filepath.Join(testTemplateDir(), "tokens-list-complete.html")
+	tokensFile := filepath.Join(testTemplateDir(), "tokens", "list.html")
 	_ = os.WriteFile(tokensFile, []byte("<html><body>tokens</body></html>"), 0644)
 	defer func() {
 		err := os.Remove(tokensFile)
@@ -270,7 +516,7 @@ func TestServer_HandleTokensList(t *testing.T) {
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens-list-complete.html"))
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens", "list.html"))
 
 	s.engine.GET("/tokens", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{}
@@ -289,7 +535,7 @@ func TestServer_HandleTokensList(t *testing.T) {
 
 func TestServer_HandleTokensList_Error(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	tokensFile := filepath.Join(testTemplateDir(), "tokens-list-complete.html")
+	tokensFile := filepath.Join(testTemplateDir(), "tokens", "list.html")
 	_ = os.WriteFile(tokensFile, []byte("<html><body>tokens</body></html>"), 0644)
 	defer func() {
 		err := os.Remove(tokensFile)
@@ -300,7 +546,7 @@ func TestServer_HandleTokensList_Error(t *testing.T) {
 
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
-	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens-list-complete.html"))
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens", "list.html"))
 
 	s.engine.GET("/tokens", func(c *gin.Context) {
 		var client APIClientInterface = &mockAPIClient{DashboardErr: errFake}
@@ -815,6 +1061,120 @@ func TestServer_HandleTokensNew_Error(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500 for API error, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleAuditList(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	// minimal templates
+	_ = os.MkdirAll(filepath.Join(testTemplateDir(), "audit"), 0755)
+	_ = os.WriteFile(filepath.Join(testTemplateDir(), "audit", "list.html"), []byte("<html><body>audit list</body></html>"), 0644)
+	t.Cleanup(func() { _ = os.Remove(filepath.Join(testTemplateDir(), "audit", "list.html")) })
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "audit", "*.html"))
+
+	var capClient *capturingAuditClient
+	s.engine.GET("/audit", func(c *gin.Context) {
+		capClient = &capturingAuditClient{}
+		var client APIClientInterface = capClient
+		c.Set("apiClient", client)
+		s.handleAuditList(c)
+	})
+
+	req, _ := http.NewRequest("GET", "/audit", nil)
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	// With search param: ensure it is forwarded to API client
+	req2, _ := http.NewRequest("GET", "/audit?search=req-123", nil)
+	w2 := httptest.NewRecorder()
+	s.engine.ServeHTTP(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected 200 with search, got %d", w2.Code)
+	}
+	if capClient == nil || capClient.lastFilters == nil || capClient.lastFilters["search"] != "req-123" {
+		t.Fatalf("expected search filter to be forwarded, got %#v", capClient)
+	}
+}
+
+func TestServer_HandleAuditList_Error(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	_ = os.MkdirAll(filepath.Join(testTemplateDir(), "audit"), 0755)
+	_ = os.WriteFile(filepath.Join(testTemplateDir(), "audit", "list.html"), []byte("<html><body>audit list</body></html>"), 0644)
+	t.Cleanup(func() { _ = os.Remove(filepath.Join(testTemplateDir(), "audit", "list.html")) })
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "audit", "*.html"))
+
+	s.engine.GET("/audit", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{DashboardErr: errFake}
+		c.Set("apiClient", client)
+		s.handleAuditList(c)
+	})
+
+	req, _ := http.NewRequest("GET", "/audit", nil)
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleAuditShow(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	_ = os.MkdirAll(filepath.Join(testTemplateDir(), "audit"), 0755)
+	_ = os.WriteFile(filepath.Join(testTemplateDir(), "audit", "show.html"), []byte("<html><body>audit show</body></html>"), 0644)
+	t.Cleanup(func() { _ = os.Remove(filepath.Join(testTemplateDir(), "audit", "show.html")) })
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "audit", "*.html"))
+
+	s.engine.GET("/audit/:id", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleAuditShow(c)
+	})
+
+	req, _ := http.NewRequest("GET", "/audit/evt-1", nil)
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleAuditShow_Error(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	_ = os.MkdirAll(filepath.Join(testTemplateDir(), "audit"), 0755)
+	_ = os.WriteFile(filepath.Join(testTemplateDir(), "audit", "show.html"), []byte("<html><body>audit show</body></html>"), 0644)
+	t.Cleanup(func() { _ = os.Remove(filepath.Join(testTemplateDir(), "audit", "show.html")) })
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "audit", "*.html"))
+
+	s.engine.GET("/audit/:id", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{DashboardErr: errors.New("not found")}
+		c.Set("apiClient", client)
+		s.handleAuditShow(c)
+	})
+
+	req, _ := http.NewRequest("GET", "/audit/missing", nil)
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
 	}
 }
 

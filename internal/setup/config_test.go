@@ -204,6 +204,56 @@ func TestSetupConfig_WriteConfigFile(t *testing.T) {
 			t.Error("database directory not created")
 		}
 	})
+
+	t.Run("fails with invalid config directory", func(t *testing.T) {
+		// Try to create config in a file (not directory)
+		existingFile := filepath.Join(tmpDir, "existing-file")
+		err := os.WriteFile(existingFile, []byte("content"), 0644)
+		if err != nil {
+			t.Fatalf("failed to create test file: %v", err)
+		}
+
+		config := &SetupConfig{
+			ConfigPath:      filepath.Join(existingFile, "cannot-create.env"), // Invalid path
+			OpenAIAPIKey:    "sk-test",
+			ManagementToken: "token",
+			DatabasePath:    filepath.Join(tmpDir, "test.db"),
+			ListenAddr:      ":8080",
+		}
+
+		err = config.WriteConfigFile()
+		if err == nil {
+			t.Error("expected error for invalid config directory, got nil")
+		}
+		if !strings.Contains(err.Error(), "failed to create config directory") {
+			t.Errorf("expected config directory error, got: %v", err)
+		}
+	})
+
+	t.Run("fails with invalid database directory", func(t *testing.T) {
+		// Create a file where we want to create a directory
+		existingFile := filepath.Join(tmpDir, "db-file")
+		err := os.WriteFile(existingFile, []byte("content"), 0644)
+		if err != nil {
+			t.Fatalf("failed to create test file: %v", err)
+		}
+
+		config := &SetupConfig{
+			ConfigPath:      filepath.Join(tmpDir, "test.env"),
+			OpenAIAPIKey:    "sk-test",
+			ManagementToken: "token",
+			DatabasePath:    filepath.Join(existingFile, "cannot-create.db"), // Invalid path
+			ListenAddr:      ":8080",
+		}
+
+		err = config.WriteConfigFile()
+		if err == nil {
+			t.Error("expected error for invalid database directory, got nil")
+		}
+		if !strings.Contains(err.Error(), "failed to create database directory") {
+			t.Errorf("expected database directory error, got: %v", err)
+		}
+	})
 }
 
 func TestRunNonInteractiveSetup(t *testing.T) {

@@ -1,0 +1,58 @@
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+        <a class="navbar-brand" href="/dashboard">
+            <i class="bi bi-shield-check"></i>
+            LLM Proxy Admin
+        </a>
+        
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link {{ if eq .active "dashboard" }}active{{ end }}" href="/dashboard">
+                        <i class="bi bi-speedometer2"></i>
+                        Dashboard
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {{ if eq .active "projects" }}active{{ end }}" href="/projects">
+                        <i class="bi bi-folder"></i>
+                        Projects
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {{ if eq .active "tokens" }}active{{ end }}" href="/tokens">
+                        <i class="bi bi-key"></i>
+                        Tokens
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {{ if eq .active "audit" }}active{{ end }}" href="/audit">
+                        <i class="bi bi-shield-check"></i>
+                        Audit Events
+                    </a>
+                </li>
+            </ul>
+            
+            <!-- Health Status -->
+            <div class="navbar-nav me-3">
+                <a class="nav-link" href="/health" target="_blank" title="API Health">
+                    <i class="bi bi-heart-pulse text-success"></i>
+                </a>
+            </div>
+            
+            <!-- User menu -->
+            <div class="navbar-nav">
+                <form action="/auth/logout" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-outline-light btn-sm">
+                        <i class="bi bi-box-arrow-right"></i>
+                        Logout
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</nav>

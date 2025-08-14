@@ -1,0 +1,156 @@
+{{ define "audit/show.html" }}
+{{ template "layout/start" . }}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="bi bi-shield-check"></i>
+                Audit Event Details
+            </h1>
+            <a href="/audit" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i>
+                Back to List
+            </a>
+        </div>
+    </div>
+</div>
+
+{{ if .event }}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    Event #{{ .event.ID }}
+                    {{ if eq .event.Outcome "success" }}
+                        <span class="badge bg-success ms-2">Success</span>
+                    {{ else if eq .event.Outcome "failure" }}
+                        <span class="badge bg-danger ms-2">Failure</span>
+                    {{ else }}
+                        <span class="badge bg-warning ms-2">{{ .event.Outcome }}</span>
+                    {{ end }}
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Basic Information</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>Timestamp:</strong></td>
+                                <td>{{ .event.Timestamp.Format "2006-01-02 15:04:05 MST" }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Action:</strong></td>
+                                <td><span class="badge bg-secondary">{{ .event.Action }}</span></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Actor:</strong></td>
+                                <td>{{ .event.Actor }}</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Outcome:</strong></td>
+                                <td>
+                                    {{ if eq .event.Outcome "success" }}
+                                        <span class="badge bg-success">Success</span>
+                                    {{ else if eq .event.Outcome "failure" }}
+                                        <span class="badge bg-danger">Failure</span>
+                                    {{ else }}
+                                        <span class="badge bg-warning">{{ .event.Outcome }}</span>
+                                    {{ end }}
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted">Network Information</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <td><strong>IP Address:</strong></td>
+                                <td><code>{{ stringOr .event.ClientIP "-" }}</code></td>
+                            </tr>
+                            {{ if .event.UserAgent }}
+                            <tr>
+                                <td><strong>User Agent:</strong></td>
+                                <td><small>{{ stringOr .event.UserAgent "-" }}</small></td>
+                            </tr>
+                            {{ end }}
+                            {{ if .event.Method }}
+                            <tr>
+                                <td><strong>HTTP Method:</strong></td>
+                                <td><span class="badge bg-info">{{ stringOr .event.Method "-" }}</span></td>
+                            </tr>
+                            {{ end }}
+                            {{ if .event.Path }}
+                            <tr>
+                                <td><strong>Endpoint:</strong></td>
+                                <td><code>{{ stringOr .event.Path "-" }}</code></td>
+                            </tr>
+                            {{ end }}
+                        </table>
+                    </div>
+                </div>
+
+                {{ if .event.Metadata }}
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <h6 class="text-muted">Additional Details</h6>
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <pre class="mb-0"><code>{{ .event.Metadata }}</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {{ end }}
+
+                {{ if .event.Reason }}
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <h6 class="text-muted">Error Information</h6>
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            {{ stringOr .event.Reason "-" }}
+                        </div>
+                    </div>
+                </div>
+                {{ end }}
+
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <h6 class="text-muted">Identifiers</h6>
+                        <table class="table table-sm">
+                            {{ if .event.ProjectID }}
+                            <tr>
+                                <td><strong>Project ID:</strong></td>
+                                <td><code>{{ .event.ProjectID }}</code></td>
+                            </tr>
+                            {{ end }}
+                            {{ if .event.TokenID }}
+                            <tr>
+                                <td><strong>Token ID:</strong></td>
+                                <td><code>{{ .event.TokenID }}</code></td>
+                            </tr>
+                            {{ end }}
+                            {{ if .event.RequestID }}
+                            <tr>
+                                <td><strong>Request ID:</strong></td>
+                                <td><code>{{ .event.RequestID }}</code></td>
+                            </tr>
+                            {{ end }}
+                            {{ if .event.CorrelationID }}
+                            <tr>
+                                <td><strong>Correlation ID:</strong></td>
+                                <td><code>{{ .event.CorrelationID }}</code></td>
+                            </tr>
+                            {{ end }}
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{ template "layout/end" . }}
+{{ end }}
+{{ end }}

@@ -71,6 +71,25 @@ func TestNewLogger(t *testing.T) {
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "audit log file path cannot be empty")
 	})
+
+	t.Run("fails when directory creation fails", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		// Create a file where we want to create a directory
+		blockingFile := filepath.Join(tmpDir, "blocking-file")
+		err := os.WriteFile(blockingFile, []byte("content"), 0644)
+		require.NoError(t, err)
+
+		// Try to create logger with path that requires creating directory where file exists
+		logPath := filepath.Join(blockingFile, "audit", "audit.log")
+		config := LoggerConfig{
+			FilePath:  logPath,
+			CreateDir: true,
+		}
+
+		_, err = NewLogger(config)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to create audit log directory")
+	})
 }
 
 func TestLogger_Log(t *testing.T) {
@@ -206,6 +225,54 @@ func TestLogger_Log(t *testing.T) {
 		err = logger.Log(nil)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "audit event cannot be nil")
+	})
+
+	t.Run("fails when file is closed", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		logPath := filepath.Join(tmpDir, "audit.log")
+
+		config := LoggerConfig{
+			FilePath:  logPath,
+			CreateDir: true,
+		}
+
+		logger, err := NewLogger(config)
+		require.NoError(t, err)
+
+		// Close the file
+		err = logger.Close()
+		require.NoError(t, err)
+
+		// Try to log after closing
+		event := NewEvent(ActionTokenCreate, ActorManagement, ResultSuccess)
+		err = logger.Log(event)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to log to file")
+	})
+
+	t.Run("handles file write errors gracefully", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		logPath := filepath.Join(tmpDir, "audit.log")
+
+		config := LoggerConfig{
+			FilePath:  logPath,
+			CreateDir: true,
+		}
+
+		logger, err := NewLogger(config)
+		require.NoError(t, err)
+		defer func() { _ = logger.Close() }()
+
+		// Create an event with problematic data that might cause JSON marshal issues
+		// While Event normally marshals fine, let's test by manually setting bad file state
+		event := NewEvent(ActionTokenCreate, ActorManagement, ResultSuccess)
+
+		// Close file manually to simulate write error
+		_ = logger.file.Close()
+
+		err = logger.Log(event)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to log to file")
 	})
 }
 

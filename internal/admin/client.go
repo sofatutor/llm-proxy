@@ -97,6 +97,35 @@ type DashboardData struct {
 	RequestsThisWeek int `json:"requests_this_week"`
 }
 
+// AuditEvent represents an audit log entry for the admin UI
+type AuditEvent struct {
+	ID            string         `json:"id"`
+	Timestamp     time.Time      `json:"timestamp"`
+	Action        string         `json:"action"`
+	Actor         string         `json:"actor"`
+	ProjectID     *string        `json:"project_id,omitempty"`
+	RequestID     *string        `json:"request_id,omitempty"`
+	CorrelationID *string        `json:"correlation_id,omitempty"`
+	ClientIP      *string        `json:"client_ip,omitempty"`
+	Method        *string        `json:"method,omitempty"`
+	Path          *string        `json:"path,omitempty"`
+	UserAgent     *string        `json:"user_agent,omitempty"`
+	Outcome       string         `json:"outcome"`
+	Reason        *string        `json:"reason,omitempty"`
+	TokenID       *string        `json:"token_id,omitempty"`
+	Metadata      *string        `json:"metadata,omitempty"` // JSON string
+	ParsedMeta    *AuditMetadata `json:"-"`                  // Parsed metadata for template use
+}
+
+// AuditMetadata represents parsed metadata for easier template access
+type AuditMetadata map[string]interface{}
+
+// AuditEventsResponse represents the API response for audit events listing
+type AuditEventsResponse struct {
+	Events     []AuditEvent `json:"events"`
+	Pagination Pagination   `json:"pagination"`
+}
+
 // GetDashboardData retrieves dashboard statistics
 func (c *APIClient) GetDashboardData(ctx context.Context) (*DashboardData, error) {
 	// For now, calculate from projects and tokens lists
@@ -391,4 +420,67 @@ func (c *APIClient) doRequest(req *http.Request, result any) error {
 	}
 
 	return nil
+}
+
+// GetAuditEvents retrieves a paginated list of audit events with optional filters
+func (c *APIClient) GetAuditEvents(ctx context.Context, filters map[string]string, page, pageSize int) ([]AuditEvent, *Pagination, error) {
+	// Build query parameters
+	params := url.Values{}
+	for key, value := range filters {
+		if value != "" {
+			params.Set(key, value)
+		}
+	}
+	params.Set("page", fmt.Sprintf("%d", page))
+	params.Set("page_size", fmt.Sprintf("%d", pageSize))
+
+	endpoint := "/manage/audit"
+	if len(params) > 0 {
+		endpoint += "?" + params.Encode()
+	}
+
+	req, err := c.newRequest(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var response AuditEventsResponse
+	if err := c.doRequest(req, &response); err != nil {
+		return nil, nil, err
+	}
+
+	// Parse metadata for each event
+	for i := range response.Events {
+		if response.Events[i].Metadata != nil && *response.Events[i].Metadata != "" {
+			var meta AuditMetadata
+			if err := json.Unmarshal([]byte(*response.Events[i].Metadata), &meta); err == nil {
+				response.Events[i].ParsedMeta = &meta
+			}
+		}
+	}
+
+	return response.Events, &response.Pagination, nil
+}
+
+// GetAuditEvent retrieves a specific audit event by ID
+func (c *APIClient) GetAuditEvent(ctx context.Context, id string) (*AuditEvent, error) {
+	req, err := c.newRequest(ctx, "GET", "/manage/audit/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var event AuditEvent
+	if err := c.doRequest(req, &event); err != nil {
+		return nil, err
+	}
+
+	// Parse metadata
+	if event.Metadata != nil && *event.Metadata != "" {
+		var meta AuditMetadata
+		if err := json.Unmarshal([]byte(*event.Metadata), &meta); err == nil {
+			event.ParsedMeta = &meta
+		}
+	}
+
+	return &event, nil
 }

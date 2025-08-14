@@ -15,6 +15,7 @@ import (
 
 	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/database"
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/sofatutor/llm-proxy/internal/token"
@@ -679,6 +680,335 @@ func TestHandleNotFound_WriteHeader_Flush_EventBus(t *testing.T) {
 	srv.eventBus = &mockEventBus{}
 	if srv.EventBus() == nil {
 		t.Error("EventBus() returned nil")
+	}
+}
+
+// (removed unused mockAuditStore and mockDB)
+
+func TestHandleAuditEvents_And_ByID(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	// Use a real in-memory DB and seed deterministic rows used by the handlers
+	realDB, err := database.New(database.Config{Path: ":memory:"})
+	require.NoError(t, err)
+	srv.db = realDB
+	ctx := context.Background()
+	// Insert deterministic event for show
+	_, err = srv.db.DB().ExecContext(ctx, "INSERT INTO audit_events (id,timestamp,action,actor,outcome) VALUES (?,?,?,?,?)", "evt-1", time.Now(), "x", "y", "success")
+	require.NoError(t, err)
+
+	// List
+	r := httptest.NewRequest(http.MethodGet, "/manage/audit?search=abc&page=1&page_size=20", nil)
+	r.Header.Set("Authorization", "Bearer "+cfg.ManagementToken)
+	w := httptest.NewRecorder()
+	srv.handleAuditEvents(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list expected 200, got %d", w.Code)
+	}
+
+	// Show
+	r2 := httptest.NewRequest(http.MethodGet, "/manage/audit/evt-1", nil)
+	r2.Header.Set("Authorization", "Bearer "+cfg.ManagementToken)
+	w2 := httptest.NewRecorder()
+	srv.handleAuditEventByID(w2, r2)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("show expected 200, got %d", w2.Code)
+	}
+}
+
+// Additional coverage for handleAuditEventByID error branches
+func TestHandleAuditEventByID_MethodNotAllowed(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	r := httptest.NewRequest(http.MethodPost, "/manage/audit/anything", nil)
+	w := httptest.NewRecorder()
+	srv.handleAuditEventByID(w, r)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", w.Code)
+	}
+}
+
+func TestHandleAuditEventByID_DBUnavailable(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	// Ensure DB is nil to hit ServiceUnavailable branch
+	srv.db = nil
+
+	r := httptest.NewRequest(http.MethodGet, "/manage/audit/evt-x", nil)
+	w := httptest.NewRecorder()
+	srv.handleAuditEventByID(w, r)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+func TestHandleAuditEventByID_MissingID(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	// Real in-memory DB so the handler proceeds past db==nil
+	realDB, err := database.New(database.Config{Path: ":memory:"})
+	require.NoError(t, err)
+	srv.db = realDB
+
+	r := httptest.NewRequest(http.MethodGet, "/manage/audit/", nil)
+	w := httptest.NewRecorder()
+	srv.handleAuditEventByID(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing id, got %d", w.Code)
+	}
+}
+
+func TestHandleAuditEventByID_NotFound(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	realDB, err := database.New(database.Config{Path: ":memory:"})
+	require.NoError(t, err)
+	srv.db = realDB
+
+	r := httptest.NewRequest(http.MethodGet, "/manage/audit/does-not-exist", nil)
+	w := httptest.NewRecorder()
+	srv.handleAuditEventByID(w, r)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for missing audit event, got %d", w.Code)
+	}
+}
+
+func TestHandleAuditEventByID_EncodeError(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	// Seed a real DB with one audit event so the handler reaches the encode step
+	realDB, err := database.New(database.Config{Path: ":memory:"})
+	require.NoError(t, err)
+	srv.db = realDB
+	ctx := context.Background()
+	_, err = srv.db.DB().ExecContext(ctx, "INSERT INTO audit_events (id,timestamp,action,actor,outcome) VALUES (?,?,?,?,?)", "evt-encode", time.Now(), "x", "y", "success")
+	require.NoError(t, err)
+
+	r := httptest.NewRequest(http.MethodGet, "/manage/audit/evt-encode", nil)
+	rr := httptest.NewRecorder()
+	failing := &mockFailingResponseWriter{ResponseWriter: rr, failOnFirstWrite: true}
+	srv.handleAuditEventByID(failing, r)
+	if failing.statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when encode fails, got %d", failing.statusCode)
+	}
+}
+
+func TestHandleAuditEvents_MethodNotAllowed(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	// Real DB so handler progresses when method would be GET
+	realDB, err := database.New(database.Config{Path: ":memory:"})
+	require.NoError(t, err)
+	srv.db = realDB
+
+	r := httptest.NewRequest(http.MethodPost, "/manage/audit", nil)
+	w := httptest.NewRecorder()
+	srv.handleAuditEvents(w, r)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", w.Code)
+	}
+}
+
+func TestHandleAuditEvents_DBUnavailable(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	// Force DB unavailable branch
+	srv.db = nil
+
+	r := httptest.NewRequest(http.MethodGet, "/manage/audit", nil)
+	w := httptest.NewRecorder()
+	srv.handleAuditEvents(w, r)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+func TestHandleAuditEvents_EncodeError(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	realDB, err := database.New(database.Config{Path: ":memory:"})
+	require.NoError(t, err)
+	srv.db = realDB
+
+	// Seed one row so encoding is attempted
+	ctx := context.Background()
+	_, err = srv.db.DB().ExecContext(ctx, "INSERT INTO audit_events (id,timestamp,action,actor,outcome) VALUES (?,?,?,?,?)", "evt-enc-list", time.Now(), "x", "y", "success")
+	require.NoError(t, err)
+
+	r := httptest.NewRequest(http.MethodGet, "/manage/audit?page=1&page_size=20", nil)
+	rr := httptest.NewRecorder()
+	failing := &mockFailingResponseWriter{ResponseWriter: rr, failOnFirstWrite: true}
+	srv.handleAuditEvents(failing, r)
+	if failing.statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when encoding list fails, got %d", failing.statusCode)
+	}
+}
+
+func TestManagementAuthMiddleware_Direct(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, ManagementToken: "tok", EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	nextCalled := false
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mw := srv.managementAuthMiddleware(next)
+
+	// Missing header
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	mw.ServeHTTP(w, r)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for missing header, got %d", w.Code)
+	}
+
+	// Wrong token
+	r = httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("Authorization", "Bearer wrong")
+	w = httptest.NewRecorder()
+	mw.ServeHTTP(w, r)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for wrong token, got %d", w.Code)
+	}
+
+	// Correct token
+	r = httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("Authorization", "Bearer "+cfg.ManagementToken)
+	w = httptest.NewRecorder()
+	mw.ServeHTTP(w, r)
+	if w.Code != http.StatusNoContent || !nextCalled {
+		t.Fatalf("expected 204 and next called, got %d, nextCalled=%v", w.Code, nextCalled)
+	}
+}
+
+func TestHandleMetrics_EncodeError(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory", EnableMetrics: true, MetricsPath: "/metrics"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	// Ensure some proxy metrics to exercise data path
+	p := &proxy.TransparentProxy{}
+	p.SetMetrics(&proxy.ProxyMetrics{RequestCount: 10, ErrorCount: 2})
+	srv.proxy = p
+
+	r := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rr := httptest.NewRecorder()
+	failing := &mockFailingResponseWriter{ResponseWriter: rr, failOnFirstWrite: true}
+	srv.handleMetrics(failing, r)
+	if failing.statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when metrics encode fails, got %d", failing.statusCode)
+	}
+}
+
+// initializeComponents error path via bad API config (no default_api and missing provider)
+func TestInitializeComponents_ErrorPath(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "api_bad_*.yaml")
+	require.NoError(t, err)
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	// Valid YAML with APIs but missing default_api
+	configYAML := `
+apis:
+  test_api:
+    base_url: https://api.example.com
+    allowed_endpoints:
+      - /v1/test
+    allowed_methods:
+      - GET
+`
+	_, err = tmpFile.Write([]byte(configYAML))
+	require.NoError(t, err)
+	require.NoError(t, tmpFile.Close())
+
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, APIConfigPath: tmpFile.Name(), DefaultAPIProvider: "missing_api", EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	if err := srv.initializeComponents(); err == nil {
+		t.Fatalf("expected initializeComponents to error with bad API config")
+	}
+}
+
+// Start should return an initialization error when components fail to init
+func TestServer_Start_InitializationFailure(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "api_bad_*.yaml")
+	require.NoError(t, err)
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	configYAML := `
+apis:
+  test_api:
+    base_url: https://api.example.com
+    allowed_endpoints:
+      - /v1/test
+    allowed_methods:
+      - GET
+`
+	_, err = tmpFile.Write([]byte(configYAML))
+	require.NoError(t, err)
+	require.NoError(t, tmpFile.Close())
+
+	cfg := &config.Config{ListenAddr: "127.0.0.1:0", RequestTimeout: time.Second, APIConfigPath: tmpFile.Name(), DefaultAPIProvider: "missing_api", EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	// Start should fail fast due to initializeComponents error
+	if err := srv.Start(); err == nil {
+		t.Fatalf("expected Start to fail due to initialization error")
+	}
+}
+
+// Encode error paths for list endpoints
+func TestHandleListProjects_EncodeError(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, ManagementToken: "tok", EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	// Auth passes
+	r := httptest.NewRequest(http.MethodGet, "/manage/projects", nil)
+	r.Header.Set("Authorization", "Bearer "+cfg.ManagementToken)
+	rr := httptest.NewRecorder()
+	failing := &mockFailingResponseWriter{ResponseWriter: rr, failOnFirstWrite: true}
+	srv.handleProjects(failing, r)
+	if failing.statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when projects encode fails, got %d", failing.statusCode)
+	}
+}
+
+func TestHandleTokens_ListEncodeError(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	r := httptest.NewRequest(http.MethodGet, "/manage/tokens", nil)
+	rr := httptest.NewRecorder()
+	failing := &mockFailingResponseWriter{ResponseWriter: rr, failOnFirstWrite: true}
+	srv.handleTokens(failing, r)
+	if failing.statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when tokens list encode fails, got %d", failing.statusCode)
+	}
+}
+
+func Test_parseInt(t *testing.T) {
+	if parseInt("", 7) != 7 {
+		t.Fatal("empty returns default")
+	}
+	if parseInt("abc", 7) != 7 {
+		t.Fatal("invalid returns default")
+	}
+	if parseInt("42", 7) != 42 {
+		t.Fatal("valid parsed")
 	}
 }
 

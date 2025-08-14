@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/audit"
 )
@@ -186,6 +187,85 @@ func TestDB_ListAuditEvents(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDB_CountAuditEvents_and_GetAuditEventByID(t *testing.T) {
+	db, err := New(Config{Path: ":memory:"})
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	ctx := context.Background()
+	startTimeStr := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
+	endTimeStr := time.Now().Add(1 * time.Hour).Format(time.RFC3339)
+
+	// Insert multiple events with different fields to exercise search and lookups
+	e1 := audit.NewEvent(audit.ActionProjectCreate, audit.ActorManagement, audit.ResultSuccess).
+		WithProjectID("p1").WithRequestID("req-123").WithCorrelationID("corr-abc").WithDetail("http_method", "POST").WithDetail("endpoint", "/manage/projects").WithClientIP("198.51.100.1")
+	e2 := audit.NewEvent(audit.ActionTokenCreate, audit.ActorAdmin, audit.ResultFailure).
+		WithProjectID("p2").WithRequestID("req-456").WithCorrelationID("corr-def").WithDetail("http_method", "POST").WithDetail("endpoint", "/manage/tokens").WithClientIP("198.51.100.2").WithDetail("error", "boom")
+	e3 := audit.NewEvent(audit.ActionProjectDelete, audit.ActorSystem, audit.ResultSuccess).
+		WithProjectID("p3").WithRequestID("req-789").WithCorrelationID("corr-ghi").WithDetail("http_method", "DELETE").WithDetail("endpoint", "/manage/projects/p3").WithClientIP("198.51.100.3")
+
+	if err := db.StoreAuditEvent(ctx, e1); err != nil {
+		t.Fatalf("store e1: %v", err)
+	}
+	if err := db.StoreAuditEvent(ctx, e2); err != nil {
+		t.Fatalf("store e2: %v", err)
+	}
+	if err := db.StoreAuditEvent(ctx, e3); err != nil {
+		t.Fatalf("store e3: %v", err)
+	}
+
+	// Count without filters
+	n, err := db.CountAuditEvents(ctx, AuditEventFilters{})
+	if err != nil || n < 3 {
+		t.Fatalf("CountAuditEvents all: n=%d err=%v", n, err)
+	}
+
+	// Count with various filters to improve coverage
+	tests := []struct {
+		name        string
+		filter      AuditEventFilters
+		minExpected int
+	}{
+		{"search request_id", AuditEventFilters{Search: "req-123"}, 1},
+		{"search path", AuditEventFilters{Search: "/manage/tokens"}, 1},
+		{"filter by action", AuditEventFilters{Action: audit.ActionProjectCreate}, 1},
+		{"filter by client IP", AuditEventFilters{ClientIP: "198.51.100.1"}, 1},
+		{"filter by project ID", AuditEventFilters{ProjectID: "p2"}, 1},
+		{"filter by outcome", AuditEventFilters{Outcome: "success"}, 2},
+		{"filter by actor", AuditEventFilters{Actor: audit.ActorAdmin}, 1},
+		{"filter by request ID", AuditEventFilters{RequestID: "req-456"}, 1},
+		{"filter by correlation ID", AuditEventFilters{CorrelationID: "corr-abc"}, 1},
+		{"filter by method", AuditEventFilters{Method: "POST"}, 2},
+		{"filter by path", AuditEventFilters{Path: "/manage/projects"}, 1},
+		{"filter by start time", AuditEventFilters{StartTime: &startTimeStr}, 3},
+		{"filter by end time", AuditEventFilters{EndTime: &endTimeStr}, 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			count, err := db.CountAuditEvents(ctx, tt.filter)
+			if err != nil {
+				t.Fatalf("CountAuditEvents with %s failed: %v", tt.name, err)
+			}
+			if count < tt.minExpected {
+				t.Errorf("CountAuditEvents with %s: expected at least %d, got %d", tt.name, tt.minExpected, count)
+			}
+		})
+	}
+
+	// Verify we can fetch a concrete ID via List then GetAuditEventByID
+	items, err := db.ListAuditEvents(ctx, AuditEventFilters{ProjectID: "p1", Limit: 1})
+	if err != nil || len(items) == 0 {
+		t.Fatalf("ListAuditEvents p1: items=%d err=%v", len(items), err)
+	}
+	got, err := db.GetAuditEventByID(ctx, items[0].ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetAuditEventByID: err=%v", err)
 	}
 }
 

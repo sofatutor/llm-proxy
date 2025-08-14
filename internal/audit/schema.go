@@ -72,6 +72,10 @@ const (
 	ActionAdminLogin  = "admin.login"
 	ActionAdminLogout = "admin.logout"
 	ActionAdminAccess = "admin.access"
+
+	// Audit actions
+	ActionAuditList = "audit.list"
+	ActionAuditShow = "audit.show"
 )
 
 // Actor types for common audit actors
