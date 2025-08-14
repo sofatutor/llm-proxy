@@ -7,30 +7,25 @@
                 <i class="bi bi-shield-check"></i>
                 Audit Events
             </h1>
+            <form class="d-flex align-items-center" method="GET" action="/audit" autocomplete="off">
+                <div class="input-group" style="width: 40vw; max-width: 60vw;">
+                    <input type="search" class="form-control" name="search" placeholder="Search events (action, actor, IP, path, request id, ...)" value="{{ index .filters "search" }}" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
+                    <button class="btn btn-primary" type="submit">
+                        <i class="bi bi-search"></i>
+                        <span class="d-none d-md-inline">Search</span>
+                    </button>
+                    {{ if index .filters "search" }}
+                    <a class="btn btn-outline-secondary" href="/audit">
+                        <i class="bi bi-x-circle"></i>
+                        <span class="d-none d-md-inline">Clear</span>
+                    </a>
+                    {{ end }}
+                </div>
+            </form>
         </div>
     </div>
 </div>
 
-<!-- Search -->
-<form class="row g-2 mb-3" method="GET" action="/audit">
-    <div class="col-md-5 col-lg-4">
-        <input type="search" class="form-control" name="search" placeholder="Search events (action, actor, IP, path, request id, ...)" value="{{ index .filters "search" }}">
-    </div>
-    <div class="col-auto">
-        <button class="btn btn-primary" type="submit">
-            <i class="bi bi-search"></i>
-            Search
-        </button>
-    </div>
-    {{ if index .filters "search" }}
-    <div class="col-auto">
-        <a class="btn btn-outline-secondary" href="/audit">
-            <i class="bi bi-x-circle"></i>
-            Clear
-        </a>
-    </div>
-    {{ end }}
-</form>
 
 {{ if .events }}
 <div class="row">
