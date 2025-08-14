@@ -43,7 +43,7 @@ Use the following commands to run tests:
   - [x] 1.4 Link to existing architecture doc: add prominent link to `docs/architecture.md` from Home and Features
 
 - [ ] 2.0 Author core pages content (Home, Features, Screenshots, Quickstart, Contributing)
-  - [ ] 2.1 Homepage: concise value prop, feature bullets, contributor CTA, quick links to issues (`good first issue`) and CONTRIBUTING
+  - [x] 2.1 Homepage: concise value prop, feature bullets, contributor CTA, quick links to issues (`good first issue`) and CONTRIBUTING
   - [ ] 2.2 Features: bullets for Transparent Proxy, Withering Tokens, Project-based ACL, Async Events/Dispatcher, Admin UI, Observability; link into deeper docs
   - [ ] 2.3 Screenshots: embed images from `docs/assets/screenshots/` with alt text and captions (Login, Dashboard, Projects, Project Create, Project Show, Tokens, Token Created, Audit, Audit Detail)
   - [ ] 2.4 Quickstart: minimal steps to run `llm-proxy server` and `llm-proxy admin`, sample curl and `openai chat` through proxy, links to `docs/cli-reference.md`

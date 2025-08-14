@@ -5,21 +5,27 @@
 
 Open-source reverse proxy for LLM APIs with withering tokens, management UI, and observability.
 
-- Transparent proxying to OpenAI-compatible endpoints
-- Short-lived withering tokens with project-scoped access
-- Admin UI for projects and tokens
-- Async event system and dispatcher integrations
+### Why LLM Proxy?
+
+- Transparent proxying to OpenAI‑compatible endpoints
+- Short‑lived withering tokens with project‑scoped access control
+- Admin UI for projects, tokens, and audit trails
+- Async event system with pluggable dispatcher integrations (file, Lunary, Helicone)
+
+Get the big picture in the [Architecture](./architecture.md) and jump to the [Quickstart](./quickstart.md).
 
 ### Contributors welcome
 
-- See [Contributing](./contributing.md)
-- Browse issues: `good first issue` label
-- Stars and feedback appreciated!
+- Read the [Contributing guide](./contributing.md)
+- Pick a task: [good first issues](https://github.com/sofatutor/llm-proxy/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+- Explore the [roadmap](../PLAN.md)
 
-### Badges
+### Status & Coverage
 
 <!-- Replace with real badges after CI wiring -->
 ![Build](https://img.shields.io/badge/build-pending-lightgrey)
 ![Coverage](https://img.shields.io/badge/coverage-TBD-lightgrey)
+
+View the live coverage report on the [Coverage page](./coverage/).
 
 
