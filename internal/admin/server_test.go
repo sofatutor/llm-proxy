@@ -181,6 +181,18 @@ func (m *mockAPIClient) GetAuditEvent(ctx context.Context, id string) (*AuditEve
 
 var _ APIClientInterface = (*mockAPIClient)(nil) // Ensure interface compliance
 
+// capturingAuditClient records the filters passed to GetAuditEvents for assertions
+type capturingAuditClient struct{ mockAPIClient; lastFilters map[string]string }
+
+func (m *capturingAuditClient) GetAuditEvents(ctx context.Context, filters map[string]string, page, pageSize int) ([]AuditEvent, *Pagination, error) {
+    m.lastFilters = filters
+    if m.DashboardErr != nil {
+        return nil, nil, m.DashboardErr
+    }
+    return []AuditEvent{{ID: "evt-1", Outcome: "success"}}, &Pagination{Page: page, PageSize: pageSize, TotalItems: 1, TotalPages: 1}, nil
+}
+
+
 func TestServer_HandleDashboard(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	dashboardFile := createTestTemplate(t, "dashboard.html", "<html><body>dashboard</body></html>")
@@ -841,12 +853,13 @@ func TestServer_HandleAuditList(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(testTemplateDir(), "audit", "list.html"), []byte("<html><body>audit list</body></html>"), 0644)
 	t.Cleanup(func() { _ = os.Remove(filepath.Join(testTemplateDir(), "audit", "list.html")) })
 
-	s := &Server{engine: gin.New()}
+    s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
 	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "audit", "*.html"))
 
-	s.engine.GET("/audit", func(c *gin.Context) {
-		var client APIClientInterface = &mockAPIClient{}
+    s.engine.GET("/audit", func(c *gin.Context) {
+        cap := &capturingAuditClient{}
+        var client APIClientInterface = cap
 		c.Set("apiClient", client)
 		s.handleAuditList(c)
 	})

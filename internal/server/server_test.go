@@ -746,6 +746,92 @@ func TestHandleAuditEvents_And_ByID(t *testing.T) {
 	}
 }
 
+// Additional coverage for handleAuditEventByID error branches
+func TestHandleAuditEventByID_MethodNotAllowed(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	r := httptest.NewRequest(http.MethodPost, "/manage/audit/anything", nil)
+	w := httptest.NewRecorder()
+	srv.handleAuditEventByID(w, r)
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", w.Code)
+	}
+}
+
+func TestHandleAuditEventByID_DBUnavailable(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	// Ensure DB is nil to hit ServiceUnavailable branch
+	srv.db = nil
+
+	r := httptest.NewRequest(http.MethodGet, "/manage/audit/evt-x", nil)
+	w := httptest.NewRecorder()
+	srv.handleAuditEventByID(w, r)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+func TestHandleAuditEventByID_MissingID(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	// Real in-memory DB so the handler proceeds past db==nil
+	realDB, err := database.New(database.Config{Path: ":memory:"})
+	require.NoError(t, err)
+	srv.db = realDB
+
+	r := httptest.NewRequest(http.MethodGet, "/manage/audit/", nil)
+	w := httptest.NewRecorder()
+	srv.handleAuditEventByID(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for missing id, got %d", w.Code)
+	}
+}
+
+func TestHandleAuditEventByID_NotFound(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	realDB, err := database.New(database.Config{Path: ":memory:"})
+	require.NoError(t, err)
+	srv.db = realDB
+
+	r := httptest.NewRequest(http.MethodGet, "/manage/audit/does-not-exist", nil)
+	w := httptest.NewRecorder()
+	srv.handleAuditEventByID(w, r)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for missing audit event, got %d", w.Code)
+	}
+}
+
+func TestHandleAuditEventByID_EncodeError(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	// Seed a real DB with one audit event so the handler reaches the encode step
+	realDB, err := database.New(database.Config{Path: ":memory:"})
+	require.NoError(t, err)
+	srv.db = realDB
+	ctx := context.Background()
+	_, err = srv.db.DB().ExecContext(ctx, "INSERT INTO audit_events (id,timestamp,action,actor,outcome) VALUES (?,?,?,?,?)", "evt-encode", time.Now(), "x", "y", "success")
+	require.NoError(t, err)
+
+	r := httptest.NewRequest(http.MethodGet, "/manage/audit/evt-encode", nil)
+	rr := httptest.NewRecorder()
+	failing := &mockFailingResponseWriter{ResponseWriter: rr, failOnFirstWrite: true}
+	srv.handleAuditEventByID(failing, r)
+	if failing.statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when encode fails, got %d", failing.statusCode)
+	}
+}
+
 func Test_parseInt(t *testing.T) {
 	if parseInt("", 7) != 7 {
 		t.Fatal("empty returns default")

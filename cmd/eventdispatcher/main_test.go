@@ -1,10 +1,39 @@
 package main
 
 import (
-	"flag"
-	"os"
-	"testing"
+    "flag"
+    "os"
+    "testing"
 )
+
+func TestEnvHelpers(t *testing.T) {
+    os.Setenv("X", "val")
+    t.Cleanup(func() { os.Unsetenv("X") })
+    if got := envOrDefault("X", "fallback"); got != "val" {
+        t.Fatalf("envOrDefault got %q", got)
+    }
+    if got := envOrDefault("MISSING", "fb"); got != "fb" {
+        t.Fatalf("envOrDefault fallback got %q", got)
+    }
+    os.Setenv("N", "42")
+    t.Cleanup(func() { os.Unsetenv("N") })
+    if got := envIntOrDefault("N", 7); got != 42 {
+        t.Fatalf("envIntOrDefault got %d", got)
+    }
+    if got := envIntOrDefault("MISSING_INT", 9); got != 9 {
+        t.Fatalf("envIntOrDefault fallback got %d", got)
+    }
+}
+
+func TestRun_NoFilePermission(t *testing.T) {
+    // set file path to an invalid directory to trigger open error
+    os.Setenv("EVENTDISPATCHER_FILE", "/dev/null/dir/notafile.jsonl")
+    defer os.Unsetenv("EVENTDISPATCHER_FILE")
+    code := run()
+    if code != 1 {
+        t.Fatalf("expected exit code 1, got %d", code)
+    }
+}
 
 func TestRun_InvalidArg(t *testing.T) {
 	t.Skip("Skipping CLI entrypoint test: Go flag/os.Exit not testable in-process, see COVERAGE_PR34.md")
