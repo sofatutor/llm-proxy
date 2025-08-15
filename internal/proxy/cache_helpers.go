@@ -258,3 +258,36 @@ func conditionalRequestMatches(r *http.Request, cachedHeaders http.Header) bool 
 	}
 	return false
 }
+
+// hasClientCacheOptIn returns true if the client request explicitly opts into
+// shared caching via Cache-Control (public with max-age or s-maxage > 0).
+func hasClientCacheOptIn(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	cc := parseCacheControl(r.Header.Get("Cache-Control"))
+	if !cc.publicCache {
+		return false
+	}
+	if cc.sMaxAge > 0 {
+		return true
+	}
+	if cc.maxAge > 0 {
+		return true
+	}
+	return false
+}
+
+// hasClientConditionals reports if the client sent If-None-Match or If-Modified-Since.
+func hasClientConditionals(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if strings.TrimSpace(r.Header.Get("If-None-Match")) != "" {
+		return true
+	}
+	if strings.TrimSpace(r.Header.Get("If-Modified-Since")) != "" {
+		return true
+	}
+	return false
+}

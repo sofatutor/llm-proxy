@@ -712,6 +712,14 @@ func (p *TransparentProxy) Handler() http.Handler {
 
 		// Simple cache lookup with conditional handling (ETag/Last-Modified)
 		if p.cache != nil && (r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodPost) {
+			// Honor HTTP headers: only attempt lookup when client explicitly opts in (public max-age/s-maxage)
+			// or when the client provides conditional headers for GET/HEAD.
+			optIn := hasClientCacheOptIn(r)
+			conds := (r.Method == http.MethodGet || r.Method == http.MethodHead) && hasClientConditionals(r)
+			if !(optIn || conds) {
+				p.proxy.ServeHTTP(rw, r)
+				return
+			}
 			key := cacheKeyFromRequest(r)
 			if cr, ok := p.cache.Get(key); ok {
 				if !canServeCachedForRequest(r, cr.headers) {
