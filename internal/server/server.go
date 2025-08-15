@@ -160,7 +160,7 @@ func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectSto
 	mux.HandleFunc("/health", s.logRequestMiddleware(s.handleHealth))
 	mux.HandleFunc("/ready", s.logRequestMiddleware(s.handleReady))
 	mux.HandleFunc("/live", s.logRequestMiddleware(s.handleLive))
-	mux.HandleFunc("/manage/projects", s.logRequestMiddleware(s.handleProjects))
+	mux.HandleFunc("/manage/projects", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleProjects)))
 	mux.HandleFunc("/manage/projects/", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleProjectByID)))
 	mux.HandleFunc("/manage/tokens", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleTokens)))
 	mux.HandleFunc("/manage/tokens/", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleTokenByID)))

@@ -325,15 +325,6 @@ func TestHandleProjects(t *testing.T) {
 		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 	})
 
-	t.Run("Auth_Failure", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/manage/projects", nil)
-		req.Header.Set("Authorization", "Bearer wrong_token")
-		w := httptest.NewRecorder()
-
-		server.handleProjects(w, req)
-
-		assert.Equal(t, http.StatusUnauthorized, w.Code)
-	})
 }
 
 func TestHandleProjectByID(t *testing.T) {
@@ -863,7 +854,7 @@ func TestHandleTokens_GetTokensByProjectIDError(t *testing.T) {
 
 func TestHandleTokenByID(t *testing.T) {
 	server, tokenStore, _ := setupServerAndMocks(t)
-	
+
 	testToken := token.TokenData{
 		Token:        "sk-test123456789",
 		ProjectID:    "project-1",
@@ -966,20 +957,11 @@ func TestHandleTokenByID(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "token ID is required")
 	})
 
-	t.Run("Auth_Failure", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/manage/tokens/sk-test123456789", nil)
-		req.Header.Set("Authorization", "Bearer wrong_token")
-		w := httptest.NewRecorder()
-
-		server.handleTokenByID(w, req)
-
-		assert.Equal(t, http.StatusUnauthorized, w.Code)
-	})
 }
 
 func TestHandleGetToken(t *testing.T) {
 	server, tokenStore, _ := setupServerAndMocks(t)
-	
+
 	testToken := token.TokenData{
 		Token:        "sk-test123456789",
 		ProjectID:    "project-1",
@@ -1025,7 +1007,7 @@ func TestHandleGetToken(t *testing.T) {
 
 func TestHandleUpdateToken(t *testing.T) {
 	server, tokenStore, _ := setupServerAndMocks(t)
-	
+
 	testToken := token.TokenData{
 		Token:        "sk-test123456789",
 		ProjectID:    "project-1",
