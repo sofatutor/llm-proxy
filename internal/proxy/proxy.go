@@ -16,7 +16,11 @@ import (
 	"sync"
 	"time"
 
+	"crypto/sha256"
+	"encoding/hex"
+
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/middleware"
 	"github.com/sofatutor/llm-proxy/internal/token"
@@ -47,6 +51,7 @@ type TransparentProxy struct {
 	mu                   sync.RWMutex
 	allowedMethodsHeader string // cached comma-separated allowed methods
 	obsMiddleware        *middleware.ObservabilityMiddleware
+	cache                httpCache
 }
 
 // ProxyMetrics tracks proxy usage statistics
@@ -114,6 +119,21 @@ func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator,
 		logger:               logger,
 		metrics:              &ProxyMetrics{},
 		allowedMethodsHeader: allowedMethodsHeader,
+	}
+
+	// Initialize HTTP cache (always on; behavior controlled by HTTP caching headers)
+	if config.RedisCacheURL != "" {
+		if opt, err := redis.ParseURL(config.RedisCacheURL); err == nil {
+			client := redis.NewClient(opt)
+			proxy.cache = newRedisCache(client, config.RedisCacheKeyPrefix)
+			logger.Info("HTTP cache enabled", zap.String("backend", "redis"))
+		} else {
+			proxy.cache = newInMemoryCache()
+			logger.Warn("Failed to parse RedisCacheURL; falling back to in-memory cache", zap.Error(err))
+		}
+	} else {
+		proxy.cache = newInMemoryCache()
+		logger.Info("HTTP cache enabled", zap.String("backend", "in-memory"))
 	}
 
 	// Initialize the reverse proxy
@@ -234,58 +254,14 @@ func (p *TransparentProxy) processRequestHeaders(req *http.Request) {
 
 // modifyResponse processes the response before returning it to the client
 func (p *TransparentProxy) modifyResponse(res *http.Response) error {
-	// Remove any upstream CORS headers to prevent conflicts
-	corsHeaders := []string{
-		"Access-Control-Allow-Origin",
-		"Access-Control-Allow-Methods",
-		"Access-Control-Allow-Headers",
-		"Access-Control-Allow-Credentials",
-		"Access-Control-Expose-Headers",
-		"Access-Control-Max-Age",
-	}
-	for _, header := range corsHeaders {
-		res.Header.Del(header)
-	}
-
-	// Add proxy headers
+	// Set proxy headers
 	res.Header.Set("X-Proxy", "llm-proxy")
-	res.Header.Set("X-Proxy-Version", version)
 
-	// Get request from response
-	req := res.Request
-	if req == nil {
-		p.logger.Warn("Response has no request")
-		return nil
-	}
-
-	// Add CORS headers if the original request had an Origin header
-	origin := req.Header.Get("Origin")
-	if origin != "" && len(p.config.AllowedOrigins) > 0 {
-		for _, o := range p.config.AllowedOrigins {
-			if o == origin {
-				res.Header.Set("Access-Control-Allow-Origin", origin)
-				break
-			}
-		}
-	}
-
-	// Get project ID from context
-	projectID, _ := req.Context().Value(ctxKeyProjectID).(string)
-	if projectID != "" {
-		res.Header.Set("X-Proxy-ID", projectID)
-	}
-
-	// Calculate and add response time header
-	startTime, ok := req.Context().Value(ctxKeyRequestStart).(time.Time)
-	if ok {
-		remoteCallDuration := time.Since(startTime)
-		res.Header.Set("X-LLM-Proxy-Remote-Duration", remoteCallDuration.String())
-		res.Header.Set("X-LLM-Proxy-Remote-Duration-Ms", fmt.Sprintf("%.2f", float64(remoteCallDuration.Milliseconds())))
-	}
-
-	// For streaming responses, we just pass through
-	if isStreaming(res) {
-		return nil
+	// Error handling: increment error count for 4xx/5xx
+	if res.StatusCode >= 400 {
+		p.metrics.mu.Lock()
+		p.metrics.ErrorCount++
+		p.metrics.mu.Unlock()
 	}
 
 	// Process response body to extract metadata for non-streaming responses
@@ -310,6 +286,92 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 	if res.Request != nil {
 		if v := res.Request.Header.Get("X-UPSTREAM-REQUEST-START"); v != "" {
 			res.Header.Set("X-UPSTREAM-REQUEST-START", v)
+		}
+	}
+
+	// Store in cache when enabled and request is cacheable
+	if p.cache != nil && res.Request != nil {
+		req := res.Request
+		if req.Method == http.MethodGet || req.Method == http.MethodHead || req.Method == http.MethodPost {
+			// Only cache successful responses
+			if res.StatusCode < 200 || res.StatusCode >= 300 {
+				return nil
+			}
+
+			// derive TTL from response headers or (fallback) client request Cache-Control
+			respTTL := cacheTTLFromHeaders(res, p.config.HTTPCacheDefaultTTL)
+			forcedTTL := time.Duration(0)
+			if respTTL == 0 {
+				forcedTTL = requestForcedCacheTTL(req)
+			}
+			ttl := respTTL
+			if ttl == 0 {
+				ttl = forcedTTL
+			}
+
+			// If TTL comes from response, ensure response is cacheable by policy
+			if ttl > 0 && (respTTL > 0 && !isResponseCacheable(res)) {
+				ttl = 0
+			}
+
+			if ttl > 0 {
+				key := cacheKeyFromRequest(req)
+				if !isStreaming(res) {
+					bodyBytes, err := io.ReadAll(res.Body)
+					if err == nil {
+						_ = res.Body.Close()
+						res.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
+						if p.config.HTTPCacheMaxObjectBytes == 0 || int64(len(bodyBytes)) <= p.config.HTTPCacheMaxObjectBytes {
+							headers := cloneHeadersForCache(res.Header)
+							// If we are forcing cache via request (no upstream cache headers), add a shared Cache-Control
+							if respTTL == 0 {
+								headers.Set("Cache-Control", fmt.Sprintf("public, max-age=%d", int(ttl.Seconds())))
+							}
+							cr := cachedResponse{
+								statusCode: res.StatusCode,
+								headers:    headers,
+								body:       bodyBytes,
+								expiresAt:  time.Now().Add(ttl),
+							}
+							p.cache.Set(key, cr)
+							res.Header.Set("X-PROXY-CACHE", "stored")
+							res.Header.Set("X-PROXY-CACHE-KEY", key)
+							if respTTL == 0 {
+								res.Header.Set("Cache-Status", "llm-proxy; stored (forced)")
+							} else if res.Header.Get("Cache-Status") == "" {
+								res.Header.Set("Cache-Status", "llm-proxy; stored")
+							}
+						}
+					}
+				} else {
+					// Streaming: wrap and capture asynchronously, then store on completion
+					maxBytes := p.config.HTTPCacheMaxObjectBytes
+					if maxBytes <= 0 {
+						maxBytes = 2 * 1024 * 1024 // default 2MB
+					}
+					headers := cloneHeadersForCache(res.Header)
+					if respTTL == 0 {
+						headers.Set("Cache-Control", fmt.Sprintf("public, max-age=%d", int(ttl.Seconds())))
+					}
+					expiresAt := time.Now().Add(ttl)
+					orig := res.Body
+					res.Body = newStreamingCapture(orig, maxBytes, func(buf []byte) {
+						if len(buf) == 0 {
+							return
+						}
+						if int64(len(buf)) > maxBytes {
+							return
+						}
+						p.cache.Set(key, cachedResponse{
+							statusCode: res.StatusCode,
+							headers:    headers,
+							body:       append([]byte(nil), buf...),
+							expiresAt:  expiresAt,
+						})
+					})
+				}
+			}
 		}
 	}
 
@@ -637,6 +699,60 @@ func (p *TransparentProxy) Handler() http.Handler {
 		p.proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 			logProxyTimings(p.logger, r.Context())
 			p.errorHandler(w, r, err)
+		}
+
+		// Compute X-Body-Hash once for methods with bodies to support POST/PUT/PATCH caching
+		if r.Body != nil && (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch) {
+			bodyBytes, _ := io.ReadAll(r.Body)
+			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			// Import hashing lazily to avoid overhead elsewhere
+			sum := sha256.Sum256(bodyBytes)
+			r.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
+		}
+
+		// Simple cache lookup with conditional handling (ETag/Last-Modified)
+		if p.cache != nil && (r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodPost) {
+			key := cacheKeyFromRequest(r)
+			if cr, ok := p.cache.Get(key); ok {
+				if !canServeCachedForRequest(r, cr.headers) {
+					// Authorization present but cached response not explicitly shared-cacheable
+					w.Header().Set("Cache-Status", "llm-proxy; bypass")
+					w.Header().Set("X-PROXY-CACHE", "bypass")
+					w.Header().Set("X-PROXY-CACHE-KEY", key)
+					p.proxy.ServeHTTP(rw, r)
+					return
+				}
+				// If the client provided conditionals, respond 304 when validators match
+				if r.Method == http.MethodGet || r.Method == http.MethodHead {
+					if conditionalRequestMatches(r, cr.headers) {
+						for hk, hv := range cr.headers {
+							for _, v := range hv {
+								w.Header().Add(hk, v)
+							}
+						}
+						w.Header().Set("Cache-Status", "llm-proxy; conditional-hit")
+						w.Header().Set("X-PROXY-CACHE", "conditional-hit")
+						w.Header().Set("X-PROXY-CACHE-KEY", key)
+						w.WriteHeader(http.StatusNotModified)
+						return
+					}
+				}
+				for hk, hv := range cr.headers {
+					for _, v := range hv {
+						w.Header().Add(hk, v)
+					}
+				}
+				w.Header().Set("Cache-Status", "llm-proxy; hit")
+				w.Header().Set("X-PROXY-CACHE", "hit")
+				w.Header().Set("X-PROXY-CACHE-KEY", key)
+				w.WriteHeader(cr.statusCode)
+				if r.Method != http.MethodHead {
+					_, _ = w.Write(cr.body)
+				}
+				return
+			}
+			w.Header().Set("Cache-Status", "llm-proxy; miss")
+			// Do not set X-PROXY-CACHE(-KEY) on miss; only set definitive headers on hit/bypass/conditional-hit or store path
 		}
 
 		p.proxy.ServeHTTP(rw, r)
