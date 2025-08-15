@@ -182,3 +182,29 @@ func TestCalculateCacheTTL_Paths(t *testing.T) {
 		t.Fatalf("expected forced ttl 2s from request; got %v %v", ttl, fromResp)
 	}
 }
+
+func TestHasClientCacheOptIn(t *testing.T) {
+	// nil request
+	if hasClientCacheOptIn(nil) {
+		t.Fatalf("nil request should not opt in")
+	}
+	r := &http.Request{Header: http.Header{}}
+	if hasClientCacheOptIn(r) {
+		t.Fatalf("empty headers should not opt in")
+	}
+	// public only is not enough without age values
+	r.Header.Set("Cache-Control", "public")
+	if hasClientCacheOptIn(r) {
+		t.Fatalf("public without age should not opt in")
+	}
+	// s-maxage>0 opts in
+	r.Header.Set("Cache-Control", "public, s-maxage=10")
+	if !hasClientCacheOptIn(r) {
+		t.Fatalf("expected opt-in via s-maxage")
+	}
+	// max-age>0 opts in too
+	r.Header.Set("Cache-Control", "public, max-age=5")
+	if !hasClientCacheOptIn(r) {
+		t.Fatalf("expected opt-in via max-age")
+	}
+}
