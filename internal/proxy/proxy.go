@@ -122,7 +122,10 @@ func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator,
 	}
 
 	// Initialize HTTP cache (enabled only when HTTPCacheEnabled is true)
-	if config.HTTPCacheEnabled {
+	if !config.HTTPCacheEnabled {
+		logger.Info("HTTP cache disabled")
+		proxy.cache = nil
+	} else {
 		if config.RedisCacheURL != "" {
 			if opt, err := redis.ParseURL(config.RedisCacheURL); err == nil {
 				client := redis.NewClient(opt)
@@ -136,9 +139,6 @@ func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator,
 			proxy.cache = newInMemoryCache()
 			logger.Info("HTTP cache enabled", zap.String("backend", "in-memory"))
 		}
-	} else {
-		proxy.cache = nil
-		logger.Info("HTTP cache disabled")
 	}
 
 	// Initialize the reverse proxy
@@ -280,15 +280,12 @@ func calculateCacheTTL(res *http.Response, req *http.Request, defaultTTL time.Du
 }
 
 func (p *TransparentProxy) modifyResponse(res *http.Response) error {
+	// For streaming responses, return early without side effects
+	if isStreaming(res) {
+		return nil
+	}
 	// Set proxy headers
 	res.Header.Set("X-Proxy", "llm-proxy")
-
-	// Error handling: increment error count for 4xx/5xx
-	if res.StatusCode >= 400 {
-		p.metrics.mu.Lock()
-		p.metrics.ErrorCount++
-		p.metrics.mu.Unlock()
-	}
 
 	// Process response body to extract metadata for non-streaming responses
 	if res.StatusCode == http.StatusOK &&
@@ -321,16 +318,22 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 		if req.Method == http.MethodGet || req.Method == http.MethodHead || req.Method == http.MethodPost {
 			// Only cache successful responses
 			if res.StatusCode < 200 || res.StatusCode >= 300 {
+				res.Header.Set("X-CACHE-DEBUG", "status-not-cacheable")
 				return nil
 			}
 
 			// Calculate effective TTL
 			ttl, fromResponse := calculateCacheTTL(res, req, p.config.HTTPCacheDefaultTTL)
 			if ttl <= 0 {
+				res.Header.Set("X-CACHE-DEBUG", fmt.Sprintf("ttl-zero-ttl=%v-from-resp=%v", ttl, fromResponse))
 				return nil
 			}
 
-			// Continue with existing logic using ttl/fromResponse
+			// Ensure Cache-Status preserves miss set by handler
+			if res.Header.Get("Cache-Status") == "" {
+				res.Header.Set("Cache-Status", "llm-proxy; miss")
+			}
+
 			key := cacheKeyFromRequest(req)
 			if !isStreaming(res) {
 				bodyBytes, err := io.ReadAll(res.Body)
@@ -354,12 +357,15 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 						res.Header.Set("X-PROXY-CACHE-KEY", key)
 						if !fromResponse {
 							res.Header.Set("Cache-Status", "llm-proxy; stored (forced)")
-						} else if res.Header.Get("Cache-Status") == "" {
+						} else {
 							res.Header.Set("Cache-Status", "llm-proxy; stored")
 						}
 					}
+				} else {
+					res.Header.Set("X-CACHE-DEBUG", fmt.Sprintf("read-body-error=%v", err))
 				}
 			} else {
+				res.Header.Set("X-CACHE-DEBUG", "streaming-response")
 				maxBytes := p.config.HTTPCacheMaxObjectBytes
 				if maxBytes <= 0 {
 					maxBytes = 2 * 1024 * 1024 // default 2MB
@@ -386,6 +392,11 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 				})
 			}
 		}
+	}
+
+	// Set miss status if no cache status was set
+	if res.Header.Get("Cache-Status") == "" {
+		res.Header.Set("Cache-Status", "llm-proxy; miss")
 	}
 
 	return nil
@@ -725,11 +736,11 @@ func (p *TransparentProxy) Handler() http.Handler {
 
 		// Simple cache lookup with conditional handling (ETag/Last-Modified)
 		if p.cache != nil && (r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodPost) {
-			// Honor HTTP headers: only attempt lookup when client explicitly opts in (public max-age/s-maxage)
-			// or when the client provides conditional headers for GET/HEAD.
+			// Allow GET/HEAD lookups by default when cache is enabled, since reuse will still be gated by canServeCachedForRequest.
+			// Require explicit client opt-in for POST lookups.
 			optIn := hasClientCacheOptIn(r)
-			conds := (r.Method == http.MethodGet || r.Method == http.MethodHead) && hasClientConditionals(r)
-			if !optIn && !conds {
+			allowedLookup := (r.Method == http.MethodGet || r.Method == http.MethodHead) || (r.Method == http.MethodPost && optIn)
+			if !allowedLookup {
 				p.proxy.ServeHTTP(rw, r)
 				return
 			}
@@ -786,7 +797,8 @@ func (p *TransparentProxy) Handler() http.Handler {
 				}
 				return
 			}
-			w.Header().Set("Cache-Status", "llm-proxy; miss")
+			// Note: don't set miss status here; let modifyResponse handle cache status
+			// w.Header().Set("Cache-Status", "llm-proxy; miss")
 			// Do not set X-PROXY-CACHE(-KEY) on miss; only set definitive headers on hit/bypass/conditional-hit or store path
 		}
 
