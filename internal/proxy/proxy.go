@@ -357,7 +357,7 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 						res.Header.Set("X-PROXY-CACHE-KEY", key)
 						if !fromResponse {
 							res.Header.Set("Cache-Status", "llm-proxy; stored (forced)")
-						} else if res.Header.Get("Cache-Status") == "" {
+						} else {
 							res.Header.Set("Cache-Status", "llm-proxy; stored")
 						}
 					}

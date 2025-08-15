@@ -1656,8 +1656,3 @@ func TestNewTransparentProxyWithLoggerAndObservability(t *testing.T) {
 	require.NotNil(t, proxy)
 	assert.NotNil(t, proxy.obsMiddleware)
 }
-Validator, mockStore, logger, obsCfg)
-	require.NoError(t, err)
-	require.NotNil(t, proxy)
-	assert.NotNil(t, proxy.obsMiddleware)
-}
