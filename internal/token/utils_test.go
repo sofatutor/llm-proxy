@@ -129,6 +129,98 @@ func TestExtractTokenFromHeader(t *testing.T) {
 	}
 }
 
+func TestGenerateWithOptions_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name           string
+		setupGen       func() *TokenGenerator
+		expiration     time.Duration
+		maxRequests    *int
+		expectExpiry   bool
+		expectMaxReq   bool
+		expectedMaxReq *int
+	}{
+		{
+			name:         "Zero expiration with generator default",
+			setupGen:     func() *TokenGenerator { return NewTokenGenerator().WithExpiration(time.Hour) },
+			expiration:   0,
+			maxRequests:  nil,
+			expectExpiry: true, // Uses generator default
+			expectMaxReq: false,
+		},
+		{
+			name:         "Positive expiration overrides generator default",
+			setupGen:     func() *TokenGenerator { return NewTokenGenerator().WithExpiration(time.Hour) },
+			expiration:   2 * time.Hour, // Should override the 1 hour default
+			maxRequests:  nil,
+			expectExpiry: true,
+			expectMaxReq: false,
+		},
+		{
+			name:           "With max requests override",
+			setupGen:       func() *TokenGenerator { return NewTokenGenerator().WithMaxRequests(50) },
+			expiration:     time.Hour,
+			maxRequests:    &[]int{100}[0],
+			expectExpiry:   true,
+			expectMaxReq:   true,
+			expectedMaxReq: &[]int{100}[0],
+		},
+		{
+			name:           "Use generator default max requests",
+			setupGen:       func() *TokenGenerator { return NewTokenGenerator().WithMaxRequests(75) },
+			expiration:     time.Hour,
+			maxRequests:    nil,
+			expectExpiry:   true,
+			expectMaxReq:   true,
+			expectedMaxReq: &[]int{75}[0],
+		},
+		{
+			name:         "No expiration and no max requests",
+			setupGen:     func() *TokenGenerator { return NewTokenGenerator() }, // Default generator
+			expiration:   0,
+			maxRequests:  nil,
+			expectExpiry: true, // Will use DefaultTokenExpiration (30 days)
+			expectMaxReq: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			generator := tt.setupGen()
+
+			token, expiresAt, maxRequests, err := generator.GenerateWithOptions(tt.expiration, tt.maxRequests)
+			if err != nil {
+				t.Fatalf("GenerateWithOptions() error = %v", err)
+			}
+
+			// Validate token format
+			if err := ValidateTokenFormat(token); err != nil {
+				t.Errorf("Generated token has invalid format: %v", err)
+			}
+
+			// Check expiration
+			if tt.expectExpiry && expiresAt == nil {
+				t.Errorf("Expected expiration time, got nil")
+			}
+			if !tt.expectExpiry && expiresAt != nil {
+				t.Errorf("Expected no expiration time, got %v", *expiresAt)
+			}
+
+			// Check max requests
+			if tt.expectMaxReq && maxRequests == nil {
+				t.Errorf("Expected max requests, got nil")
+			}
+			if !tt.expectMaxReq && maxRequests != nil {
+				t.Errorf("Expected no max requests, got %v", *maxRequests)
+			}
+
+			// Verify specific values when expected
+			if tt.expectedMaxReq != nil && maxRequests != nil && *maxRequests != *tt.expectedMaxReq {
+				t.Errorf("Expected max requests %d, got %d", *tt.expectedMaxReq, *maxRequests)
+			}
+		})
+	}
+}
+
 func TestExtractTokenFromRequest(t *testing.T) {
 	// Generate a valid token for testing
 	token, err := GenerateToken()

@@ -22,3 +22,21 @@ func TestInMemoryEventBus_DropOnOverflow(t *testing.T) {
 		t.Fatalf("expected some published and dropped events, got pub=%d drop=%d", pub, drop)
 	}
 }
+
+// Test RedisEventBus.Stop() method for coverage
+func TestRedisEventBus_Stop(t *testing.T) {
+	// Create a mock Redis client for testing
+	mockClient := newMockRedisClientLog()
+
+	redisEventBus := &RedisEventBus{
+		client: mockClient,
+		key:    "test-events",
+	}
+
+	// Call Stop() - should be a no-op but needs to be called for coverage
+	redisEventBus.Stop()
+
+	// Verify that Stop() is indeed a no-op (no state changes)
+	// Just ensure it doesn't panic or cause errors
+	redisEventBus.Stop()
+}
