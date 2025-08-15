@@ -296,6 +296,7 @@ llm-proxy benchmark \
   --endpoint "/v1/chat/completions" \
   --token "$PROXY_TOKEN" \
   --requests 10 --concurrency 1 \
+  --cache \
   --debug \
   --json '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"test"}]}'
 ```
