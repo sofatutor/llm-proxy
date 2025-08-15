@@ -126,6 +126,28 @@ The proxy uses the following environment variables related to API configuration:
 - `DEFAULT_API_PROVIDER`: Default API provider to use (overrides the `default_api` in the config file)
 - `OPENAI_API_URL`: Base URL for OpenAI API (legacy support, default: `https://api.openai.com`)
 
+### HTTP Caching Configuration
+
+The proxy supports HTTP response caching with the following environment variables:
+
+- `HTTP_CACHE_ENABLED`: Enable or disable HTTP response caching (default: `true`)
+- `HTTP_CACHE_BACKEND`: Cache backend to use, either `redis` or `in-memory` (default: `in-memory`)
+- `REDIS_CACHE_URL`: Redis connection URL for cache storage (default: `redis://localhost:6379/0` when backend is `redis`)
+- `REDIS_CACHE_KEY_PREFIX`: Prefix for Redis cache keys (default: `llmproxy:cache:`)
+- `HTTP_CACHE_MAX_OBJECT_BYTES`: Maximum size in bytes for cached objects (default: `1048576` - 1MB)
+- `HTTP_CACHE_DEFAULT_TTL`: Default TTL in seconds when upstream response doesn't specify caching directives (default: `300` - 5 minutes)
+
+#### Cache Behavior
+
+The caching system follows HTTP standards:
+
+- **GET/HEAD requests**: Cached by default when upstream permits
+- **POST requests**: Only cached when client explicitly opts in via request `Cache-Control` header
+- **Authentication**: Cached responses for authenticated requests are only served if marked as publicly cacheable (`Cache-Control: public` or `s-maxage` present)
+- **Streaming responses**: Captured during streaming and stored after completion
+- **TTL precedence**: `s-maxage` (shared cache) takes precedence over `max-age`
+- **Headers**: Responses include `X-PROXY-CACHE`, `X-PROXY-CACHE-KEY`, and `Cache-Status` for observability
+
 ## Example Configuration
 
 See [api_providers_example.yaml](../config/api_providers_example.yaml) for a comprehensive example configuration with multiple API providers.
