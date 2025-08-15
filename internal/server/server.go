@@ -701,13 +701,18 @@ func (s *Server) handleBulkRevokeProjectTokens(w http.ResponseWriter, r *http.Re
 	requestID := getRequestID(ctx)
 
 	// Extract project ID from path
-	pathParts := strings.Split(strings.TrimPrefix(r.URL.Path, "/manage/projects/"), "/")
-	if len(pathParts) != 2 || pathParts[0] == "" || pathParts[1] != "tokens/revoke" {
+	pathSuffix := strings.TrimPrefix(r.URL.Path, "/manage/projects/")
+	if !strings.HasSuffix(pathSuffix, "/tokens/revoke") {
 		s.logger.Error("invalid bulk revoke path", zap.String("path", r.URL.Path), zap.String("request_id", requestID))
 		http.Error(w, `{"error":"invalid path"}`, http.StatusBadRequest)
 		return
 	}
-	projectID := pathParts[0]
+	projectID := strings.TrimSuffix(pathSuffix, "/tokens/revoke")
+	if projectID == "" {
+		s.logger.Error("invalid project ID in bulk revoke path", zap.String("path", r.URL.Path), zap.String("request_id", requestID))
+		http.Error(w, `{"error":"invalid path"}`, http.StatusBadRequest)
+		return
+	}
 
 	// Verify project exists
 	_, err := s.projectStore.GetProjectByID(ctx, projectID)

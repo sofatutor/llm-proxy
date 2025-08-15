@@ -69,6 +69,16 @@ func (m *MockTokenStoreExtended) ListTokens(ctx context.Context) ([]token.TokenD
 	return args.Get(0).([]token.TokenData), args.Error(1)
 }
 
+func (m *MockTokenStoreExtended) RevokeToken(ctx context.Context, tokenID string) error {
+	args := m.Called(ctx, tokenID)
+	return args.Error(0)
+}
+
+func (m *MockTokenStoreExtended) RevokeProjectTokens(ctx context.Context, projectID string) error {
+	args := m.Called(ctx, projectID)
+	return args.Error(0)
+}
+
 // MockProjectStore with methods that return testable results
 type MockProjectStoreExtended struct {
 	*mock.Mock
@@ -849,4 +859,444 @@ func TestHandleTokens_GetTokensByProjectIDError(t *testing.T) {
 
 	server.handleTokens(w, req)
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
+}
+
+func TestHandleTokenByID(t *testing.T) {
+	server, tokenStore, _ := setupServerAndMocks(t)
+	
+	testToken := token.TokenData{
+		Token:        "sk-test123456789",
+		ProjectID:    "project-1",
+		IsActive:     true,
+		MaxRequests:  intPtr(1000),
+		RequestCount: 100,
+		CreatedAt:    time.Now().UTC(),
+		ExpiresAt:    timePtr(time.Now().Add(24 * time.Hour).UTC()),
+	}
+
+	// Setup mocks
+	tokenStore.On("GetTokenByID", mock.Anything, "sk-test123456789").Return(testToken, nil)
+	tokenStore.On("GetTokenByID", mock.Anything, "sk-nonexistent").Return(token.TokenData{}, errors.New("not found"))
+	tokenStore.On("UpdateToken", mock.Anything, mock.AnythingOfType("token.TokenData")).Return(nil)
+
+	t.Run("GET_Token_Success", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/manage/tokens/sk-test123456789", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleTokenByID(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+		var response TokenListResponse
+		err := json.NewDecoder(w.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.Equal(t, testToken.ProjectID, response.ProjectID)
+		assert.Equal(t, testToken.IsActive, response.IsActive)
+		assert.Equal(t, testToken.MaxRequests, response.MaxRequests)
+		assert.Equal(t, testToken.RequestCount, response.RequestCount)
+	})
+
+	t.Run("GET_Token_NotFound", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/manage/tokens/sk-nonexistent", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleTokenByID(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Contains(t, w.Body.String(), "token not found")
+	})
+
+	t.Run("PATCH_Token_Success", func(t *testing.T) {
+		reqBody := map[string]interface{}{
+			"is_active":    false,
+			"max_requests": 2000,
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("PATCH", "/manage/tokens/sk-test123456789", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		server.handleTokenByID(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+		var response TokenListResponse
+		err := json.NewDecoder(w.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.Equal(t, false, response.IsActive)
+		assert.Equal(t, intPtr(2000), response.MaxRequests)
+	})
+
+	t.Run("DELETE_Token_Success", func(t *testing.T) {
+		// Mock revocation success
+		tokenStore.On("RevokeToken", mock.Anything, "sk-test123456789").Return(nil)
+
+		req := httptest.NewRequest("DELETE", "/manage/tokens/sk-test123456789", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleTokenByID(w, req)
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+	})
+
+	t.Run("Invalid_Method", func(t *testing.T) {
+		req := httptest.NewRequest("PUT", "/manage/tokens/sk-test123456789", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleTokenByID(w, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+
+	t.Run("Invalid_TokenID", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/manage/tokens/", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleTokenByID(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "token ID is required")
+	})
+
+	t.Run("Auth_Failure", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/manage/tokens/sk-test123456789", nil)
+		req.Header.Set("Authorization", "Bearer wrong_token")
+		w := httptest.NewRecorder()
+
+		server.handleTokenByID(w, req)
+
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+}
+
+func TestHandleGetToken(t *testing.T) {
+	server, tokenStore, _ := setupServerAndMocks(t)
+	
+	testToken := token.TokenData{
+		Token:        "sk-test123456789",
+		ProjectID:    "project-1",
+		IsActive:     true,
+		MaxRequests:  intPtr(1000),
+		RequestCount: 100,
+		CreatedAt:    time.Now().UTC(),
+		ExpiresAt:    timePtr(time.Now().Add(24 * time.Hour).UTC()),
+	}
+
+	t.Run("Success", func(t *testing.T) {
+		tokenStore.On("GetTokenByID", mock.Anything, "sk-test123456789").Return(testToken, nil).Once()
+
+		req := httptest.NewRequest("GET", "/manage/tokens/sk-test123456789", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleGetToken(w, req, "sk-test123456789")
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+		var response TokenListResponse
+		err := json.NewDecoder(w.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.Equal(t, testToken.ProjectID, response.ProjectID)
+		assert.Equal(t, testToken.IsActive, response.IsActive)
+	})
+
+	t.Run("TokenNotFound", func(t *testing.T) {
+		tokenStore.On("GetTokenByID", mock.Anything, "sk-nonexistent").Return(token.TokenData{}, errors.New("not found")).Once()
+
+		req := httptest.NewRequest("GET", "/manage/tokens/sk-nonexistent", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleGetToken(w, req, "sk-nonexistent")
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Contains(t, w.Body.String(), "token not found")
+	})
+}
+
+func TestHandleUpdateToken(t *testing.T) {
+	server, tokenStore, _ := setupServerAndMocks(t)
+	
+	testToken := token.TokenData{
+		Token:        "sk-test123456789",
+		ProjectID:    "project-1",
+		IsActive:     true,
+		MaxRequests:  intPtr(1000),
+		RequestCount: 100,
+		CreatedAt:    time.Now().UTC(),
+		ExpiresAt:    timePtr(time.Now().Add(24 * time.Hour).UTC()),
+	}
+
+	t.Run("Success_IsActive", func(t *testing.T) {
+		tokenStore.On("GetTokenByID", mock.Anything, "sk-test123456789").Return(testToken, nil).Once()
+		tokenStore.On("UpdateToken", mock.Anything, mock.AnythingOfType("token.TokenData")).Return(nil).Once()
+
+		reqBody := map[string]interface{}{
+			"is_active": false,
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("PATCH", "/manage/tokens/sk-test123456789", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		server.handleUpdateToken(w, req, "sk-test123456789")
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+		var response TokenListResponse
+		err := json.NewDecoder(w.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.Equal(t, false, response.IsActive)
+	})
+
+	t.Run("Success_MaxRequests", func(t *testing.T) {
+		tokenStore.On("GetTokenByID", mock.Anything, "sk-test123456789").Return(testToken, nil).Once()
+		tokenStore.On("UpdateToken", mock.Anything, mock.AnythingOfType("token.TokenData")).Return(nil).Once()
+
+		reqBody := map[string]interface{}{
+			"max_requests": 2000,
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("PATCH", "/manage/tokens/sk-test123456789", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		server.handleUpdateToken(w, req, "sk-test123456789")
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response TokenListResponse
+		err := json.NewDecoder(w.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.Equal(t, intPtr(2000), response.MaxRequests)
+	})
+
+	t.Run("InvalidRequestBody", func(t *testing.T) {
+		req := httptest.NewRequest("PATCH", "/manage/tokens/sk-test123456789", strings.NewReader("invalid-json"))
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		server.handleUpdateToken(w, req, "sk-test123456789")
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "invalid request body")
+	})
+
+	t.Run("TokenNotFound", func(t *testing.T) {
+		tokenStore.On("GetTokenByID", mock.Anything, "sk-nonexistent").Return(token.TokenData{}, errors.New("not found")).Once()
+
+		reqBody := map[string]interface{}{
+			"is_active": false,
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("PATCH", "/manage/tokens/sk-nonexistent", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		server.handleUpdateToken(w, req, "sk-nonexistent")
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Contains(t, w.Body.String(), "token not found")
+	})
+
+	t.Run("NoFieldsToUpdate", func(t *testing.T) {
+		tokenStore.On("GetTokenByID", mock.Anything, "sk-no-fields").Return(testToken, nil).Once()
+
+		reqBody := map[string]interface{}{}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("PATCH", "/manage/tokens/sk-no-fields", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		server.handleUpdateToken(w, req, "sk-no-fields")
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "no fields to update")
+	})
+
+	t.Run("UpdateStorageError", func(t *testing.T) {
+		tokenStore.On("GetTokenByID", mock.Anything, "sk-storage-error").Return(testToken, nil).Once()
+		tokenStore.On("UpdateToken", mock.Anything, mock.AnythingOfType("token.TokenData")).Return(errors.New("storage error")).Once()
+
+		reqBody := map[string]interface{}{
+			"is_active": false,
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("PATCH", "/manage/tokens/sk-storage-error", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		server.handleUpdateToken(w, req, "sk-storage-error")
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "failed to update token")
+	})
+}
+
+func TestHandleRevokeToken(t *testing.T) {
+	server, tokenStore, _ := setupServerAndMocks(t)
+
+	testToken := token.TokenData{
+		Token:        "sk-test123456789",
+		ProjectID:    "project-1",
+		IsActive:     true,
+		MaxRequests:  intPtr(1000),
+		RequestCount: 100,
+		CreatedAt:    time.Now().UTC(),
+		ExpiresAt:    timePtr(time.Now().Add(24 * time.Hour).UTC()),
+	}
+
+	inactiveToken := token.TokenData{
+		Token:        "sk-inactive123",
+		ProjectID:    "project-1",
+		IsActive:     false,
+		MaxRequests:  intPtr(1000),
+		RequestCount: 100,
+		CreatedAt:    time.Now().UTC(),
+		ExpiresAt:    timePtr(time.Now().Add(24 * time.Hour).UTC()),
+	}
+
+	t.Run("Success", func(t *testing.T) {
+		tokenStore.On("GetTokenByID", mock.Anything, "sk-revoke-success").Return(testToken, nil).Once()
+		tokenStore.On("UpdateToken", mock.Anything, mock.AnythingOfType("token.TokenData")).Return(nil).Once()
+
+		req := httptest.NewRequest("DELETE", "/manage/tokens/sk-revoke-success", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleRevokeToken(w, req, "sk-revoke-success")
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+	})
+
+	t.Run("TokenNotFound", func(t *testing.T) {
+		tokenStore.On("GetTokenByID", mock.Anything, "sk-nonexistent").Return(token.TokenData{}, errors.New("not found")).Once()
+
+		req := httptest.NewRequest("DELETE", "/manage/tokens/sk-nonexistent", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleRevokeToken(w, req, "sk-nonexistent")
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Contains(t, w.Body.String(), "token not found")
+	})
+
+	t.Run("AlreadyRevoked", func(t *testing.T) {
+		tokenStore.On("GetTokenByID", mock.Anything, "sk-inactive123").Return(inactiveToken, nil).Once()
+
+		req := httptest.NewRequest("DELETE", "/manage/tokens/sk-inactive123", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleRevokeToken(w, req, "sk-inactive123")
+
+		assert.Equal(t, http.StatusNoContent, w.Code)
+	})
+
+	t.Run("StorageError", func(t *testing.T) {
+		tokenStore.On("GetTokenByID", mock.Anything, "sk-storage-error").Return(testToken, nil).Once()
+		tokenStore.On("UpdateToken", mock.Anything, mock.AnythingOfType("token.TokenData")).Return(errors.New("storage error")).Once()
+
+		req := httptest.NewRequest("DELETE", "/manage/tokens/sk-storage-error", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleRevokeToken(w, req, "sk-storage-error")
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "failed to revoke token")
+	})
+}
+
+func TestHandleBulkRevokeProjectTokens(t *testing.T) {
+	server, tokenStore, projectStore := setupServerAndMocks(t)
+
+	testProject := proxy.Project{
+		ID:   "project-1",
+		Name: "Test Project",
+	}
+
+	t.Run("Success", func(t *testing.T) {
+		testTokens := []token.TokenData{
+			{Token: "sk-token1", ProjectID: "project-1", IsActive: true},
+			{Token: "sk-token2", ProjectID: "project-1", IsActive: false}, // Already revoked
+		}
+
+		projectStore.On("GetProjectByID", mock.Anything, "project-1").Return(testProject, nil).Once()
+		tokenStore.On("GetTokensByProjectID", mock.Anything, "project-1").Return(testTokens, nil).Once()
+		tokenStore.On("UpdateToken", mock.Anything, mock.AnythingOfType("token.TokenData")).Return(nil).Once()
+
+		req := httptest.NewRequest("POST", "/manage/projects/project-1/tokens/revoke", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleBulkRevokeProjectTokens(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+		var response map[string]interface{}
+		err := json.NewDecoder(w.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.Contains(t, response, "revoked_count")
+		assert.Contains(t, response, "already_revoked_count")
+		assert.Contains(t, response, "total_tokens")
+		assert.Equal(t, float64(1), response["revoked_count"])
+		assert.Equal(t, float64(1), response["already_revoked_count"])
+		assert.Equal(t, float64(2), response["total_tokens"])
+	})
+
+	t.Run("ProjectNotFound", func(t *testing.T) {
+		projectStore.On("GetProjectByID", mock.Anything, "nonexistent").Return(proxy.Project{}, errors.New("not found")).Once()
+
+		req := httptest.NewRequest("POST", "/manage/projects/nonexistent/tokens/revoke", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleBulkRevokeProjectTokens(w, req)
+
+		assert.Equal(t, http.StatusNotFound, w.Code)
+		assert.Contains(t, w.Body.String(), "project not found")
+	})
+
+	t.Run("GetTokensError", func(t *testing.T) {
+		projectStore.On("GetProjectByID", mock.Anything, "project-1").Return(testProject, nil).Once()
+		tokenStore.On("GetTokensByProjectID", mock.Anything, "project-1").Return([]token.TokenData{}, errors.New("storage error")).Once()
+
+		req := httptest.NewRequest("POST", "/manage/projects/project-1/tokens/revoke", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleBulkRevokeProjectTokens(w, req)
+
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "failed to get project tokens")
+	})
+}
+
+// Helper function to create int pointers
+func intPtr(i int) *int {
+	return &i
+}
+
+// Helper function to create time pointers
+func timePtr(t time.Time) *time.Time {
+	return &t
 }
