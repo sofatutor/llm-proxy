@@ -280,6 +280,10 @@ func calculateCacheTTL(res *http.Response, req *http.Request, defaultTTL time.Du
 }
 
 func (p *TransparentProxy) modifyResponse(res *http.Response) error {
+	// For streaming responses, return early without side effects
+	if isStreaming(res) {
+		return nil
+	}
 	// Set proxy headers
 	res.Header.Set("X-Proxy", "llm-proxy")
 
@@ -303,9 +307,6 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 	// Update metrics
 	p.metrics.mu.Lock()
 	p.metrics.RequestCount++
-	if res.StatusCode >= 400 {
-		p.metrics.ErrorCount++
-	}
 	p.metrics.mu.Unlock()
 
 	// --- PATCH: Copy X-UPSTREAM-REQUEST-START from request to response ---
@@ -330,7 +331,11 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 				return nil
 			}
 
-			// Continue with existing logic using ttl/fromResponse
+			// Ensure Cache-Status preserves miss set by handler
+			if res.Header.Get("Cache-Status") == "" {
+				res.Header.Set("Cache-Status", "llm-proxy; miss")
+			}
+
 			key := cacheKeyFromRequest(req)
 			if !isStreaming(res) {
 				bodyBytes, err := io.ReadAll(res.Body)
@@ -352,11 +357,6 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 						p.cache.Set(key, cr)
 						res.Header.Set("X-PROXY-CACHE", "stored")
 						res.Header.Set("X-PROXY-CACHE-KEY", key)
-						if !fromResponse {
-							res.Header.Set("Cache-Status", "llm-proxy; stored (forced)")
-						} else if res.Header.Get("Cache-Status") == "" {
-							res.Header.Set("Cache-Status", "llm-proxy; stored")
-						}
 					}
 				}
 			} else {
@@ -725,11 +725,11 @@ func (p *TransparentProxy) Handler() http.Handler {
 
 		// Simple cache lookup with conditional handling (ETag/Last-Modified)
 		if p.cache != nil && (r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodPost) {
-			// Honor HTTP headers: only attempt lookup when client explicitly opts in (public max-age/s-maxage)
-			// or when the client provides conditional headers for GET/HEAD.
+			// Allow GET/HEAD lookups by default when cache is enabled, since reuse will still be gated by canServeCachedForRequest.
+			// Require explicit client opt-in for POST lookups.
 			optIn := hasClientCacheOptIn(r)
-			conds := (r.Method == http.MethodGet || r.Method == http.MethodHead) && hasClientConditionals(r)
-			if !(optIn || conds) {
+			allowedLookup := (r.Method == http.MethodGet || r.Method == http.MethodHead) || (r.Method == http.MethodPost && optIn)
+			if !allowedLookup {
 				p.proxy.ServeHTTP(rw, r)
 				return
 			}
