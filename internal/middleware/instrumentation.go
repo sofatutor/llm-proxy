@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
@@ -73,6 +74,11 @@ func (m *ObservabilityMiddleware) Middleware() Middleware {
 			}
 			if reqID == "" {
 				reqID = crw.Header().Get("X-Request-ID")
+			}
+
+			// Skip publishing cache hits (do not incur provider cost)
+			if v := strings.ToLower(crw.Header().Get("X-PROXY-CACHE")); v == "hit" || v == "conditional-hit" {
+				return
 			}
 
 			evt := eventbus.Event{
