@@ -64,15 +64,19 @@ func cacheKeyFromRequest(r *http.Request) string {
 
 	// If client explicitly opts into shared caching with a TTL (public + max-age/s-maxage),
 	// include the requested TTL in the key so different TTLs do not collide with older entries.
-	cc := parseCacheControl(r.Header.Get("Cache-Control"))
-	if cc.publicCache && (cc.sMaxAge > 0 || cc.maxAge > 0) {
-		final.WriteString("|ttl=")
-		if cc.sMaxAge > 0 {
-			final.WriteString("smax=")
-			final.WriteString(strconv.Itoa(cc.sMaxAge))
-		} else {
-			final.WriteString("max=")
-			final.WriteString(strconv.Itoa(cc.maxAge))
+	// Only apply this for methods that can carry a body (POST/PUT/PATCH) to avoid splitting
+	// GET/HEAD cache keys unnecessarily when origin already provides TTLs.
+	if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch {
+		cc := parseCacheControl(r.Header.Get("Cache-Control"))
+		if cc.publicCache && (cc.sMaxAge > 0 || cc.maxAge > 0) {
+			final.WriteString("|ttl=")
+			if cc.sMaxAge > 0 {
+				final.WriteString("smax=")
+				final.WriteString(strconv.Itoa(cc.sMaxAge))
+			} else {
+				final.WriteString("max=")
+				final.WriteString(strconv.Itoa(cc.maxAge))
+			}
 		}
 	}
 
