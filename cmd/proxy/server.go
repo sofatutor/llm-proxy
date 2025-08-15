@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -103,6 +104,28 @@ func runServerDaemon() {
 		fmt.Println("[daemon] Log level: debug (via -v/--debug)")
 	} else {
 		fmt.Println("[daemon] Log level: info (default)")
+	}
+
+	// Load .env if present to resolve LISTEN_ADDR for preflight checks
+	if _, err := os.Stat(serverEnvFile); err == nil {
+		if err := godotenv.Load(serverEnvFile); err != nil {
+			fmt.Printf("Warning: Error loading %s file: %v\n", serverEnvFile, err)
+		}
+	}
+	// Fail fast if the configured address is already in use (best effort)
+	listen := serverListenAddr
+	if listen == "" {
+		listen = os.Getenv("LISTEN_ADDR")
+	}
+	if listen == "" {
+		listen = ":8080"
+	}
+	if ln, err := net.Listen("tcp", listen); err != nil {
+		fmt.Fprintf(os.Stderr, "Listen address unavailable (already in use?): %s: %v\n", listen, err)
+		osExit(1)
+		return
+	} else {
+		_ = ln.Close()
 	}
 
 	// Get the absolute path of the current executable
@@ -233,6 +256,16 @@ func runServerForeground() {
 	// Handle graceful shutdown
 	done := make(chan os.Signal, 1)
 	signal.Notify(done, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	// Fail fast if the configured address is already in use
+	if cfg.ListenAddr == "" {
+		cfg.ListenAddr = ":8080"
+	}
+	if ln, err := net.Listen("tcp", cfg.ListenAddr); err != nil {
+		zapLogger.Fatal("Listen address unavailable (already in use?)", zap.String("addr", cfg.ListenAddr), zap.Error(err))
+	} else {
+		_ = ln.Close()
+	}
 
 	// Make sure the database directory exists
 	dbDir := filepath.Dir(cfg.DatabasePath)
