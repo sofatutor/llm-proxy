@@ -1018,6 +1018,8 @@ Latency breakdown:
 				totalUpstreamLat, minUpstreamLat, maxUpstreamLat time.Duration
 				totalProxyLat, minProxyLat, maxProxyLat          time.Duration
 				upstreamLatCount, proxyLatCount                  int
+				cacheHits                                        int
+				sawCacheHeader                                   bool
 			)
 			for r := range results {
 				isSuccess := r.err == nil && r.statusCode >= 200 && r.statusCode < 300
@@ -1030,6 +1032,15 @@ Latency breakdown:
 						reqHeaders http.Header
 						reqBody    string
 					}{r.response, r.headers, r.errMsg, r.reqHeaders, r.reqBody}
+				}
+				if r.headers != nil {
+					v := strings.ToLower(r.headers.Get("X-PROXY-CACHE"))
+					if v != "" {
+						sawCacheHeader = true
+					}
+					if v == "hit" || v == "conditional-hit" {
+						cacheHits++
+					}
 				}
 				if isSuccess {
 					success++
@@ -1186,6 +1197,10 @@ Latency breakdown:
 			fmt.Printf("| %-21s | %-22s |\n", "Max latency", formatDuration(maxLatency))
 			fmt.Printf("| %-21s | %-22s |\n", "p90 latency", formatDuration(p90Latency))
 			fmt.Printf("| %-21s | %-22s |\n", "p90 mean latency", formatDuration(p90Mean))
+			// Show cache hits if cache is in play
+			if cacheHits > 0 || sawCacheHeader || cacheMode {
+				fmt.Printf("| %-21s | %-22d |\n", "Cache hits", cacheHits)
+			}
 			if success > 0 {
 				if upstreamLatCount > 0 {
 					fmt.Printf("| %-21s | %-22s |\n", "Upstream latency avg", formatDuration(avgUpstreamLat))
