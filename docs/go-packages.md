@@ -362,7 +362,54 @@ func (b *FileEventBus) Stop() {
 
 ### Proxy System (`internal/proxy`)
 
-The proxy package provides transparent HTTP proxying with authentication.
+The proxy package provides transparent HTTP proxying with authentication and caching capabilities.
+
+#### HTTP Response Caching
+
+The proxy includes a built-in HTTP response caching system with Redis backend support:
+
+```go
+package main
+
+import (
+    "context"
+    "github.com/sofatutor/llm-proxy/internal/proxy"
+    "github.com/redis/go-redis/v9"
+)
+
+func main() {
+    // Create Redis client for cache backend
+    redisClient := redis.NewClient(&redis.Options{
+        Addr: "localhost:6379",
+    })
+    
+    // Configure proxy with caching
+    config := &proxy.Config{
+        HTTPCacheEnabled:       true,
+        HTTPCacheBackend:       "redis",
+        RedisClient:           redisClient,
+        HTTPCacheKeyPrefix:    "myapp:cache:",
+        HTTPCacheMaxObjectBytes: 1048576, // 1MB
+        HTTPCacheDefaultTTL:   300,       // 5 minutes
+    }
+    
+    // The proxy will automatically handle:
+    // - Cache key generation based on method, path, query, headers
+    // - TTL derivation from Cache-Control headers (s-maxage > max-age)
+    // - Streaming response capture and storage
+    // - Auth-aware caching (Authorization header not in cache key)
+    // - Response headers: X-PROXY-CACHE, X-PROXY-CACHE-KEY, Cache-Status
+}
+```
+
+#### Cache Integration Features
+
+- **Redis Backend**: Primary cache store with in-memory fallback
+- **HTTP Standards Compliance**: Respects Cache-Control, ETag, Last-Modified
+- **Streaming Support**: Captures streaming responses during transmission
+- **Conservative Vary**: Includes Accept, Accept-Encoding, Accept-Language in cache key
+- **Event Bus Integration**: Cache hits bypass event publishing for performance
+- **Authentication Aware**: Only serves public cached responses to authenticated requests
 
 #### Creating a Transparent Proxy
 
