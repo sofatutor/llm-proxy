@@ -11,6 +11,9 @@ Short-lived, project-scoped tokens with expiration and rate-limiting support. Ro
 ### Project-based Access Control
 Multi-tenant isolation: each project binds to its own upstream API key and token space.
 
+### HTTP Response Caching
+Redis-backed shared cache with standards-compliant HTTP semantics. Supports GET/HEAD caching by default, optional POST caching via request `Cache-Control`, streaming response capture, and auth-aware public reuse. Configure with `HTTP_CACHE_ENABLED=true` and `HTTP_CACHE_BACKEND=redis`. Features conservative `Vary` handling, configurable TTL, and size limits.
+
 ### Admin Management UI
 Web UI for creating projects and generating withering tokens, including audit views and useful UX.
 

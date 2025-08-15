@@ -11,7 +11,7 @@ Start with the main [README](../README.md) for a quick overview, installation, a
 - **[Architecture Overview](architecture.md)** - Complete system architecture, components, and data flow
 - **[Code Organization Guide](code-organization.md)** - Package structure, layering, and dependency management  
 - **[Proxy Design](proxy-design.md)** - Transparent proxy implementation details
-- **[Caching Strategy](caching-strategy.md)** - Token caching and performance optimization
+- **[Caching Strategy](caching-strategy.md)** - HTTP response caching with Redis backend and streaming support
 
 ## Configuration & Setup
 
