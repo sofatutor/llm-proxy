@@ -302,19 +302,7 @@ func hasClientCacheOptIn(r *http.Request) bool {
 	return false
 }
 
-// hasClientConditionals reports if the client sent If-None-Match or If-Modified-Since.
-func hasClientConditionals(r *http.Request) bool {
-	if r == nil {
-		return false
-	}
-	if strings.TrimSpace(r.Header.Get("If-None-Match")) != "" {
-		return true
-	}
-	if strings.TrimSpace(r.Header.Get("If-Modified-Since")) != "" {
-		return true
-	}
-	return false
-}
+// Note: client conditional inspection is handled by conditionalRequestMatches; removed redundant helper.
 
 // wantsRevalidation returns true if the client requests origin revalidation
 // (e.g., Cache-Control: no-cache or max-age=0).

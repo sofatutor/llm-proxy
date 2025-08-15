@@ -310,33 +310,33 @@ func TestCacheHelpers_Coverage(t *testing.T) {
 	req := httptest.NewRequest("GET", "/test", nil)
 	headers := make(http.Header)
 	headers.Set("Cache-Control", "public, max-age=60")
-	
+
 	// Without Authorization - should be true
 	assert.True(t, canServeCachedForRequest(req, headers))
-	
+
 	// With Authorization but public cache - should be true
 	req.Header.Set("Authorization", "Bearer test")
 	assert.True(t, canServeCachedForRequest(req, headers))
-	
+
 	// With Authorization but private cache - should be false
 	headers.Set("Cache-Control", "private, max-age=60")
 	assert.False(t, canServeCachedForRequest(req, headers))
-	
+
 	// Test conditionalRequestMatches
 	req.Header.Set("If-None-Match", "123")
 	headers.Set("ETag", "123")
 	assert.True(t, conditionalRequestMatches(req, headers))
-	
+
 	req.Header.Set("If-None-Match", "456")
 	assert.False(t, conditionalRequestMatches(req, headers))
-	
+
 	// Test wantsRevalidation
 	req.Header.Set("Cache-Control", "no-cache")
 	assert.True(t, wantsRevalidation(req))
-	
+
 	req.Header.Set("Cache-Control", "max-age=0")
 	assert.True(t, wantsRevalidation(req))
-	
+
 	req.Header.Set("Cache-Control", "max-age=60")
 	assert.False(t, wantsRevalidation(req))
 }
