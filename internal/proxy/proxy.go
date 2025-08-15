@@ -122,7 +122,10 @@ func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator,
 	}
 
 	// Initialize HTTP cache (enabled only when HTTPCacheEnabled is true)
-	if config.HTTPCacheEnabled {
+	if !config.HTTPCacheEnabled {
+		logger.Info("HTTP cache disabled")
+		proxy.cache = nil
+	} else {
 		if config.RedisCacheURL != "" {
 			if opt, err := redis.ParseURL(config.RedisCacheURL); err == nil {
 				client := redis.NewClient(opt)
@@ -136,9 +139,6 @@ func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator,
 			proxy.cache = newInMemoryCache()
 			logger.Info("HTTP cache enabled", zap.String("backend", "in-memory"))
 		}
-	} else {
-		proxy.cache = nil
-		logger.Info("HTTP cache disabled")
 	}
 
 	// Initialize the reverse proxy
@@ -319,12 +319,14 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 		if req.Method == http.MethodGet || req.Method == http.MethodHead || req.Method == http.MethodPost {
 			// Only cache successful responses
 			if res.StatusCode < 200 || res.StatusCode >= 300 {
+				res.Header.Set("X-CACHE-DEBUG", "status-not-cacheable")
 				return nil
 			}
 
 			// Calculate effective TTL
 			ttl, fromResponse := calculateCacheTTL(res, req, p.config.HTTPCacheDefaultTTL)
 			if ttl <= 0 {
+				res.Header.Set("X-CACHE-DEBUG", fmt.Sprintf("ttl-zero-ttl=%v-from-resp=%v", ttl, fromResponse))
 				return nil
 			}
 
@@ -350,14 +352,20 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 						p.cache.Set(key, cr)
 						res.Header.Set("X-PROXY-CACHE", "stored")
 						res.Header.Set("X-PROXY-CACHE-KEY", key)
+						res.Header.Set("X-CACHE-DEBUG", "stored-successfully")
 						if !fromResponse {
 							res.Header.Set("Cache-Status", "llm-proxy; stored (forced)")
 						} else if res.Header.Get("Cache-Status") == "" {
 							res.Header.Set("Cache-Status", "llm-proxy; stored")
 						}
+					} else {
+						res.Header.Set("X-CACHE-DEBUG", fmt.Sprintf("size-too-large-bytes=%d-max=%d", len(bodyBytes), p.config.HTTPCacheMaxObjectBytes))
 					}
+				} else {
+					res.Header.Set("X-CACHE-DEBUG", fmt.Sprintf("read-body-error=%v", err))
 				}
 			} else {
+				res.Header.Set("X-CACHE-DEBUG", "streaming-response")
 				maxBytes := p.config.HTTPCacheMaxObjectBytes
 				if maxBytes <= 0 {
 					maxBytes = 2 * 1024 * 1024 // default 2MB
@@ -384,6 +392,11 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 				})
 			}
 		}
+	}
+
+	// Set miss status if no cache status was set
+	if res.Header.Get("Cache-Status") == "" {
+		res.Header.Set("Cache-Status", "llm-proxy; miss")
 	}
 
 	return nil
@@ -784,7 +797,8 @@ func (p *TransparentProxy) Handler() http.Handler {
 				}
 				return
 			}
-			w.Header().Set("Cache-Status", "llm-proxy; miss")
+			// Note: don't set miss status here; let modifyResponse handle cache status
+			// w.Header().Set("Cache-Status", "llm-proxy; miss")
 			// Do not set X-PROXY-CACHE(-KEY) on miss; only set definitive headers on hit/bypass/conditional-hit or store path
 		}
 

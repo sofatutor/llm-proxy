@@ -202,6 +202,11 @@ func TestHTTPCache_BasicHitOnSecondGET(t *testing.T) {
 	p, err := NewTransparentProxyWithLogger(cfg, mockValidator, mockStore, zap.NewNop())
 	require.NoError(t, err)
 
+	// Debug: Check if cache is actually enabled
+	if p.cache == nil {
+		t.Fatalf("Cache is nil, but HTTPCacheEnabled was true")
+	}
+
 	// First request -> miss and store
 	req1 := httptest.NewRequest("GET", "/v1/test", nil)
 	req1.Header.Set("Authorization", "Bearer test_token")
@@ -296,8 +301,44 @@ func TestHTTPCache_VaryAcceptSeparatesEntries(t *testing.T) {
 	_ = res3.Body.Close()
 	assert.Contains(t, res3.Header.Get("Cache-Status"), "stored") // Third request should store new cache entry
 
-	// Upstream should have been hit twice (json miss + plain miss)
+	// Add tests for uncovered cache functions
 	assert.Equal(t, 2, hits)
+}
+
+func TestCacheHelpers_Coverage(t *testing.T) {
+	// Test canServeCachedForRequest
+	req := httptest.NewRequest("GET", "/test", nil)
+	headers := make(http.Header)
+	headers.Set("Cache-Control", "public, max-age=60")
+	
+	// Without Authorization - should be true
+	assert.True(t, canServeCachedForRequest(req, headers))
+	
+	// With Authorization but public cache - should be true
+	req.Header.Set("Authorization", "Bearer test")
+	assert.True(t, canServeCachedForRequest(req, headers))
+	
+	// With Authorization but private cache - should be false
+	headers.Set("Cache-Control", "private, max-age=60")
+	assert.False(t, canServeCachedForRequest(req, headers))
+	
+	// Test conditionalRequestMatches
+	req.Header.Set("If-None-Match", "123")
+	headers.Set("ETag", "123")
+	assert.True(t, conditionalRequestMatches(req, headers))
+	
+	req.Header.Set("If-None-Match", "456")
+	assert.False(t, conditionalRequestMatches(req, headers))
+	
+	// Test wantsRevalidation
+	req.Header.Set("Cache-Control", "no-cache")
+	assert.True(t, wantsRevalidation(req))
+	
+	req.Header.Set("Cache-Control", "max-age=0")
+	assert.True(t, wantsRevalidation(req))
+	
+	req.Header.Set("Cache-Control", "max-age=60")
+	assert.False(t, wantsRevalidation(req))
 }
 
 // Test streaming response handling
@@ -1611,6 +1652,11 @@ func TestNewTransparentProxyWithLoggerAndObservability(t *testing.T) {
 	}
 
 	proxy, err := NewTransparentProxyWithLoggerAndObservability(config, mockValidator, mockStore, logger, obsCfg)
+	require.NoError(t, err)
+	require.NotNil(t, proxy)
+	assert.NotNil(t, proxy.obsMiddleware)
+}
+Validator, mockStore, logger, obsCfg)
 	require.NoError(t, err)
 	require.NotNil(t, proxy)
 	assert.NotNil(t, proxy.obsMiddleware)
