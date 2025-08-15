@@ -366,7 +366,7 @@ The proxy package provides transparent HTTP proxying with authentication and cac
 
 #### HTTP Response Caching
 
-The proxy includes a built-in HTTP response caching system with Redis backend support:
+The proxy includes a built-in HTTP response caching system with support for both Redis and an in-memory fallback backend (used when Redis is not configured):
 
 ```go
 package main
