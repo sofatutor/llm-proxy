@@ -730,6 +730,20 @@ func (p *TransparentProxy) Handler() http.Handler {
 					p.proxy.ServeHTTP(rw, r)
 					return
 				}
+				// Origin revalidation path: if client requests revalidation (no-cache/max-age=0),
+				// send conditional request upstream using cached validators (ETag/Last-Modified).
+				if wantsRevalidation(r) {
+					condReq := r.Clone(r.Context())
+					if etag := cr.headers.Get("ETag"); etag != "" {
+						condReq.Header.Set("If-None-Match", etag)
+					}
+					if lm := cr.headers.Get("Last-Modified"); lm != "" {
+						condReq.Header.Set("If-Modified-Since", lm)
+					}
+					// Forward conditionally to upstream; let modifyResponse handle store/refresh
+					p.proxy.ServeHTTP(rw, condReq)
+					return
+				}
 				// If the client provided conditionals, respond 304 when validators match
 				if r.Method == http.MethodGet || r.Method == http.MethodHead {
 					if conditionalRequestMatches(r, cr.headers) {

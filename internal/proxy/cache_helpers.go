@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -41,22 +42,41 @@ func cacheKeyFromRequest(r *http.Request) string {
 	varyHeaders := []string{"Accept", "Accept-Encoding", "Accept-Language"}
 	vb := strings.Builder{}
 	for _, hk := range varyHeaders {
-		vv := strings.Join(r.Header.Values(hk), ",")
-		vb.WriteString("|")
-		vb.WriteString(strings.ToLower(hk))
-		vb.WriteString("=")
-		vb.WriteString(vv)
-	}
-
-	vraw := baseKey + vb.String()
-	// Optionally include a request body hash for cacheable methods with body
-	if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch {
-		if bodyHash := r.Header.Get("X-Body-Hash"); bodyHash != "" {
-			vraw += "|body=" + bodyHash
+		if v := r.Header.Get(hk); v != "" {
+			vb.WriteString(strings.ToLower(hk))
+			vb.WriteString(":")
+			vb.WriteString(strings.TrimSpace(v))
+			vb.WriteString("|")
 		}
 	}
+	vraw := baseKey + vb.String()
 	vsum := sha256.Sum256([]byte(vraw))
-	return hex.EncodeToString(vsum[:])
+	varyKey := hex.EncodeToString(vsum[:])
+
+	final := strings.Builder{}
+	final.WriteString(varyKey)
+
+	// For methods with body, include X-Body-Hash when present (computed in proxy)
+	if r.Header.Get("X-Body-Hash") != "" {
+		final.WriteString("|body=")
+		final.WriteString(r.Header.Get("X-Body-Hash"))
+	}
+
+	// If client explicitly opts into shared caching with a TTL (public + max-age/s-maxage),
+	// include the requested TTL in the key so different TTLs do not collide with older entries.
+	cc := parseCacheControl(r.Header.Get("Cache-Control"))
+	if cc.publicCache && (cc.sMaxAge > 0 || cc.maxAge > 0) {
+		final.WriteString("|ttl=")
+		if cc.sMaxAge > 0 {
+			final.WriteString("smax=")
+			final.WriteString(strconv.Itoa(cc.sMaxAge))
+		} else {
+			final.WriteString("max=")
+			final.WriteString(strconv.Itoa(cc.maxAge))
+		}
+	}
+
+	return final.String()
 }
 
 func isResponseCacheable(res *http.Response) bool {
@@ -287,6 +307,25 @@ func hasClientConditionals(r *http.Request) bool {
 		return true
 	}
 	if strings.TrimSpace(r.Header.Get("If-Modified-Since")) != "" {
+		return true
+	}
+	return false
+}
+
+// wantsRevalidation returns true if the client requests origin revalidation
+// (e.g., Cache-Control: no-cache or max-age=0).
+func wantsRevalidation(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	ccVal := strings.ToLower(r.Header.Get("Cache-Control"))
+	if ccVal == "" {
+		return false
+	}
+	if strings.Contains(ccVal, "no-cache") {
+		return true
+	}
+	if strings.Contains(ccVal, "max-age=0") {
 		return true
 	}
 	return false
