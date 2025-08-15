@@ -205,16 +205,18 @@ func TestHTTPCache_BasicHitOnSecondGET(t *testing.T) {
 	// First request -> miss and store
 	req1 := httptest.NewRequest("GET", "/v1/test", nil)
 	req1.Header.Set("Authorization", "Bearer test_token")
+	req1.Header.Set("Cache-Control", "public, max-age=60") // Client opts in to caching
 	w1 := httptest.NewRecorder()
 	p.Handler().ServeHTTP(w1, req1)
 	res1 := w1.Result()
 	_ = res1.Body.Close()
 	assert.Equal(t, http.StatusOK, res1.StatusCode)
-	assert.Contains(t, res1.Header.Get("Cache-Status"), "miss")
+	assert.Contains(t, res1.Header.Get("Cache-Status"), "stored")
 
 	// Second request -> hit (no upstream increment)
 	req2 := httptest.NewRequest("GET", "/v1/test", nil)
 	req2.Header.Set("Authorization", "Bearer test_token")
+	req2.Header.Set("Cache-Control", "public, max-age=60") // Client opts in to caching
 	w2 := httptest.NewRecorder()
 	p.Handler().ServeHTTP(w2, req2)
 	res2 := w2.Result()
@@ -259,16 +261,17 @@ func TestHTTPCache_VaryAcceptSeparatesEntries(t *testing.T) {
 
 	handler := p.Handler()
 
-	// First: Accept json -> miss
+	// First: Accept json -> miss and store
 	r1 := httptest.NewRequest("GET", "/v1/test", nil)
 	r1.Header.Set("Authorization", "Bearer test_token")
 	r1.Header.Set("Accept", "application/json")
+	r1.Header.Set("Cache-Control", "public, max-age=60") // Client opts in to caching
 	w1 := httptest.NewRecorder()
 	handler.ServeHTTP(w1, r1)
 	res1 := w1.Result()
 	_, _ = io.ReadAll(res1.Body)
 	_ = res1.Body.Close()
-	assert.Contains(t, res1.Header.Get("Cache-Status"), "miss")
+	assert.Contains(t, res1.Header.Get("Cache-Status"), "stored")
 
 	// Second: Accept json -> hit
 	r2 := httptest.NewRequest("GET", "/v1/test", nil)
@@ -285,12 +288,13 @@ func TestHTTPCache_VaryAcceptSeparatesEntries(t *testing.T) {
 	r3 := httptest.NewRequest("GET", "/v1/test", nil)
 	r3.Header.Set("Authorization", "Bearer test_token")
 	r3.Header.Set("Accept", "text/plain")
+	r3.Header.Set("Cache-Control", "public, max-age=60") // Client opts in to caching
 	w3 := httptest.NewRecorder()
 	handler.ServeHTTP(w3, r3)
 	res3 := w3.Result()
 	_, _ = io.ReadAll(res3.Body)
 	_ = res3.Body.Close()
-	assert.Contains(t, res3.Header.Get("Cache-Status"), "miss")
+	assert.Contains(t, res3.Header.Get("Cache-Status"), "stored") // Third request should store new cache entry
 
 	// Upstream should have been hit twice (json miss + plain miss)
 	assert.Equal(t, 2, hits)

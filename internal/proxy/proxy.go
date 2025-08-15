@@ -283,12 +283,18 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 	// Set proxy headers
 	res.Header.Set("X-Proxy", "llm-proxy")
 
-	// Error handling: increment error count for 4xx/5xx
-	if res.StatusCode >= 400 {
-		p.metrics.mu.Lock()
-		p.metrics.ErrorCount++
-		p.metrics.mu.Unlock()
+	// Early return for streaming responses - no metrics or processing
+	if isStreaming(res) {
+		return nil
 	}
+
+	// Update metrics
+	p.metrics.mu.Lock()
+	p.metrics.RequestCount++
+	if res.StatusCode >= 400 {
+		p.metrics.ErrorCount++
+	}
+	p.metrics.mu.Unlock()
 
 	// Process response body to extract metadata for non-streaming responses
 	if res.StatusCode == http.StatusOK &&
@@ -299,14 +305,6 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 			p.logger.Warn("Failed to extract response metadata", zap.Error(err))
 		}
 	}
-
-	// Update metrics
-	p.metrics.mu.Lock()
-	p.metrics.RequestCount++
-	if res.StatusCode >= 400 {
-		p.metrics.ErrorCount++
-	}
-	p.metrics.mu.Unlock()
 
 	// --- PATCH: Copy X-UPSTREAM-REQUEST-START from request to response ---
 	if res.Request != nil {
