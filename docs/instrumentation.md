@@ -237,6 +237,72 @@ llm-proxy dispatcher --service helicone \
 - [Implementation](../internal/dispatcher/plugins/helicone.go): `heliconePayloadFromEvent` function
 - [Tests](../internal/dispatcher/plugins/helicone_payload_test.go): Payload transformation examples
 
+## HTTP Response Caching Integration
+
+The proxy includes HTTP response caching that integrates with the instrumentation and observability system. Caching behavior affects both response headers and event publishing.
+
+### Cache Response Headers
+
+When caching is enabled (`HTTP_CACHE_ENABLED=true`), the proxy adds observability headers to all responses:
+
+- **`X-PROXY-CACHE`**: Indicates cache result
+  - `hit`: Response served from cache
+  - `miss`: Response not in cache, fetched from upstream
+- **`X-PROXY-CACHE-KEY`**: The cache key used for the request (useful for debugging cache behavior)
+- **`Cache-Status`**: Standard HTTP cache status header
+  - `hit`: Cache hit, response served from cache
+  - `miss`: Cache miss, response fetched from upstream
+  - `bypass`: Caching bypassed (e.g., due to `Cache-Control: no-store`)
+  - `stored`: Response was stored in cache after fetch
+  - `conditional-hit`: Conditional request (e.g., `If-None-Match`) resulted in 304
+
+### Event Bus Behavior with Caching
+
+The caching system integrates with the instrumentation middleware to optimize performance:
+
+- **Cache Hits**: Events are **not published** to the event bus for cache hits (including conditional hits). This prevents duplicate instrumentation data and reduces event bus load.
+- **Cache Misses and Stores**: Events **are published** normally when responses are fetched from upstream, whether they get cached or not.
+
+This behavior ensures that:
+- Each unique API call is instrumented exactly once (when first fetched)
+- Cache performance doesn't impact event bus throughput
+- Downstream analytics systems receive clean, non-duplicated data
+
+### Example Headers
+
+```http
+# Cache hit response
+HTTP/1.1 200 OK
+X-PROXY-CACHE: hit
+X-PROXY-CACHE-KEY: llmproxy:cache:proj123:GET:/v1/models:accept-application/json
+Cache-Status: hit
+Content-Type: application/json
+
+# Cache miss response
+HTTP/1.1 200 OK
+X-PROXY-CACHE: miss
+X-PROXY-CACHE-KEY: llmproxy:cache:proj123:POST:/v1/chat/completions:accept-application/json:body-hash-abc123
+Cache-Status: stored
+Content-Type: application/json
+```
+
+### Debugging Cache Behavior
+
+Use the benchmark tool with `--debug` flag to inspect cache headers:
+
+```bash
+llm-proxy benchmark \
+  --base-url "http://localhost:8080" \
+  --endpoint "/v1/chat/completions" \
+  --token "$PROXY_TOKEN" \
+  --requests 10 --concurrency 1 \
+  --cache \
+  --debug \
+  --json '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"test"}]}'
+```
+
+This will show sample responses with all headers, making it easy to verify cache behavior.
+
 ## Important: In-Memory vs. Redis Event Bus
 
 - The **in-memory event bus** only works within a single process. If you run the proxy and dispatcher as separate processes or containers, they will not share events.

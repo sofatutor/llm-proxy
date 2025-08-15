@@ -42,7 +42,8 @@ flowchart LR
     
     subgraph Proxy["LLM Proxy Server"]
         AuthSystem["Auth System"] --> TokenManager["Token Manager"]
-        TokenManager --> ReverseProxy["Reverse Proxy"]
+        TokenManager --> CacheLayer["Cache Layer"]
+        CacheLayer --> ReverseProxy["Reverse Proxy"]
         ReverseProxy --> EventBus["Event Bus"]
         EventBus --> EventDispatcher["Event Dispatcher"]
         ReverseProxy <--> LoggingSystem["Logging System"]
@@ -64,11 +65,14 @@ flowchart LR
     subgraph Storage["Data Storage"]
         DB
         AuditFile
-        Redis[("Redis Cache")]
+        RedisCache[("Redis Cache")]
+        InMemoryCache[("In-Memory Cache")]
         EventLogs[("Event Logs")]
     end
     
-    EventBus -.-> Redis
+    CacheLayer <--> RedisCache
+    CacheLayer <--> InMemoryCache
+    EventBus -.-> RedisCache
     EventDispatcher --> EventLogs
     
     Proxy --> API["Target API"]
@@ -82,7 +86,8 @@ flowchart TD
     
     subgraph Middleware["Middleware Chain"]
         RequestID["Request ID Middleware"] --> Logging["Logging Middleware"]
-        Logging --> Instrumentation["Instrumentation Middleware"]
+        Logging --> Cache["Cache Middleware"]
+        Cache --> Instrumentation["Instrumentation Middleware"]
         Instrumentation --> Audit["Audit Middleware"]
         Audit --> Validation["Token Validation Middleware"] 
         Validation --> Timeout["Timeout Middleware"]
@@ -91,6 +96,10 @@ flowchart TD
     
     Middleware --> Director["Director Function"] --> Transport["HTTP Transport"] --> TargetAPI["Target API"]
     TargetAPI --> Response["API Response"] --> ModifyResponse["ModifyResponse Function"] --> Client["Client"]
+    
+    Cache -.-> |"Cache Hit"| Client
+    Cache <--> RedisCache[("Redis Cache")]
+    Cache <--> InMemoryCache[("In-Memory Cache")]
     
     Instrumentation -.-> EventBus["Event Bus (Async)"]
     EventBus --> EventDispatcher["Event Dispatcher"]
@@ -104,6 +113,76 @@ flowchart TD
     Director -.-> |"Error"| ErrorHandler
     Transport -.-> |"Error"| ErrorHandler
 ```
+
+## HTTP Response Caching System
+
+The LLM Proxy includes a comprehensive HTTP response caching system that honors standard HTTP caching semantics while providing significant performance improvements.
+
+### Cache Architecture
+
+The caching system integrates early in the middleware chain to provide maximum efficiency:
+
+```mermaid
+flowchart LR
+    Request["Client Request"] --> CacheMiddleware["Cache Middleware"]
+    CacheMiddleware --> |"Cache Miss"| Upstream["Upstream Request"]
+    CacheMiddleware --> |"Cache Hit"| Response["Cached Response"]
+    
+    Upstream --> CacheStore["Cache Storage"]
+    CacheStore --> Response
+    
+    subgraph Storage["Cache Storage"]
+        Redis[("Redis Backend")]
+        InMemory[("In-Memory Fallback")]
+    end
+    
+    CacheStore --> Storage
+    
+    Response --> Headers["Response Headers"]
+    Headers --> |"X-PROXY-CACHE: hit/miss"| Client["Client"]
+    Headers --> |"Cache-Status: hit/miss/bypass"| Client
+    Headers --> |"X-PROXY-CACHE-KEY: key"| Client
+```
+
+### Cache Features
+
+1. **Backend Support**: 
+   - Primary: Redis for production deployments
+   - Fallback: In-memory for development/testing
+   - Configurable via `HTTP_CACHE_BACKEND` environment variable
+
+2. **HTTP Standards Compliance**:
+   - Honors `Cache-Control` directives (`no-store`, `private`, `public`, `max-age`, `s-maxage`)
+   - Respects `Authorization` header behavior (shared cache only serves public responses to authenticated requests)
+   - Supports conditional requests with `ETag` and `Last-Modified` validators
+   - Implements proper TTL derivation with `s-maxage` precedence over `max-age`
+
+3. **Streaming Response Support**:
+   - Captures streaming responses while serving them to the client
+   - Stores complete response after streaming completion
+   - Subsequent requests serve from cache immediately
+
+4. **Cache Key Strategy**:
+   - Includes HTTP method, path, and sorted query parameters
+   - Conservative `Vary` handling with subset of request headers (`Accept`, `Accept-Encoding`, `Accept-Language`)
+   - Excludes `Authorization` and `X-*` headers from cache key
+   - For POST/PUT/PATCH requests, includes body hash when client opts in
+
+5. **Observability Integration**:
+   - Cache hits bypass event bus publishing for performance
+   - Cache misses and stores are published to event bus
+   - Response headers indicate cache status for debugging
+
+### Configuration
+
+Cache behavior is controlled through environment variables:
+
+- `HTTP_CACHE_ENABLED`: Enable/disable caching (default: `true`)
+- `HTTP_CACHE_BACKEND`: Backend selection (`redis`|`in-memory`, default: `in-memory`)
+- `REDIS_CACHE_URL`: Redis connection URL for cache storage
+- `REDIS_CACHE_KEY_PREFIX`: Key prefix for Redis keys (default: `llmproxy:cache:`)
+- `HTTP_CACHE_MAX_OBJECT_BYTES`: Maximum cached object size (default: 1048576)
+- `HTTP_CACHE_DEFAULT_TTL`: Default TTL when upstream doesn't specify (default: 300)
 
 ## Async Event System Architecture
 

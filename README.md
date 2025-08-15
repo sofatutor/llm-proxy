@@ -6,6 +6,7 @@ A transparent, secure proxy for OpenAI's API with token management, rate limitin
 - **OpenAI API Compatibility**
 - **Withering Tokens**: Expiration, revocation, and rate-limiting
 - **Project-based Access Control**
+- **HTTP Response Caching**: Redis-backed cache with configurable TTL, auth-aware shared caching, and streaming response support. Enable with `HTTP_CACHE_ENABLED=true`.
 - **Admin UI**: Web interface for management
 - **Comprehensive Logging**
 - **Async Instrumentation Middleware**: Non-blocking, streaming-capable instrumentation for all API calls. See [docs/instrumentation.md](docs/instrumentation.md) for advanced usage and extension.
@@ -26,6 +27,24 @@ docker run -d \
   -p 8080:8080 \
   -v ./llm-proxy/data:/app/data \
   -e MANAGEMENT_TOKEN=your-secure-management-token \
+  ghcr.io/sofatutor/llm-proxy:latest
+```
+
+#### With Redis Caching
+```bash
+# Start Redis
+docker run -d --name redis -p 6379:6379 redis:alpine
+
+# Start proxy with caching enabled
+docker run -d \
+  --name llm-proxy \
+  -p 8080:8080 \
+  -v ./llm-proxy/data:/app/data \
+  -e MANAGEMENT_TOKEN=your-secure-management-token \
+  -e HTTP_CACHE_ENABLED=true \
+  -e HTTP_CACHE_BACKEND=redis \
+  -e REDIS_CACHE_URL=redis://redis:6379/0 \
+  --link redis \
   ghcr.io/sofatutor/llm-proxy:latest
 ```
 
@@ -52,6 +71,14 @@ MANAGEMENT_TOKEN=your-secure-management-token ./bin/llm-proxy
 - `OBSERVABILITY_ENABLED`: Deprecated; the async event bus is now always enabled
 - `OBSERVABILITY_BUFFER_SIZE`: Event buffer size for instrumentation events (default 1000)
 - `FILE_EVENT_LOG`: Path to persistent event log file (enables file event logging via dispatcher)
+
+### Caching Configuration
+- `HTTP_CACHE_ENABLED`: Enable HTTP response caching (default `true`)
+- `HTTP_CACHE_BACKEND`: Cache backend (`redis` or `in-memory`, default `in-memory`)
+- `REDIS_CACHE_URL`: Redis connection URL (default `redis://localhost:6379/0` when backend=redis)
+- `REDIS_CACHE_KEY_PREFIX`: Cache key prefix (default `llmproxy:cache:`)
+- `HTTP_CACHE_MAX_OBJECT_BYTES`: Maximum cached object size in bytes (default 1048576)
+- `HTTP_CACHE_DEFAULT_TTL`: Default TTL in seconds when upstream doesn't specify (default 300)
 
 See `docs/configuration.md` and [docs/instrumentation.md](docs/instrumentation.md) for all options and advanced usage.
 
