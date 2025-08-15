@@ -101,6 +101,16 @@ func (m *MockTokenStore) ListTokens(ctx context.Context) ([]TokenData, error) {
 	return tokens, nil
 }
 
+func (m *MockTokenStore) UpdateToken(ctx context.Context, token TokenData) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	if _, exists := m.tokens[token.Token]; !exists {
+		return ErrTokenNotFound
+	}
+	m.tokens[token.Token] = token
+	return nil
+}
+
 func TestTokenDataIsValid(t *testing.T) {
 	now := time.Now()
 	future := now.Add(1 * time.Hour)

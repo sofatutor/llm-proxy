@@ -243,6 +243,10 @@ func (m *MockStore) CreateToken(ctx context.Context, td TokenData) error {
 	return nil
 }
 
+func (m *MockStore) UpdateToken(ctx context.Context, td TokenData) error {
+	return nil
+}
+
 func (m *MockStore) GetTokensByProjectID(ctx context.Context, projectID string) ([]TokenData, error) {
 	return nil, nil
 }

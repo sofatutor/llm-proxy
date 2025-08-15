@@ -304,6 +304,11 @@ func (a *DBTokenStoreAdapter) CreateToken(ctx context.Context, td token.TokenDat
 	return a.db.CreateToken(ctx, dbToken)
 }
 
+func (a *DBTokenStoreAdapter) UpdateToken(ctx context.Context, td token.TokenData) error {
+	dbToken := ImportTokenData(td)
+	return a.db.UpdateToken(ctx, dbToken)
+}
+
 func (a *DBTokenStoreAdapter) ListTokens(ctx context.Context) ([]token.TokenData, error) {
 	dbTokens, err := a.db.ListTokens(ctx)
 	if err != nil {

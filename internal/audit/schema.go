@@ -55,6 +55,8 @@ const (
 const (
 	// Token lifecycle actions
 	ActionTokenCreate   = "token.create"
+	ActionTokenRead     = "token.read"
+	ActionTokenUpdate   = "token.update"
 	ActionTokenRevoke   = "token.revoke"
 	ActionTokenDelete   = "token.delete"
 	ActionTokenList     = "token.list"

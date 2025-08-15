@@ -274,6 +274,9 @@ func (m *mockTokenStore) IncrementTokenUsage(ctx context.Context, tokenID string
 func (m *mockTokenStore) CreateToken(ctx context.Context, td token.TokenData) error {
 	return nil
 }
+func (m *mockTokenStore) UpdateToken(ctx context.Context, td token.TokenData) error {
+	return nil
+}
 func (m *mockTokenStore) GetTokensByProjectID(ctx context.Context, projectID string) ([]token.TokenData, error) {
 	return nil, nil
 }

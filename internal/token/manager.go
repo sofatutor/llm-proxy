@@ -167,6 +167,16 @@ func (m *Manager) GetTokenStats(ctx context.Context, tokenID string) (*TokenStat
 	return stats, nil
 }
 
+// UpdateToken updates an existing token in the store
+func (m *Manager) UpdateToken(ctx context.Context, token TokenData) error {
+	// Validate token format first
+	if err := token.ValidateFormat(); err != nil {
+		return fmt.Errorf("invalid token format: %w", err)
+	}
+
+	return m.store.UpdateToken(ctx, token)
+}
+
 // UpdateTokenLimit updates the maximum allowed requests for a token
 func (m *Manager) UpdateTokenLimit(ctx context.Context, tokenID string, maxRequests *int) error {
 	return m.limiter.UpdateLimit(ctx, tokenID, maxRequests)
