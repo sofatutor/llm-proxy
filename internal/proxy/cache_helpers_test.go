@@ -160,6 +160,24 @@ func TestConditionalRequestMatches_Edges(t *testing.T) {
 	}
 }
 
+func TestWantsRevalidation(t *testing.T) {
+	if wantsRevalidation(nil) {
+		t.Fatalf("nil should not revalidate")
+	}
+	r := &http.Request{Header: http.Header{}}
+	if wantsRevalidation(r) {
+		t.Fatalf("empty headers should not revalidate")
+	}
+	r.Header.Set("Cache-Control", "max-age=0")
+	if !wantsRevalidation(r) {
+		t.Fatalf("max-age=0 should request revalidation")
+	}
+	r.Header.Set("Cache-Control", "no-cache")
+	if !wantsRevalidation(r) {
+		t.Fatalf("no-cache should request revalidation")
+	}
+}
+
 func TestCalculateCacheTTL_Paths(t *testing.T) {
 	// Response cacheable with s-maxage from response
 	res := &http.Response{StatusCode: 200, Header: http.Header{"Cache-Control": {"public, s-maxage=5"}, "Content-Type": {"application/json"}}}

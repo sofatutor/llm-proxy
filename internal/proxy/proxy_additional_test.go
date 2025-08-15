@@ -128,3 +128,12 @@ func TestModifyResponse_TooLarge_NotStored(t *testing.T) {
 		t.Fatalf("did not expect store when object exceeds max size")
 	}
 }
+
+// Cover constructor branch where logger is nil: it should create a logger and not error
+func TestNewTransparentProxyWithLogger_NilLoggerCreatesOne(t *testing.T) {
+	cfg := ProxyConfig{TargetBaseURL: "https://api.example.com", AllowedEndpoints: []string{"/v1/test"}, AllowedMethods: []string{"GET"}}
+	p, err := NewTransparentProxyWithLogger(cfg, nil, nil, nil)
+	if err != nil || p == nil {
+		t.Fatalf("expected proxy instance with auto-created logger, got p=%v err=%v", p, err)
+	}
+}
