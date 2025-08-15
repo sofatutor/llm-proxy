@@ -97,7 +97,7 @@ func isResponseCacheable(res *http.Response) bool {
 	// If Authorization was present on request, require explicit shared cache directives
 	if res.Request != nil {
 		if res.Request.Header.Get("Authorization") != "" {
-			if !(cc.publicCache || cc.sMaxAge > 0) {
+			if !cc.publicCache && cc.sMaxAge <= 0 {
 				return false
 			}
 		}

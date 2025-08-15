@@ -729,7 +729,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 			// or when the client provides conditional headers for GET/HEAD.
 			optIn := hasClientCacheOptIn(r)
 			conds := (r.Method == http.MethodGet || r.Method == http.MethodHead) && hasClientConditionals(r)
-			if !(optIn || conds) {
+			if !optIn && !conds {
 				p.proxy.ServeHTTP(rw, r)
 				return
 			}
