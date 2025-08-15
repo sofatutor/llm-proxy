@@ -904,3 +904,74 @@ func TestAPIClient_GetAuditEvents_Error(t *testing.T) {
 		t.Fatal("expected error for 500 response")
 	}
 }
+
+// Additional error scenarios to improve coverage
+func TestAPIClient_GetProject_NetworkError(t *testing.T) {
+	client := NewAPIClient("http://invalid-host-that-does-not-exist", "test-token")
+	ctx := context.Background()
+
+	// This should fail due to invalid URL/unreachable server
+	project, err := client.GetProject(ctx, "test-id")
+	if err == nil {
+		t.Error("expected network error, got nil")
+	}
+	if project != nil {
+		t.Error("expected nil project on error")
+	}
+}
+
+func TestAPIClient_CreateProject_NetworkError(t *testing.T) {
+	client := NewAPIClient("http://invalid-host-that-does-not-exist", "test-token")
+	ctx := context.Background()
+
+	// This should fail due to invalid URL/unreachable server
+	project, err := client.CreateProject(ctx, "test-name", "test-key")
+	if err == nil {
+		t.Error("expected network error, got nil")
+	}
+	if project != nil {
+		t.Error("expected nil project on error")
+	}
+}
+
+func TestAPIClient_UpdateProject_NetworkError(t *testing.T) {
+	client := NewAPIClient("http://invalid-host-that-does-not-exist", "test-token")
+	ctx := context.Background()
+
+	// This should fail due to invalid URL/unreachable server
+	project, err := client.UpdateProject(ctx, "test-id", "test-name", "test-key")
+	if err == nil {
+		t.Error("expected network error, got nil")
+	}
+	if project != nil {
+		t.Error("expected nil project on error")
+	}
+}
+
+func TestAPIClient_CreateToken_NetworkError(t *testing.T) {
+	client := NewAPIClient("http://invalid-host-that-does-not-exist", "test-token")
+	ctx := context.Background()
+
+	// This should fail due to invalid URL/unreachable server
+	token, err := client.CreateToken(ctx, "test-project", 60)
+	if err == nil {
+		t.Error("expected network error, got nil")
+	}
+	if token != nil {
+		t.Error("expected nil token on error")
+	}
+}
+
+func TestAPIClient_GetAuditEvent_NetworkError(t *testing.T) {
+	client := NewAPIClient("http://invalid-host-that-does-not-exist", "test-token")
+	ctx := context.Background()
+
+	// This should fail due to invalid URL/unreachable server
+	event, err := client.GetAuditEvent(ctx, "test-id")
+	if err == nil {
+		t.Error("expected network error, got nil")
+	}
+	if event != nil {
+		t.Error("expected nil event on error")
+	}
+}
