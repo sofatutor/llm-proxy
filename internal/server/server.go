@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -261,6 +262,26 @@ func (s *Server) initializeAPIRoutes() error {
 		proxyConfig, err = apiConfig.GetProxyConfigForAPI(apiConfig.DefaultAPI)
 		if err != nil {
 			return fmt.Errorf("failed to get proxy configuration: %w", err)
+		}
+	}
+
+	// Apply HTTP cache env overrides (simple toggle + backend selection)
+	if v := os.Getenv("HTTP_CACHE_ENABLED"); v != "" {
+		// Parse bool; default to true on invalid for safety
+		proxyConfig.HTTPCacheEnabled = strings.EqualFold(v, "true") || strings.EqualFold(v, "1") || strings.EqualFold(v, "yes")
+	} else {
+		// Default: enabled
+		proxyConfig.HTTPCacheEnabled = true
+	}
+	backend := strings.ToLower(os.Getenv("HTTP_CACHE_BACKEND"))
+	if backend == "redis" {
+		url := os.Getenv("REDIS_CACHE_URL")
+		if url == "" {
+			url = "redis://localhost:6379/0"
+		}
+		proxyConfig.RedisCacheURL = url
+		if kp := os.Getenv("REDIS_CACHE_KEY_PREFIX"); kp != "" {
+			proxyConfig.RedisCacheKeyPrefix = kp
 		}
 	}
 

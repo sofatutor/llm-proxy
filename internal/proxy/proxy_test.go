@@ -175,6 +175,127 @@ func TestTransparentProxy_BasicProxying(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+func TestHTTPCache_BasicHitOnSecondGET(t *testing.T) {
+	// Upstream that counts hits
+	hitCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount++
+		w.Header().Set("Cache-Control", "public, max-age=60")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	mockValidator := new(MockTokenValidator)
+	mockStore := new(MockProjectStore)
+	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
+	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
+
+	cfg := ProxyConfig{
+		TargetBaseURL:       server.URL,
+		AllowedEndpoints:    []string{"/v1/test"},
+		AllowedMethods:      []string{"GET"},
+		HTTPCacheEnabled:    true,
+		HTTPCacheDefaultTTL: 10 * time.Second,
+	}
+
+	p, err := NewTransparentProxyWithLogger(cfg, mockValidator, mockStore, zap.NewNop())
+	require.NoError(t, err)
+
+	// First request -> miss and store
+	req1 := httptest.NewRequest("GET", "/v1/test", nil)
+	req1.Header.Set("Authorization", "Bearer test_token")
+	w1 := httptest.NewRecorder()
+	p.Handler().ServeHTTP(w1, req1)
+	res1 := w1.Result()
+	_ = res1.Body.Close()
+	assert.Equal(t, http.StatusOK, res1.StatusCode)
+	assert.Contains(t, res1.Header.Get("Cache-Status"), "miss")
+
+	// Second request -> hit (no upstream increment)
+	req2 := httptest.NewRequest("GET", "/v1/test", nil)
+	req2.Header.Set("Authorization", "Bearer test_token")
+	w2 := httptest.NewRecorder()
+	p.Handler().ServeHTTP(w2, req2)
+	res2 := w2.Result()
+	_ = res2.Body.Close()
+	assert.Equal(t, http.StatusOK, res2.StatusCode)
+	assert.Contains(t, res2.Header.Get("Cache-Status"), "hit")
+
+	// Upstream should have been hit once
+	assert.Equal(t, 1, hitCount)
+}
+
+func TestHTTPCache_VaryAcceptSeparatesEntries(t *testing.T) {
+	// Upstream returns different payload for different Accept
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		w.Header().Set("Cache-Control", "public, max-age=60")
+		if strings.Contains(r.Header.Get("Accept"), "application/json") {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"type":"json"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("plain"))
+	}))
+	defer srv.Close()
+
+	mockValidator := new(MockTokenValidator)
+	mockStore := new(MockProjectStore)
+	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
+	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
+
+	cfg := ProxyConfig{
+		TargetBaseURL:       srv.URL,
+		AllowedEndpoints:    []string{"/v1/test"},
+		AllowedMethods:      []string{"GET"},
+		HTTPCacheEnabled:    true,
+		HTTPCacheDefaultTTL: 10 * time.Second,
+	}
+	p, err := NewTransparentProxyWithLogger(cfg, mockValidator, mockStore, zap.NewNop())
+	require.NoError(t, err)
+
+	handler := p.Handler()
+
+	// First: Accept json -> miss
+	r1 := httptest.NewRequest("GET", "/v1/test", nil)
+	r1.Header.Set("Authorization", "Bearer test_token")
+	r1.Header.Set("Accept", "application/json")
+	w1 := httptest.NewRecorder()
+	handler.ServeHTTP(w1, r1)
+	res1 := w1.Result()
+	_, _ = io.ReadAll(res1.Body)
+	_ = res1.Body.Close()
+	assert.Contains(t, res1.Header.Get("Cache-Status"), "miss")
+
+	// Second: Accept json -> hit
+	r2 := httptest.NewRequest("GET", "/v1/test", nil)
+	r2.Header.Set("Authorization", "Bearer test_token")
+	r2.Header.Set("Accept", "application/json")
+	w2 := httptest.NewRecorder()
+	handler.ServeHTTP(w2, r2)
+	res2 := w2.Result()
+	_, _ = io.ReadAll(res2.Body)
+	_ = res2.Body.Close()
+	assert.Contains(t, res2.Header.Get("Cache-Status"), "hit")
+
+	// Third: different Accept -> miss (separate cache entry)
+	r3 := httptest.NewRequest("GET", "/v1/test", nil)
+	r3.Header.Set("Authorization", "Bearer test_token")
+	r3.Header.Set("Accept", "text/plain")
+	w3 := httptest.NewRecorder()
+	handler.ServeHTTP(w3, r3)
+	res3 := w3.Result()
+	_, _ = io.ReadAll(res3.Body)
+	_ = res3.Body.Close()
+	assert.Contains(t, res3.Header.Get("Cache-Status"), "miss")
+
+	// Upstream should have been hit twice (json miss + plain miss)
+	assert.Equal(t, 2, hits)
+}
+
 // Test streaming response handling
 func TestTransparentProxy_StreamingResponses(t *testing.T) {
 	// Create mock API server
