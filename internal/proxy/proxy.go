@@ -121,19 +121,24 @@ func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator,
 		allowedMethodsHeader: allowedMethodsHeader,
 	}
 
-	// Initialize HTTP cache (always on; behavior controlled by HTTP caching headers)
-	if config.RedisCacheURL != "" {
-		if opt, err := redis.ParseURL(config.RedisCacheURL); err == nil {
-			client := redis.NewClient(opt)
-			proxy.cache = newRedisCache(client, config.RedisCacheKeyPrefix)
-			logger.Info("HTTP cache enabled", zap.String("backend", "redis"))
+	// Initialize HTTP cache (enabled only when HTTPCacheEnabled is true)
+	if config.HTTPCacheEnabled {
+		if config.RedisCacheURL != "" {
+			if opt, err := redis.ParseURL(config.RedisCacheURL); err == nil {
+				client := redis.NewClient(opt)
+				proxy.cache = newRedisCache(client, config.RedisCacheKeyPrefix)
+				logger.Info("HTTP cache enabled", zap.String("backend", "redis"))
+			} else {
+				proxy.cache = newInMemoryCache()
+				logger.Warn("Failed to parse RedisCacheURL; falling back to in-memory cache", zap.Error(err))
+			}
 		} else {
 			proxy.cache = newInMemoryCache()
-			logger.Warn("Failed to parse RedisCacheURL; falling back to in-memory cache", zap.Error(err))
+			logger.Info("HTTP cache enabled", zap.String("backend", "in-memory"))
 		}
 	} else {
-		proxy.cache = newInMemoryCache()
-		logger.Info("HTTP cache enabled", zap.String("backend", "in-memory"))
+		proxy.cache = nil
+		logger.Info("HTTP cache disabled")
 	}
 
 	// Initialize the reverse proxy
@@ -252,7 +257,28 @@ func (p *TransparentProxy) processRequestHeaders(req *http.Request) {
 	}
 }
 
-// modifyResponse processes the response before returning it to the client
+// calculateCacheTTL determines the effective TTL for caching a response.
+// It prefers TTL from response headers (when the response is cacheable),
+// otherwise falls back to client-forced TTL from the request. It returns the
+// chosen TTL and whether it came from the response headers.
+func calculateCacheTTL(res *http.Response, req *http.Request, defaultTTL time.Duration) (time.Duration, bool) {
+	if res == nil || req == nil {
+		return 0, false
+	}
+	respTTL := cacheTTLFromHeaders(res, defaultTTL)
+	if respTTL > 0 {
+		if !isResponseCacheable(res) {
+			return 0, false
+		}
+		return respTTL, true
+	}
+	forcedTTL := requestForcedCacheTTL(req)
+	if forcedTTL > 0 {
+		return forcedTTL, false
+	}
+	return 0, false
+}
+
 func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 	// Set proxy headers
 	res.Header.Set("X-Proxy", "llm-proxy")
@@ -298,79 +324,66 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 				return nil
 			}
 
-			// derive TTL from response headers or (fallback) client request Cache-Control
-			respTTL := cacheTTLFromHeaders(res, p.config.HTTPCacheDefaultTTL)
-			forcedTTL := time.Duration(0)
-			if respTTL == 0 {
-				forcedTTL = requestForcedCacheTTL(req)
-			}
-			ttl := respTTL
-			if ttl == 0 {
-				ttl = forcedTTL
+			// Calculate effective TTL
+			ttl, fromResponse := calculateCacheTTL(res, req, p.config.HTTPCacheDefaultTTL)
+			if ttl <= 0 {
+				return nil
 			}
 
-			// If TTL comes from response, ensure response is cacheable by policy
-			if ttl > 0 && (respTTL > 0 && !isResponseCacheable(res)) {
-				ttl = 0
-			}
+			// Continue with existing logic using ttl/fromResponse
+			key := cacheKeyFromRequest(req)
+			if !isStreaming(res) {
+				bodyBytes, err := io.ReadAll(res.Body)
+				if err == nil {
+					_ = res.Body.Close()
+					res.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 
-			if ttl > 0 {
-				key := cacheKeyFromRequest(req)
-				if !isStreaming(res) {
-					bodyBytes, err := io.ReadAll(res.Body)
-					if err == nil {
-						_ = res.Body.Close()
-						res.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-
-						if p.config.HTTPCacheMaxObjectBytes == 0 || int64(len(bodyBytes)) <= p.config.HTTPCacheMaxObjectBytes {
-							headers := cloneHeadersForCache(res.Header)
-							// If we are forcing cache via request (no upstream cache headers), add a shared Cache-Control
-							if respTTL == 0 {
-								headers.Set("Cache-Control", fmt.Sprintf("public, max-age=%d", int(ttl.Seconds())))
-							}
-							cr := cachedResponse{
-								statusCode: res.StatusCode,
-								headers:    headers,
-								body:       bodyBytes,
-								expiresAt:  time.Now().Add(ttl),
-							}
-							p.cache.Set(key, cr)
-							res.Header.Set("X-PROXY-CACHE", "stored")
-							res.Header.Set("X-PROXY-CACHE-KEY", key)
-							if respTTL == 0 {
-								res.Header.Set("Cache-Status", "llm-proxy; stored (forced)")
-							} else if res.Header.Get("Cache-Status") == "" {
-								res.Header.Set("Cache-Status", "llm-proxy; stored")
-							}
+					if p.config.HTTPCacheMaxObjectBytes == 0 || int64(len(bodyBytes)) <= p.config.HTTPCacheMaxObjectBytes {
+						headers := cloneHeadersForCache(res.Header)
+						if !fromResponse {
+							headers.Set("Cache-Control", fmt.Sprintf("public, max-age=%d", int(ttl.Seconds())))
 						}
-					}
-				} else {
-					// Streaming: wrap and capture asynchronously, then store on completion
-					maxBytes := p.config.HTTPCacheMaxObjectBytes
-					if maxBytes <= 0 {
-						maxBytes = 2 * 1024 * 1024 // default 2MB
-					}
-					headers := cloneHeadersForCache(res.Header)
-					if respTTL == 0 {
-						headers.Set("Cache-Control", fmt.Sprintf("public, max-age=%d", int(ttl.Seconds())))
-					}
-					expiresAt := time.Now().Add(ttl)
-					orig := res.Body
-					res.Body = newStreamingCapture(orig, maxBytes, func(buf []byte) {
-						if len(buf) == 0 {
-							return
-						}
-						if int64(len(buf)) > maxBytes {
-							return
-						}
-						p.cache.Set(key, cachedResponse{
+						cr := cachedResponse{
 							statusCode: res.StatusCode,
 							headers:    headers,
-							body:       append([]byte(nil), buf...),
-							expiresAt:  expiresAt,
-						})
-					})
+							body:       bodyBytes,
+							expiresAt:  time.Now().Add(ttl),
+						}
+						p.cache.Set(key, cr)
+						res.Header.Set("X-PROXY-CACHE", "stored")
+						res.Header.Set("X-PROXY-CACHE-KEY", key)
+						if !fromResponse {
+							res.Header.Set("Cache-Status", "llm-proxy; stored (forced)")
+						} else if res.Header.Get("Cache-Status") == "" {
+							res.Header.Set("Cache-Status", "llm-proxy; stored")
+						}
+					}
 				}
+			} else {
+				maxBytes := p.config.HTTPCacheMaxObjectBytes
+				if maxBytes <= 0 {
+					maxBytes = 2 * 1024 * 1024 // default 2MB
+				}
+				headers := cloneHeadersForCache(res.Header)
+				if !fromResponse {
+					headers.Set("Cache-Control", fmt.Sprintf("public, max-age=%d", int(ttl.Seconds())))
+				}
+				expiresAt := time.Now().Add(ttl)
+				orig := res.Body
+				res.Body = newStreamingCapture(orig, maxBytes, func(buf []byte) {
+					if len(buf) == 0 {
+						return
+					}
+					if int64(len(buf)) > maxBytes {
+						return
+					}
+					p.cache.Set(key, cachedResponse{
+						statusCode: res.StatusCode,
+						headers:    headers,
+						body:       append([]byte(nil), buf...),
+						expiresAt:  expiresAt,
+					})
+				})
 			}
 		}
 	}
