@@ -52,8 +52,7 @@ type fakeRedisStatusCmd struct{ err error }
 
 func (c *fakeRedisStatusCmd) Err() error { return c.err }
 
-// adapter exposing only methods used by redisCache
-type miniRedisAdapter struct{ *fakeRedisClient }
+// adapter exposing only methods used by redisCache (kept minimal; removed unused declarations)
 
 func TestRedisCache_GetSet(t *testing.T) {
 	f := newFakeRedis()
@@ -90,6 +89,14 @@ func TestRedisCache_GetSet(t *testing.T) {
 	}
 	if out.StatusCode != 200 || string(out.Body) != "ok" || out.Headers["ETag"][0] != "x" {
 		t.Fatalf("unexpected data: %#v", out)
+	}
+}
+
+func TestNewRedisCache_DefaultPrefix(t *testing.T) {
+	// Ensure empty prefix falls back to default
+	rc := newRedisCache(nil, "")
+	if rc.prefix != "llmproxy:cache:" {
+		t.Fatalf("expected default prefix, got %q", rc.prefix)
 	}
 }
 
