@@ -85,6 +85,19 @@ type ProxyConfig struct {
 
 	// RequiredHeaders is a list of required request headers (case-insensitive)
 	RequiredHeaders []string
+
+	// --- HTTP cache (global, opt-in; set programmatically, not via YAML) ---
+	// HTTPCacheEnabled toggles the proxy cache for GET/HEAD based on HTTP semantics
+	HTTPCacheEnabled bool
+	// HTTPCacheDefaultTTL is used only when upstream allows caching but omits explicit TTL
+	HTTPCacheDefaultTTL time.Duration
+	// HTTPCacheMaxObjectBytes is a guardrail for maximum cacheable response size
+	HTTPCacheMaxObjectBytes int64
+
+	// RedisCacheURL enables Redis-backed cache when non-empty (e.g., redis://localhost:6379/0)
+	RedisCacheURL string
+	// RedisCacheKeyPrefix allows namespacing cache keys (default: llmproxy:cache:)
+	RedisCacheKeyPrefix string
 }
 
 // Validate checks that the ProxyConfig is valid and returns an error if not.

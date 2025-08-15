@@ -846,6 +846,9 @@ Latency breakdown:
 			concurrency, _ := cmd.Flags().GetInt("concurrency")
 			jsonBody, _ := cmd.Flags().GetString("json")
 			debug, _ := cmd.Flags().GetBool("debug")
+			cacheMode, _ := cmd.Flags().GetBool("cache")
+			cacheTTL, _ := cmd.Flags().GetInt("cache-ttl")
+			method, _ := cmd.Flags().GetString("method")
 
 			if baseURL == "" || endpoint == "" || token == "" || totalRequests <= 0 || concurrency <= 0 {
 				fmt.Fprintln(os.Stderr, "Missing required flags or invalid values.")
@@ -860,6 +863,8 @@ Latency breakdown:
 				response    string
 				statusCode  int
 				headers     http.Header
+				reqHeaders  http.Header
+				reqBody     string
 				upstreamLat time.Duration
 				proxyLat    time.Duration
 			}
@@ -877,9 +882,11 @@ Latency breakdown:
 
 			statusCounts := make(map[int]int)
 			statusSamples := make(map[int]struct {
-				response string
-				headers  http.Header
-				errMsg   string
+				response   string
+				headers    http.Header
+				errMsg     string
+				reqHeaders http.Header
+				reqBody    string
 			})
 
 			var latencies []time.Duration
@@ -902,19 +909,39 @@ Latency breakdown:
 						progressMu.Unlock()
 						requestStart := time.Now()
 						requestStartNs := requestStart.UnixNano()
-						var bodyReader io.Reader
-						if jsonBody != "" {
-							bodyReader = strings.NewReader(jsonBody)
-						} else {
-							bodyReader = nil
+						verb := strings.ToUpper(strings.TrimSpace(method))
+						if verb == "" {
+							verb = "POST"
 						}
-						req, _ := http.NewRequest("POST", baseURL+endpoint, bodyReader)
+						var bodyReader io.Reader
+						var reqBodyStr string
+						if verb == http.MethodPost || verb == http.MethodPut || verb == http.MethodPatch {
+							if jsonBody != "" {
+								reqBodyStr = jsonBody
+								bodyReader = strings.NewReader(jsonBody)
+							}
+						}
+						req, _ := http.NewRequest(verb, baseURL+endpoint, bodyReader)
 						req.Header.Set("Authorization", "Bearer "+token)
-						if jsonBody != "" {
+						if jsonBody != "" && (verb == http.MethodPost || verb == http.MethodPut || verb == http.MethodPatch) {
 							req.Header.Set("Content-Type", "application/json")
+						}
+						// If cache mode is enabled, ask intermediaries to treat the response as cacheable
+						if cacheMode {
+							if cacheTTL <= 0 {
+								cacheTTL = 86400 // default to 1 day if not provided
+							}
+							req.Header.Set("Cache-Control", fmt.Sprintf("public, max-age=%d", cacheTTL))
 						}
 						// Add X-REQUEST-START header
 						req.Header.Set("X-REQUEST-START", fmt.Sprintf("%d", requestStartNs))
+
+						// Snapshot request headers for debug (with redacted Authorization)
+						sentReqHeaders := req.Header.Clone()
+						if v := sentReqHeaders.Get("Authorization"); v != "" {
+							sentReqHeaders.Set("Authorization", "Bearer <redacted>")
+						}
+
 						client := &http.Client{Timeout: 10 * time.Second}
 						resp, err := client.Do(req)
 						responseEnd := time.Now()
@@ -957,7 +984,7 @@ Latency breakdown:
 						} else {
 							errMsg = err.Error()
 						}
-						results <- result{latency: lat, err: err, errMsg: errMsg, response: respBody, statusCode: statusCode, headers: headers, upstreamLat: upstreamLat, proxyLat: proxyLat}
+						results <- result{latency: lat, err: err, errMsg: errMsg, response: respBody, statusCode: statusCode, headers: headers, reqHeaders: sentReqHeaders, reqBody: reqBodyStr, upstreamLat: upstreamLat, proxyLat: proxyLat}
 						progressMu.Lock()
 						if err != nil || statusCode < 200 || statusCode >= 300 {
 							failed++
@@ -991,16 +1018,29 @@ Latency breakdown:
 				totalUpstreamLat, minUpstreamLat, maxUpstreamLat time.Duration
 				totalProxyLat, minProxyLat, maxProxyLat          time.Duration
 				upstreamLatCount, proxyLatCount                  int
+				cacheHits                                        int
+				sawCacheHeader                                   bool
 			)
 			for r := range results {
 				isSuccess := r.err == nil && r.statusCode >= 200 && r.statusCode < 300
 				statusCounts[r.statusCode]++
 				if _, ok := statusSamples[r.statusCode]; !ok {
 					statusSamples[r.statusCode] = struct {
-						response string
-						headers  http.Header
-						errMsg   string
-					}{r.response, r.headers, r.errMsg}
+						response   string
+						headers    http.Header
+						errMsg     string
+						reqHeaders http.Header
+						reqBody    string
+					}{r.response, r.headers, r.errMsg, r.reqHeaders, r.reqBody}
+				}
+				if r.headers != nil {
+					v := strings.ToLower(r.headers.Get("X-PROXY-CACHE"))
+					if v != "" {
+						sawCacheHeader = true
+					}
+					if v == "hit" || v == "conditional-hit" {
+						cacheHits++
+					}
 				}
 				if isSuccess {
 					success++
@@ -1157,6 +1197,10 @@ Latency breakdown:
 			fmt.Printf("| %-21s | %-22s |\n", "Max latency", formatDuration(maxLatency))
 			fmt.Printf("| %-21s | %-22s |\n", "p90 latency", formatDuration(p90Latency))
 			fmt.Printf("| %-21s | %-22s |\n", "p90 mean latency", formatDuration(p90Mean))
+			// Show cache hits if cache is in play
+			if cacheHits > 0 || sawCacheHeader || cacheMode {
+				fmt.Printf("| %-21s | %-22d |\n", "Cache hits", cacheHits)
+			}
 			if success > 0 {
 				if upstreamLatCount > 0 {
 					fmt.Printf("| %-21s | %-22s |\n", "Upstream latency avg", formatDuration(avgUpstreamLat))
@@ -1215,6 +1259,15 @@ Latency breakdown:
 								fmt.Printf("  %s: %s\n", k, strings.Join(v, ", "))
 							}
 						}
+						if sample.reqHeaders != nil {
+							fmt.Println("Request headers:")
+							for k, v := range sample.reqHeaders {
+								fmt.Printf("  %s: %s\n", k, strings.Join(v, ", "))
+							}
+						}
+						if sample.reqBody != "" {
+							fmt.Printf("Request body: %s\n", sample.reqBody)
+						}
 					}
 				}
 			}
@@ -1227,6 +1280,9 @@ Latency breakdown:
 	benchmarkCmd.Flags().IntP("concurrency", "c", 1, "Number of concurrent workers (required)")
 	benchmarkCmd.Flags().String("json", "", "Optional JSON string to use as the POST body for each request")
 	benchmarkCmd.Flags().Bool("debug", false, "Show detailed sample response and headers")
+	benchmarkCmd.Flags().Bool("cache", false, "Set Cache-Control: public with a high TTL for benchmarking cache behavior")
+	benchmarkCmd.Flags().Int("cache-ttl", 0, "TTL seconds to use with --cache (default 86400)")
+	benchmarkCmd.Flags().String("method", "POST", "HTTP method to use (GET, POST, PUT, PATCH)")
 	rootCmd.AddCommand(benchmarkCmd)
 
 	// Add persistent flag for management API base URL
