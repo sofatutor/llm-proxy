@@ -896,18 +896,18 @@ func TestServer_HandleProjectsDelete_Errors(t *testing.T) {
 
 func TestServer_HandleTokensShow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	
+
 	// Create temporary template directory
 	tmpDir := t.TempDir()
 	templateDir := filepath.Join(tmpDir, "templates")
 	err := os.MkdirAll(templateDir, 0755)
 	require.NoError(t, err)
-	
+
 	// Create error.html template
 	errorTemplate := `<html><body>Error: {{.error}}</body></html>`
 	err = os.WriteFile(filepath.Join(templateDir, "error.html"), []byte(errorTemplate), 0644)
 	require.NoError(t, err)
-	
+
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
 	s.engine.LoadHTMLGlob(filepath.Join(templateDir, "*.html"))

@@ -62,7 +62,7 @@ type Project struct {
 
 // Token represents a token from the Management API (sanitized)
 type Token struct {
-	TokenID      string     `json:"token_id"`      // Added for Admin UI support
+	TokenID      string     `json:"token_id"` // Added for Admin UI support
 	ProjectID    string     `json:"project_id"`
 	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
 	IsActive     bool       `json:"is_active"`
