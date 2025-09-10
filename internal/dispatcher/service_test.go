@@ -557,7 +557,13 @@ func TestService_TimerFlushSendsBatch(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go func() { _ = svc.Run(ctx, false) }()
+
+	// Wait for service goroutine to complete to avoid race on logger
+	serviceComplete := make(chan struct{})
+	go func() {
+		defer close(serviceComplete)
+		_ = svc.Run(ctx, false)
+	}()
 
 	// Give Run/processEvents time to subscribe to the bus before publishing
 	time.Sleep(20 * time.Millisecond)
@@ -574,6 +580,7 @@ func TestService_TimerFlushSendsBatch(t *testing.T) {
 	}
 	cancel()
 	_ = svc.Stop()
+	<-serviceComplete // Wait for service goroutine to complete
 
 	rp.mu.Lock()
 	sends := rp.sends
@@ -597,11 +604,20 @@ func TestService_StopIdempotent(t *testing.T) {
 		t.Fatalf("NewServiceWithBus failed: %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	go func() { _ = svc.Run(ctx, false) }()
+
+	// Wait for service goroutine to complete to avoid race on logger
+	serviceComplete := make(chan struct{})
+	go func() {
+		defer close(serviceComplete)
+		_ = svc.Run(ctx, false)
+	}()
+
 	cancel()
 	if err := svc.Stop(); err != nil {
 		t.Fatalf("first Stop err: %v", err)
 	}
+	<-serviceComplete // Wait for service goroutine to complete
+
 	if err := svc.Stop(); err != nil {
 		t.Fatalf("second Stop err: %v", err)
 	}
@@ -649,7 +665,13 @@ func TestDispatcher_DoesNotDispatchDuplicates(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
-	go func() { _ = service.Run(ctx, false) }()
+
+	// Wait for service goroutine to complete to avoid race on logger
+	serviceComplete := make(chan struct{})
+	go func() {
+		defer close(serviceComplete)
+		_ = service.Run(ctx, false)
+	}()
 
 	// Wait for all events to be dispatched
 	for i := 0; i < 100; i++ {
@@ -662,6 +684,7 @@ func TestDispatcher_DoesNotDispatchDuplicates(t *testing.T) {
 		}
 	}
 	_ = service.Stop()
+	<-serviceComplete // Wait for service goroutine to complete
 
 	dispatchedMu.Lock()
 	finalCnt := len(dispatched)

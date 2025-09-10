@@ -3,6 +3,7 @@ package token
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,6 +25,15 @@ func (s *CompleteStore) CreateToken(ctx context.Context, token TokenData) error 
 	return nil
 }
 
+func (s *CompleteStore) UpdateToken(ctx context.Context, token TokenData) error {
+	if _, exists := s.tokens[token.Token]; !exists {
+		return errors.New("token not found")
+	}
+
+	s.tokens[token.Token] = token
+	return nil
+}
+
 func (s *CompleteStore) GetTokenUnsafe(tokenID string) (TokenData, bool) {
 	return s.MockStore.GetTokenUnsafe(tokenID)
 }
@@ -37,8 +47,9 @@ func (s *CompleteStore) ListTokens(ctx context.Context) ([]TokenData, error) {
 }
 
 type mockManagerStore struct {
-	tokenData TokenData
-	err       error
+	tokenData        TokenData
+	err              error
+	updateTokenError error
 }
 
 func (m *mockManagerStore) GetTokenByID(ctx context.Context, tokenID string) (TokenData, error) {
@@ -52,8 +63,14 @@ func (m *mockManagerStore) UpdateTokenLimit(ctx context.Context, tokenID string,
 	return nil
 }
 func (m *mockManagerStore) CreateToken(ctx context.Context, token TokenData) error { return nil }
-func (m *mockManagerStore) DeleteToken(ctx context.Context, tokenID string) error  { return nil }
-func (m *mockManagerStore) RevokeToken(ctx context.Context, tokenID string) error  { return nil }
+func (m *mockManagerStore) UpdateToken(ctx context.Context, token TokenData) error {
+	if m.updateTokenError != nil {
+		return m.updateTokenError
+	}
+	return nil
+}
+func (m *mockManagerStore) DeleteToken(ctx context.Context, tokenID string) error { return nil }
+func (m *mockManagerStore) RevokeToken(ctx context.Context, tokenID string) error { return nil }
 func (m *mockManagerStore) RevokeBatchTokens(ctx context.Context, tokenIDs []string) (int, error) {
 	return 0, nil
 }
@@ -545,4 +562,169 @@ func TestManager_GetTokenStats_ErrorsAndEdgeCases(t *testing.T) {
 	if stats == nil || stats.RemainingCount != -1 || stats.TimeRemaining != -1 {
 		t.Errorf("expected unlimited requests and no expiration, got %+v", stats)
 	}
+}
+
+func TestManager_UpdateToken(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name       string
+		setupToken func() TokenData
+		wantErr    bool
+		errMsg     string
+	}{
+		{
+			name: "valid token update",
+			setupToken: func() TokenData {
+				token, _ := GenerateToken()
+				return TokenData{
+					Token:       token,
+					ProjectID:   "proj-123",
+					IsActive:    true,
+					MaxRequests: intPtr(100),
+				}
+			},
+			wantErr: false,
+		},
+		{
+			name: "update inactive token",
+			setupToken: func() TokenData {
+				token, _ := GenerateToken()
+				return TokenData{
+					Token:       token,
+					ProjectID:   "proj-123",
+					IsActive:    false,
+					MaxRequests: intPtr(50),
+				}
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid token format - too short",
+			setupToken: func() TokenData {
+				return TokenData{
+					Token:     "sk-short",
+					ProjectID: "proj-123",
+					IsActive:  true,
+				}
+			},
+			wantErr: true,
+			errMsg:  "invalid token format",
+		},
+		{
+			name: "invalid token format - no prefix",
+			setupToken: func() TokenData {
+				return TokenData{
+					Token:     "test123456789012345678901234567890",
+					ProjectID: "proj-123",
+					IsActive:  true,
+				}
+			},
+			wantErr: true,
+			errMsg:  "invalid token format",
+		},
+		{
+			name: "empty token",
+			setupToken: func() TokenData {
+				return TokenData{
+					Token:     "",
+					ProjectID: "proj-123",
+					IsActive:  true,
+				}
+			},
+			wantErr: true,
+			errMsg:  "invalid token format",
+		},
+		{
+			name: "unlimited requests",
+			setupToken: func() TokenData {
+				token, _ := GenerateToken()
+				return TokenData{
+					Token:       token,
+					ProjectID:   "proj-123",
+					IsActive:    true,
+					MaxRequests: nil, // unlimited
+				}
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := &CompleteStore{
+				MockStore: *NewMockStore(),
+			}
+
+			tokenData := tt.setupToken()
+
+			// Create the token in the store first if it's a valid format
+			if !tt.wantErr {
+				err := store.CreateToken(ctx, tokenData)
+				if err != nil {
+					t.Fatalf("Failed to create token for test: %v", err)
+				}
+			}
+
+			manager, err := NewManager(store, false)
+			if err != nil {
+				t.Fatalf("NewManager() error = %v", err)
+			}
+
+			err = manager.UpdateToken(ctx, tokenData)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("UpdateToken() expected error but got none")
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("UpdateToken() error = %v, want error containing %q", err, tt.errMsg)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("UpdateToken() unexpected error = %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestManager_UpdateToken_StoreError(t *testing.T) {
+	ctx := context.Background()
+
+	// Generate a valid token for testing
+	validToken, err := GenerateToken()
+	if err != nil {
+		t.Fatalf("Failed to generate valid token: %v", err)
+	}
+
+	// Create a mock store that returns an error
+	mockStore := &mockManagerStore{
+		updateTokenError: errors.New("store update error"),
+	}
+
+	manager := &Manager{
+		store:     mockStore,
+		validator: NewValidator(mockStore),
+	}
+
+	token := TokenData{
+		Token:     validToken,
+		ProjectID: "proj-123",
+		IsActive:  true,
+	}
+
+	err = manager.UpdateToken(ctx, token)
+	if err == nil {
+		t.Error("UpdateToken() expected error from store but got none")
+	}
+	if !strings.Contains(err.Error(), "store update error") {
+		t.Errorf("UpdateToken() error = %v, want error containing 'store update error'", err)
+	}
+}
+
+// Helper function to create int pointers
+func intPtr(i int) *int {
+	return &i
 }

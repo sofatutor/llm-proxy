@@ -1,4 +1,4 @@
-.PHONY: all build test test-coverage lint clean tools dev-setup db-setup run docker docker-build docker-run docker-smoke docker-stop swag test-benchmark coverage
+.PHONY: all build test test-coverage test-coverage-ci test-watch test-coverage-watch test-dev lint clean tools dev-setup db-setup run docker docker-build docker-run docker-smoke docker-stop swag test-benchmark coverage
 
 # Go parameters
 GOCMD=go
@@ -8,6 +8,10 @@ GOTEST=$(GOCMD) test -parallel=8
 GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 GOLINT=golangci-lint
+
+# Test runner (prefer gotestsum if available, fallback to go test)
+GOTESTSUM := $(shell command -v gotestsum 2> /dev/null || echo "$(HOME)/go/bin/gotestsum")
+TEST_CMD := $(if $(shell test -x "$(GOTESTSUM)" && echo "exists"),$(GOTESTSUM) --format testname --,$(GOTEST))
 
 # Binary names
 BINDIR=bin
@@ -25,14 +29,20 @@ $(BINDIR):
 	@mkdir -p $(BINDIR)
 
 test:
-	$(GOTEST) -v -race ./...
+	$(TEST_CMD) -v -race ./...
 
 integration-test:
-	$(GOTEST) -v -race -tags=integration -timeout=5m -run=Integration ./...
+	$(TEST_CMD) -v -race -tags=integration -timeout=5m -run=Integration ./...
 
 test-coverage:
-	$(GOTEST) -v -race -coverprofile=coverage.out -covermode=atomic ./...
+	$(TEST_CMD) -v -race -coverprofile=coverage.out -covermode=atomic ./...
 	go tool cover -func=coverage.out
+
+test-coverage-ci:
+	@./scripts/run-coverage.sh ci --coverpkg ./internal/... --outfile coverage_ci.txt
+
+test-dev:
+	@./scripts/run-coverage.sh dev --coverpkg ./internal/... --outfile coverage_dev.out
 
 test-coverage-html: test-coverage
 	go tool cover -html=coverage.out
@@ -127,6 +137,4 @@ db-setup:
 	mkdir -p ./data
 	cat ./scripts/schema.sql | sqlite3 ./data/llm-proxy.db
 
-coverage:
-	go test -coverprofile=coverage.out ./...
-	go tool cover -html=coverage.out -o coverage.html 
+coverage: test-coverage-html

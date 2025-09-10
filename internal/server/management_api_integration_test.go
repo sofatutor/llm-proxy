@@ -139,13 +139,13 @@ func TestManagementAPI_Integration(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
-	// 7. Delete Project
+	// 7. Delete Project (now returns 405 Method Not Allowed)
 	req, _ = http.NewRequest("DELETE", fmt.Sprintf("%s/manage/projects/%s", ts.URL, projID), nil)
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
 	resp, err = client.Do(req)
 	require.NoError(t, err)
-	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+	require.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
 	resp.Body.Close()
 }

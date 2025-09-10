@@ -410,3 +410,39 @@ func TestRedisEventBus_ReadEvents_SkipsInvalidJSON(t *testing.T) {
 		t.Fatalf("unexpected event parsed: %+v", evts[0])
 	}
 }
+
+func TestRedisEventBus_Stop_NoOp_Coverage(t *testing.T) {
+	client := newMockRedisClientLog()
+	// Use NewRedisEventBusLog constructor to create RedisEventBus
+	bus := NewRedisEventBusLog(client, "events", time.Second, 10)
+
+	// Call Stop() - this should be a no-op and not panic
+	bus.Stop()
+
+	// Verify we can still use the bus after Stop (since it's a no-op)
+	bus.Publish(context.Background(), Event{RequestID: "after-stop"})
+
+	// Verify events can still be read
+	events, err := bus.ReadEvents(context.Background(), 0, -1)
+	if err != nil {
+		t.Fatalf("ReadEvents after Stop failed: %v", err)
+	}
+	if len(events) != 1 || events[0].RequestID != "after-stop" {
+		t.Fatalf("expected 1 event after Stop, got %d events", len(events))
+	}
+}
+
+func TestRedisEventBus_Stop_Direct_Coverage(t *testing.T) {
+	client := newMockRedisClientLog()
+	// Create RedisEventBus directly and ensure Stop method is called
+	bus := &RedisEventBus{
+		client: client,
+		key:    "test-events",
+	}
+
+	// This should directly call the Stop method at line 267
+	bus.Stop()
+
+	// Verify bus is still usable (no-op Stop)
+	bus.Publish(context.Background(), Event{RequestID: "test"})
+}

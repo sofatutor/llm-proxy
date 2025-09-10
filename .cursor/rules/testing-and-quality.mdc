@@ -9,13 +9,14 @@ Use these commands before committing/pushing. They match CI behavior in `.github
 
 - **Unit tests (fast)**
   - `make test`
-  - Equivalent (CI-style coverage replication):
-    - `go test -v -race -parallel=4 -coverprofile=coverage_ci.txt -covermode=atomic -coverpkg=./internal/... ./...`
-    - View summary: `go tool cover -func=coverage_ci.txt | tail -n 1`
 
 - **Coverage report**
   - `make test-coverage` for local overview
+  - `make test-coverage-ci` for CI-style coverage (matches CI exactly, shows total at end)
   - CI treats coverage across all `./internal/...` packages (via `-coverpkg=./internal/...`). Numbers can differ from per-package local reports. Target: **≥ 90%**.
+
+- **Watch mode (optional)**
+  - `make test-dev` - Jest-like watch with minimal output and aggregated coverage
 
 - **Integration tests**
   - `go test -v -race -parallel=4 -tags=integration -timeout=5m -run=Integration ./...`
@@ -30,7 +31,7 @@ Use these commands before committing/pushing. They match CI behavior in `.github
 ## Pre-push checklist (must be green)
 
 - **All tests pass**: `make test` (and integration tests when modified areas touch server endpoints).
-- **Coverage ≥ 90%** (CI-style): run the CI-equivalent coverage command and verify `go tool cover -func=coverage_ci.txt` summary meets threshold.
+- **Coverage ≥ 90%** (CI-style): `make test-coverage-ci` shows total at end.
 - **Linters clean**: `make lint` returns 0 issues.
 - **No unformatted files**: `gofmt -l .` shows empty output.
 - **No .env/.key/secret artifacts** are added (see ignore rules).
@@ -68,7 +69,7 @@ fi
 make lint
 
 # Unit tests + CI-style coverage
-go test -v -race -parallel=4 -coverprofile=coverage_ci.txt -covermode=atomic -coverpkg=./internal/... ./...
+make test-coverage-ci
 COV=$(go tool cover -func=coverage_ci.txt | tail -n 1 | awk '{print $3}' | tr -d '%')
 REQ=90
 if [ "${COV%.*}" -lt "$REQ" ]; then

@@ -196,3 +196,74 @@ func TestTokenGeneration_Multiple(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateTokenFormat_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		token   string
+		wantErr bool
+	}{
+		{
+			name:    "Token with invalid base64 but correct regex format",
+			token:   "sk-invalidBase64WithValidLength123456",
+			wantErr: true,
+		},
+		{
+			name:    "Token too short for regex",
+			token:   "sk-short",
+			wantErr: true,
+		},
+		{
+			name:    "Token with special characters in base64 part",
+			token:   "sk-some!@#$invalidChars",
+			wantErr: true,
+		},
+		{
+			name:    "Token without prefix",
+			token:   "abcdefghijklmnopqrstuvwxyz123456",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateTokenFormat(tt.token)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateTokenFormat() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// Test coverage for error paths and edge cases
+func TestGenerateToken_Coverage(t *testing.T) {
+	// Test multiple generations to increase coverage confidence
+	tokens := make(map[string]bool)
+	for i := 0; i < 50; i++ {
+		token, err := GenerateToken()
+		if err != nil {
+			t.Fatalf("GenerateToken() iteration %d failed: %v", i, err)
+		}
+
+		if tokens[token] {
+			t.Errorf("Duplicate token generated: %s", token)
+		}
+		tokens[token] = true
+
+		// Verify each token can be decoded
+		uuid, err := DecodeToken(token)
+		if err != nil {
+			t.Errorf("Failed to decode generated token %s: %v", token, err)
+		}
+
+		// Verify UUID is not empty
+		if uuid.String() == "00000000-0000-0000-0000-000000000000" {
+			t.Errorf("Generated token decoded to empty UUID")
+		}
+
+		// Verify token format
+		if err := ValidateTokenFormat(token); err != nil {
+			t.Errorf("Generated token failed format validation: %v", err)
+		}
+	}
+}

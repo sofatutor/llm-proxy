@@ -134,3 +134,24 @@ func TestObfuscateToken(t *testing.T) {
 		})
 	}
 }
+
+// Test that coverage statistics are accessible
+func TestGenerateSecureToken_CoverageEdgeCases(t *testing.T) {
+	// Test very small length case that should still work
+	token, err := GenerateSecureToken(1)
+	if err != nil {
+		t.Errorf("GenerateSecureToken(1) error = %v", err)
+	}
+	if len(token) != 2 { // 1 byte = 2 hex chars
+		t.Errorf("GenerateSecureToken(1) length = %d, want 2", len(token))
+	}
+
+	// Test very large length to ensure it works
+	token, err = GenerateSecureToken(1000)
+	if err != nil {
+		t.Errorf("GenerateSecureToken(1000) error = %v", err)
+	}
+	if len(token) != 2000 { // 1000 bytes = 2000 hex chars
+		t.Errorf("GenerateSecureToken(1000) length = %d, want 2000", len(token))
+	}
+}
