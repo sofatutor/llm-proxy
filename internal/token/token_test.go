@@ -235,7 +235,7 @@ func TestValidateTokenFormat_EdgeCases(t *testing.T) {
 	}
 }
 
-// Test coverage for error paths and edge cases  
+// Test coverage for error paths and edge cases
 func TestGenerateToken_Coverage(t *testing.T) {
 	// Test multiple generations to increase coverage confidence
 	tokens := make(map[string]bool)
@@ -244,23 +244,23 @@ func TestGenerateToken_Coverage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GenerateToken() iteration %d failed: %v", i, err)
 		}
-		
+
 		if tokens[token] {
 			t.Errorf("Duplicate token generated: %s", token)
 		}
 		tokens[token] = true
-		
+
 		// Verify each token can be decoded
 		uuid, err := DecodeToken(token)
 		if err != nil {
 			t.Errorf("Failed to decode generated token %s: %v", token, err)
 		}
-		
+
 		// Verify UUID is not empty
 		if uuid.String() == "00000000-0000-0000-0000-000000000000" {
 			t.Errorf("Generated token decoded to empty UUID")
 		}
-		
+
 		// Verify token format
 		if err := ValidateTokenFormat(token); err != nil {
 			t.Errorf("Generated token failed format validation: %v", err)

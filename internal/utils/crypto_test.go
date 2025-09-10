@@ -135,7 +135,7 @@ func TestObfuscateToken(t *testing.T) {
 	}
 }
 
-// Test that coverage statistics are accessible  
+// Test that coverage statistics are accessible
 func TestGenerateSecureToken_CoverageEdgeCases(t *testing.T) {
 	// Test very small length case that should still work
 	token, err := GenerateSecureToken(1)

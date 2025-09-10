@@ -524,10 +524,22 @@ func TestHandleTokens(t *testing.T) {
 		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
 		// Expect sanitized token response (without actual token values)
+		raw := w.Body.Bytes()
+
 		var response []TokenListResponse
-		err := json.NewDecoder(w.Body).Decode(&response)
+		err := json.NewDecoder(bytes.NewReader(raw)).Decode(&response)
 		require.NoError(t, err)
 		assert.Len(t, response, 2)
+
+		// Explicitly assert that no raw token field is present
+		var generic []map[string]interface{}
+		err = json.NewDecoder(bytes.NewReader(raw)).Decode(&generic)
+		require.NoError(t, err)
+		for _, item := range generic {
+			if _, exists := item["token"]; exists {
+				t.Fatalf("response item unexpectedly contains raw token field: %v", item)
+			}
+		}
 	})
 
 	t.Run("GET_TokensByProject", func(t *testing.T) {
@@ -541,11 +553,23 @@ func TestHandleTokens(t *testing.T) {
 		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
 		// Expect sanitized token response (without actual token values)
+		raw := w.Body.Bytes()
+
 		var response []TokenListResponse
-		err := json.NewDecoder(w.Body).Decode(&response)
+		err := json.NewDecoder(bytes.NewReader(raw)).Decode(&response)
 		require.NoError(t, err)
 		assert.Len(t, response, 1)
 		assert.Equal(t, "project-1", response[0].ProjectID)
+
+		// Explicitly assert that no raw token field is present
+		var generic []map[string]interface{}
+		err = json.NewDecoder(bytes.NewReader(raw)).Decode(&generic)
+		require.NoError(t, err)
+		for _, item := range generic {
+			if _, exists := item["token"]; exists {
+				t.Fatalf("response item unexpectedly contains raw token field: %v", item)
+			}
+		}
 	})
 
 	t.Run("Invalid_Method", func(t *testing.T) {
@@ -880,13 +904,24 @@ func TestHandleTokenByID(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
+		// Test both structured response and raw JSON to ensure no token field
+		raw := w.Body.Bytes()
+
 		var response TokenListResponse
-		err := json.NewDecoder(w.Body).Decode(&response)
+		err := json.NewDecoder(bytes.NewReader(raw)).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, testToken.ProjectID, response.ProjectID)
 		assert.Equal(t, testToken.IsActive, response.IsActive)
 		assert.Equal(t, testToken.MaxRequests, response.MaxRequests)
 		assert.Equal(t, testToken.RequestCount, response.RequestCount)
+
+		// Security check: ensure no raw token field is present
+		var generic map[string]interface{}
+		err = json.NewDecoder(bytes.NewReader(raw)).Decode(&generic)
+		require.NoError(t, err)
+		if _, exists := generic["token"]; exists {
+			t.Fatalf("GET /manage/tokens/{id} response unexpectedly contains raw token field: %v", generic)
+		}
 	})
 
 	t.Run("GET_Token_NotFound", func(t *testing.T) {
@@ -1281,4 +1316,192 @@ func intPtr(i int) *int {
 // Helper function to create time pointers
 func timePtr(t time.Time) *time.Time {
 	return &t
+}
+
+func TestHandleTokenByID_SecurityValidation(t *testing.T) {
+	server, tokenStore, _ := setupServerAndMocks(t)
+
+	testToken := token.TokenData{
+		Token:        "sk-test123456789",
+		ProjectID:    "project-1",
+		IsActive:     true,
+		MaxRequests:  intPtr(1000),
+		RequestCount: 100,
+		CreatedAt:    time.Now().UTC(),
+		ExpiresAt:    timePtr(time.Now().Add(24 * time.Hour).UTC()),
+	}
+
+	tokenStore.On("GetTokenByID", mock.Anything, "sk-test123456789").Return(testToken, nil)
+
+	t.Run("GET_Token_Never_Returns_Raw_Token", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/manage/tokens/sk-test123456789", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleTokenByID(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		// Parse response as generic map to check all fields
+		raw := w.Body.Bytes()
+		var responseMap map[string]interface{}
+		err := json.NewDecoder(bytes.NewReader(raw)).Decode(&responseMap)
+		require.NoError(t, err)
+
+		// Ensure no raw token field exists
+		_, hasToken := responseMap["token"]
+		assert.False(t, hasToken, "Response must not contain raw token field")
+
+		// Ensure expected fields are present
+		assert.Contains(t, responseMap, "project_id")
+		assert.Contains(t, responseMap, "is_active")
+		assert.Contains(t, responseMap, "request_count")
+		assert.Equal(t, "project-1", responseMap["project_id"])
+		assert.Equal(t, true, responseMap["is_active"])
+		assert.Equal(t, float64(100), responseMap["request_count"])
+	})
+}
+
+func TestHandleBulkRevokeProjectTokens_EdgeCases(t *testing.T) {
+	server, tokenStore, projectStore := setupServerAndMocks(t)
+
+	testProject := proxy.Project{
+		ID:   "project-1",
+		Name: "Test Project",
+	}
+
+	t.Run("Invalid_Path_Format", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/manage/projects/project-1/invalid/path", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleBulkRevokeProjectTokens(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "invalid path")
+	})
+
+	t.Run("Empty_Project_ID", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/manage/projects//tokens/revoke", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleBulkRevokeProjectTokens(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "invalid path")
+	})
+
+	t.Run("Partial_Revocation_Failures", func(t *testing.T) {
+		// Test case where some tokens fail to revoke
+		testTokens := []token.TokenData{
+			{Token: "sk-token1", ProjectID: "project-1", IsActive: true},
+			{Token: "sk-token2", ProjectID: "project-1", IsActive: true},
+			{Token: "sk-token3", ProjectID: "project-1", IsActive: false}, // Already revoked
+		}
+
+		projectStore.On("GetProjectByID", mock.Anything, "project-1").Return(testProject, nil).Once()
+		tokenStore.On("GetTokensByProjectID", mock.Anything, "project-1").Return(testTokens, nil).Once()
+
+		// First token update succeeds, second fails
+		tokenStore.On("UpdateToken", mock.Anything, mock.MatchedBy(func(td token.TokenData) bool {
+			return td.Token == "sk-token1"
+		})).Return(nil).Once()
+
+		tokenStore.On("UpdateToken", mock.Anything, mock.MatchedBy(func(td token.TokenData) bool {
+			return td.Token == "sk-token2"
+		})).Return(errors.New("storage error")).Once()
+
+		req := httptest.NewRequest("POST", "/manage/projects/project-1/tokens/revoke", nil)
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		w := httptest.NewRecorder()
+
+		server.handleBulkRevokeProjectTokens(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response map[string]interface{}
+		err := json.NewDecoder(w.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.Equal(t, float64(1), response["revoked_count"])
+		assert.Equal(t, float64(1), response["already_revoked_count"])
+		assert.Equal(t, float64(3), response["total_tokens"])
+		assert.Contains(t, response, "failed_count")
+		assert.Equal(t, float64(1), response["failed_count"])
+	})
+}
+
+func TestHandleUpdateProject_WithTokenRevocation(t *testing.T) {
+	server, tokenStore, projectStore := setupServerAndMocks(t)
+
+	testProject := proxy.Project{
+		ID:        "project-1",
+		Name:      "Test Project",
+		IsActive:  true,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+
+	testTokens := []token.TokenData{
+		{Token: "sk-active1", ProjectID: "project-1", IsActive: true},
+		{Token: "sk-active2", ProjectID: "project-1", IsActive: true},
+		{Token: "sk-inactive", ProjectID: "project-1", IsActive: false},
+	}
+
+	projectStore.On("GetProjectByID", mock.Anything, "project-1").Return(testProject, nil)
+	projectStore.On("UpdateProject", mock.Anything, mock.AnythingOfType("proxy.Project")).Return(nil)
+	tokenStore.On("GetTokensByProjectID", mock.Anything, "project-1").Return(testTokens, nil)
+	tokenStore.On("UpdateToken", mock.Anything, mock.AnythingOfType("token.TokenData")).Return(nil)
+
+	t.Run("Deactivate_Project_With_Token_Revocation", func(t *testing.T) {
+		reqBody := map[string]interface{}{
+			"is_active":     false,
+			"revoke_tokens": true,
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("PATCH", "/manage/projects/project-1", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		server.handleUpdateProject(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response proxy.Project
+		err := json.NewDecoder(w.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.False(t, response.IsActive)
+		assert.NotNil(t, response.DeactivatedAt)
+	})
+
+	t.Run("Reactivate_Project_Clears_Deactivated_Timestamp", func(t *testing.T) {
+		// Set up project as deactivated
+		deactivatedProject := testProject
+		now := time.Now().UTC()
+		deactivatedProject.IsActive = false
+		deactivatedProject.DeactivatedAt = &now
+
+		projectStore.On("GetProjectByID", mock.Anything, "project-reactivate").Return(deactivatedProject, nil)
+		projectStore.On("UpdateProject", mock.Anything, mock.AnythingOfType("proxy.Project")).Return(nil)
+
+		reqBody := map[string]interface{}{
+			"is_active": true,
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("PATCH", "/manage/projects/project-reactivate", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		server.handleUpdateProject(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var response proxy.Project
+		err := json.NewDecoder(w.Body).Decode(&response)
+		require.NoError(t, err)
+		assert.True(t, response.IsActive)
+		assert.Nil(t, response.DeactivatedAt)
+	})
 }

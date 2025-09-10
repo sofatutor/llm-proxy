@@ -19,7 +19,10 @@ func TestDBTokenStoreAdapter_UpdateToken_Integration(t *testing.T) {
 	// Initialize database
 	db, err := New(Config{Path: dbPath})
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() {
+		cerr := db.Close()
+		require.NoError(t, cerr)
+	})
 
 	// Create a test project first (required for foreign key constraint)
 	project := Project{
