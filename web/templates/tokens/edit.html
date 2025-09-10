@@ -1,0 +1,127 @@
+{{ define "tokens/edit.html" }}
+{{ template "layout.html" . }}
+
+{{ define "content" }}
+<div class="container">
+    <div class="header">
+        <h1>Edit Token</h1>
+        <nav class="breadcrumb">
+            <a href="/tokens">Tokens</a> &gt;
+            <a href="/tokens/{{ .tokenID }}">{{ obfuscateToken .tokenID }}</a> &gt;
+            <span>Edit</span>
+        </nav>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h2>Token Details</h2>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="/tokens/{{ .tokenID }}" class="form">
+                <input type="hidden" name="_method" value="PUT">
+                
+                <div class="form-group">
+                    <label for="project">Project:</label>
+                    <input type="text" id="project" value="{{ .project.Name }}" disabled class="form-control">
+                    <small class="form-text">Token is associated with this project</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="token_id">Token ID:</label>
+                    <input type="text" id="token_id" value="{{ obfuscateToken .tokenID }}" disabled class="form-control">
+                    <small class="form-text">Unique identifier for this token</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="expires_at">Expires At:</label>
+                    <input type="text" id="expires_at" 
+                           value="{{ if .token.ExpiresAt }}{{ .token.ExpiresAt.Format "2006-01-02 15:04:05 UTC" }}{{ else }}Never{{ end }}" 
+                           disabled class="form-control">
+                    <small class="form-text">Token expiration time (cannot be modified)</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="request_count">Request Count:</label>
+                    <input type="text" id="request_count" value="{{ .token.RequestCount }}" disabled class="form-control">
+                    <small class="form-text">Number of requests made with this token</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="is_active">Status:</label>
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" id="is_active" name="is_active" 
+                               {{ if .token.IsActive }}checked{{ end }} value="true">
+                        <label for="is_active">Active</label>
+                    </div>
+                    <small class="form-text">Uncheck to deactivate this token</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="max_requests">Max Requests:</label>
+                    <input type="number" id="max_requests" name="max_requests" 
+                           value="{{ if .token.MaxRequests }}{{ .token.MaxRequests }}{{ end }}" 
+                           class="form-control" min="0" placeholder="No limit">
+                    <small class="form-text">Maximum number of requests allowed (leave empty for no limit)</small>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Update Token</button>
+                    <a href="/tokens/{{ .tokenID }}" class="btn btn-secondary">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card danger-zone">
+        <div class="card-header">
+            <h3>Danger Zone</h3>
+        </div>
+        <div class="card-body">
+            <p><strong>Revoke this token:</strong> This action cannot be undone. The token will be immediately deactivated.</p>
+            <form method="POST" action="/tokens/{{ .tokenID }}" style="display: inline;">
+                <input type="hidden" name="_method" value="DELETE">
+                <button type="submit" class="btn btn-danger" 
+                        onclick="return confirm('Are you sure you want to revoke this token? This action cannot be undone.')">
+                    Revoke Token
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.danger-zone {
+    border-color: #dc3545;
+    margin-top: 2rem;
+}
+
+.danger-zone .card-header {
+    background-color: #f8d7da;
+    border-bottom-color: #dc3545;
+    color: #721c24;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
+.checkbox-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.checkbox-wrapper input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+}
+</style>
+{{ end }}
+{{ end }}

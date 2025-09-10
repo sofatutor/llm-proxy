@@ -326,7 +326,7 @@ func TestAPIClient_UpdateProject(t *testing.T) {
 	client := NewAPIClient(server.URL, "test-token")
 	ctx := context.Background()
 
-	project, err := client.UpdateProject(ctx, "1", "Updated Name", "sk-updated-key")
+	project, err := client.UpdateProject(ctx, "1", "Updated Name", "sk-updated-key", nil)
 	if err != nil {
 		t.Fatalf("UpdateProject failed: %v", err)
 	}
@@ -573,7 +573,7 @@ func TestAPIClient_UpdateProjectPartial(t *testing.T) {
 	ctx := context.Background()
 
 	// Test updating only name
-	project, err := client.UpdateProject(ctx, "1", "New Name", "")
+	project, err := client.UpdateProject(ctx, "1", "New Name", "", nil)
 	if err != nil {
 		t.Fatalf("UpdateProject failed: %v", err)
 	}
@@ -717,7 +717,7 @@ func TestAPIClient_CreateProject_Errors(t *testing.T) {
 func TestAPIClient_UpdateProject_Errors(t *testing.T) {
 	client := NewAPIClient("http://invalid-host", "token")
 	ctx := context.Background()
-	_, err := client.UpdateProject(ctx, "id", "foo", "bar")
+	_, err := client.UpdateProject(ctx, "id", "foo", "bar", nil)
 	if err == nil {
 		t.Error("expected network error, got nil")
 	}
@@ -728,7 +728,7 @@ func TestAPIClient_UpdateProject_Errors(t *testing.T) {
 	}))
 	defer server.Close()
 	client2 := NewAPIClient(server.URL, "token")
-	_, err = client2.UpdateProject(ctx, "id", "foo", "bar")
+	_, err = client2.UpdateProject(ctx, "id", "foo", "bar", nil)
 	if err == nil || !strings.Contains(err.Error(), "fail") {
 		t.Errorf("expected API error, got %v", err)
 	}
@@ -741,7 +741,7 @@ func TestAPIClient_UpdateProject_Errors(t *testing.T) {
 	}))
 	defer server2.Close()
 	client3 := NewAPIClient(server2.URL, "token")
-	_, err = client3.UpdateProject(ctx, "id", "foo", "bar")
+	_, err = client3.UpdateProject(ctx, "id", "foo", "bar", nil)
 	if err == nil || !strings.Contains(err.Error(), "decode") {
 		t.Errorf("expected decode error, got %v", err)
 	}

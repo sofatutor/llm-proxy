@@ -1077,6 +1077,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		sanitizedTokens := make([]TokenListResponse, len(tokens))
 		for i, token := range tokens {
 			sanitizedTokens[i] = TokenListResponse{
+				TokenID:      token.Token,
 				ProjectID:    token.ProjectID,
 				ExpiresAt:    token.ExpiresAt,
 				IsActive:     token.IsActive,
@@ -1150,6 +1151,7 @@ func (s *Server) handleGetToken(w http.ResponseWriter, r *http.Request, tokenID 
 
 	// Create sanitized response without the actual token value
 	response := TokenListResponse{
+		TokenID:      tokenID,
 		ProjectID:    tokenData.ProjectID,
 		ExpiresAt:    tokenData.ExpiresAt,
 		IsActive:     tokenData.IsActive,
@@ -1265,6 +1267,7 @@ func (s *Server) handleUpdateToken(w http.ResponseWriter, r *http.Request, token
 
 	// Return updated token (sanitized)
 	response := TokenListResponse{
+		TokenID:      tokenID,
 		ProjectID:    tokenData.ProjectID,
 		ExpiresAt:    tokenData.ExpiresAt,
 		IsActive:     tokenData.IsActive,

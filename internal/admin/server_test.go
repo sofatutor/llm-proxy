@@ -310,11 +310,15 @@ func (m *mockAPIClient) GetProject(ctx context.Context, id string) (*Project, er
 	return &Project{ID: id, Name: "Test Project"}, nil
 }
 
-func (m *mockAPIClient) UpdateProject(ctx context.Context, id, name, apiKey string) (*Project, error) {
+func (m *mockAPIClient) UpdateProject(ctx context.Context, id, name, apiKey string, isActive *bool) (*Project, error) {
 	if m.DashboardErr != nil {
 		return nil, m.DashboardErr
 	}
-	return &Project{ID: id, Name: name, OpenAIAPIKey: apiKey}, nil
+	project := &Project{ID: id, Name: name, OpenAIAPIKey: apiKey}
+	if isActive != nil {
+		project.IsActive = *isActive
+	}
+	return project, nil
 }
 
 func (m *mockAPIClient) DeleteProject(ctx context.Context, id string) error {
@@ -341,6 +345,36 @@ func (m *mockAPIClient) GetAuditEvent(ctx context.Context, id string) (*AuditEve
 		return nil, m.DashboardErr
 	}
 	return &AuditEvent{ID: id, Outcome: "success"}, nil
+}
+
+// Implement new token methods
+func (m *mockAPIClient) GetToken(ctx context.Context, tokenID string) (*Token, error) {
+	if m.DashboardErr != nil {
+		return nil, m.DashboardErr
+	}
+	return &Token{TokenID: tokenID, ProjectID: "1", IsActive: true}, nil
+}
+
+func (m *mockAPIClient) UpdateToken(ctx context.Context, tokenID string, isActive *bool, maxRequests *int) (*Token, error) {
+	if m.DashboardErr != nil {
+		return nil, m.DashboardErr
+	}
+	token := &Token{TokenID: tokenID, ProjectID: "1", IsActive: true}
+	if isActive != nil {
+		token.IsActive = *isActive
+	}
+	if maxRequests != nil {
+		token.MaxRequests = maxRequests
+	}
+	return token, nil
+}
+
+func (m *mockAPIClient) RevokeToken(ctx context.Context, tokenID string) error {
+	return m.DashboardErr
+}
+
+func (m *mockAPIClient) RevokeProjectTokens(ctx context.Context, projectID string) error {
+	return m.DashboardErr
 }
 
 var _ APIClientInterface = (*mockAPIClient)(nil) // Ensure interface compliance

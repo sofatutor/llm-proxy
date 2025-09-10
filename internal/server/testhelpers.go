@@ -4,6 +4,7 @@ import "time"
 
 // TokenListResponse matches the sanitized token response schema (shared for tests and production)
 type TokenListResponse struct {
+	TokenID      string     `json:"token_id"`      // Added for Admin UI support
 	ProjectID    string     `json:"project_id"`
 	ExpiresAt    *time.Time `json:"expires_at"`
 	IsActive     bool       `json:"is_active"`

@@ -50,11 +50,15 @@ type APIClientInterface interface {
 	GetTokens(ctx context.Context, projectID string, page, pageSize int) ([]Token, *Pagination, error)
 	CreateToken(ctx context.Context, projectID string, durationMinutes int) (*TokenCreateResponse, error)
 	GetProject(ctx context.Context, projectID string) (*Project, error)
-	UpdateProject(ctx context.Context, projectID string, name string, openAIAPIKey string) (*Project, error)
+	UpdateProject(ctx context.Context, projectID string, name string, openAIAPIKey string, isActive *bool) (*Project, error)
 	DeleteProject(ctx context.Context, projectID string) error
 	CreateProject(ctx context.Context, name string, openAIAPIKey string) (*Project, error)
 	GetAuditEvents(ctx context.Context, filters map[string]string, page, pageSize int) ([]AuditEvent, *Pagination, error)
 	GetAuditEvent(ctx context.Context, id string) (*AuditEvent, error)
+	GetToken(ctx context.Context, tokenID string) (*Token, error)
+	UpdateToken(ctx context.Context, tokenID string, isActive *bool, maxRequests *int) (*Token, error)
+	RevokeToken(ctx context.Context, tokenID string) error
+	RevokeProjectTokens(ctx context.Context, projectID string) error
 }
 
 // Server represents the Admin UI HTTP server.
@@ -95,6 +99,14 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	// Add middleware
 	engine.Use(gin.Logger())
 	engine.Use(gin.Recovery())
+
+	// Add method override middleware for HTML forms
+	engine.Use(func(c *gin.Context) {
+		if c.Request.Method == "POST" && c.Request.FormValue("_method") != "" {
+			c.Request.Method = c.Request.FormValue("_method")
+		}
+		c.Next()
+	})
 
 	// Add session middleware
 	store := cookie.NewStore(getSessionSecret(cfg))
@@ -203,6 +215,7 @@ func (s *Server) setupRoutes() {
 			projects.GET("/:id/edit", s.handleProjectsEdit)
 			projects.PUT("/:id", s.handleProjectsUpdate)
 			projects.DELETE("/:id", s.handleProjectsDelete)
+			projects.POST("/:id/revoke-tokens", s.handleProjectsBulkRevoke)
 		}
 
 		// Tokens routes
@@ -212,6 +225,9 @@ func (s *Server) setupRoutes() {
 			tokens.GET("/new", s.handleTokensNew)
 			tokens.POST("", s.handleTokensCreate)
 			tokens.GET("/:token", s.handleTokensShow)
+			tokens.GET("/:token/edit", s.handleTokensEdit)
+			tokens.PUT("/:token", s.handleTokensUpdate)
+			tokens.DELETE("/:token", s.handleTokensRevoke)
 		}
 
 		// Audit routes
@@ -440,6 +456,7 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 	var req struct {
 		Name         string `form:"name" binding:"required"`
 		OpenAIAPIKey string `form:"openai_api_key" binding:"required"`
+		IsActive     *bool  `form:"is_active"`
 	}
 
 	if err := c.ShouldBind(&req); err != nil {
@@ -458,7 +475,7 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 	if ref := c.Request.Referer(); ref != "" {
 		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
 	}
-	project, err := apiClient.UpdateProject(ctx, id, req.Name, req.OpenAIAPIKey)
+	project, err := apiClient.UpdateProject(ctx, id, req.Name, req.OpenAIAPIKey, req.IsActive)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to update project: %v", err),
@@ -1106,4 +1123,201 @@ func (s *Server) handleAuditShow(c *gin.Context) {
 		"active": "audit",
 		"event":  event,
 	})
+}
+
+// Token edit/revoke handlers
+
+func (s *Server) handleTokensEdit(c *gin.Context) {
+	// Get API client from context
+	apiClient := c.MustGet("apiClient").(APIClientInterface)
+
+	tokenID := c.Param("token")
+	if tokenID == "" {
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"error": "Token ID is required",
+		})
+		return
+	}
+
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+
+	token, err := apiClient.GetToken(ctx, tokenID)
+	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			c.HTML(http.StatusNotFound, "error.html", gin.H{
+				"error":   "Token not found",
+				"details": fmt.Sprintf("Token %s was not found", tokenID),
+			})
+		} else {
+			c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+				"error":   "Failed to load token",
+				"details": err.Error(),
+			})
+		}
+		return
+	}
+
+	// Get project for the token
+	project, err := apiClient.GetProject(ctx, token.ProjectID)
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"error":   "Failed to load project",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.HTML(http.StatusOK, "tokens/edit.html", gin.H{
+		"title":   "Edit Token",
+		"active":  "tokens",
+		"token":   token,
+		"project": project,
+		"tokenID": tokenID,
+	})
+}
+
+func (s *Server) handleTokensUpdate(c *gin.Context) {
+	// Get API client from context
+	apiClient := c.MustGet("apiClient").(APIClientInterface)
+
+	tokenID := c.Param("token")
+	if tokenID == "" {
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"error": "Token ID is required",
+		})
+		return
+	}
+
+	var req struct {
+		IsActive    *bool `form:"is_active"`
+		MaxRequests *int  `form:"max_requests"`
+	}
+
+	if err := c.ShouldBind(&req); err != nil {
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"error":   "Invalid form data",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+
+	_, err := apiClient.UpdateToken(ctx, tokenID, req.IsActive, req.MaxRequests)
+	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			c.HTML(http.StatusNotFound, "error.html", gin.H{
+				"error":   "Token not found",
+				"details": fmt.Sprintf("Token %s was not found", tokenID),
+			})
+		} else {
+			c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+				"error":   "Failed to update token",
+				"details": err.Error(),
+			})
+		}
+		return
+	}
+
+	c.Redirect(http.StatusSeeOther, fmt.Sprintf("/tokens/%s", tokenID))
+}
+
+func (s *Server) handleTokensRevoke(c *gin.Context) {
+	// Get API client from context
+	apiClient := c.MustGet("apiClient").(APIClientInterface)
+
+	tokenID := c.Param("token")
+	if tokenID == "" {
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"error": "Token ID is required",
+		})
+		return
+	}
+
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+
+	err := apiClient.RevokeToken(ctx, tokenID)
+	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			c.HTML(http.StatusNotFound, "error.html", gin.H{
+				"error":   "Token not found",
+				"details": fmt.Sprintf("Token %s was not found", tokenID),
+			})
+		} else {
+			c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+				"error":   "Failed to revoke token",
+				"details": err.Error(),
+			})
+		}
+		return
+	}
+
+	c.Redirect(http.StatusSeeOther, "/tokens")
+}
+
+// Project bulk revoke handler
+
+func (s *Server) handleProjectsBulkRevoke(c *gin.Context) {
+	// Get API client from context
+	apiClient := c.MustGet("apiClient").(APIClientInterface)
+
+	projectID := c.Param("id")
+	if projectID == "" {
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"error": "Project ID is required",
+		})
+		return
+	}
+
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+
+	err := apiClient.RevokeProjectTokens(ctx, projectID)
+	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			c.HTML(http.StatusNotFound, "error.html", gin.H{
+				"error":   "Project not found",
+				"details": fmt.Sprintf("Project %s was not found", projectID),
+			})
+		} else {
+			c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+				"error":   "Failed to revoke project tokens",
+				"details": err.Error(),
+			})
+		}
+		return
+	}
+
+	c.Redirect(http.StatusSeeOther, fmt.Sprintf("/projects/%s", projectID))
 }
