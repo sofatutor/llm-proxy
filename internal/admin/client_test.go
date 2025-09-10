@@ -86,6 +86,32 @@ func TestAPIClient_TokenMethods(t *testing.T) {
 	}
 }
 
+func TestAPIClient_TokenMethods_ErrorBranches(t *testing.T) {
+	// Server returns 400 with JSON body for GetToken
+	srvJSON := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"bad token"}`))
+	}))
+	defer srvJSON.Close()
+
+	c1 := NewAPIClient(srvJSON.URL, "tkn")
+	if _, err := c1.GetToken(context.Background(), "tok-x"); err == nil {
+		t.Fatalf("expected error on 400 JSON, got nil")
+	}
+
+	// Server returns 400 with non-JSON body for UpdateToken
+	srvText := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("plain error"))
+	}))
+	defer srvText.Close()
+
+	c2 := NewAPIClient(srvText.URL, "tkn")
+	if _, err := c2.UpdateToken(context.Background(), "tok-y", nil, nil); err == nil {
+		t.Fatalf("expected error on 400 text, got nil")
+	}
+}
+
 func TestObfuscateAPIKey(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -656,6 +682,40 @@ func TestAPIClient_UpdateProjectPartial(t *testing.T) {
 	}
 	if project.OpenAIAPIKey != "" {
 		t.Errorf("OpenAIAPIKey should be empty, got %q", project.OpenAIAPIKey)
+	}
+}
+
+func TestAPIClient_UpdateProject_WithIsActive(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("failed to decode request: %v", err)
+		}
+
+		project := Project{ID: "1", CreatedAt: time.Now()}
+		if name, ok := req["name"].(string); ok {
+			project.Name = name
+		}
+		if isActive, ok := req["is_active"].(bool); ok {
+			project.IsActive = isActive
+		}
+		if err := json.NewEncoder(w).Encode(project); err != nil {
+			t.Errorf("failed to encode project: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewAPIClient(server.URL, "test-token")
+	ctx := context.Background()
+
+	// Test updating with isActive = true
+	active := true
+	project, err := client.UpdateProject(ctx, "1", "Updated", "", &active)
+	if err != nil {
+		t.Fatalf("UpdateProject failed: %v", err)
+	}
+	if !project.IsActive {
+		t.Errorf("IsActive = %v, want true", project.IsActive)
 	}
 }
 
