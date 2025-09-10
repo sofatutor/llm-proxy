@@ -1,0 +1,21 @@
+{
+  "name": "llm-proxy-e2e",
+  "version": "1.0.0",
+  "description": "End-to-end tests for LLM Proxy Admin UI",
+  "private": true,
+  "scripts": {
+    "e2e:install": "playwright install --with-deps",
+    "e2e:test": "playwright test --reporter=line",
+    "e2e:ui": "playwright test --ui",
+    "e2e:trace": "playwright show-trace ./test-results/**/trace.zip",
+    "pree2e:test": "make build",
+    "start:e2e": "./bin/llm-proxy server --listen-addr :8099 --admin-ui --admin-listen-addr :8099"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.47.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
