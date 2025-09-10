@@ -592,6 +592,19 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 		return
 	}
+
+	// Validate revoke_tokens usage: it is only valid when explicitly deactivating the project
+	if req.RevokeTokens != nil {
+		if req.IsActive == nil || (req.IsActive != nil && *req.IsActive) {
+			// Audit: invalid field combination
+			_ = s.auditLogger.Log(s.auditEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultFailure, r, requestID).
+				WithProjectID(id).
+				WithDetail("validation_error", "revoke_tokens requires is_active=false"))
+
+			http.Error(w, `{"error":"revoke_tokens requires is_active=false"}`, http.StatusBadRequest)
+			return
+		}
+	}
 	project, err := s.projectStore.GetProjectByID(ctx, id)
 	if err != nil {
 		s.logger.Error("project not found for update", zap.String("id", id), zap.Error(err))
@@ -666,7 +679,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 			for _, token := range tokens {
 				if token.IsActive {
 					token.IsActive = false
-					token.DeactivatedAt = func() *time.Time { t := time.Now().UTC(); return &t }()
+					token.DeactivatedAt = nowPtrUTC()
 					if err := s.tokenStore.UpdateToken(ctx, token); err != nil {
 						s.logger.Warn("failed to revoke token during project deactivation",
 							zap.String("token_id", token.Token),
@@ -779,7 +792,7 @@ func (s *Server) handleBulkRevokeProjectTokens(w http.ResponseWriter, r *http.Re
 
 		// Revoke the token
 		token.IsActive = false
-		token.DeactivatedAt = func() *time.Time { t := time.Now().UTC(); return &t }()
+		token.DeactivatedAt = nowPtrUTC()
 
 		if err := s.tokenStore.UpdateToken(ctx, token); err != nil {
 			s.logger.Warn("failed to revoke individual token during bulk revoke",
@@ -1306,7 +1319,7 @@ func (s *Server) handleRevokeToken(w http.ResponseWriter, r *http.Request, token
 
 	// Revoke token by setting is_active to false
 	tokenData.IsActive = false
-	tokenData.DeactivatedAt = func() *time.Time { t := time.Now().UTC(); return &t }()
+	tokenData.DeactivatedAt = nowPtrUTC()
 
 	if err := s.tokenStore.UpdateToken(ctx, tokenData); err != nil {
 		s.logger.Error("failed to revoke token", zap.String("token_id", tokenID), zap.Error(err), zap.String("request_id", requestID))
@@ -1344,6 +1357,12 @@ func getRequestID(ctx context.Context) string {
 		return requestID
 	}
 	return uuid.New().String()
+}
+
+// nowPtrUTC returns the current UTC time as a *time.Time convenience helper.
+func nowPtrUTC() *time.Time {
+	t := time.Now().UTC()
+	return &t
 }
 
 // parseInt parses a string to an integer with a default value
