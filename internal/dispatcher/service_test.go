@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -598,7 +599,7 @@ func TestService_StopIdempotent(t *testing.T) {
 		FlushInterval:    time.Millisecond,
 	}
 	bus := eventbus.NewInMemoryEventBus(2)
-	svc, err := NewServiceWithBus(cfg, zaptest.NewLogger(t), bus)
+	svc, err := NewServiceWithBus(cfg, zap.NewNop(), bus)
 	if err != nil {
 		t.Fatalf("NewServiceWithBus failed: %v", err)
 	}

@@ -1,10 +1,10 @@
-# Response Caching Strategy
+# HTTP Response Caching Strategy
 
-This document outlines the caching strategy for the LLM proxy, which will be implemented in the production phase.
+This document outlines the HTTP response caching system implemented in the LLM proxy. The caching system provides significant performance improvements through Redis-backed shared caching with HTTP standards compliance.
 
 ## Overview
 
-The proxy will implement a Redis-backed caching system to improve performance, reduce latency, and decrease load on the target API. This caching system will be configurable per endpoint and will respect cache control headers.
+The proxy implements a Redis-backed caching system that improves performance, reduces latency, and decreases load on target APIs. The caching system respects HTTP cache control headers and provides optional in-memory fallback for development environments.
 
 ## Goals
 
@@ -68,20 +68,30 @@ Not all endpoints are suitable for caching. By default:
 
 ### TTL Configuration
 
-TTL settings will be configurable at multiple levels:
+TTL (Time-To-Live) is determined through a precedence hierarchy:
 
-1. **Global Default**: Base TTL for all cacheable endpoints
-2. **Per-Endpoint**: Specific TTL for each endpoint
-3. **Per-Request**: Support for cache control headers to override defaults
+1. **Response Headers** (highest precedence):
+   - `s-maxage` directive (shared cache specific)
+   - `max-age` directive (general cache TTL)
 
-### Invalidation Strategies
+2. **Default TTL** (fallback):
+   - `HTTP_CACHE_DEFAULT_TTL` environment variable
+   - Used when upstream permits caching but doesn't specify TTL
+   - Default: 300 seconds (5 minutes)
 
-Several cache invalidation strategies will be implemented:
+3. **Client-Forced Caching**:
+   - When client sends `Cache-Control: public, max-age=N` on request
+   - Used for POST requests or when upstream lacks cache directives
+   - Enables cache testing and benchmarking scenarios
 
-1. **Time-Based Expiration**: Automatic expiration after TTL
-2. **Manual Invalidation**: Admin API to clear cache entries
-3. **Conditional Invalidation**: Based on response headers (ETag, Last-Modified)
-4. **Targeted Invalidation**: Clear cache for specific projects or endpoints
+### Cache Invalidation
+
+Current invalidation mechanisms:
+
+1. **Time-Based Expiration**: Automatic expiration via Redis TTL
+2. **Manual Purge**: Planned for future management API
+3. **Size Limits**: Objects exceeding `HTTP_CACHE_MAX_OBJECT_BYTES` are not cached
+4. **Cache Control Directives**: `no-store` and `private` bypass caching entirely
 
 ## Implementation Approach
 
@@ -177,21 +187,71 @@ Comprehensive metrics will be collected:
 4. **Transport Security**: Encrypted communication with Redis
 5. **Response Validation**: Validation of cached responses before serving
 
-## Development Plan
+## Implementation Status
 
-The caching system will be implemented in multiple phases:
+The core caching system has been implemented and is available in the proxy:
 
-1. **Phase 1: Core Caching**
-   - Basic Redis integration
-   - Simple key generation
-   - Time-based expiration
+### ✅ Implemented Features
 
-2. **Phase 2: Advanced Features**
-   - Per-endpoint configuration
-   - Cache control header support
-   - Monitoring and metrics
+1. **Redis-backed Caching**
+   - Primary Redis backend with in-memory fallback
+   - Configurable via `HTTP_CACHE_BACKEND` environment variable
+   - Redis connection and key prefix configuration
 
-3. **Phase 3: Optimization**
-   - Compression
-   - Partial result caching
-   - Performance tuning
+2. **HTTP Standards Compliance**
+   - Respects `Cache-Control` directives (`no-store`, `private`, `public`, `max-age`, `s-maxage`)
+   - Honors `Authorization` header behavior for shared cache semantics
+   - Supports conditional requests with `ETag` and `Last-Modified` validators
+   - TTL derivation with `s-maxage` precedence over `max-age`
+
+3. **Request Method Support**
+   - GET/HEAD caching by default when upstream permits
+   - Optional POST caching when client opts in via request `Cache-Control`
+   - Conservative `Vary` handling with subset of request headers
+
+4. **Streaming Response Support**
+   - Captures streaming responses while serving to client
+   - Stores complete response after streaming completion
+   - Subsequent requests serve from cache immediately
+
+5. **Observability Integration**
+   - Response headers: `X-PROXY-CACHE`, `X-PROXY-CACHE-KEY`, `Cache-Status`
+   - Event bus bypass for cache hits (performance optimization)
+   - Cache misses and stores published to event bus
+
+6. **Configuration and Tooling**
+   - Environment variable configuration
+   - Benchmark CLI with cache testing flags (`--cache`, `--cache-ttl`, `--method`)
+   - Size limits and TTL controls
+
+### 🔄 Future Enhancements
+
+1. **Advanced Cache Control**
+   - `stale-while-revalidate` and `stale-if-error` support
+   - Full per-response `Vary` header handling
+   - Upstream conditional revalidation (If-None-Match/If-Modified-Since)
+
+2. **Management Features**
+   - Cache purge endpoints and CLI commands
+   - Metrics for hits/misses/bypass/store rates
+   - Cache warming strategies
+
+3. **Performance Optimizations**
+   - Response compression for large objects
+   - Bounded L1 in-memory cache layer
+   - Cache key optimization
+
+### Configuration
+
+Enable caching with environment variables:
+
+```bash
+HTTP_CACHE_ENABLED=true
+HTTP_CACHE_BACKEND=redis
+REDIS_CACHE_URL=redis://localhost:6379/0
+REDIS_CACHE_KEY_PREFIX=llmproxy:cache:
+HTTP_CACHE_MAX_OBJECT_BYTES=1048576
+HTTP_CACHE_DEFAULT_TTL=300
+```
+
+See [API Configuration Guide](api-configuration.md) for complete configuration details.

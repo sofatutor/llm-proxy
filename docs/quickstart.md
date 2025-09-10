@@ -18,6 +18,15 @@ go build -o llm-proxy ./cmd/proxy
 ./llm-proxy admin --management-token $MANAGEMENT_TOKEN
 ```
 
+3b) Start with Redis caching (optional)
+```bash
+# Start Redis
+docker run -d --name redis -p 6379:6379 redis:alpine
+
+# Start proxy with caching
+HTTP_CACHE_ENABLED=true HTTP_CACHE_BACKEND=redis REDIS_CACHE_URL=redis://localhost:6379/0 ./llm-proxy server
+```
+
 4) Generate a token
    - In the Admin UI: Tokens → Generate Token (recommended)
    - Or via CLI (replace IDs):

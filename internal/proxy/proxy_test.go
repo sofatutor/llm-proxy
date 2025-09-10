@@ -175,6 +175,172 @@ func TestTransparentProxy_BasicProxying(t *testing.T) {
 	mockStore.AssertExpectations(t)
 }
 
+func TestHTTPCache_BasicHitOnSecondGET(t *testing.T) {
+	// Upstream that counts hits
+	hitCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount++
+		w.Header().Set("Cache-Control", "public, max-age=60")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	mockValidator := new(MockTokenValidator)
+	mockStore := new(MockProjectStore)
+	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
+	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
+
+	cfg := ProxyConfig{
+		TargetBaseURL:       server.URL,
+		AllowedEndpoints:    []string{"/v1/test"},
+		AllowedMethods:      []string{"GET"},
+		HTTPCacheEnabled:    true,
+		HTTPCacheDefaultTTL: 10 * time.Second,
+	}
+
+	p, err := NewTransparentProxyWithLogger(cfg, mockValidator, mockStore, zap.NewNop())
+	require.NoError(t, err)
+
+	// Debug: Check if cache is actually enabled
+	if p.cache == nil {
+		t.Fatalf("Cache is nil, but HTTPCacheEnabled was true")
+	}
+
+	// First request -> miss and store
+	req1 := httptest.NewRequest("GET", "/v1/test", nil)
+	req1.Header.Set("Authorization", "Bearer test_token")
+	req1.Header.Set("Cache-Control", "public, max-age=60") // Client opts in to caching
+	w1 := httptest.NewRecorder()
+	p.Handler().ServeHTTP(w1, req1)
+	res1 := w1.Result()
+	_ = res1.Body.Close()
+	assert.Equal(t, http.StatusOK, res1.StatusCode)
+	assert.Contains(t, res1.Header.Get("Cache-Status"), "stored")
+
+	// Second request -> hit (no upstream increment)
+	req2 := httptest.NewRequest("GET", "/v1/test", nil)
+	req2.Header.Set("Authorization", "Bearer test_token")
+	req2.Header.Set("Cache-Control", "public, max-age=60") // Client opts in to caching
+	w2 := httptest.NewRecorder()
+	p.Handler().ServeHTTP(w2, req2)
+	res2 := w2.Result()
+	_ = res2.Body.Close()
+	assert.Equal(t, http.StatusOK, res2.StatusCode)
+	assert.Contains(t, res2.Header.Get("Cache-Status"), "hit")
+
+	// Upstream should have been hit once
+	assert.Equal(t, 1, hitCount)
+}
+
+func TestHTTPCache_VaryAcceptSeparatesEntries(t *testing.T) {
+	// Upstream returns different payload for different Accept
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		w.Header().Set("Cache-Control", "public, max-age=60")
+		if strings.Contains(r.Header.Get("Accept"), "application/json") {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"type":"json"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("plain"))
+	}))
+	defer srv.Close()
+
+	mockValidator := new(MockTokenValidator)
+	mockStore := new(MockProjectStore)
+	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
+	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
+
+	cfg := ProxyConfig{
+		TargetBaseURL:       srv.URL,
+		AllowedEndpoints:    []string{"/v1/test"},
+		AllowedMethods:      []string{"GET"},
+		HTTPCacheEnabled:    true,
+		HTTPCacheDefaultTTL: 10 * time.Second,
+	}
+	p, err := NewTransparentProxyWithLogger(cfg, mockValidator, mockStore, zap.NewNop())
+	require.NoError(t, err)
+
+	handler := p.Handler()
+
+	// First: Accept json -> miss and store
+	r1 := httptest.NewRequest("GET", "/v1/test", nil)
+	r1.Header.Set("Authorization", "Bearer test_token")
+	r1.Header.Set("Accept", "application/json")
+	r1.Header.Set("Cache-Control", "public, max-age=60") // Client opts in to caching
+	w1 := httptest.NewRecorder()
+	handler.ServeHTTP(w1, r1)
+	res1 := w1.Result()
+	_, _ = io.ReadAll(res1.Body)
+	_ = res1.Body.Close()
+	assert.Contains(t, res1.Header.Get("Cache-Status"), "stored")
+
+	// Second: Accept json -> hit
+	r2 := httptest.NewRequest("GET", "/v1/test", nil)
+	r2.Header.Set("Authorization", "Bearer test_token")
+	r2.Header.Set("Accept", "application/json")
+	w2 := httptest.NewRecorder()
+	handler.ServeHTTP(w2, r2)
+	res2 := w2.Result()
+	_, _ = io.ReadAll(res2.Body)
+	_ = res2.Body.Close()
+	assert.Contains(t, res2.Header.Get("Cache-Status"), "hit")
+
+	// Third: different Accept -> miss (separate cache entry)
+	r3 := httptest.NewRequest("GET", "/v1/test", nil)
+	r3.Header.Set("Authorization", "Bearer test_token")
+	r3.Header.Set("Accept", "text/plain")
+	r3.Header.Set("Cache-Control", "public, max-age=60") // Client opts in to caching
+	w3 := httptest.NewRecorder()
+	handler.ServeHTTP(w3, r3)
+	res3 := w3.Result()
+	_, _ = io.ReadAll(res3.Body)
+	_ = res3.Body.Close()
+	assert.Contains(t, res3.Header.Get("Cache-Status"), "stored") // Third request should store new cache entry
+
+	// Add tests for uncovered cache functions
+	assert.Equal(t, 2, hits)
+}
+
+func TestCacheHelpers_Coverage(t *testing.T) {
+	// Test canServeCachedForRequest
+	req := httptest.NewRequest("GET", "/test", nil)
+	headers := make(http.Header)
+	headers.Set("Cache-Control", "public, max-age=60")
+
+	// Without Authorization - should be true
+	assert.True(t, canServeCachedForRequest(req, headers))
+
+	// With Authorization but public cache - should be true
+	req.Header.Set("Authorization", "Bearer test")
+	assert.True(t, canServeCachedForRequest(req, headers))
+
+	// With Authorization but private cache - should be false
+	headers.Set("Cache-Control", "private, max-age=60")
+	assert.False(t, canServeCachedForRequest(req, headers))
+
+	// Test conditionalRequestMatches
+	req.Header.Set("If-None-Match", "123")
+	headers.Set("ETag", "123")
+	assert.True(t, conditionalRequestMatches(req, headers))
+
+	req.Header.Set("If-None-Match", "456")
+	assert.False(t, conditionalRequestMatches(req, headers))
+
+	// Test wantsRevalidation
+	req.Header.Set("Cache-Control", "no-cache")
+	assert.True(t, wantsRevalidation(req))
+
+	req.Header.Set("Cache-Control", "max-age=0")
+	assert.True(t, wantsRevalidation(req))
+
+	req.Header.Set("Cache-Control", "max-age=60")
+	assert.False(t, wantsRevalidation(req))
+}
+
 // Test streaming response handling
 func TestTransparentProxy_StreamingResponses(t *testing.T) {
 	// Create mock API server

@@ -10,6 +10,7 @@ This document is a snapshot of the LLM Proxy CLI capabilities and flags intended
   - [`llm-proxy setup`](#llm-proxy-setup)
   - [`llm-proxy manage`](#llm-proxy-manage)
   - [`llm-proxy dispatcher`](#llm-proxy-dispatcher)
+  - [`llm-proxy benchmark`](#llm-proxy-benchmark)
   - [`llm-proxy openai chat`](#llm-proxy-openai-chat)
 - [Configuration Files](#configuration-files)
 - [Exit Codes](#exit-codes)
@@ -25,6 +26,7 @@ The LLM Proxy CLI provides commands for:
 - Setting up the initial configuration
 - Managing projects and tokens
 - Running the event dispatcher
+- Benchmarking proxy performance and testing cache behavior
 - Interactive chat with OpenAI
 
 ## Global Options
@@ -352,6 +354,109 @@ llm-proxy dispatcher --service file --endpoint ./events.jsonl
 # Start with custom buffer size
 llm-proxy dispatcher --service file --endpoint ./events.jsonl --buffer 1000
 ```
+
+---
+
+### `llm-proxy benchmark`
+
+Benchmark latency, throughput, and error rates by sending concurrent requests to the proxy or target API directly. Includes cache testing capabilities to validate cache hit/miss behavior.
+
+**Usage:**
+```bash
+llm-proxy benchmark [flags]
+```
+
+**Required Flags:**
+- `--base-url string`: Base URL of the target (e.g., `http://localhost:8080` or `https://api.openai.com/v1`)
+- `--endpoint string`: API path to hit (e.g., `/v1/chat/completions` or `/chat/completions` for OpenAI)
+- `--token string`: Bearer token (proxy token or OpenAI API key)
+- `--requests, -r int`: Total number of requests to send
+- `--concurrency, -c int`: Number of concurrent workers
+
+**Optional Flags:**
+- `--json string`: JSON request body for POST requests
+- `--method string`: HTTP method to use (GET, POST, PUT, PATCH) (default: "POST")
+- `--cache`: Set `Cache-Control: public` with high TTL for benchmarking cache behavior
+- `--cache-ttl int`: TTL seconds to use with `--cache` (default: 86400)
+- `--debug`: Print sample responses and headers by status code
+
+**Cache Testing Examples:**
+```bash
+# Test cache warming with POST requests
+llm-proxy benchmark \
+  --base-url "http://localhost:8080" \
+  --endpoint "/v1/chat/completions" \
+  --token "$PROXY_TOKEN" \
+  --requests 10 --concurrency 1 \
+  --cache --cache-ttl 3600 \
+  --json '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"test cache"}]}'
+
+# Test cache hits with GET requests
+llm-proxy benchmark \
+  --base-url "http://localhost:8080" \
+  --endpoint "/v1/models" \
+  --token "$PROXY_TOKEN" \
+  --method GET \
+  --requests 20 --concurrency 5 \
+  --debug
+
+# Compare cache performance - first populate cache, then test hits
+llm-proxy benchmark \
+  --base-url "http://localhost:8080" \
+  --endpoint "/v1/chat/completions" \
+  --token "$PROXY_TOKEN" \
+  --requests 1 --concurrency 1 \
+  --cache --cache-ttl 300 \
+  --json '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"warmup"}]}'
+
+llm-proxy benchmark \
+  --base-url "http://localhost:8080" \
+  --endpoint "/v1/chat/completions" \
+  --token "$PROXY_TOKEN" \
+  --requests 50 --concurrency 10 \
+  --debug \
+  --json '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"warmup"}]}'
+```
+
+**Standard Benchmarking Examples:**
+```bash
+# Proxy performance test
+llm-proxy benchmark \
+  --base-url "http://localhost:8080" \
+  --endpoint "/v1/chat/completions" \
+  --token "$PROXY_TOKEN" \
+  --requests 100 --concurrency 4 \
+  --json '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}'
+
+# Direct OpenAI comparison
+llm-proxy benchmark \
+  --base-url "https://api.openai.com/v1" \
+  --endpoint "/chat/completions" \
+  --token "$OPENAI_API_KEY" \
+  --requests 100 --concurrency 4 \
+  --json '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}'
+
+# Debug mode to inspect cache headers
+llm-proxy benchmark \
+  --base-url "http://localhost:8080" \
+  --endpoint "/v1/chat/completions" \
+  --token "$PROXY_TOKEN" \
+  --requests 20 --concurrency 5 \
+  --json '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}' \
+  --debug
+```
+
+**Latency Breakdown:**
+The benchmark tool provides detailed timing information:
+- Request includes `X-REQUEST-START` (ns)
+- Proxy returns `X-UPSTREAM-REQUEST-START` and `X-UPSTREAM-REQUEST-STOP` (ns)
+- This allows precise separation of upstream vs proxy latency
+
+**Cache Headers:**
+When testing cache behavior, look for these response headers:
+- `X-PROXY-CACHE`: `hit` or `miss`
+- `X-PROXY-CACHE-KEY`: Cache key used for the request
+- `Cache-Status`: `hit`, `miss`, `bypass`, `stored`, or `conditional-hit`
 
 ---
 
