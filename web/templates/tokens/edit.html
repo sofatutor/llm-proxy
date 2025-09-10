@@ -1,7 +1,5 @@
 {{ define "tokens/edit.html" }}
-{{ template "layout.html" . }}
-
-{{ define "content" }}
+{{ template "layout/start" . }}
 <div class="container">
     <div class="header">
         <h1>Edit Token</h1>
@@ -123,5 +121,5 @@
     margin: 0;
 }
 </style>
-{{ end }}
+{{ template "layout/end" . }}
 {{ end }}

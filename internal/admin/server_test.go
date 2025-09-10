@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
@@ -895,10 +896,27 @@ func TestServer_HandleProjectsDelete_Errors(t *testing.T) {
 
 func TestServer_HandleTokensShow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	
+	// Create temporary template directory
+	tmpDir := t.TempDir()
+	templateDir := filepath.Join(tmpDir, "templates")
+	err := os.MkdirAll(templateDir, 0755)
+	require.NoError(t, err)
+	
+	// Create error.html template
+	errorTemplate := `<html><body>Error: {{.error}}</body></html>`
+	err = os.WriteFile(filepath.Join(templateDir, "error.html"), []byte(errorTemplate), 0644)
+	require.NoError(t, err)
+	
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(templateDir, "*.html"))
+
+	// Mock API client that returns an error to trigger error handling
+	mockClient := &mockAPIClient{DashboardErr: fmt.Errorf("token not found")}
 
 	s.engine.GET("/tokens/:token", func(c *gin.Context) {
+		c.Set("apiClient", mockClient)
 		s.handleTokensShow(c)
 	})
 
@@ -906,8 +924,9 @@ func TestServer_HandleTokensShow(t *testing.T) {
 	w := httptest.NewRecorder()
 	s.engine.ServeHTTP(w, req)
 
-	if w.Code != http.StatusSeeOther {
-		t.Errorf("expected 303, got %d", w.Code)
+	// Should return 500 Internal Server Error since GetToken failed
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", w.Code)
 	}
 }
 

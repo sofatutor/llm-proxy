@@ -9,7 +9,7 @@
     "e2e:ui": "playwright test --ui",
     "e2e:trace": "playwright show-trace ./test-results/**/trace.zip",
     "pree2e:test": "make build",
-    "start:e2e": "./bin/llm-proxy server --listen-addr :8099 --admin-ui --admin-listen-addr :8099"
+    "start:e2e": "./scripts/start-e2e.sh"
   },
   "devDependencies": {
     "@playwright/test": "^1.47.0",

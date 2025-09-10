@@ -1,0 +1,81 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+        
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+          
+    - name: Cache Node modules
+      uses: actions/cache@v4
+      with:
+        path: node_modules
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+    
+    - name: Install Go dependencies
+      run: go mod download
+      
+    - name: Install Node.js dependencies
+      run: npm install
+      
+    - name: Install Playwright browsers
+      run: npm run e2e:install
+      
+    - name: Build LLM Proxy
+      run: make build
+      
+    - name: Run Go tests
+      run: make test
+      
+    - name: Run linters
+      run: make lint
+      
+    - name: Run E2E tests
+      run: npm run e2e:test
+      env:
+        # Generate a test management token for E2E tests
+        MANAGEMENT_TOKEN: "test-management-token-for-e2e-$(date +%s)"
+        
+    - name: Upload Playwright report
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: playwright-report
+        path: test-results/
+        retention-days: 7
+        
+    - name: Upload test videos
+      uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: test-videos
+        path: test-results/
+        retention-days: 7
