@@ -652,9 +652,60 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 }
 
 func (s *Server) handleTokensShow(c *gin.Context) {
-	// Note: This would require a new Management API endpoint to get token details
-	// For now, redirect to tokens list
-	c.Redirect(http.StatusSeeOther, "/tokens")
+	// Get API client from context
+	apiClient := c.MustGet("apiClient").(APIClientInterface)
+
+	tokenID := c.Param("token")
+	if tokenID == "" {
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"error": "Token ID is required",
+		})
+		return
+	}
+
+	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
+	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
+	} else if ip := c.Request.Header.Get("X-Real-IP"); ip != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedIP, ip)
+	}
+	if ref := c.Request.Referer(); ref != "" {
+		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
+	}
+
+	token, err := apiClient.GetToken(ctx, tokenID)
+	if err != nil {
+		if strings.Contains(err.Error(), "404") {
+			c.HTML(http.StatusNotFound, "error.html", gin.H{
+				"error":   "Token not found",
+				"details": fmt.Sprintf("Token %s was not found", tokenID),
+			})
+		} else {
+			c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+				"error":   "Failed to load token",
+				"details": err.Error(),
+			})
+		}
+		return
+	}
+
+	// Get project for the token
+	project, err := apiClient.GetProject(ctx, token.ProjectID)
+	if err != nil {
+		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
+			"error":   "Failed to load project",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.HTML(http.StatusOK, "tokens/show.html", gin.H{
+		"title":   "Token Details",
+		"active":  "tokens",
+		"token":   token,
+		"project": project,
+		"tokenID": tokenID,
+	})
 }
 
 // Helper functions
