@@ -54,7 +54,7 @@ case "$MODE" in
 
   watch|dev)
     # Uppercasing via tr for portability (avoid ${VAR^^} which may not be available)
-    MODE_UPPER=$(printf "%s" "$MODE" | tr '[:lower:]' '[:upper:]')
+    MODE_UPPER=$(echo "$MODE" | tr '[:lower:]' '[:upper:]')
     echo "🧪 ${MODE_UPPER} Mode: Running tests + coverage, then watching..."
     # Initial run (strip per-package coverage noise)
     "$gotestsum_bin" --format pkgname --hide-summary=skipped,output -- \

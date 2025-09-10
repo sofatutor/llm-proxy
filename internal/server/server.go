@@ -842,11 +842,6 @@ func (s *Server) handleBulkRevokeProjectTokens(w http.ResponseWriter, r *http.Re
 	}
 }
 
-// generateUUID generates a random UUID (v4)
-func generateUUID() string {
-	return uuid.NewString()
-}
-
 // Add this helper to *Server
 func (s *Server) checkManagementAuth(w http.ResponseWriter, r *http.Request) bool {
 	const prefix = "Bearer "
