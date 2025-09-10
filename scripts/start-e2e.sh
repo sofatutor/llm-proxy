@@ -30,9 +30,11 @@ cleanup() {
     if [ ! -z "$ADMIN_PID" ]; then
         kill $ADMIN_PID 2>/dev/null || true
     fi
+    # Remove this run's DB and any leftover E2E DBs from prior runs
     if [ -f "$DB_PATH" ]; then
         rm -f "$DB_PATH" || true
     fi
+    rm -f ./tmp/e2e-db-*.sqlite 2>/dev/null || true
 }
 
 # Set trap to cleanup on script exit

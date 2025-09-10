@@ -201,23 +201,5 @@
 {{ end }}
 {{ template "layout/end" . }}
 
-<script>
-function revokeToken(tokenId, obfuscatedToken) {
-    if (confirm('Are you sure you want to revoke token ' + obfuscatedToken + '? This action cannot be undone.')) {
-        // Create a form and submit it
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/tokens/' + tokenId;
-        
-        const methodInput = document.createElement('input');
-        methodInput.type = 'hidden';
-        methodInput.name = '_method';
-        methodInput.value = 'DELETE';
-        form.appendChild(methodInput);
-        
-        document.body.appendChild(form);
-        form.submit();
-    }
-}
-</script>
+<script src="/static/js/token-utils.js"></script>
 {{ end }}

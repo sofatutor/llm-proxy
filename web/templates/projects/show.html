@@ -256,23 +256,13 @@ function copyToClipboard(text) {
     });
 }
 
-function bulkRevokeTokens(projectId, projectName) {
-    if (confirm('Are you sure you want to revoke ALL tokens for project "' + projectName + '"? This action cannot be undone.')) {
-        // Create a form and submit it
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/projects/' + projectId + '/revoke-tokens';
-        
-        document.body.appendChild(form);
-        form.submit();
-    }
-}
+// moved to /static/js/token-utils.js
 
 function confirmDelete(projectId, projectName) {
     document.getElementById('deleteProjectName').textContent = projectName;
     document.getElementById('deleteForm').action = '/projects/' + projectId;
     new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }
-</script>
+<script src="/static/js/token-utils.js"></script>
 {{ template "layout/end" . }}
 {{ end }}

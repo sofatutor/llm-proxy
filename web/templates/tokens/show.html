@@ -157,52 +157,8 @@
     </div>
     {{ end }}
 
+<script src="/static/js/token-utils.js"></script>
 {{ template "layout/end" . }}
-
-<script>
-function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).then(function() {
-        // Create toast notification
-        const toast = document.createElement('div');
-        toast.className = 'toast position-fixed top-0 end-0 m-3';
-        toast.setAttribute('role', 'alert');
-        toast.innerHTML = `
-            <div class="toast-body bg-success text-white">
-                <i class="bi bi-check-circle"></i>
-                Copied to clipboard!
-            </div>
-        `;
-        
-        document.body.appendChild(toast);
-        const bsToast = new bootstrap.Toast(toast);
-        bsToast.show();
-        
-        toast.addEventListener('hidden.bs.toast', function() {
-            toast.remove();
-        });
-    }).catch(function(err) {
-        console.error('Failed to copy: ', err);
-    });
-}
-
-function revokeToken(tokenId, obfuscatedToken) {
-    if (confirm('Are you sure you want to revoke token ' + obfuscatedToken + '? This action cannot be undone.')) {
-        // Create a form and submit it
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/tokens/' + tokenId;
-        
-        const methodInput = document.createElement('input');
-        methodInput.type = 'hidden';
-        methodInput.name = '_method';
-        methodInput.value = 'DELETE';
-        form.appendChild(methodInput);
-        
-        document.body.appendChild(form);
-        form.submit();
-    }
-}
-</script>
 {{ end }}
 
 

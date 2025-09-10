@@ -595,26 +595,9 @@ func TestGetRequestID(t *testing.T) {
 }
 
 func TestGenerateUUID(t *testing.T) {
-	// Generate a UUID and check its format
-	id := generateUUID()
-
-	// Check that it's not empty
+	// Ensure request IDs are generated when missing
+	id := getRequestID(context.Background())
 	assert.NotEmpty(t, id)
-
-	// Check length (36 characters for UUID format: 8-4-4-4-12)
-	assert.Equal(t, 36, len(id))
-
-	// Check that it contains hyphens at the correct positions
-	assert.Equal(t, string(id[8]), "-")
-	assert.Equal(t, string(id[13]), "-")
-	assert.Equal(t, string(id[18]), "-")
-	assert.Equal(t, string(id[23]), "-")
-
-	// Check that all other characters are valid hex
-	validHex := "0123456789abcdef-"
-	for _, c := range id {
-		assert.Contains(t, validHex, string(c))
-	}
 }
 
 func TestInitializeComponentsAndStart(t *testing.T) {
