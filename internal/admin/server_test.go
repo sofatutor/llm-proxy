@@ -1465,6 +1465,36 @@ func TestServer_HandleAuditList_Error(t *testing.T) {
 	}
 }
 
+func TestServer_HandleAuditList_WithHeadersAndFilters(t *testing.T) {
+    gin.SetMode(gin.TestMode)
+    _ = os.MkdirAll(filepath.Join(testTemplateDir(), "audit"), 0755)
+    _ = os.WriteFile(filepath.Join(testTemplateDir(), "audit", "list.html"), []byte("<html><body>audit list</body></html>"), 0644)
+    t.Cleanup(func() { _ = os.Remove(filepath.Join(testTemplateDir(), "audit", "list.html")) })
+
+    s := &Server{engine: gin.New()}
+    s.engine.SetFuncMap(template.FuncMap{})
+    s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "audit", "*.html"))
+
+    cap := &capturingAuditClient{}
+    s.engine.GET("/audit", func(c *gin.Context) {
+        c.Set("apiClient", APIClientInterface(cap))
+        s.handleAuditList(c)
+    })
+
+    // Build a query exercising most filters and header forwarding branch
+    req, _ := http.NewRequest("GET", "/audit?action=proxy_request&outcome=success&project_id=p1&actor=alice&client_ip=1.2.3.4&request_id=req-1&method=GET&path=/v1/chat&search=foo&start_time=2024-01-01T00:00:00Z&end_time=2024-01-02T00:00:00Z&page=2&page_size=10", nil)
+    req.Header.Set("X-Forwarded-For", "203.0.113.1, 10.0.0.1")
+    w := httptest.NewRecorder()
+    s.engine.ServeHTTP(w, req)
+
+    if w.Code != http.StatusOK {
+        t.Fatalf("expected 200, got %d", w.Code)
+    }
+    if cap.lastFilters == nil || cap.lastFilters["action"] != "proxy_request" || cap.lastFilters["outcome"] != "success" || cap.lastFilters["project_id"] != "p1" || cap.lastFilters["search"] != "foo" {
+        t.Fatalf("filters not forwarded as expected: %#v", cap.lastFilters)
+    }
+}
+
 func TestServer_HandleAuditShow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	_ = os.MkdirAll(filepath.Join(testTemplateDir(), "audit"), 0755)

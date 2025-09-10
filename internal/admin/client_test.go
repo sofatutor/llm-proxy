@@ -112,6 +112,35 @@ func TestAPIClient_TokenMethods_ErrorBranches(t *testing.T) {
 	}
 }
 
+func TestAPIClient_UpdateToken_SendsBothFields(t *testing.T) {
+	// Capture request payload and return updated token
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/manage/tokens/tok-99" || r.Method != http.MethodPatch {
+			http.Error(w, "bad route", http.StatusNotFound)
+			return
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if _, ok := body["is_active"]; !ok {
+			t.Fatalf("missing is_active in payload: %#v", body)
+		}
+		if _, ok := body["max_requests"]; !ok {
+			t.Fatalf("missing max_requests in payload: %#v", body)
+		}
+		_ = json.NewEncoder(w).Encode(Token{TokenID: "tok-99", ProjectID: "p1", IsActive: true})
+	}))
+	defer srv.Close()
+
+	c := NewAPIClient(srv.URL, "tkn")
+	active := true
+	maxReq := 42
+	if _, err := c.UpdateToken(context.Background(), "tok-99", &active, &maxReq); err != nil {
+		t.Fatalf("UpdateToken err: %v", err)
+	}
+}
+
 func TestObfuscateAPIKey(t *testing.T) {
 	tests := []struct {
 		name   string
