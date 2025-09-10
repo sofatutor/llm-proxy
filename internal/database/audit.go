@@ -173,11 +173,11 @@ func (d *DB) ListAuditEvents(ctx context.Context, filters AuditEventFilters) ([]
 		args = append(args, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern)
 	}
 	if filters.StartTime != nil {
-		query += " AND timestamp >= ?"
+		query += " AND timestamp >= datetime(?)"
 		args = append(args, *filters.StartTime)
 	}
 	if filters.EndTime != nil {
-		query += " AND timestamp <= ?"
+		query += " AND timestamp <= datetime(?)"
 		args = append(args, *filters.EndTime)
 	}
 
@@ -281,11 +281,11 @@ func (d *DB) CountAuditEvents(ctx context.Context, filters AuditEventFilters) (i
 		args = append(args, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern)
 	}
 	if filters.StartTime != nil {
-		query += " AND timestamp >= ?"
+		query += " AND timestamp >= datetime(?)"
 		args = append(args, *filters.StartTime)
 	}
 	if filters.EndTime != nil {
-		query += " AND timestamp <= ?"
+		query += " AND timestamp <= datetime(?)"
 		args = append(args, *filters.EndTime)
 	}
 

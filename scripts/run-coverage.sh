@@ -53,7 +53,9 @@ case "$MODE" in
     ;;
 
   watch|dev)
-    echo "🧪 ${MODE^^} Mode: Running tests + coverage, then watching..."
+    # Uppercasing via tr for portability (avoid ${VAR^^} which may not be available)
+    MODE_UPPER=$(echo "$MODE" | tr '[:lower:]' '[:upper:]')
+    echo "🧪 ${MODE_UPPER} Mode: Running tests + coverage, then watching..."
     # Initial run (strip per-package coverage noise)
     "$gotestsum_bin" --format pkgname --hide-summary=skipped,output -- \
       -coverprofile="$OUTFILE_DEV" -covermode=atomic -coverpkg="$COVERPKG" ./... \
@@ -86,5 +88,3 @@ case "$MODE" in
     exit 2
     ;;
 esac
-
-

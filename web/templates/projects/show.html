@@ -92,6 +92,29 @@
                 <hr>
                 <div class="row">
                     <div class="col-sm-3">
+                        <strong>Status:</strong>
+                    </div>
+                    <div class="col-sm-9">
+                        {{ if .project.IsActive }}
+                            <span class="badge bg-success fs-6">
+                                <i class="bi bi-check-circle"></i>
+                                Active
+                            </span>
+                            <br>
+                            <small class="text-muted">Project and all its tokens are active</small>
+                        {{ else }}
+                            <span class="badge bg-danger fs-6">
+                                <i class="bi bi-x-circle"></i>
+                                Inactive
+                            </span>
+                            <br>
+                            <small class="text-muted">Project is disabled; all API requests will be rejected</small>
+                        {{ end }}
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-sm-3">
                         <strong>Last Updated:</strong>
                     </div>
                     <div class="col-sm-9">
@@ -151,8 +174,14 @@
                 </p>
                 <div class="text-center">
                     <a href="/tokens?project_id={{ .project.ID }}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-list"></i>
                         View Tokens
                     </a>
+                    <button type="button" class="btn btn-sm btn-outline-danger ms-2" 
+                            onclick="bulkRevokeTokens('{{ .project.ID }}', '{{ .project.Name }}')">
+                        <i class="bi bi-trash"></i>
+                        Revoke All Tokens
+                    </button>
                 </div>
             </div>
         </div>
@@ -227,11 +256,13 @@ function copyToClipboard(text) {
     });
 }
 
+// moved to /static/js/token-utils.js
+
 function confirmDelete(projectId, projectName) {
     document.getElementById('deleteProjectName').textContent = projectName;
     document.getElementById('deleteForm').action = '/projects/' + projectId;
     new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }
-</script>
+<script src="/static/js/token-utils.js"></script>
 {{ template "layout/end" . }}
 {{ end }}

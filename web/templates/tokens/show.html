@@ -28,23 +28,52 @@
                 <div class="card-body">
                     <div class="row mb-3">
                         <div class="col-sm-4"><strong>Token ID</strong></div>
-                        <div class="col-sm-8"><code>{{ .token.ID }}</code></div>
+                        <div class="col-sm-8">
+                            <code>{{ obfuscateToken .tokenID }}</code>
+                            <button class="btn btn-sm btn-outline-secondary ms-2" 
+                                    onclick="copyToClipboard('{{ .tokenID }}')" 
+                                    title="Copy token ID to clipboard">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-sm-4"><strong>Project</strong></div>
-                        <div class="col-sm-8"><code>{{ .token.ProjectID }}</code></div>
-                    </div>
-                    <div class="row mb-3">
-                        <div class="col-sm-4"><strong>Obfuscated Token</strong></div>
-                        <div class="col-sm-8"><code>{{ obfuscateToken .token.Token }}</code></div>
+                        <div class="col-sm-8">
+                            <a href="/projects/{{ .project.ID }}" class="text-decoration-none">
+                                {{ .project.Name }}
+                            </a>
+                            <br>
+                            <small class="text-muted">{{ .project.ID }}</small>
+                        </div>
                     </div>
                     <div class="row mb-3">
                         <div class="col-sm-4"><strong>Status</strong></div>
                         <div class="col-sm-8">
                             {{ if .token.IsActive }}
-                                <span class="badge bg-success">Active</span>
+                                {{ if .token.ExpiresAt }}
+                                    {{ if gt .token.ExpiresAt.Unix now.Unix }}
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle"></i>
+                                            Active
+                                        </span>
+                                    {{ else }}
+                                        <span class="badge bg-danger">
+                                            <i class="bi bi-x-circle"></i>
+                                            Expired
+                                        </span>
+                                    {{ end }}
+                                {{ else }}
+                                    <span class="badge bg-success">
+                                        <i class="bi bi-check-circle"></i>
+                                        Active
+                                    </span>
+                                {{ end }}
                             {{ else }}
-                                <span class="badge bg-secondary">Inactive</span>
+                                <span class="badge bg-danger">
+                                    <i class="bi bi-x-circle"></i>
+                                    Inactive
+                                </span>
                             {{ end }}
                         </div>
                     </div>
@@ -52,16 +81,45 @@
                         <div class="col-sm-4"><strong>Expires</strong></div>
                         <div class="col-sm-8">
                             {{ if .token.ExpiresAt }}
-                                {{ .token.ExpiresAt.Format "2006-01-02 15:04:05 MST" }}
+                                {{ .token.ExpiresAt.Format "Monday, January 2, 2006 at 3:04 PM" }}
+                                <br>
+                                <small class="text-muted">{{ .token.ExpiresAt.Format "2006-01-02 15:04:05 MST" }}</small>
                             {{ else }}
-                                Never
+                                <span class="text-muted">Never expires</span>
                             {{ end }}
                         </div>
                     </div>
                     <div class="row mb-3">
-                        <div class="col-sm-4"><strong>Requests</strong></div>
-                        <div class="col-sm-8">{{ .token.RequestCount }}</div>
+                        <div class="col-sm-4"><strong>Usage</strong></div>
+                        <div class="col-sm-8">
+                            <strong>{{ .token.RequestCount }}</strong> requests made
+                            {{ if .token.MaxRequests }}
+                                <br>
+                                <small class="text-muted">Limit: {{ .token.MaxRequests }} requests</small>
+                            {{ else }}
+                                <br>
+                                <small class="text-muted">No limit</small>
+                            {{ end }}
+                        </div>
                     </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4"><strong>Created</strong></div>
+                        <div class="col-sm-8">
+                            {{ .token.CreatedAt.Format "Monday, January 2, 2006 at 3:04 PM" }}
+                            <br>
+                            <small class="text-muted">{{ .token.CreatedAt.Format "2006-01-02 15:04:05 MST" }}</small>
+                        </div>
+                    </div>
+                    {{ if .token.LastUsedAt }}
+                    <div class="row mb-3">
+                        <div class="col-sm-4"><strong>Last Used</strong></div>
+                        <div class="col-sm-8">
+                            {{ .token.LastUsedAt.Format "Monday, January 2, 2006 at 3:04 PM" }}
+                            <br>
+                            <small class="text-muted">{{ .token.LastUsedAt.Format "2006-01-02 15:04:05 MST" }}</small>
+                        </div>
+                    </div>
+                    {{ end }}
                 </div>
             </div>
         </div>
@@ -71,12 +129,24 @@
                     <h5 class="card-title mb-0">Actions</h5>
                 </div>
                 <div class="card-body d-grid gap-2">
-                    <form method="POST" action="/tokens/{{ .token.ID }}?_method=DELETE">
-                        <button type="submit" class="btn btn-outline-danger">
-                            <i class="bi bi-x-octagon"></i>
-                            Revoke Token
-                        </button>
-                    </form>
+                    <a href="/tokens/{{ .tokenID }}/edit" class="btn btn-outline-warning">
+                        <i class="bi bi-pencil"></i>
+                        Edit Token
+                    </a>
+                    <button type="button" class="btn btn-outline-danger" 
+                            onclick="revokeToken('{{ .tokenID }}', '{{ obfuscateToken .tokenID }}')">
+                        <i class="bi bi-x-circle"></i>
+                        Revoke Token
+                    </button>
+                    <hr>
+                    <a href="/projects/{{ .project.ID }}" class="btn btn-outline-primary">
+                        <i class="bi bi-folder"></i>
+                        View Project
+                    </a>
+                    <a href="/tokens/new?project_id={{ .project.ID }}" class="btn btn-outline-success">
+                        <i class="bi bi-key"></i>
+                        Generate New Token
+                    </a>
                 </div>
             </div>
         </div>
@@ -87,6 +157,7 @@
     </div>
     {{ end }}
 
+<script src="/static/js/token-utils.js"></script>
 {{ template "layout/end" . }}
 {{ end }}
 

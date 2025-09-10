@@ -502,7 +502,7 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"name and openai_api_key are required"}`, http.StatusBadRequest)
 		return
 	}
-	id := generateUUID()
+	id := uuid.NewString()
 	now := time.Now().UTC()
 	project := proxy.Project{
 		ID:           id,
@@ -842,16 +842,6 @@ func (s *Server) handleBulkRevokeProjectTokens(w http.ResponseWriter, r *http.Re
 	}
 }
 
-// generateUUID generates a random UUID (v4)
-func generateUUID() string {
-	b := make([]byte, 16)
-	_, _ = time.Now().UTC().MarshalBinary() // for entropy
-	for i := range b {
-		b[i] = byte(65 + time.Now().UnixNano()%26)
-	}
-	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
-}
-
 // Add this helper to *Server
 func (s *Server) checkManagementAuth(w http.ResponseWriter, r *http.Request) bool {
 	const prefix = "Bearer "
@@ -1077,6 +1067,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		sanitizedTokens := make([]TokenListResponse, len(tokens))
 		for i, token := range tokens {
 			sanitizedTokens[i] = TokenListResponse{
+				TokenID:      token.Token,
 				ProjectID:    token.ProjectID,
 				ExpiresAt:    token.ExpiresAt,
 				IsActive:     token.IsActive,
@@ -1150,6 +1141,7 @@ func (s *Server) handleGetToken(w http.ResponseWriter, r *http.Request, tokenID 
 
 	// Create sanitized response without the actual token value
 	response := TokenListResponse{
+		TokenID:      tokenID,
 		ProjectID:    tokenData.ProjectID,
 		ExpiresAt:    tokenData.ExpiresAt,
 		IsActive:     tokenData.IsActive,
@@ -1265,6 +1257,7 @@ func (s *Server) handleUpdateToken(w http.ResponseWriter, r *http.Request, token
 
 	// Return updated token (sanitized)
 	response := TokenListResponse{
+		TokenID:      tokenID,
 		ProjectID:    tokenData.ProjectID,
 		ExpiresAt:    tokenData.ExpiresAt,
 		IsActive:     tokenData.IsActive,

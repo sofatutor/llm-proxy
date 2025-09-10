@@ -131,6 +131,13 @@
                                         <a href="/projects/{{ .ProjectID }}" class="btn btn-outline-primary" title="View Project">
                                             <i class="bi bi-folder"></i>
                                         </a>
+                                        <a href="/tokens/{{ .TokenID }}/edit" class="btn btn-outline-warning" title="Edit Token">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-outline-danger" title="Revoke Token" 
+                                                onclick="revokeToken('{{ .TokenID }}', '{{ obfuscateToken .TokenID }}')">
+                                            <i class="bi bi-x-circle"></i>
+                                        </button>
                                         <a href="/tokens/new?project_id={{ .ProjectID }}" class="btn btn-outline-success" title="Generate New Token">
                                             <i class="bi bi-key"></i>
                                         </a>
@@ -193,4 +200,6 @@
 </div>
 {{ end }}
 {{ template "layout/end" . }}
+
+<script src="/static/js/token-utils.js"></script>
 {{ end }}

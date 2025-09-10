@@ -12,6 +12,135 @@ import (
 	"time"
 )
 
+// Test Admin API client token methods: GetToken, UpdateToken, RevokeToken, RevokeProjectTokens
+func TestAPIClient_TokenMethods(t *testing.T) {
+	mux := http.NewServeMux()
+
+	// GET /manage/tokens/:id
+	mux.HandleFunc("/manage/tokens/tok-1", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(Token{TokenID: "tok-1", ProjectID: "p1", IsActive: true})
+	})
+
+	// PATCH /manage/tokens/:id
+	mux.HandleFunc("/manage/tokens/tok-2", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch {
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(Token{TokenID: "tok-2", ProjectID: "p1", IsActive: false})
+	})
+
+	// DELETE /manage/tokens/:id
+	mux.HandleFunc("/manage/tokens/tok-3", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodDelete {
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	// POST /manage/projects/:id/tokens/revoke
+	mux.HandleFunc("/manage/projects/p1/tokens/revoke", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	c := NewAPIClient(ts.URL, "mgmt-token")
+
+	// GetToken
+	tok, err := c.GetToken(context.Background(), "tok-1")
+	if err != nil {
+		t.Fatalf("GetToken error: %v", err)
+	}
+	if tok == nil || tok.TokenID != "tok-1" || tok.ProjectID != "p1" {
+		t.Fatalf("GetToken unexpected: %+v", tok)
+	}
+
+	// UpdateToken (payload covered by doRequest decoding)
+	updated, err := c.UpdateToken(context.Background(), "tok-2", nil, nil)
+	if err != nil {
+		t.Fatalf("UpdateToken error: %v", err)
+	}
+	if updated == nil || updated.TokenID != "tok-2" || updated.IsActive != false {
+		t.Fatalf("UpdateToken unexpected: %+v", updated)
+	}
+
+	// RevokeToken (204 branch)
+	if err := c.RevokeToken(context.Background(), "tok-3"); err != nil {
+		t.Fatalf("RevokeToken error: %v", err)
+	}
+
+	// RevokeProjectTokens (204 branch)
+	if err := c.RevokeProjectTokens(context.Background(), "p1"); err != nil {
+		t.Fatalf("RevokeProjectTokens error: %v", err)
+	}
+}
+
+func TestAPIClient_TokenMethods_ErrorBranches(t *testing.T) {
+	// Server returns 400 with JSON body for GetToken
+	srvJSON := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"bad token"}`))
+	}))
+	defer srvJSON.Close()
+
+	c1 := NewAPIClient(srvJSON.URL, "tkn")
+	if _, err := c1.GetToken(context.Background(), "tok-x"); err == nil {
+		t.Fatalf("expected error on 400 JSON, got nil")
+	}
+
+	// Server returns 400 with non-JSON body for UpdateToken
+	srvText := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("plain error"))
+	}))
+	defer srvText.Close()
+
+	c2 := NewAPIClient(srvText.URL, "tkn")
+	if _, err := c2.UpdateToken(context.Background(), "tok-y", nil, nil); err == nil {
+		t.Fatalf("expected error on 400 text, got nil")
+	}
+}
+
+func TestAPIClient_UpdateToken_SendsBothFields(t *testing.T) {
+	// Capture request payload and return updated token
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/manage/tokens/tok-99" || r.Method != http.MethodPatch {
+			http.Error(w, "bad route", http.StatusNotFound)
+			return
+		}
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if _, ok := body["is_active"]; !ok {
+			t.Fatalf("missing is_active in payload: %#v", body)
+		}
+		if _, ok := body["max_requests"]; !ok {
+			t.Fatalf("missing max_requests in payload: %#v", body)
+		}
+		_ = json.NewEncoder(w).Encode(Token{TokenID: "tok-99", ProjectID: "p1", IsActive: true})
+	}))
+	defer srv.Close()
+
+	c := NewAPIClient(srv.URL, "tkn")
+	active := true
+	maxReq := 42
+	if _, err := c.UpdateToken(context.Background(), "tok-99", &active, &maxReq); err != nil {
+		t.Fatalf("UpdateToken err: %v", err)
+	}
+}
+
 func TestObfuscateAPIKey(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -326,7 +455,7 @@ func TestAPIClient_UpdateProject(t *testing.T) {
 	client := NewAPIClient(server.URL, "test-token")
 	ctx := context.Background()
 
-	project, err := client.UpdateProject(ctx, "1", "Updated Name", "sk-updated-key")
+	project, err := client.UpdateProject(ctx, "1", "Updated Name", "sk-updated-key", nil)
 	if err != nil {
 		t.Fatalf("UpdateProject failed: %v", err)
 	}
@@ -573,7 +702,7 @@ func TestAPIClient_UpdateProjectPartial(t *testing.T) {
 	ctx := context.Background()
 
 	// Test updating only name
-	project, err := client.UpdateProject(ctx, "1", "New Name", "")
+	project, err := client.UpdateProject(ctx, "1", "New Name", "", nil)
 	if err != nil {
 		t.Fatalf("UpdateProject failed: %v", err)
 	}
@@ -582,6 +711,40 @@ func TestAPIClient_UpdateProjectPartial(t *testing.T) {
 	}
 	if project.OpenAIAPIKey != "" {
 		t.Errorf("OpenAIAPIKey should be empty, got %q", project.OpenAIAPIKey)
+	}
+}
+
+func TestAPIClient_UpdateProject_WithIsActive(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("failed to decode request: %v", err)
+		}
+
+		project := Project{ID: "1", CreatedAt: time.Now()}
+		if name, ok := req["name"].(string); ok {
+			project.Name = name
+		}
+		if isActive, ok := req["is_active"].(bool); ok {
+			project.IsActive = isActive
+		}
+		if err := json.NewEncoder(w).Encode(project); err != nil {
+			t.Errorf("failed to encode project: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewAPIClient(server.URL, "test-token")
+	ctx := context.Background()
+
+	// Test updating with isActive = true
+	active := true
+	project, err := client.UpdateProject(ctx, "1", "Updated", "", &active)
+	if err != nil {
+		t.Fatalf("UpdateProject failed: %v", err)
+	}
+	if !project.IsActive {
+		t.Errorf("IsActive = %v, want true", project.IsActive)
 	}
 }
 
@@ -717,7 +880,7 @@ func TestAPIClient_CreateProject_Errors(t *testing.T) {
 func TestAPIClient_UpdateProject_Errors(t *testing.T) {
 	client := NewAPIClient("http://invalid-host", "token")
 	ctx := context.Background()
-	_, err := client.UpdateProject(ctx, "id", "foo", "bar")
+	_, err := client.UpdateProject(ctx, "id", "foo", "bar", nil)
 	if err == nil {
 		t.Error("expected network error, got nil")
 	}
@@ -728,7 +891,7 @@ func TestAPIClient_UpdateProject_Errors(t *testing.T) {
 	}))
 	defer server.Close()
 	client2 := NewAPIClient(server.URL, "token")
-	_, err = client2.UpdateProject(ctx, "id", "foo", "bar")
+	_, err = client2.UpdateProject(ctx, "id", "foo", "bar", nil)
 	if err == nil || !strings.Contains(err.Error(), "fail") {
 		t.Errorf("expected API error, got %v", err)
 	}
@@ -741,7 +904,7 @@ func TestAPIClient_UpdateProject_Errors(t *testing.T) {
 	}))
 	defer server2.Close()
 	client3 := NewAPIClient(server2.URL, "token")
-	_, err = client3.UpdateProject(ctx, "id", "foo", "bar")
+	_, err = client3.UpdateProject(ctx, "id", "foo", "bar", nil)
 	if err == nil || !strings.Contains(err.Error(), "decode") {
 		t.Errorf("expected decode error, got %v", err)
 	}

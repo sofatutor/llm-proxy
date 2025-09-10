@@ -73,6 +73,24 @@
                         </div>
                     </div>
 
+                    <div class="mb-3">
+                        <label class="form-label">Project Status</label>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" 
+                                   type="checkbox" 
+                                   id="is_active" 
+                                   name="is_active" 
+                                   value="true"
+                                   {{ if .project.IsActive }}checked{{ end }}>
+                            <label class="form-check-label" for="is_active">
+                                Active
+                            </label>
+                        </div>
+                        <div class="form-text">
+                            When inactive, all tokens for this project will be disabled and API requests will be rejected.
+                        </div>
+                    </div>
+
                     <div class="card bg-light">
                         <div class="card-body">
                             <h6 class="card-title">

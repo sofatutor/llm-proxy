@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
@@ -310,11 +311,15 @@ func (m *mockAPIClient) GetProject(ctx context.Context, id string) (*Project, er
 	return &Project{ID: id, Name: "Test Project"}, nil
 }
 
-func (m *mockAPIClient) UpdateProject(ctx context.Context, id, name, apiKey string) (*Project, error) {
+func (m *mockAPIClient) UpdateProject(ctx context.Context, id, name, apiKey string, isActive *bool) (*Project, error) {
 	if m.DashboardErr != nil {
 		return nil, m.DashboardErr
 	}
-	return &Project{ID: id, Name: name, OpenAIAPIKey: apiKey}, nil
+	project := &Project{ID: id, Name: name, OpenAIAPIKey: apiKey}
+	if isActive != nil {
+		project.IsActive = *isActive
+	}
+	return project, nil
 }
 
 func (m *mockAPIClient) DeleteProject(ctx context.Context, id string) error {
@@ -341,6 +346,36 @@ func (m *mockAPIClient) GetAuditEvent(ctx context.Context, id string) (*AuditEve
 		return nil, m.DashboardErr
 	}
 	return &AuditEvent{ID: id, Outcome: "success"}, nil
+}
+
+// Implement new token methods
+func (m *mockAPIClient) GetToken(ctx context.Context, tokenID string) (*Token, error) {
+	if m.DashboardErr != nil {
+		return nil, m.DashboardErr
+	}
+	return &Token{TokenID: tokenID, ProjectID: "1", IsActive: true}, nil
+}
+
+func (m *mockAPIClient) UpdateToken(ctx context.Context, tokenID string, isActive *bool, maxRequests *int) (*Token, error) {
+	if m.DashboardErr != nil {
+		return nil, m.DashboardErr
+	}
+	token := &Token{TokenID: tokenID, ProjectID: "1", IsActive: true}
+	if isActive != nil {
+		token.IsActive = *isActive
+	}
+	if maxRequests != nil {
+		token.MaxRequests = maxRequests
+	}
+	return token, nil
+}
+
+func (m *mockAPIClient) RevokeToken(ctx context.Context, tokenID string) error {
+	return m.DashboardErr
+}
+
+func (m *mockAPIClient) RevokeProjectTokens(ctx context.Context, projectID string) error {
+	return m.DashboardErr
 }
 
 var _ APIClientInterface = (*mockAPIClient)(nil) // Ensure interface compliance
@@ -560,6 +595,37 @@ func TestServer_HandleTokensList_Error(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500 for tokens list error, got %d", w.Code)
+	}
+}
+
+type projectsErrorClient struct{ mockAPIClient }
+
+func (p *projectsErrorClient) GetProjects(ctx context.Context, page, pageSize int) ([]Project, *Pagination, error) {
+	return nil, nil, errFake
+}
+
+func TestServer_HandleTokensList_ProjectsFetchError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tokensFile := filepath.Join(testTemplateDir(), "tokens", "list.html")
+	_ = os.WriteFile(tokensFile, []byte("<html><body>tokens</body></html>"), 0644)
+	defer func() { _ = os.Remove(tokensFile) }()
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens", "list.html"))
+
+	s.engine.GET("/tokens", func(c *gin.Context) {
+		// tokens succeed, projects fail
+		var client APIClientInterface = &projectsErrorClient{}
+		c.Set("apiClient", client)
+		s.handleTokensList(c)
+	})
+
+	req, _ := http.NewRequest("GET", "/tokens", nil)
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 when projects fetch fails, got %d", w.Code)
 	}
 }
 
@@ -861,10 +927,27 @@ func TestServer_HandleProjectsDelete_Errors(t *testing.T) {
 
 func TestServer_HandleTokensShow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+
+	// Create temporary template directory
+	tmpDir := t.TempDir()
+	templateDir := filepath.Join(tmpDir, "templates")
+	err := os.MkdirAll(templateDir, 0755)
+	require.NoError(t, err)
+
+	// Create error.html template
+	errorTemplate := `<html><body>Error: {{.error}}</body></html>`
+	err = os.WriteFile(filepath.Join(templateDir, "error.html"), []byte(errorTemplate), 0644)
+	require.NoError(t, err)
+
 	s := &Server{engine: gin.New()}
 	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(templateDir, "*.html"))
+
+	// Mock API client that returns an error to trigger error handling
+	mockClient := &mockAPIClient{DashboardErr: fmt.Errorf("token not found")}
 
 	s.engine.GET("/tokens/:token", func(c *gin.Context) {
+		c.Set("apiClient", mockClient)
 		s.handleTokensShow(c)
 	})
 
@@ -872,8 +955,9 @@ func TestServer_HandleTokensShow(t *testing.T) {
 	w := httptest.NewRecorder()
 	s.engine.ServeHTTP(w, req)
 
-	if w.Code != http.StatusSeeOther {
-		t.Errorf("expected 303, got %d", w.Code)
+	// Should return 500 Internal Server Error since GetToken failed
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", w.Code)
 	}
 }
 
@@ -929,6 +1013,10 @@ func TestServer_HandleProjectsCreate(t *testing.T) {
 	form := strings.NewReader("name=New+Project&openai_api_key=key-1234")
 	req, _ := http.NewRequest("POST", "/projects", form)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	// Add headers to exercise forwarding logic
+	req.Header.Set("X-Forwarded-For", "192.168.1.1,10.0.0.1")
+	req.Header.Set("User-Agent", "Test Browser")
+	req.Header.Set("Referer", "https://example.com")
 	w := httptest.NewRecorder()
 	s.engine.ServeHTTP(w, req)
 
@@ -1064,6 +1152,255 @@ func TestServer_HandleTokensNew_Error(t *testing.T) {
 	}
 }
 
+func TestServer_HandleTokensShow_Success(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	// Prepare templates
+	tokensDir := filepath.Join(testTemplateDir(), "tokens")
+	_ = os.MkdirAll(tokensDir, 0755)
+	showTpl := filepath.Join(tokensDir, "show.html")
+	if err := os.WriteFile(showTpl, []byte("<html><body>show</body></html>"), 0644); err != nil {
+		t.Fatalf("write show.html: %v", err)
+	}
+	defer func() { _ = os.Remove(showTpl) }()
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens", "*.html"))
+
+	s.engine.GET("/tokens/:token", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleTokensShow(c)
+	})
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "/tokens/tok-1", nil)
+	s.engine.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleTokensShow_NotFoundBranch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	errTpl := filepath.Join(testTemplateDir(), "error.html")
+	_ = os.WriteFile(errTpl, []byte("<html><body>error</body></html>"), 0644)
+	defer func() { _ = os.Remove(errTpl) }()
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "*.html"))
+
+	s.engine.GET("/tokens/:token", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{DashboardErr: errors.New("404 not found")}
+		c.Set("apiClient", client)
+		s.handleTokensShow(c)
+	})
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "/tokens/missing", nil)
+	s.engine.ServeHTTP(w, r)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleProjectsBulkRevoke_NotFound(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	errTpl := filepath.Join(testTemplateDir(), "error.html")
+	_ = os.WriteFile(errTpl, []byte("<html><body>error</body></html>"), 0644)
+	defer func() { _ = os.Remove(errTpl) }()
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "*.html"))
+
+	s.engine.POST("/projects/:id/revoke-tokens", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{DashboardErr: errors.New("404 not found")}
+		c.Set("apiClient", client)
+		s.handleProjectsBulkRevoke(c)
+	})
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("POST", "/projects/missing/revoke-tokens", nil)
+	// Add headers to exercise forwarding logic
+	r.Header.Set("X-Real-IP", "192.168.1.100")
+	r.Header.Set("Referer", "http://admin.local/projects")
+	s.engine.ServeHTTP(w, r)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestServer_MethodOverrideMiddleware(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	// Create server with NewServer to include method override middleware
+	tmpDir := t.TempDir()
+	templateDir := filepath.Join(tmpDir, "templates")
+	err := os.MkdirAll(templateDir, 0755)
+	require.NoError(t, err)
+
+	// Create minimal templates
+	err = os.WriteFile(filepath.Join(templateDir, "base.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+	require.NoError(t, err)
+	subDir := filepath.Join(templateDir, "tokens")
+	err = os.MkdirAll(subDir, 0755)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(subDir, "test.html"), []byte(`<html><body>{{.}}</body></html>`), 0644)
+	require.NoError(t, err)
+
+	cfg := &config.Config{
+		LogLevel: "info",
+		AdminUI: config.AdminUIConfig{
+			ListenAddr:      ":0",
+			ManagementToken: "test-token",
+			APIBaseURL:      "http://localhost:8080",
+			TemplateDir:     templateDir,
+		},
+	}
+	server, err := NewServer(cfg)
+	require.NoError(t, err)
+
+	// Gin selects routes before middleware runs, so method override cannot change
+	// which handler is chosen. Instead, assert the middleware mutates the method
+	// seen by the handler.
+	server.engine.POST("/echo-method", func(c *gin.Context) {
+		c.String(http.StatusOK, c.Request.Method)
+	})
+
+	// Send POST with _method=PUT to exercise method override middleware
+	form := strings.NewReader("_method=PUT&data=test")
+	req, _ := http.NewRequest("POST", "/echo-method", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	server.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("method override expected 200, got %d", w.Code)
+	}
+	if strings.TrimSpace(w.Body.String()) != "PUT" {
+		t.Fatalf("expected overridden method PUT, got %q", strings.TrimSpace(w.Body.String()))
+	}
+}
+
+func TestServer_HandleTokensUpdate_BadRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	// Need an error.html template for 400 path
+	errTpl := filepath.Join(testTemplateDir(), "error.html")
+	if err := os.WriteFile(errTpl, []byte("<html><body>error</body></html>"), 0644); err != nil {
+		t.Fatalf("write error.html: %v", err)
+	}
+	defer func() { _ = os.Remove(errTpl) }()
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "*.html"))
+	s.engine.PUT("/tokens/:token", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleTokensUpdate(c)
+	})
+
+	// Invalid max_requests causes ShouldBind to fail → 400
+	form := strings.NewReader("max_requests=notanumber")
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("PUT", "/tokens/tok-1", form)
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	s.engine.ServeHTTP(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestServer_TokenAndProjectHandlers_MissingParams(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	// error.html template for 400s
+	errTpl := filepath.Join(testTemplateDir(), "error.html")
+	if err := os.WriteFile(errTpl, []byte("<html><body>error</body></html>"), 0644); err != nil {
+		t.Fatalf("write error.html: %v", err)
+	}
+	defer func() { _ = os.Remove(errTpl) }()
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "*.html"))
+
+	s.engine.GET("/tokens/:token", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		// Simulate missing param by overriding param in context (empty)
+		c.Params = []gin.Param{{Key: "token", Value: ""}}
+		s.handleTokensShow(c)
+	})
+	s.engine.GET("/tokens/:token/edit", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		// Simulate missing param by overriding param in context (empty)
+		c.Params = []gin.Param{{Key: "token", Value: ""}}
+		s.handleTokensEdit(c)
+	})
+	s.engine.PUT("/tokens/:token", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		c.Params = []gin.Param{{Key: "token", Value: ""}}
+		s.handleTokensUpdate(c)
+	})
+	s.engine.DELETE("/tokens/:token", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		c.Params = []gin.Param{{Key: "token", Value: ""}}
+		s.handleTokensRevoke(c)
+	})
+	s.engine.POST("/projects/:id/revoke-tokens", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		c.Params = []gin.Param{{Key: "id", Value: ""}}
+		s.handleProjectsBulkRevoke(c)
+	})
+
+	// show missing token
+	w0 := httptest.NewRecorder()
+	r0, _ := http.NewRequest("GET", "/tokens/any", nil)
+	s.engine.ServeHTTP(w0, r0)
+	if w0.Code != http.StatusBadRequest {
+		t.Fatalf("show missing token expected 400, got %d", w0.Code)
+	}
+
+	// edit missing token
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "/tokens/any/edit", nil)
+	s.engine.ServeHTTP(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("edit missing token expected 400, got %d", w.Code)
+	}
+
+	// update missing token
+	w2 := httptest.NewRecorder()
+	form := strings.NewReader("")
+	r2, _ := http.NewRequest("PUT", "/tokens/any", form)
+	r2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	s.engine.ServeHTTP(w2, r2)
+	if w2.Code != http.StatusBadRequest {
+		t.Fatalf("update missing token expected 400, got %d", w2.Code)
+	}
+
+	// revoke missing token
+	w3 := httptest.NewRecorder()
+	r3, _ := http.NewRequest("DELETE", "/tokens/any", nil)
+	s.engine.ServeHTTP(w3, r3)
+	if w3.Code != http.StatusBadRequest {
+		t.Fatalf("revoke missing token expected 400, got %d", w3.Code)
+	}
+
+	// bulk revoke missing project id
+	w4 := httptest.NewRecorder()
+	r4, _ := http.NewRequest("POST", "/projects/any/revoke-tokens", nil)
+	s.engine.ServeHTTP(w4, r4)
+	if w4.Code != http.StatusBadRequest {
+		t.Fatalf("bulk revoke missing project expected 400, got %d", w4.Code)
+	}
+}
+
 func TestServer_HandleAuditList(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	// minimal templates
@@ -1125,6 +1462,36 @@ func TestServer_HandleAuditList_Error(t *testing.T) {
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleAuditList_WithHeadersAndFilters(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	_ = os.MkdirAll(filepath.Join(testTemplateDir(), "audit"), 0755)
+	_ = os.WriteFile(filepath.Join(testTemplateDir(), "audit", "list.html"), []byte("<html><body>audit list</body></html>"), 0644)
+	t.Cleanup(func() { _ = os.Remove(filepath.Join(testTemplateDir(), "audit", "list.html")) })
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "audit", "*.html"))
+
+	cap := &capturingAuditClient{}
+	s.engine.GET("/audit", func(c *gin.Context) {
+		c.Set("apiClient", APIClientInterface(cap))
+		s.handleAuditList(c)
+	})
+
+	// Build a query exercising most filters and header forwarding branch
+	req, _ := http.NewRequest("GET", "/audit?action=proxy_request&outcome=success&project_id=p1&actor=alice&client_ip=1.2.3.4&request_id=req-1&method=GET&path=/v1/chat&search=foo&start_time=2024-01-01T00:00:00Z&end_time=2024-01-02T00:00:00Z&page=2&page_size=10", nil)
+	req.Header.Set("X-Forwarded-For", "203.0.113.1, 10.0.0.1")
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if cap.lastFilters == nil || cap.lastFilters["action"] != "proxy_request" || cap.lastFilters["outcome"] != "success" || cap.lastFilters["project_id"] != "p1" || cap.lastFilters["search"] != "foo" {
+		t.Fatalf("filters not forwarded as expected: %#v", cap.lastFilters)
 	}
 }
 
@@ -2012,6 +2379,160 @@ func TestAdminHealthEndpoint(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "ok", admin["status"])
 	assert.Equal(t, "ok", backendStatus["status"])
+}
+
+func TestServer_HandleTokensEdit_Update_Revoke_and_ProjectsBulkRevoke(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Prepare minimal templates
+	tokensDir := filepath.Join(testTemplateDir(), "tokens")
+	_ = os.MkdirAll(tokensDir, 0755)
+	editTpl := filepath.Join(tokensDir, "edit.html")
+	if err := os.WriteFile(editTpl, []byte("<html><body>edit</body></html>"), 0644); err != nil {
+		t.Fatalf("write edit.html: %v", err)
+	}
+	defer func() { _ = os.Remove(editTpl) }()
+	errTpl := filepath.Join(testTemplateDir(), "error.html")
+	if err := os.WriteFile(errTpl, []byte("<html><body>error</body></html>"), 0644); err != nil {
+		t.Fatalf("write error.html: %v", err)
+	}
+	defer func() { _ = os.Remove(errTpl) }()
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "**/*.html"))
+
+	// Success paths
+	s.engine.GET("/tokens/:token/edit", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleTokensEdit(c)
+	})
+	s.engine.PUT("/tokens/:token", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleTokensUpdate(c)
+	})
+	s.engine.DELETE("/tokens/:token", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleTokensRevoke(c)
+	})
+	s.engine.POST("/projects/:id/revoke-tokens", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleProjectsBulkRevoke(c)
+	})
+
+	// tokens edit
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "/tokens/tok-1/edit", nil)
+	s.engine.ServeHTTP(w, r)
+	if w.Code != http.StatusOK {
+		t.Fatalf("edit expected 200, got %d", w.Code)
+	}
+
+	// tokens update
+	w2 := httptest.NewRecorder()
+	form := strings.NewReader("is_active=true&max_requests=5")
+	r2, _ := http.NewRequest("PUT", "/tokens/tok-2", form)
+	r2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	s.engine.ServeHTTP(w2, r2)
+	if w2.Code != http.StatusSeeOther {
+		t.Fatalf("update expected 303, got %d", w2.Code)
+	}
+
+	// tokens revoke
+	w3 := httptest.NewRecorder()
+	r3, _ := http.NewRequest("DELETE", "/tokens/tok-3", nil)
+	s.engine.ServeHTTP(w3, r3)
+	if w3.Code != http.StatusSeeOther {
+		t.Fatalf("revoke expected 303, got %d", w3.Code)
+	}
+
+	// projects bulk revoke
+	w4 := httptest.NewRecorder()
+	r4, _ := http.NewRequest("POST", "/projects/p1/revoke-tokens", nil)
+	s.engine.ServeHTTP(w4, r4)
+	if w4.Code != http.StatusSeeOther {
+		t.Fatalf("bulk revoke expected 303, got %d", w4.Code)
+	}
+}
+
+func TestServer_TokenHandlers_ErrorBranches(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Prepare minimal templates
+	tokensDir := filepath.Join(testTemplateDir(), "tokens")
+	_ = os.MkdirAll(tokensDir, 0755)
+	editTpl := filepath.Join(tokensDir, "edit.html")
+	_ = os.WriteFile(editTpl, []byte("<html><body>edit</body></html>"), 0644)
+	defer func() { _ = os.Remove(editTpl) }()
+	errTpl := filepath.Join(testTemplateDir(), "error.html")
+	_ = os.WriteFile(errTpl, []byte("<html><body>error</body></html>"), 0644)
+	defer func() { _ = os.Remove(errTpl) }()
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "**/*.html"))
+
+	notFoundErr := errors.New("404 not found")
+
+	// Not found and generic errors
+	s.engine.GET("/tokens/:token/edit", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{DashboardErr: notFoundErr}
+		c.Set("apiClient", client)
+		s.handleTokensEdit(c)
+	})
+	s.engine.PUT("/tokens/:token", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{DashboardErr: errFake}
+		c.Set("apiClient", client)
+		s.handleTokensUpdate(c)
+	})
+	s.engine.DELETE("/tokens/:token", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{DashboardErr: notFoundErr}
+		c.Set("apiClient", client)
+		s.handleTokensRevoke(c)
+	})
+	s.engine.POST("/projects/:id/revoke-tokens", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{DashboardErr: errFake}
+		c.Set("apiClient", client)
+		s.handleProjectsBulkRevoke(c)
+	})
+
+	// edit not found
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "/tokens/missing/edit", nil)
+	s.engine.ServeHTTP(w, r)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("edit not found expected 404, got %d", w.Code)
+	}
+
+	// update internal error
+	w2 := httptest.NewRecorder()
+	form := strings.NewReader("is_active=true&max_requests=1")
+	r2, _ := http.NewRequest("PUT", "/tokens/tok-err", form)
+	r2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	s.engine.ServeHTTP(w2, r2)
+	if w2.Code != http.StatusInternalServerError {
+		t.Fatalf("update error expected 500, got %d", w2.Code)
+	}
+
+	// revoke not found
+	w3 := httptest.NewRecorder()
+	r3, _ := http.NewRequest("DELETE", "/tokens/missing", nil)
+	s.engine.ServeHTTP(w3, r3)
+	if w3.Code != http.StatusNotFound {
+		t.Fatalf("revoke not found expected 404, got %d", w3.Code)
+	}
+
+	// bulk revoke internal error
+	w4 := httptest.NewRecorder()
+	r4, _ := http.NewRequest("POST", "/projects/p-err/revoke-tokens", nil)
+	s.engine.ServeHTTP(w4, r4)
+	if w4.Code != http.StatusInternalServerError {
+		t.Fatalf("bulk revoke error expected 500, got %d", w4.Code)
+	}
 }
 
 func TestServer_templateFuncs_AllFuncs(t *testing.T) {

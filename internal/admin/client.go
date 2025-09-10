@@ -55,12 +55,14 @@ type Project struct {
 	ID           string    `json:"id"`
 	Name         string    `json:"name"`
 	OpenAIAPIKey string    `json:"openai_api_key"`
+	IsActive     bool      `json:"is_active"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // Token represents a token from the Management API (sanitized)
 type Token struct {
+	TokenID      string     `json:"token_id"` // Added for Admin UI support
 	ProjectID    string     `json:"project_id"`
 	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
 	IsActive     bool       `json:"is_active"`
@@ -246,13 +248,16 @@ func (c *APIClient) CreateProject(ctx context.Context, name, openaiAPIKey string
 }
 
 // UpdateProject updates an existing project
-func (c *APIClient) UpdateProject(ctx context.Context, id, name, openaiAPIKey string) (*Project, error) {
-	payload := map[string]string{}
+func (c *APIClient) UpdateProject(ctx context.Context, id, name, openaiAPIKey string, isActive *bool) (*Project, error) {
+	payload := map[string]interface{}{}
 	if name != "" {
 		payload["name"] = name
 	}
 	if openaiAPIKey != "" {
 		payload["openai_api_key"] = openaiAPIKey
+	}
+	if isActive != nil {
+		payload["is_active"] = *isActive
 	}
 
 	req, err := c.newRequest(ctx, "PATCH", fmt.Sprintf("/manage/projects/%s", id), payload)
@@ -483,4 +488,62 @@ func (c *APIClient) GetAuditEvent(ctx context.Context, id string) (*AuditEvent, 
 	}
 
 	return &event, nil
+}
+
+// GetToken retrieves a single token by ID
+func (c *APIClient) GetToken(ctx context.Context, tokenID string) (*Token, error) {
+	req, err := c.newRequest(ctx, "GET", fmt.Sprintf("/manage/tokens/%s", tokenID), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var token Token
+	if err := c.doRequest(req, &token); err != nil {
+		return nil, err
+	}
+
+	return &token, nil
+}
+
+// UpdateToken updates an existing token
+func (c *APIClient) UpdateToken(ctx context.Context, tokenID string, isActive *bool, maxRequests *int) (*Token, error) {
+	payload := map[string]interface{}{}
+	if isActive != nil {
+		payload["is_active"] = *isActive
+	}
+	if maxRequests != nil {
+		payload["max_requests"] = *maxRequests
+	}
+
+	req, err := c.newRequest(ctx, "PATCH", fmt.Sprintf("/manage/tokens/%s", tokenID), payload)
+	if err != nil {
+		return nil, err
+	}
+
+	var token Token
+	if err := c.doRequest(req, &token); err != nil {
+		return nil, err
+	}
+
+	return &token, nil
+}
+
+// RevokeToken revokes a single token by setting is_active to false
+func (c *APIClient) RevokeToken(ctx context.Context, tokenID string) error {
+	req, err := c.newRequest(ctx, "DELETE", fmt.Sprintf("/manage/tokens/%s", tokenID), nil)
+	if err != nil {
+		return err
+	}
+
+	return c.doRequest(req, nil)
+}
+
+// RevokeProjectTokens revokes all tokens for a project in bulk
+func (c *APIClient) RevokeProjectTokens(ctx context.Context, projectID string) error {
+	req, err := c.newRequest(ctx, "POST", fmt.Sprintf("/manage/projects/%s/tokens/revoke", projectID), nil)
+	if err != nil {
+		return err
+	}
+
+	return c.doRequest(req, nil)
 }

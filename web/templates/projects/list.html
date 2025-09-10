@@ -26,6 +26,7 @@
                             <tr>
                                 <th>Name</th>
                                 <th>API Key</th>
+                                <th>Status</th>
                                 <th>Created</th>
                                 <th class="text-end">Actions</th>
                             </tr>
@@ -38,6 +39,19 @@
                                 </td>
                                 <td>
                                     <code class="small">{{ obfuscateAPIKey .OpenAIAPIKey }}</code>
+                                </td>
+                                <td>
+                                    {{ if .IsActive }}
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle"></i>
+                                            Active
+                                        </span>
+                                    {{ else }}
+                                        <span class="badge bg-danger">
+                                            <i class="bi bi-x-circle"></i>
+                                            Inactive
+                                        </span>
+                                    {{ end }}
                                 </td>
                                 <td>
                                     <small class="text-muted">{{ .CreatedAt.Format "2006-01-02 15:04" }}</small>
@@ -53,6 +67,10 @@
                                         <a href="/tokens/new?project_id={{ .ID }}" class="btn btn-outline-success" title="Generate Token">
                                             <i class="bi bi-key"></i>
                                         </a>
+                                        <button type="button" class="btn btn-outline-danger" title="Revoke All Tokens" 
+                                                onclick="bulkRevokeTokens('{{ .ID }}', '{{ .Name }}')">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -105,5 +123,7 @@
     </div>
 </div>
 {{ template "layout/end" . }}
+
+<script src="/static/js/token-utils.js"></script>
 {{ end }}
 {{ end }}
