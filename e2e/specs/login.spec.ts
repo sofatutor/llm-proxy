@@ -12,7 +12,8 @@ test.describe('Admin UI Login', () => {
     
     // Verify we're on the login page
     await expect(page).toHaveTitle(/Sign In/);
-    await expect(page.locator('h1')).toContainText('Sign In');
+    // Login page uses a styled button with text "Sign In" rather than an <h1>
+    await expect(page.locator('button:has-text("Sign In")')).toBeVisible();
 
     // Fill in the management token
     await page.fill('#management_token', MANAGEMENT_TOKEN);
@@ -26,8 +27,8 @@ test.describe('Admin UI Login', () => {
     
     // Should see navigation menu
     await expect(page.locator('nav')).toBeVisible();
-    await expect(page.locator('a[href="/projects"]')).toBeVisible();
-    await expect(page.locator('a[href="/tokens"]')).toBeVisible();
+    await expect(page.locator('nav a[href="/projects"]')).toBeVisible();
+    await expect(page.locator('nav a[href="/tokens"]')).toBeVisible();
   });
 
   test('should show error for invalid management token', async ({ page }) => {

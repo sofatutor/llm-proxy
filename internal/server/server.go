@@ -502,7 +502,7 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"name and openai_api_key are required"}`, http.StatusBadRequest)
 		return
 	}
-	id := generateUUID()
+	id := uuid.NewString()
 	now := time.Now().UTC()
 	project := proxy.Project{
 		ID:           id,
@@ -844,12 +844,7 @@ func (s *Server) handleBulkRevokeProjectTokens(w http.ResponseWriter, r *http.Re
 
 // generateUUID generates a random UUID (v4)
 func generateUUID() string {
-	b := make([]byte, 16)
-	_, _ = time.Now().UTC().MarshalBinary() // for entropy
-	for i := range b {
-		b[i] = byte(65 + time.Now().UnixNano()%26)
-	}
-	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+	return uuid.NewString()
 }
 
 // Add this helper to *Server

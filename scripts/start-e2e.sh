@@ -10,6 +10,8 @@ ADMIN_PORT=${ADMIN_PORT:-8099}
 MANAGEMENT_TOKEN=${MANAGEMENT_TOKEN:-e2e-management-token}
 
 echo "Starting LLM Proxy management API server on port $MGMT_PORT..."
+DB_PATH="./tmp/e2e-db-$$.sqlite"
+export DATABASE_PATH="$DB_PATH"
 MANAGEMENT_TOKEN="$MANAGEMENT_TOKEN" LLM_PROXY_EVENT_BUS="in-memory" ./bin/llm-proxy server --addr ":$MGMT_PORT" --debug &
 MGMT_PID=$!
 
@@ -28,6 +30,9 @@ cleanup() {
     if [ ! -z "$ADMIN_PID" ]; then
         kill $ADMIN_PID 2>/dev/null || true
     fi
+    if [ -f "$DB_PATH" ]; then
+        rm -f "$DB_PATH" || true
+    fi
 }
 
 # Set trap to cleanup on script exit
@@ -36,6 +41,7 @@ trap cleanup EXIT INT TERM
 echo "Servers started. Management API PID: $MGMT_PID, Admin UI PID: $ADMIN_PID"
 echo "Management API: http://localhost:$MGMT_PORT"
 echo "Admin UI: http://localhost:$ADMIN_PORT"
+export MGMT_BASE_URL="http://localhost:$MGMT_PORT"
 
 # Wait for both processes
 wait

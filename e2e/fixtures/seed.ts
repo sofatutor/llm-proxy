@@ -8,7 +8,10 @@ export class SeedFixture {
   private readonly createdTokens: string[] = [];
 
   constructor(baseUrl: string, managementToken: string) {
-    this.baseUrl = baseUrl;
+    // Prefer explicit Management API base URL from env; fallback to provided baseUrl
+    // If baseUrl looks like the Admin UI default (:8099), map to API default (:8080)
+    const envMgmt = process.env.MGMT_BASE_URL || process.env.MANAGE_API_BASE_URL;
+    this.baseUrl = envMgmt || baseUrl.replace(':8099', ':8080') || 'http://localhost:8080';
     this.managementToken = managementToken;
   }
 
@@ -16,6 +19,8 @@ export class SeedFixture {
    * Create a test project
    */
   async createProject(name: string, openaiApiKey: string = 'sk-test-key-for-e2e'): Promise<string> {
+    // Ensure unique name per test run to avoid UNIQUE constraints in DB
+    const uniqueName = `${name} ${Date.now()}-${Math.floor(Math.random()*1000)}`;
     const response = await fetch(`${this.baseUrl}/manage/projects`, {
       method: 'POST',
       headers: {
@@ -23,7 +28,7 @@ export class SeedFixture {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        name,
+        name: uniqueName,
         openai_api_key: openaiApiKey,
       }),
     });

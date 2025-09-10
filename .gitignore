@@ -73,6 +73,9 @@ coverage.*
 coverage.out
 coverage.html
 
+# Test results
+test-results/
+
 # Node (for admin UI, if applicable)
 node_modules/
 npm-debug.log*
