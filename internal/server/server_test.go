@@ -93,7 +93,14 @@ func TestMetricsEndpoint(t *testing.T) {
 	server, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
 	require.NoError(t, err)
 	p := &proxy.TransparentProxy{}
-	p.SetMetrics(&proxy.ProxyMetrics{RequestCount: 2, ErrorCount: 1, CacheHits: 3, CacheMisses: 4, CacheBypass: 5, CacheStores: 6})
+	p.SetMetrics(&proxy.ProxyMetrics{
+		RequestCount: 2,
+		ErrorCount:   1,
+		CacheHits:    3,
+		CacheMisses:  4,
+		CacheBypass:  5,
+		CacheStores:  6,
+	})
 	server.proxy = p
 
 	req := httptest.NewRequest("GET", "/metrics", nil)
@@ -951,7 +958,10 @@ func TestHandleMetrics_EncodeError(t *testing.T) {
 
 	// Ensure some proxy metrics to exercise data path
 	p := &proxy.TransparentProxy{}
-	p.SetMetrics(&proxy.ProxyMetrics{RequestCount: 10, ErrorCount: 2})
+	p.SetMetrics(&proxy.ProxyMetrics{
+		RequestCount: 10,
+		ErrorCount:   2,
+	})
 	srv.proxy = p
 
 	r := httptest.NewRequest(http.MethodGet, "/metrics", nil)
