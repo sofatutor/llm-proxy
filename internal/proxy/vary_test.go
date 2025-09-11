@@ -91,7 +91,7 @@ func TestVaryHandling_PerResponse(t *testing.T) {
 				"Accept": "text/plain",
 			},
 			expectSameKey: true,
-			description:   "Vary: * should be ignored (not cacheable, but keys should be same)",
+			description:   "Vary: * varies on unspecified parameters; for key generation treat as no vary (keys same)",
 		},
 	}
 
