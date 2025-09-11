@@ -18,12 +18,12 @@ func shouldAllowProject(ctx context.Context, enforceActive bool, checker Project
 	if !enforceActive {
 		return true, 0, ErrorResponse{}
 	}
-	
+
 	// Get request metadata for audit events
 	requestID, _ := logging.GetRequestID(ctx)
 	clientIP := getClientIP(r)
 	userAgent := r.UserAgent()
-	
+
 	isActive, err := checker.GetProjectActive(ctx, projectID)
 	if err != nil {
 		if logger := getLoggerFromContext(ctx); logger != nil {
@@ -31,7 +31,7 @@ func shouldAllowProject(ctx context.Context, enforceActive bool, checker Project
 				zap.String("project_id", projectID),
 				zap.Error(err))
 		}
-		
+
 		// Emit audit event for service unavailable
 		if auditLogger != nil {
 			auditEvent := audit.NewEvent(audit.ActionProxyRequest, audit.ActorSystem, audit.ResultError).
@@ -45,10 +45,10 @@ func shouldAllowProject(ctx context.Context, enforceActive bool, checker Project
 				WithError(err)
 			_ = auditLogger.Log(auditEvent)
 		}
-		
+
 		return false, http.StatusServiceUnavailable, ErrorResponse{Error: "Service temporarily unavailable", Code: "service_unavailable"}
 	}
-	
+
 	if !isActive {
 		// Emit audit event for project inactive denial
 		if auditLogger != nil {
@@ -62,10 +62,10 @@ func shouldAllowProject(ctx context.Context, enforceActive bool, checker Project
 				WithReason("project_inactive")
 			_ = auditLogger.Log(auditEvent)
 		}
-		
+
 		return false, http.StatusForbidden, ErrorResponse{Error: "Project is inactive", Code: "project_inactive"}
 	}
-	
+
 	return true, 0, ErrorResponse{}
 }
 
@@ -142,12 +142,12 @@ func getClientIP(r *http.Request) string {
 		}
 		return strings.TrimSpace(xff)
 	}
-	
+
 	// Check X-Real-IP header
 	if xri := r.Header.Get("X-Real-IP"); xri != "" {
 		return strings.TrimSpace(xri)
 	}
-	
+
 	// Fallback to RemoteAddr (remove port if present)
 	if idx := strings.LastIndex(r.RemoteAddr, ":"); idx >= 0 {
 		return r.RemoteAddr[:idx]

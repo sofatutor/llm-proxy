@@ -60,15 +60,15 @@ const (
 // Action constants for standardized audit event types
 const (
 	// Token lifecycle actions
-	ActionTokenCreate     = "token.create"
-	ActionTokenRead       = "token.read"
-	ActionTokenUpdate     = "token.update"
-	ActionTokenRevoke     = "token.revoke"
+	ActionTokenCreate      = "token.create"
+	ActionTokenRead        = "token.read"
+	ActionTokenUpdate      = "token.update"
+	ActionTokenRevoke      = "token.revoke"
 	ActionTokenRevokeBatch = "token.revoke_batch"
-	ActionTokenDelete     = "token.delete"
-	ActionTokenList       = "token.list"
-	ActionTokenValidate   = "token.validate"
-	ActionTokenAccess     = "token.access"
+	ActionTokenDelete      = "token.delete"
+	ActionTokenList        = "token.list"
+	ActionTokenValidate    = "token.validate"
+	ActionTokenAccess      = "token.access"
 
 	// Project lifecycle actions
 	ActionProjectCreate = "project.create"

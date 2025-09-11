@@ -29,17 +29,17 @@ func (m *MockAuditLogger) Close() error {
 
 func TestShouldAllowProject_AuditEmission(t *testing.T) {
 	tests := []struct {
-		name              string
-		enforceActive     bool
-		projectActive     bool
-		checkError        error
-		expectedAllowed   bool
-		expectedStatus    int
-		expectedCode      string
-		expectAuditCall   bool
-		expectedAction    string
-		expectedResult    audit.ResultType
-		expectedReason    string
+		name            string
+		enforceActive   bool
+		projectActive   bool
+		checkError      error
+		expectedAllowed bool
+		expectedStatus  int
+		expectedCode    string
+		expectAuditCall bool
+		expectedAction  string
+		expectedResult  audit.ResultType
+		expectedReason  string
 	}{
 		{
 			name:            "enforcement_disabled_no_audit",
@@ -56,28 +56,28 @@ func TestShouldAllowProject_AuditEmission(t *testing.T) {
 			expectAuditCall: false,
 		},
 		{
-			name:              "project_inactive_audit_denied",
-			enforceActive:     true,
-			projectActive:     false,
-			expectedAllowed:   false,
-			expectedStatus:    http.StatusForbidden,
-			expectedCode:      "project_inactive",
-			expectAuditCall:   true,
-			expectedAction:    audit.ActionProxyRequest,
-			expectedResult:    audit.ResultDenied,
-			expectedReason:    "project_inactive",
+			name:            "project_inactive_audit_denied",
+			enforceActive:   true,
+			projectActive:   false,
+			expectedAllowed: false,
+			expectedStatus:  http.StatusForbidden,
+			expectedCode:    "project_inactive",
+			expectAuditCall: true,
+			expectedAction:  audit.ActionProxyRequest,
+			expectedResult:  audit.ResultDenied,
+			expectedReason:  "project_inactive",
 		},
 		{
-			name:              "db_error_audit_error",
-			enforceActive:     true,
-			checkError:        errors.New("database connection failed"),
-			expectedAllowed:   false,
-			expectedStatus:    http.StatusServiceUnavailable,
-			expectedCode:      "service_unavailable",
-			expectAuditCall:   true,
-			expectedAction:    audit.ActionProxyRequest,
-			expectedResult:    audit.ResultError,
-			expectedReason:    "service_unavailable",
+			name:            "db_error_audit_error",
+			enforceActive:   true,
+			checkError:      errors.New("database connection failed"),
+			expectedAllowed: false,
+			expectedStatus:  http.StatusServiceUnavailable,
+			expectedCode:    "service_unavailable",
+			expectAuditCall: true,
+			expectedAction:  audit.ActionProxyRequest,
+			expectedResult:  audit.ResultError,
+			expectedReason:  "service_unavailable",
 		},
 	}
 
@@ -98,23 +98,23 @@ func TestShouldAllowProject_AuditEmission(t *testing.T) {
 					assert.Equal(t, tt.expectedResult, event.Result)
 					assert.Equal(t, audit.ActorSystem, event.Actor)
 					assert.Equal(t, "test-project", event.ProjectID)
-					
+
 					// Check details
 					if tt.expectedReason != "" {
 						reason, ok := event.Details["reason"].(string)
 						assert.True(t, ok, "reason should be present in details")
 						assert.Equal(t, tt.expectedReason, reason)
 					}
-					
+
 					// Check for HTTP method and endpoint
 					method, ok := event.Details["http_method"].(string)
 					assert.True(t, ok, "http_method should be present")
 					assert.Equal(t, "POST", method)
-					
+
 					endpoint, ok := event.Details["endpoint"].(string)
 					assert.True(t, ok, "endpoint should be present")
 					assert.Equal(t, "/v1/chat/completions", endpoint)
-					
+
 					return true
 				})).Return(nil)
 			}
@@ -164,10 +164,10 @@ func TestShouldAllowProject_NilAuditLogger(t *testing.T) {
 
 func TestGetClientIP(t *testing.T) {
 	tests := []struct {
-		name            string
-		headers         map[string]string
-		remoteAddr      string
-		expectedIP      string
+		name       string
+		headers    map[string]string
+		remoteAddr string
+		expectedIP string
 	}{
 		{
 			name:       "x_forwarded_for_single",
