@@ -661,6 +661,24 @@ graph TD
 - **Distributed Rate Limiting**: Redis-backed rate limiting for clustered deployments
 - **Real-time Usage Metrics**: Streaming metrics via WebSockets for monitoring dashboards
 
+## Code Governance & Architecture Compliance
+
+The project maintains architectural integrity through systematic review processes:
+
+### Architectural Review Framework
+
+- **[Full Inventory & Review Process](tasks/prd-full-inventory-review.md)**: Comprehensive framework for architecture compliance verification
+- **[Review Templates](reviews/)**: Standardized templates for systematic architectural assessment
+- **Architecture Drift Detection**: Regular verification of implementation against this document
+- **Component Boundary Enforcement**: Package-level isolation and interface compliance review
+
+### Quality Gates for Architecture
+
+- **Design Principle Compliance**: Verification of minimal transformation, transparency, and performance principles
+- **Component Interaction Validation**: Review of data flow and component boundaries
+- **Interface Consistency**: API design and package interface alignment verification
+- **Performance Characteristic Maintenance**: Latency, memory, and scalability goal compliance
+
 ## Whitelist (Allowlist) for URIs and Methods
 
 To ensure security and maintain transparency, the proxy uses a whitelist (allowlist) for valid API URIs and HTTP methods. For the MVP, this list is hardcoded for OpenAI endpoints (such as `/v1/chat/completions`, `/v1/completions`, `/v1/embeddings`, `/v1/models`) and methods (`POST`, `GET`).

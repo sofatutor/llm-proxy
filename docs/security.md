@@ -320,6 +320,31 @@ grep '"project_id":"proj-123"' /data/audit.log
 - Follow the principle of least privilege for all components
 - Document and test incident response procedures
 
+## Security Governance & Compliance
+
+The project maintains security standards through systematic review and assessment:
+
+### Security Review Framework
+
+- **[Full Inventory & Review Process](tasks/prd-full-inventory-review.md)**: Comprehensive security assessment framework
+- **[Review Templates](reviews/)**: Standardized templates for security and compliance evaluation
+- **Secret Scanning**: Regular detection of hardcoded credentials and configuration drift
+- **Access Control Verification**: Management token usage and admin endpoint protection review
+- **Dependency Security Audits**: Go module vulnerability and license compliance assessment
+
+### Security Quality Gates
+
+- **Secret Detection**: Systematic scanning for exposed credentials and API keys
+- **Access Control Compliance**: Verification of authentication and authorization mechanisms
+- **Audit Trail Integrity**: Review of logging and compliance tracking effectiveness
+- **Dependency Risk Assessment**: Security vulnerability and license compliance verification
+
+### Compliance Integration
+
+- **Non-blocking Process**: Security reviews don't halt development but guide improvements
+- **Follow-up Tracking**: Security findings tracked through systematic issue management
+- **Maintainer Oversight**: Security review sign-off integrated with project governance
+
 ## Development Security
 
 - Validate and sanitize all inputs
