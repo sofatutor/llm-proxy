@@ -341,7 +341,7 @@ docker run --rm llm-proxy benchmark \
 ## Production Enhancements
 - Use PostgreSQL for scalability
 - Add HTTPS via reverse proxy
-- Monitor with Prometheus/Grafana
+- Optional metrics scraping/visualization (e.g., Prometheus/Grafana). Core features must not depend on any specific provider.
 - Clean up expired tokens periodically
 - Store secrets in a secure manager
 - Implement Redis-backed distributed rate limiting

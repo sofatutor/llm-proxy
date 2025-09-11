@@ -575,7 +575,7 @@ flowchart TD
         end
         
         subgraph MonitoringContainer
-            Prometheus["Prometheus"]
+            MetricsScraper["Metrics Scraper (optional)"]
         end
     end
     
@@ -605,12 +605,12 @@ flowchart TD
     Proxy3 --> API
     
     subgraph Monitoring
-        Prometheus["Prometheus"] --> Grafana["Grafana Dashboard"]
+        MetricsScraper["Metrics Scraper (optional)"] --> Grafana["Grafana Dashboard (optional)"]
     end
     
-    Proxy1 -.-> Prometheus
-    Proxy2 -.-> Prometheus
-    Proxy3 -.-> Prometheus
+    Proxy1 -.-> MetricsScraper
+    Proxy2 -.-> MetricsScraper
+    Proxy3 -.-> MetricsScraper
 ```
 
 ## Performance Considerations

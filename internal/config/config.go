@@ -65,7 +65,7 @@ type Config struct {
 	IPRateLimit     int // Maximum requests per minute per IP
 
 	// Monitoring
-	EnableMetrics bool   // Whether to enable Prometheus metrics endpoint
+	EnableMetrics bool   // Whether to enable a lightweight metrics endpoint (provider-agnostic)
 	MetricsPath   string // Path for metrics endpoint
 
 	// Cleanup
