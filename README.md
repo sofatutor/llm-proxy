@@ -5,7 +5,7 @@ A transparent, secure proxy for OpenAI's API with token management, rate limitin
 ## Features
 - **OpenAI API Compatibility**
 - **Withering Tokens**: Expiration, revocation, and rate-limiting
-- **Project-based Access Control** with **Phase 5 Lifecycle Management**
+- **Project-based Access Control** with lifecycle management
   - **Soft Deactivation**: Projects and tokens use activation flags instead of destructive deletes
   - **Individual Token Operations**: GET, PATCH, DELETE with comprehensive audit trails
   - **Bulk Token Management**: Revoke all tokens for a project
@@ -21,7 +21,6 @@ A transparent, secure proxy for OpenAI's API with token management, rate limitin
 - **SQLite Storage**
 - **Docker Deployment**
 
-> **Phase 5 Complete:** Token & project deactivation, revocation workflows, admin UI enhancements, and comprehensive audit logging are fully implemented. See [Issue #75](https://github.com/sofatutor/llm-proxy/issues/75) and related PRs [#95](https://github.com/sofatutor/llm-proxy/pull/95), [#98](https://github.com/sofatutor/llm-proxy/pull/98).
 
 ## Quick Start
 
@@ -168,7 +167,7 @@ curl -H "Authorization: Bearer <withering-token>" \
 > **Note:** The proxy API is not documented with Swagger/OpenAPI except for authentication and allowed paths/methods. For backend schemas, refer to the provider's documentation.
 
 ### Admin UI
-- `/admin/` — Web interface with Phase 5 lifecycle management
+- `/admin/` — Web interface with lifecycle management
   - Project activation/deactivation controls
   - Token revocation and editing
   - Bulk token management by project
@@ -176,7 +175,7 @@ curl -H "Authorization: Bearer <withering-token>" \
 
 ## CLI Management Tool
 
-The CLI provides full management of projects and tokens via the `llm-proxy manage` command with Phase 5 lifecycle operations. All subcommands support the `--manage-api-base-url` flag (default: http://localhost:8080) and require a management token (via `--management-token` or `MANAGEMENT_TOKEN` env).
+The CLI provides full management of projects and tokens via the `llm-proxy manage` command with lifecycle operations. All subcommands support the `--manage-api-base-url` flag (default: http://localhost:8080) and require a management token (via `--management-token` or `MANAGEMENT_TOKEN` env).
 
 ### Project Management
 ```sh
