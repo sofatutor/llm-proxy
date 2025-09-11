@@ -167,8 +167,7 @@ test.describe('Tokens Management', () => {
     await page.goto('/tokens');
     
     // Find the row containing our token and check status badge
-    const tokenRow = page.locator('table tbody tr').first();
-    const statusBadge = tokenRow.locator('.badge');
+    const statusBadge = page.locator('table tbody .badge').first();
     await expect(statusBadge).toBeVisible();
     
     // Should have appropriate color class for active status

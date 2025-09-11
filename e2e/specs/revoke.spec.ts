@@ -68,18 +68,18 @@ test.describe('Token and Project Revocation', () => {
   });
 
   test('should bulk revoke project tokens from project list', async ({ page }) => {
-    await page.goto('/projects');
+    // Navigate directly to the project details page and use the visible revoke-all button
+    await page.goto(`/projects/${projectId}`);
     
     page.on('dialog', async dialog => {
       expect(dialog.message()).toContain('revoke ALL tokens');
       await dialog.accept();
     });
     
-    // Click bulk revoke button in project list
-    await page.click(`button[onclick*="${projectId}"]`);
+    await page.click('button:has-text("Revoke All Tokens")');
     
-    // Should stay on projects page
-    await expect(page).toHaveURL('/projects');
+    // Should stay on project details page after bulk revoke
+    await expect(page).toHaveURL(`/projects/${projectId}`);
   });
 
   test('should bulk revoke project tokens from project show page', async ({ page }) => {

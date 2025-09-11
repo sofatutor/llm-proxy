@@ -31,7 +31,7 @@ test.describe('Audit Interface', () => {
     
     // Verify page title and header
     await expect(page.locator('h1')).toContainText('Audit Events');
-    await expect(page.locator('i.bi-shield-check')).toBeVisible();
+    await expect(page.locator('h1 i.bi-shield-check')).toBeVisible();
     
     // Should show search form
     const searchInput = page.locator('input[name="search"]');
@@ -54,7 +54,7 @@ test.describe('Audit Interface', () => {
     // Verify table headers
     const headers = ['Time', 'Action', 'Actor', 'Outcome', 'IP Address', 'Actions'];
     for (const header of headers) {
-      await expect(page.locator('thead th').filter({ hasText: header })).toBeVisible();
+      await expect(page.locator('thead th').filter({ hasText: new RegExp(`^${header}$`) })).toBeVisible();
     }
     
     // Should have at least one event row
@@ -74,16 +74,25 @@ test.describe('Audit Interface', () => {
     
     await page.goto('/audit');
     
-    // Click on the first view details button
-    const detailsLink = page.locator('a[href^="/audit/"]').first();
-    await detailsLink.click();
+    // Wait for table and click the first revoke-related event if present; otherwise first link
+    await expect(page.locator('table tbody tr').first()).toBeVisible();
+    const revokeRow = page.locator('table tbody tr').filter({ hasText: /revoke/i }).first();
+    if (await revokeRow.count()) {
+      await revokeRow.locator('a[href^="/audit/"]').first().click();
+    } else {
+      const detailsLink = page.locator('a[href^="/audit/"]').first();
+      await expect(detailsLink).toBeVisible();
+      await detailsLink.click();
+    }
     
-    // Should navigate to event details page
-    await expect(page).toHaveURL(/\/audit\/\d+$/);
+    // Should navigate to event details page (UUID id)
+    await expect(page).toHaveURL(/\/audit\/[a-f0-9-]+$/i);
     await expect(page.locator('h1')).toContainText('Audit Event Details');
     
-    // Should show back to list button
-    await expect(page.locator('a[href="/audit"]')).toContainText('Back to List');
+    // Should show back to list button (disambiguate from sidebar link)
+    await expect(page.getByRole('link', { name: /Back to List/i })).toBeVisible();
+    // Basic sanity: expect UUID id present in title
+    await expect(page.locator('h5.card-title')).toContainText(/Event #[a-f0-9-]+/i);
   });
 
   test('should display audit event details correctly', async ({ page }) => {
@@ -91,26 +100,34 @@ test.describe('Audit Interface', () => {
     await seed.revokeToken(tokenId);
     
     await page.goto('/audit');
-    const detailsLink = page.locator('a[href^="/audit/"]').first();
-    await detailsLink.click();
+    await expect(page.locator('table tbody tr').first()).toBeVisible();
+    const revokeRow2 = page.locator('table tbody tr').filter({ hasText: /revoke/i }).first();
+    if (await revokeRow2.count()) {
+      await revokeRow2.locator('a[href^="/audit/"]').first().click();
+    } else {
+      const detailsLink = page.locator('a[href^="/audit/"]').first();
+      await expect(detailsLink).toBeVisible();
+      await detailsLink.click();
+    }
     
     // Verify event details sections
-    await expect(page.locator('h5.card-title')).toContainText(/Event #\d+/);
+    await expect(page.locator('h5.card-title')).toContainText(/Event #/);
     
     // Basic Information section
     const basicInfoTable = page.locator('.col-md-6').first().locator('table');
     await expect(basicInfoTable.locator('td:has-text("Timestamp:")').locator('xpath=following-sibling::td')).toBeVisible();
-    await expect(basicInfoTable.locator('td:has-text("Action:")').locator('xpath=following-sibling::td .badge')).toBeVisible();
+    await expect(basicInfoTable.locator('td:has-text("Action:")').locator('xpath=following-sibling::td').locator('.badge')).toBeVisible();
     await expect(basicInfoTable.locator('td:has-text("Actor:")').locator('xpath=following-sibling::td')).toBeVisible();
-    await expect(basicInfoTable.locator('td:has-text("Outcome:")').locator('xpath=following-sibling::td .badge')).toBeVisible();
+    await expect(basicInfoTable.locator('td:has-text("Outcome:")').locator('xpath=following-sibling::td').locator('.badge')).toBeVisible();
     
     // Network Information section
     const networkInfoTable = page.locator('.col-md-6').nth(1).locator('table');
-    await expect(networkInfoTable.locator('td:has-text("IP Address:")').locator('xpath=following-sibling::td code')).toBeVisible();
+    await expect(networkInfoTable.locator('td:has-text("IP Address:")').locator('xpath=following-sibling::td').locator('code')).toBeVisible();
     
     // Identifiers section
-    const identifiersTable = page.locator('.row').filter({ hasText: 'Identifiers' }).locator('table');
-    await expect(identifiersTable).toBeVisible();
+    const identifiersHeader = page.locator('h6.text-muted:has-text("Identifiers")');
+    const identifiersSection = identifiersHeader.locator('xpath=ancestor::div[contains(@class, "row")]');
+    await expect(identifiersSection.locator('table').first()).toBeVisible();
   });
 
   test('should perform search functionality', async ({ page }) => {
