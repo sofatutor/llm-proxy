@@ -816,19 +816,12 @@ func (p *TransparentProxy) Handler() http.Handler {
 			}
 			key := cacheKeyFromRequest(r)
 			if cr, ok := p.cache.Get(key); ok {
-				// Validate Vary compatibility: if the cached response has a Vary header,
-				// check if this request would generate the same cache key
-				if cr.vary != "" && cr.vary != "*" {
-					// Generate key using the stored Vary header
-					varyKey := cacheKeyFromRequestWithVary(r, cr.vary)
-					if varyKey != key {
-						// This cached response is not valid for this request due to Vary mismatch
-						// Treat as cache miss
-						p.incrementCacheMetric("miss")
-						// Note: don't set miss status here; let modifyResponse handle cache status
-						p.proxy.ServeHTTP(rw, r)
-						return
-					}
+				// Validate Vary compatibility using helper
+				if !isVaryCompatible(r, cr, key) {
+					p.incrementCacheMetric("miss")
+					// Note: don't set miss status here; let modifyResponse handle cache status
+					p.proxy.ServeHTTP(rw, r)
+					return
 				}
 
 				if !canServeCachedForRequest(r, cr.headers) {
