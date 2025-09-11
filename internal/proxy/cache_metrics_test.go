@@ -3,6 +3,7 @@ package proxy
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -257,5 +258,64 @@ func TestCacheMetrics_ThreadSafety(t *testing.T) {
 	}
 	if metrics.CacheMisses != expectedCount {
 		t.Errorf("Expected %d cache misses, got %d", expectedCount, metrics.CacheMisses)
+	}
+}
+
+// New test: verify a real upstream response with cacheable headers increments CacheStores
+func TestCacheMetrics_StorePath_IncrementsOnCacheableResponse(t *testing.T) {
+	// Fake upstream that returns cacheable response
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "public, max-age=60")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer upstream.Close()
+
+	cfg := ProxyConfig{
+		TargetBaseURL:       upstream.URL,
+		HTTPCacheEnabled:    true,
+		HTTPCacheDefaultTTL: 5 * time.Minute,
+		AllowedEndpoints:    []string{"/v1/models"},
+		AllowedMethods:      []string{"GET"},
+	}
+
+	validator := &MockTokenValidator{}
+	validator.On("ValidateToken", mock.Anything, "valid-token").Return("project-1", nil)
+	validator.On("ValidateTokenWithTracking", mock.Anything, "valid-token").Return("project-1", nil)
+
+	store := &MockProjectStore{}
+	store.On("GetAPIKeyForProject", mock.Anything, "project-1").Return("test-key", nil)
+	store.On("GetProjectActive", mock.Anything, "project-1").Return(true, nil)
+
+	p, err := NewTransparentProxyWithLogger(cfg, validator, store, zap.NewNop())
+	if err != nil {
+		t.Fatalf("proxy: %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "/v1/models", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
+	w := httptest.NewRecorder()
+
+	// Record metrics before
+	before := p.Metrics()
+	beforeStores := before.CacheStores
+
+	p.Handler().ServeHTTP(w, req)
+	res := w.Result()
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	if got := res.Header.Get("X-PROXY-CACHE"); !strings.Contains(got, "stored") {
+		t.Fatalf("expected X-PROXY-CACHE to contain 'stored', got %q", got)
+	}
+	if res.Header.Get("X-PROXY-CACHE-KEY") == "" {
+		t.Fatalf("expected X-PROXY-CACHE-KEY to be set")
+	}
+
+	// Metrics should reflect a store
+	after := p.Metrics()
+	if after.CacheStores != beforeStores+1 {
+		t.Fatalf("expected CacheStores=%d, got %d", beforeStores+1, after.CacheStores)
 	}
 }
