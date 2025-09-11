@@ -92,6 +92,21 @@ jobs:
           docker pull ghcr.io/${{ github.repository }}:${TAG}
           docker tag ghcr.io/${{ github.repository }}:${TAG} llm-proxy:${TAG}
 
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'llm-proxy:${{ steps.set_tag.outputs.name }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+        continue-on-error: true
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+        continue-on-error: true
+
       - name: Smoke test using Makefile (run + health)
         run: |
           make docker-smoke IMAGE=llm-proxy:${{ steps.set_tag.outputs.name }}

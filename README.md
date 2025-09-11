@@ -261,6 +261,7 @@ This ensures both the proxy and dispatcher share events via Redis, enabling full
 make docker-build
 make docker-run
 make docker-smoke
+make docker-scan  # Run Trivy security scan
 ```
 
 ### Publishing

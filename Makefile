@@ -1,4 +1,4 @@
-.PHONY: all build test test-coverage test-coverage-ci test-watch test-coverage-watch test-dev lint clean tools dev-setup db-setup run docker docker-build docker-run docker-smoke docker-stop swag test-benchmark coverage
+.PHONY: all build test test-coverage test-coverage-ci test-watch test-coverage-watch test-dev lint clean tools dev-setup db-setup run docker docker-build docker-run docker-smoke docker-scan docker-stop swag test-benchmark coverage
 
 # Go parameters
 GOCMD=go
@@ -111,6 +111,14 @@ docker-smoke:
 	echo "Healthcheck failed"; \
 	docker logs llm-proxy || true; \
 	exit 1
+
+docker-scan:
+	@echo "Running Trivy security scan on llm-proxy:latest..."
+	@if command -v trivy >/dev/null 2>&1; then \
+	  trivy image --severity HIGH,CRITICAL llm-proxy:latest; \
+	else \
+	  echo "Trivy not installed. Install with: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin"; \
+	fi
 
 
 # API documentation
