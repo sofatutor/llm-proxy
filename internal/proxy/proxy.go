@@ -49,7 +49,12 @@ type ProxyMetrics struct {
 	RequestCount      int64
 	ErrorCount        int64
 	TotalResponseTime time.Duration
-	mu                sync.Mutex
+	// Cache metrics (provider-agnostic counters)
+	CacheHits    int64 // Cache hits (responses served from cache)
+	CacheMisses  int64 // Cache misses (responses fetched from upstream)
+	CacheBypass  int64 // Cache bypassed (e.g., due to authorization)
+	CacheStores  int64 // Cache stores (responses stored in cache)
+	mu           sync.Mutex
 }
 
 // Metrics returns a pointer to the current proxy metrics.
@@ -64,6 +69,24 @@ func (p *TransparentProxy) SetMetrics(m *ProxyMetrics) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.metrics = m
+}
+
+// incrementCacheMetric safely increments the specified cache metric counter.
+// Valid metric names: "hit", "miss", "bypass", "store"
+func (p *TransparentProxy) incrementCacheMetric(metric string) {
+	p.metrics.mu.Lock()
+	defer p.metrics.mu.Unlock()
+	
+	switch metric {
+	case "hit":
+		p.metrics.CacheHits++
+	case "miss":
+		p.metrics.CacheMisses++
+	case "bypass":
+		p.metrics.CacheBypass++
+	case "store":
+		p.metrics.CacheStores++
+	}
 }
 
 // NewTransparentProxy creates a new proxy instance with an internally
@@ -355,6 +378,7 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 						p.cache.Set(key, cr)
 						res.Header.Set("X-PROXY-CACHE", "stored")
 						res.Header.Set("X-PROXY-CACHE-KEY", key)
+						p.incrementCacheMetric("store")
 						if !fromResponse {
 							res.Header.Set("Cache-Status", "llm-proxy; stored (forced)")
 						} else {
@@ -389,6 +413,7 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 						body:       append([]byte(nil), buf...),
 						expiresAt:  expiresAt,
 					})
+					p.incrementCacheMetric("store")
 				})
 			}
 		}
@@ -747,6 +772,8 @@ func (p *TransparentProxy) Handler() http.Handler {
 			optIn := hasClientCacheOptIn(r)
 			allowedLookup := (r.Method == http.MethodGet || r.Method == http.MethodHead) || (r.Method == http.MethodPost && optIn)
 			if !allowedLookup {
+				// Cache is enabled but this request type/method is not cacheable - count as miss
+				p.incrementCacheMetric("miss")
 				p.proxy.ServeHTTP(rw, r)
 				return
 			}
@@ -757,6 +784,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 					w.Header().Set("Cache-Status", "llm-proxy; bypass")
 					w.Header().Set("X-PROXY-CACHE", "bypass")
 					w.Header().Set("X-PROXY-CACHE-KEY", key)
+					p.incrementCacheMetric("bypass")
 					p.proxy.ServeHTTP(rw, r)
 					return
 				}
@@ -771,6 +799,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 						condReq.Header.Set("If-Modified-Since", lm)
 					}
 					// Forward conditionally to upstream; let modifyResponse handle store/refresh
+					// Don't increment miss here since this is a conditional revalidation
 					p.proxy.ServeHTTP(rw, condReq)
 					return
 				}
@@ -785,6 +814,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 						w.Header().Set("Cache-Status", "llm-proxy; conditional-hit")
 						w.Header().Set("X-PROXY-CACHE", "conditional-hit")
 						w.Header().Set("X-PROXY-CACHE-KEY", key)
+						p.incrementCacheMetric("hit") // Conditional hit counts as cache hit
 						w.WriteHeader(http.StatusNotModified)
 						return
 					}
@@ -797,15 +827,21 @@ func (p *TransparentProxy) Handler() http.Handler {
 				w.Header().Set("Cache-Status", "llm-proxy; hit")
 				w.Header().Set("X-PROXY-CACHE", "hit")
 				w.Header().Set("X-PROXY-CACHE-KEY", key)
+				p.incrementCacheMetric("hit")
 				w.WriteHeader(cr.statusCode)
 				if r.Method != http.MethodHead {
 					_, _ = w.Write(cr.body)
 				}
 				return
 			}
+			// Cache miss - no entry found
+			p.incrementCacheMetric("miss")
 			// Note: don't set miss status here; let modifyResponse handle cache status
 			// w.Header().Set("Cache-Status", "llm-proxy; miss")
 			// Do not set X-PROXY-CACHE(-KEY) on miss; only set definitive headers on hit/bypass/conditional-hit or store path
+		} else if p.cache != nil {
+			// Cache is enabled but method is not cacheable (e.g., DELETE, OPTIONS, etc.) - count as miss
+			p.incrementCacheMetric("miss")
 		}
 
 		p.proxy.ServeHTTP(rw, r)

@@ -365,6 +365,11 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		UptimeSeconds float64 `json:"uptime_seconds"`
 		RequestCount  int64   `json:"request_count"`
 		ErrorCount    int64   `json:"error_count"`
+		// Cache metrics (provider-agnostic counters)
+		CacheHits   int64 `json:"cache_hits"`
+		CacheMisses int64 `json:"cache_misses"`
+		CacheBypass int64 `json:"cache_bypass"`
+		CacheStores int64 `json:"cache_stores"`
 	}{
 		UptimeSeconds: time.Since(s.metrics.StartTime).Seconds(),
 	}
@@ -372,6 +377,10 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		pm := s.proxy.Metrics()
 		m.RequestCount = pm.RequestCount
 		m.ErrorCount = pm.ErrorCount
+		m.CacheHits = pm.CacheHits
+		m.CacheMisses = pm.CacheMisses
+		m.CacheBypass = pm.CacheBypass
+		m.CacheStores = pm.CacheStores
 	}
 
 	w.Header().Set("Content-Type", "application/json")
