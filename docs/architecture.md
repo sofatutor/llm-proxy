@@ -309,8 +309,25 @@ The proxy implementation is based on Go's `httputil.ReverseProxy` with customiza
   - Error handling
   - Generic API support
   - Connection pooling
+  - **Project Status Guard**: Blocks inactive projects (403 responses)
 - **Implementation**: `internal/proxy/proxy.go`
 - **Design Pattern**: Transparent reverse proxy with minimal request/response transformation
+
+### Token & Project Lifecycle Management
+
+- **Purpose**: Manage project and token states with soft deactivation and comprehensive auditing
+- **Key Features**:
+  - **Soft Deactivation**: Projects and tokens use `is_active` fields instead of destructive deletes
+  - **Token Revocation**: Single token, batch, and per-project revocation with audit trails
+  - **Project Lifecycle**: Create, activate, deactivate (with optional token revocation)
+  - **Management API Extensions**: Individual token operations (GET/PATCH/DELETE), bulk operations
+  - **Admin UI Actions**: Edit/revoke tokens, activate/deactivate projects, bulk token management
+  - **Audit Integration**: All lifecycle operations generate audit events for compliance
+- **Implementation**: `internal/database/`, `internal/server/management_*.go`, `internal/admin/`
+- **Database Schema**:
+  - Projects: `is_active` BOOLEAN, `deactivated_at` TIMESTAMP
+  - Tokens: `is_active` BOOLEAN, `deactivated_at` TIMESTAMP  
+- **Security**: No destructive operations; deactivation is reversible with full audit trails
 
 ### Configuration System
 
@@ -389,18 +406,53 @@ Provides a transparent proxy to OpenAI endpoints:
 
 ### Management API (`/manage/*`)
 
-Endpoints for project and token management:
+Endpoints for project and token management with comprehensive lifecycle operations:
 
-- `/manage/tokens`: Token CRUD operations
-- `/manage/projects`: Project CRUD operations
+**Project Management:**
+- `GET /manage/projects`: List all projects
+- `POST /manage/projects`: Create new project (defaults to active)
+- `GET /manage/projects/{projectId}`: Get project details
+- `PATCH /manage/projects/{projectId}`: Update project (including `is_active` changes)
+- `DELETE /manage/projects/{projectId}`: **405 Method Not Allowed** (no destructive deletes)
+- `POST /manage/projects/{projectId}/tokens/revoke`: Bulk revoke all tokens for project
+
+**Token Management:**
+- `GET /manage/tokens`: List all tokens (supports filtering by project, active status)
+- `POST /manage/tokens`: Generate new token (blocked if project inactive)
+- `GET /manage/tokens/{tokenId}`: Get token details
+- `PATCH /manage/tokens/{tokenId}`: Update token (activate/deactivate)
+- `DELETE /manage/tokens/{tokenId}`: Revoke token (soft deactivation)
+
+**Key Features:**
+- All operations generate audit events for compliance tracking
+- Soft deactivation model prevents data loss
+- Project activation controls token generation
+- Bulk operations for administrative efficiency
 
 ### Admin UI (`/admin/*`)
 
-Web interface for system administration:
+Web interface for system administration with Phase 5 lifecycle management:
 
-- `/admin/projects`: Project management
-- `/admin/tokens`: Token management
-- `/admin/dashboard`: Usage statistics
+**Project Management:**
+- `/admin/projects`: Project listing with activation toggles
+- `/admin/projects/{projectId}/edit`: Project editing (name, API key, activation status)
+- `/admin/projects/{projectId}/tokens/revoke`: Bulk token revocation interface
+
+**Token Management:**
+- `/admin/tokens`: Token listing with status badges (active/inactive/expired)
+- `/admin/tokens/{tokenId}/edit`: Token editing (activation, expiration)
+- `/admin/tokens/{tokenId}/revoke`: Individual token revocation
+
+**Dashboard & Monitoring:**
+- `/admin/dashboard`: Usage statistics and system health
+- `/admin/audit`: Audit event listing and search (when enabled)
+
+**Key Features:**
+- **Conditional Actions**: Buttons/forms disabled based on entity state
+- **Status Visualization**: Clear badges for active/inactive/expired states  
+- **Bulk Operations**: Project-level token management
+- **Audit Integration**: Activity logs for all administrative actions
+- **No Destructive Actions**: Deactivation instead of deletion for safety
 
 ## Data Flow
 
@@ -418,30 +470,37 @@ sequenceDiagram
     
     alt Token Valid
         Proxy->>+Database: Get API Key for Project
-        Database-->>-Proxy: API Key
-        Proxy->>Proxy: Replace Authorization Header + Add Request ID
-        Proxy->>+TargetAPI: Forward Request with Headers
-        TargetAPI-->>-Proxy: Response
+        Database-->>-Proxy: Project Data with API Key
         
-        alt Normal Response
-            Proxy->>Proxy: Extract Metadata + Request ID
-            Proxy->>+Logger: Log API Call with Metadata & Context
-            Logger-->>-Proxy: Log Confirmation
-            Proxy->>+AuditLogger: Log Security Event with Request ID
-            AuditLogger-->>-Proxy: Audit Confirmation
-        else Streaming Response
-            Proxy->>Proxy: Setup Streaming Pipeline
-            loop For Each Chunk
-                TargetAPI-->>Proxy: Response Chunk
-                Proxy-->>Client: Forward Chunk
+        alt Project Active
+            Proxy->>Proxy: Replace Authorization Header + Add Request ID
+            Proxy->>+TargetAPI: Forward Request with Headers
+            TargetAPI-->>-Proxy: Response
+            
+            alt Normal Response
+                Proxy->>Proxy: Extract Metadata + Request ID
+                Proxy->>+Logger: Log API Call with Metadata & Context
+                Logger-->>-Proxy: Log Confirmation
+                Proxy->>+AuditLogger: Log Security Event with Request ID
+                AuditLogger-->>-Proxy: Audit Confirmation
+            else Streaming Response
+                Proxy->>Proxy: Setup Streaming Pipeline
+                loop For Each Chunk
+                    TargetAPI-->>Proxy: Response Chunk
+                    Proxy-->>Client: Forward Chunk
+                end
+                Proxy->>+Logger: Log Aggregated Metadata with Request ID
+                Logger-->>-Proxy: Log Confirmation
+                Proxy->>+AuditLogger: Log Security Event with Request ID
+                AuditLogger-->>-Proxy: Audit Confirmation
             end
-            Proxy->>+Logger: Log Aggregated Metadata with Request ID
-            Logger-->>-Proxy: Log Confirmation
-            Proxy->>+AuditLogger: Log Security Event with Request ID
+            
+            Proxy-->>-Client: Response (with X-Request-ID header)
+        else Project Inactive
+            Proxy->>+AuditLogger: Log Project Inactive Denial (403) with Request ID
             AuditLogger-->>-Proxy: Audit Confirmation
+            Proxy-->>Client: 403 Forbidden Response (with X-Request-ID header)
         end
-        
-        Proxy-->>-Client: Response (with X-Request-ID header)
     else Token Invalid
         Proxy->>+AuditLogger: Log Failed Authentication with Request ID
         AuditLogger-->>-Proxy: Audit Confirmation

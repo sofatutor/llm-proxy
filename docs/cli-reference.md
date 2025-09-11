@@ -24,10 +24,20 @@ This document provides a comprehensive reference for all LLM Proxy command-line 
 The LLM Proxy CLI provides commands for:
 - Starting the proxy server
 - Setting up the initial configuration
-- Managing projects and tokens
+- **Managing projects and tokens with Phase 5 lifecycle features**
 - Running the event dispatcher
 - Benchmarking proxy performance and testing cache behavior
 - Interactive chat with OpenAI
+
+### Phase 5 Features (Completed)
+This CLI includes comprehensive **token and project lifecycle management** implemented in Phase 5:
+- **Soft Deactivation**: Projects and tokens use activation flags instead of destructive deletes
+- **Individual Token Management**: GET, PATCH (activate/deactivate), DELETE (revoke) operations
+- **Bulk Token Operations**: Revoke all tokens for a project
+- **Project Lifecycle Controls**: Activation/deactivation with audit trails
+- **Enhanced Filtering**: List tokens by project, active status, etc.
+
+**Related Issues & PRs:** [#75](https://github.com/sofatutor/llm-proxy/issues/75), [#83](https://github.com/sofatutor/llm-proxy/issues/83), [#95](https://github.com/sofatutor/llm-proxy/pull/95), [#98](https://github.com/sofatutor/llm-proxy/pull/98)
 
 ## Global Options
 
@@ -189,7 +199,7 @@ llm-proxy manage project create \
 
 ##### `llm-proxy manage project update`
 
-Update an existing project.
+Update an existing project including activation status.
 
 **Usage:**
 ```bash
@@ -202,6 +212,7 @@ llm-proxy manage project update <project-id> [flags]
 **Flags:**
 - `--name string`: New project name
 - `--openai-key string`: New OpenAI API key
+- `--is-active bool`: Project activation status (true/false)
 
 **Examples:**
 ```bash
@@ -215,29 +226,38 @@ llm-proxy manage project update 123e4567-e89b-12d3-a456-426614174000 \
   --openai-key sk-new-api-key \
   --management-token your-token
 
-# Update both name and key
+# Deactivate project
 llm-proxy manage project update 123e4567-e89b-12d3-a456-426614174000 \
-  --name "New Name" \
-  --openai-key sk-new-key \
+  --is-active=false \
+  --management-token your-token
+
+# Update name and deactivate
+llm-proxy manage project update 123e4567-e89b-12d3-a456-426614174000 \
+  --name "Inactive Project" \
+  --is-active=false \
   --management-token your-token
 ```
 
 ##### `llm-proxy manage project delete`
 
-Delete a project and all associated tokens.
+**⚠️ Not Supported - Returns 405 Method Not Allowed**
 
-**Usage:**
+Project deletion is not supported in Phase 5 for data safety. Use project deactivation instead.
+
+**Alternative - Deactivate Project:**
 ```bash
-llm-proxy manage project delete <project-id> [flags]
+# Deactivate project instead of deletion
+llm-proxy manage project update <project-id> --is-active=false --management-token your-token
+
+# Optionally revoke all project tokens
+llm-proxy manage project <project-id> tokens revoke --management-token your-token
 ```
 
-**Arguments:**
-- `project-id`: UUID of the project to delete
-
-**Examples:**
-```bash
-llm-proxy manage project delete 123e4567-e89b-12d3-a456-426614174000 --management-token your-token
-```
+**Why No Deletion:**
+- Prevents accidental data loss
+- Maintains audit trail integrity  
+- Allows project reactivation if needed
+- Preserves historical token/usage data
 
 #### Token Management
 
@@ -328,6 +348,29 @@ llm-proxy manage token revoke <token-id> [flags]
 **Examples:**
 ```bash
 llm-proxy manage token revoke sk-ABC123DEF456GHI789 --management-token your-token
+```
+
+##### `llm-proxy manage project tokens revoke`
+
+Bulk revoke all tokens for a project.
+
+**Usage:**
+```bash
+llm-proxy manage project <project-id> tokens revoke [flags]
+```
+
+**Arguments:**
+- `project-id`: UUID of the project whose tokens to revoke
+
+**Examples:**
+```bash
+# Revoke all tokens for a project
+llm-proxy manage project 123e4567-e89b-12d3-a456-426614174000 tokens revoke --management-token your-token
+
+# Useful when deactivating a project
+llm-proxy manage project update 123e4567-e89b-12d3-a456-426614174000 --is-active=false --management-token your-token
+llm-proxy manage project 123e4567-e89b-12d3-a456-426614174000 tokens revoke --management-token your-token
+```
 ```
 
 ---

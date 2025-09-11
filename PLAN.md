@@ -123,20 +123,25 @@ This document outlines the implementation plan for a transparent proxy for OpenA
 
 ## Phases Overview
 
-| Phase | Focus                        | Key Topics/Files                                      |
-|-------|------------------------------|-------------------------------------------------------|
-| 5     | Core Features                | Proxy, logging, admin, token mgmt, core tests         |
-| 6     | Production Readiness         | Docs, refactoring, optimization, security, CI/CD      |
-| 7     | Production & Post-Production | Scaling, sec-ops, dev-ops, advanced monitoring, HTTPS |
+| Phase | Focus                        | Status               | Key Topics/Files                                      |
+|-------|------------------------------|----------------------|-------------------------------------------------------|
+| 5     | Core Features                | ✅ **COMPLETED**     | Proxy, logging, admin, token mgmt, deactivation, audit |
+| 6     | Production Readiness         | 🔄 In Progress       | Docs, refactoring, optimization, security, CI/CD      |
+| 7     | Production & Post-Production | 📋 Planned           | Scaling, sec-ops, dev-ops, advanced monitoring, HTTPS |
 
 _Optional/experimental features (e.g., alerting, tracing, benchmarks) are tracked in `docs/issues/optional/` and may be promoted to a main phase as needed._
 
 ## Implementation Steps
 
-### Phase 5: Core Features
-- Implement proxy logic, logging/observability, admin UI, token management, database, and core tests.
-- Add opt-in PostgreSQL support while keeping SQLite default. See `docs/issues/phase-5-postgres-support.md`.
-- See: `phase-5-generic-async-middleware.md`, `phase-5-async-event-bus.md`, `phase-5-event-dispatcher-service.md`, `phase-5-log-integration.md`, `phase-5-ui-tests.md`, etc.
+### Phase 5: Core Features ✅ **COMPLETED**
+- ✅ Implemented proxy logic, logging/observability, admin UI, token management, database, and core tests.
+- ✅ **Token & Project Deactivation**: Soft deactivation (`is_active` field), token revocation (single, batch, per-project), audit events, admin UI actions. **Completed via Issues [#75](https://github.com/sofatutor/llm-proxy/issues/75), [#83](https://github.com/sofatutor/llm-proxy/issues/83), PRs [#95](https://github.com/sofatutor/llm-proxy/pull/95), [#98](https://github.com/sofatutor/llm-proxy/pull/98)**
+- ✅ **Management API Extensions**: Individual token operations (GET/PATCH/DELETE), bulk revoke, project lifecycle with activation controls
+- ✅ **Admin UI Actions**: Token edit/revoke, project activate/deactivate, bulk token revocation
+- ✅ **Proxy Guard**: Blocks API key retrieval for inactive projects (403/401 responses)
+- ✅ **Comprehensive Audit Events**: Lifecycle operations, proxy request decisions, compliance logging
+- ✅ **E2E Test Coverage**: Complete UI test automation for all Phase 5 features
+- 🔄 Add opt-in PostgreSQL support while keeping SQLite default. See `docs/issues/phase-5-postgres-support.md`.
 
 ### Phase 6: Production Readiness
 - Complete documentation, refactoring, optimization, security, CI/CD, and containerization.
