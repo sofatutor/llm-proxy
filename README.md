@@ -5,16 +5,22 @@ A transparent, secure proxy for OpenAI's API with token management, rate limitin
 ## Features
 - **OpenAI API Compatibility**
 - **Withering Tokens**: Expiration, revocation, and rate-limiting
-- **Project-based Access Control**
+- **Project-based Access Control** with lifecycle management
+  - **Soft Deactivation**: Projects and tokens use activation flags instead of destructive deletes
+  - **Individual Token Operations**: GET, PATCH, DELETE with comprehensive audit trails
+  - **Bulk Token Management**: Revoke all tokens for a project
+  - **Project Activation Controls**: Deactivate projects to block token generation and API access
+  - **Admin UI Actions**: Edit/revoke tokens, activate/deactivate projects, bulk operations
 - **HTTP Response Caching**: Redis-backed cache with configurable TTL, auth-aware shared caching, and streaming response support. Enable with `HTTP_CACHE_ENABLED=true`.
 - **Admin UI**: Web interface for management
-- **Comprehensive Logging**
+- **Comprehensive Logging & Audit Events**: Full lifecycle operation tracking for compliance
 - **Async Instrumentation Middleware**: Non-blocking, streaming-capable instrumentation for all API calls. See [docs/instrumentation.md](docs/instrumentation.md) for advanced usage and extension.
 - **Async Event Bus & Dispatcher**: All API instrumentation events are handled via an always-on, fully asynchronous event bus (in-memory or Redis) with support for multiple subscribers, batching, retry logic, and graceful shutdown. Persistent event logging is handled by a dispatcher CLI or the `--file-event-log` flag.
 - **OpenAI Token Counting**: Accurate prompt and completion token counting using tiktoken-go.
 - **Prometheus Monitoring**
 - **SQLite Storage**
 - **Docker Deployment**
+
 
 ## Quick Start
 
@@ -80,7 +86,7 @@ MANAGEMENT_TOKEN=your-secure-management-token ./bin/llm-proxy
 - `HTTP_CACHE_MAX_OBJECT_BYTES`: Maximum cached object size in bytes (default 1048576)
 - `HTTP_CACHE_DEFAULT_TTL`: Default TTL in seconds when upstream doesn't specify (default 300)
 
-See `docs/configuration.md` and [docs/instrumentation.md](docs/instrumentation.md) for all options and advanced usage.
+See `docs/api-configuration.md` and [docs/instrumentation.md](docs/instrumentation.md) for all options and advanced usage.
 
 ### Advanced Example
 ```yaml
@@ -102,19 +108,22 @@ See `docs/issues/phase-7-param-cors-whitelist.md` for advanced configuration and
 ## Main API Endpoints
 
 ### Management API
-- `/manage/projects` — Project CRUD
+- `/manage/projects` — Project lifecycle management
   - `GET /manage/projects` — List all projects
-  - `POST /manage/projects` — Create a new project
+  - `POST /manage/projects` — Create a new project (defaults to active)
 - `/manage/projects/{projectId}`
   - `GET` — Get project details
-  - `PATCH` — Update a project (partial update)
-  - `DELETE` — Delete a project
-- `/manage/tokens` — Token CRUD
-  - `GET /manage/tokens` — List all tokens
-  - `POST /manage/tokens` — Generate a new token
-- `/manage/tokens/{token}`
+  - `PATCH` — Update a project (supports `is_active` field)
+  - `DELETE` — **405 Method Not Allowed** (no destructive deletes)
+- `/manage/projects/{projectId}/tokens/revoke` — Bulk token operations
+  - `POST` — Revoke all tokens for project
+- `/manage/tokens` — Token lifecycle management
+  - `GET /manage/tokens` — List all tokens (filter by project, active status)
+  - `POST /manage/tokens` — Generate a new token (blocked if project inactive)
+- `/manage/tokens/{tokenId}`
   - `GET` — Get token details
-  - `DELETE` — Revoke a token
+  - `PATCH` — Update token (activate/deactivate)
+  - `DELETE` — Revoke token (soft deactivation)
 
 All management endpoints require:
 ```
@@ -123,15 +132,25 @@ Authorization: Bearer <MANAGEMENT_TOKEN>
 
 #### Example (curl):
 ```bash
+# Create active project
 curl -X POST http://localhost:8080/manage/projects \
   -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "My Project", "openai_api_key": "sk-..."}'
 
+# Update project activation status
 curl -X PATCH http://localhost:8080/manage/projects/<project-id> \
   -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name": "New Name"}'
+  -d '{"is_active": false}'
+
+# Bulk revoke project tokens
+curl -X POST http://localhost:8080/manage/projects/<project-id>/tokens/revoke \
+  -H "Authorization: Bearer $MANAGEMENT_TOKEN"
+
+# Revoke individual token
+curl -X DELETE http://localhost:8080/manage/tokens/<token-id> \
+  -H "Authorization: Bearer $MANAGEMENT_TOKEN"
 ```
 
 ### Proxy
@@ -148,24 +167,64 @@ curl -H "Authorization: Bearer <withering-token>" \
 > **Note:** The proxy API is not documented with Swagger/OpenAPI except for authentication and allowed paths/methods. For backend schemas, refer to the provider's documentation.
 
 ### Admin UI
-- `/admin/` — Web interface (requires admin credentials)
+- `/admin/` — Web interface with lifecycle management
+  - Project activation/deactivation controls
+  - Token revocation and editing
+  - Bulk token management by project
+  - Audit event viewing (when enabled)
 
 ## CLI Management Tool
 
-The CLI provides full management of projects and tokens via the `llm-proxy manage` command. All subcommands support the `--manage-api-base-url` flag (default: http://localhost:8080) and require a management token (via `--management-token` or `MANAGEMENT_TOKEN` env).
+The CLI provides full management of projects and tokens via the `llm-proxy manage` command with lifecycle operations. All subcommands support the `--manage-api-base-url` flag (default: http://localhost:8080) and require a management token (via `--management-token` or `MANAGEMENT_TOKEN` env).
 
 ### Project Management
 ```sh
+# List projects with activation status
 llm-proxy manage project list --manage-api-base-url http://localhost:8080 --management-token <token>
+
+# Get project details
 llm-proxy manage project get <project-id> --manage-api-base-url http://localhost:8080 --management-token <token>
+
+# Create project (defaults to active)
 llm-proxy manage project create --name "My Project" --openai-key sk-... --manage-api-base-url http://localhost:8080 --management-token <token>
+
+# Update project (supports activation changes)
+# Note: --is-active flag not yet available in CLI; use direct API calls for activation control
+curl -X PATCH http://localhost:8080/manage/projects/<project-id> \
+  -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"is_active": false}'
+
+# CLI currently supports name and API key updates
 llm-proxy manage project update <project-id> --name "New Name" --manage-api-base-url http://localhost:8080 --management-token <token>
-llm-proxy manage project delete <project-id> --manage-api-base-url http://localhost:8080 --management-token <token>
+
+# Project deletion not supported (405) - use deactivation instead
+# llm-proxy manage project delete <project-id>  # This will fail with 405
 ```
 
 ### Token Management
 ```sh
+# Generate token (blocked if project inactive via API validation)
 llm-proxy manage token generate --project-id <project-id> --duration 24 --manage-api-base-url http://localhost:8080 --management-token <token>
+
+# Note: Token listing, details, and revocation not yet available in CLI
+# Use direct API calls for these operations:
+
+# List tokens with filtering
+curl -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  "http://localhost:8080/manage/tokens?project_id=<project-id>&active_only=true"
+
+# Get token details
+curl -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  "http://localhost:8080/manage/tokens/<token-id>"
+
+# Revoke individual token
+curl -X DELETE -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  "http://localhost:8080/manage/tokens/<token-id>"
+
+# Bulk revoke project tokens  
+curl -X POST -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  "http://localhost:8080/manage/projects/<project-id>/tokens/revoke"
 ```
 
 ### Flags
