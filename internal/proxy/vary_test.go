@@ -194,7 +194,7 @@ func TestVaryHandling_CacheValidation(t *testing.T) {
 	// Store a response with Vary: Accept
 	req := httptest.NewRequest("GET", "/v1/models", nil)
 	req.Header.Set("Accept", "application/json")
-	
+
 	key := cacheKeyFromRequestWithVary(req, "Accept")
 	t.Logf("Storage key: %s", key)
 	cr := cachedResponse{

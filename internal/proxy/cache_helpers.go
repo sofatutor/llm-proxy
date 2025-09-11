@@ -165,7 +165,7 @@ func parseVaryHeader(vary string) []string {
 	if vary == "" || vary == "*" {
 		return nil
 	}
-	
+
 	var headers []string
 	parts := strings.Split(vary, ",")
 	for _, part := range parts {
@@ -416,23 +416,4 @@ func wantsRevalidation(r *http.Request) bool {
 		return true
 	}
 	return false
-}
-
-// smartCacheLookup attempts to find a cached response using multiple key generation strategies.
-// It tries per-response Vary first (for new entries), then falls back to conservative Vary (for compatibility).
-func smartCacheLookup(cache httpCache, r *http.Request) (cachedResponse, string, bool) {
-	if cache == nil {
-		return cachedResponse{}, "", false
-	}
-
-	// Strategy 1: Try the current conservative approach (for backward compatibility)
-	conservativeKey := cacheKeyFromRequest(r)
-	if cr, ok := cache.Get(conservativeKey); ok {
-		return cr, conservativeKey, true
-	}
-
-	// Strategy 2: Future enhancement - could try specific Vary combinations here
-	// For now, we'll rely on the conservative approach and new responses will use stored Vary
-	
-	return cachedResponse{}, "", false
 }

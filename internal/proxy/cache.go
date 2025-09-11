@@ -20,8 +20,8 @@ type cachedResponse struct {
 type httpCache interface {
 	Get(key string) (cachedResponse, bool)
 	Set(key string, value cachedResponse)
-	Purge(key string) bool                        // Remove exact key
-	PurgePrefix(prefix string) int                // Remove all keys with prefix, return count
+	Purge(key string) bool         // Remove exact key
+	PurgePrefix(prefix string) int // Remove all keys with prefix, return count
 }
 
 type inMemoryCache struct {

@@ -12,7 +12,7 @@ import (
 
 func TestCacheMetrics_HitMissBypassStore(t *testing.T) {
 	tests := []struct {
-		name           string
+		name          string
 		setupCache    func() httpCache
 		request       func() *http.Request
 		expectCacheOp string
@@ -28,7 +28,7 @@ func TestCacheMetrics_HitMissBypassStore(t *testing.T) {
 				// Pre-populate cache with the correct key
 				cache.Set(key, cachedResponse{
 					statusCode: 200,
-					headers:    http.Header{"Content-Type": []string{"application/json"}},
+					headers:    http.Header{"Content-Type": []string{"application/json"}, "Cache-Control": []string{"public, s-maxage=60"}},
 					body:       []byte(`{"cached": true}`),
 					expiresAt:  time.Now().Add(time.Hour),
 				})
@@ -88,7 +88,7 @@ func TestCacheMetrics_HitMissBypassStore(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				w.Header().Set("Cache-Control", "public, max-age=300")
 				w.WriteHeader(200)
-				w.Write([]byte(`{"models": []}`))
+				_, _ = w.Write([]byte(`{"models": []}`))
 			},
 		},
 	}
@@ -132,7 +132,7 @@ func TestCacheMetrics_HitMissBypassStore(t *testing.T) {
 
 			// Execute request
 			w := httptest.NewRecorder()
-			
+
 			// For store test, we need to mock upstream response
 			if tt.setupResponse != nil {
 				// TODO: This test needs more complex setup to test store path
@@ -149,7 +149,7 @@ func TestCacheMetrics_HitMissBypassStore(t *testing.T) {
 
 			// Check metrics were incremented correctly
 			newMetrics := proxy.Metrics()
-			
+
 			switch tt.expectCacheOp {
 			case "hit":
 				if newMetrics.CacheHits != initialHits+1 {
@@ -251,7 +251,7 @@ func TestCacheMetrics_ThreadSafety(t *testing.T) {
 	// Verify final counts
 	metrics := proxy.Metrics()
 	expectedCount := int64(numGoroutines * operationsPerGoroutine)
-	
+
 	if metrics.CacheHits != expectedCount {
 		t.Errorf("Expected %d cache hits, got %d", expectedCount, metrics.CacheHits)
 	}

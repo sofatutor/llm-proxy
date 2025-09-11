@@ -50,11 +50,11 @@ type ProxyMetrics struct {
 	ErrorCount        int64
 	TotalResponseTime time.Duration
 	// Cache metrics (provider-agnostic counters)
-	CacheHits    int64 // Cache hits (responses served from cache)
-	CacheMisses  int64 // Cache misses (responses fetched from upstream)
-	CacheBypass  int64 // Cache bypassed (e.g., due to authorization)
-	CacheStores  int64 // Cache stores (responses stored in cache)
-	mu           sync.Mutex
+	CacheHits   int64 // Cache hits (responses served from cache)
+	CacheMisses int64 // Cache misses (responses fetched from upstream)
+	CacheBypass int64 // Cache bypassed (e.g., due to authorization)
+	CacheStores int64 // Cache stores (responses stored in cache)
+	mu          sync.Mutex
 }
 
 // Metrics returns a pointer to the current proxy metrics.
@@ -76,7 +76,7 @@ func (p *TransparentProxy) SetMetrics(m *ProxyMetrics) {
 func (p *TransparentProxy) incrementCacheMetric(metric string) {
 	p.metrics.mu.Lock()
 	defer p.metrics.mu.Unlock()
-	
+
 	switch metric {
 	case "hit":
 		p.metrics.CacheHits++
@@ -364,7 +364,7 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 			if varyHeader != "" && varyHeader != "*" {
 				storageKey = cacheKeyFromRequestWithVary(req, varyHeader)
 			}
-			
+
 			if !isStreaming(res) {
 				bodyBytes, err := io.ReadAll(res.Body)
 				if err == nil {
@@ -811,7 +811,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 						return
 					}
 				}
-				
+
 				if !canServeCachedForRequest(r, cr.headers) {
 					// Authorization present but cached response not explicitly shared-cacheable
 					w.Header().Set("Cache-Status", "llm-proxy; bypass")
