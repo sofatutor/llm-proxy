@@ -56,6 +56,26 @@ function revokeToken(tokenId, obfuscatedToken) {
     }
 }
 
+function reactivateToken(tokenId, obfuscatedToken) {
+    if (confirm('Are you sure you want to reactivate token ' + obfuscatedToken + '? This will make the token active again.')) {
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/tokens/' + tokenId;
+        var methodInput = document.createElement('input');
+        methodInput.type = 'hidden';
+        methodInput.name = '_method';
+        methodInput.value = 'PUT';
+        form.appendChild(methodInput);
+        var isActiveInput = document.createElement('input');
+        isActiveInput.type = 'hidden';
+        isActiveInput.name = 'is_active';
+        isActiveInput.value = 'true';
+        form.appendChild(isActiveInput);
+        document.body.appendChild(form);
+        form.submit();
+    }
+}
+
 function bulkRevokeTokens(projectId, projectName) {
     if (confirm('Are you sure you want to revoke ALL tokens for project "' + projectName + '"? This action cannot be undone.')) {
         var form = document.createElement('form');

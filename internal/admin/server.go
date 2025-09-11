@@ -213,6 +213,9 @@ func (s *Server) setupRoutes() {
 			projects.POST("", s.handleProjectsCreate)
 			projects.GET("/:id", s.handleProjectsShow)
 			projects.GET("/:id/edit", s.handleProjectsEdit)
+			// HTML forms submit via POST with _method override; Gin matches routes before middleware,
+			// so provide POST fallback routes that dispatch to the correct handlers.
+			projects.POST("/:id", s.handleProjectsPostOverride)
 			projects.PUT("/:id", s.handleProjectsUpdate)
 			projects.DELETE("/:id", s.handleProjectsDelete)
 			projects.POST("/:id/revoke-tokens", s.handleProjectsBulkRevoke)
@@ -226,6 +229,8 @@ func (s *Server) setupRoutes() {
 			tokens.POST("", s.handleTokensCreate)
 			tokens.GET("/:token", s.handleTokensShow)
 			tokens.GET("/:token/edit", s.handleTokensEdit)
+			// POST fallback for HTML forms with _method override
+			tokens.POST("/:token", s.handleTokensPostOverride)
 			tokens.PUT("/:token", s.handleTokensUpdate)
 			tokens.DELETE("/:token", s.handleTokensRevoke)
 		}
@@ -466,6 +471,10 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 		return
 	}
 
+	// Checkbox handling: check if the posted value is "true"
+	isActive := c.PostForm("is_active") == "true"
+	isActivePtr := &isActive
+
 	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
 	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {
 		ctx = context.WithValue(ctx, ctxKeyForwardedIP, strings.Split(ip, ",")[0])
@@ -475,7 +484,7 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 	if ref := c.Request.Referer(); ref != "" {
 		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
 	}
-	project, err := apiClient.UpdateProject(ctx, id, req.Name, req.OpenAIAPIKey, req.IsActive)
+	project, err := apiClient.UpdateProject(ctx, id, req.Name, req.OpenAIAPIKey, isActivePtr)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to update project: %v", err),
@@ -484,6 +493,34 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 	}
 
 	c.Redirect(http.StatusSeeOther, fmt.Sprintf("/projects/%s", project.ID))
+}
+
+// handleProjectsPostOverride routes POST requests with _method overrides to the appropriate handler.
+// It ensures form submissions to /projects/:id work even though Gin resolves routes before middleware.
+func (s *Server) handleProjectsPostOverride(c *gin.Context) {
+	// Parse form to access _method
+	if err := c.Request.ParseForm(); err != nil {
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"error": "Failed to parse form data",
+		})
+		return
+	}
+
+	method := c.PostForm("_method")
+	switch strings.ToUpper(method) {
+	case http.MethodPut:
+		s.handleProjectsUpdate(c)
+		return
+	case http.MethodDelete:
+		s.handleProjectsDelete(c)
+		return
+	default:
+		// No override provided; treat as bad request
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"error": "Unsupported method override for project action",
+		})
+		return
+	}
 }
 
 func (s *Server) handleProjectsDelete(c *gin.Context) {
@@ -560,6 +597,8 @@ func (s *Server) handleTokensList(c *gin.Context) {
 		"pagination":   pagination,
 		"projectId":    projectID,
 		"projectNames": projectNames,
+		"now":          time.Now(),
+		"currentTime":  time.Now(),
 	})
 }
 
@@ -700,11 +739,13 @@ func (s *Server) handleTokensShow(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "tokens/show.html", gin.H{
-		"title":   "Token Details",
-		"active":  "tokens",
-		"token":   token,
-		"project": project,
-		"tokenID": tokenID,
+		"title":       "Token Details",
+		"active":      "tokens",
+		"token":       token,
+		"project":     project,
+		"tokenID":     tokenID,
+		"now":         time.Now(),
+		"currentTime": time.Now(),
 	})
 }
 
@@ -1342,6 +1383,32 @@ func (s *Server) handleTokensRevoke(c *gin.Context) {
 	}
 
 	c.Redirect(http.StatusSeeOther, "/tokens")
+}
+
+// handleTokensPostOverride routes POST requests with _method overrides for token actions.
+func (s *Server) handleTokensPostOverride(c *gin.Context) {
+	// Parse form to access _method
+	if err := c.Request.ParseForm(); err != nil {
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"error": "Failed to parse form data",
+		})
+		return
+	}
+
+	method := c.PostForm("_method")
+	switch strings.ToUpper(method) {
+	case http.MethodPut:
+		s.handleTokensUpdate(c)
+		return
+	case http.MethodDelete:
+		s.handleTokensRevoke(c)
+		return
+	default:
+		c.HTML(http.StatusBadRequest, "error.html", gin.H{
+			"error": "Unsupported method override for token action",
+		})
+		return
+	}
 }
 
 // Project bulk revoke handler

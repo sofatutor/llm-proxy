@@ -30,9 +30,15 @@
                         <select class="form-select" id="project_id" name="project_id" required>
                             <option value="">Select a project</option>
                             {{ range .projects }}
-                            <option value="{{ .ID }}" {{ if eq .ID $.project_id }}selected{{ end }}>
-                                {{ .Name }} ({{ .ID }})
-                            </option>
+                            {{ if .IsActive }}
+                                <option value="{{ .ID }}" {{ if eq .ID $.project_id }}selected{{ end }}>
+                                    {{ .Name }} ({{ .ID }})
+                                </option>
+                            {{ else }}
+                                <option value="{{ .ID }}" disabled>
+                                    {{ .Name }} ({{ .ID }}) - INACTIVE
+                                </option>
+                            {{ end }}
                             {{ end }}
                         </select>
                         <div class="form-text">
