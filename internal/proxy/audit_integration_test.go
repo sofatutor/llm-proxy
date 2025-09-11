@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/sofatutor/llm-proxy/internal/audit"
+	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -35,14 +36,14 @@ func (c *SimpleAuditCollector) GetEvents() []*audit.Event {
 func TestProxyAuditIntegration(t *testing.T) {
 	// Test cases for audit event integration
 	tests := []struct {
-		name              string
-		projectID         string
-		projectActive     bool
-		getProjectError   error
-		expectedStatus    int
-		expectedAction    string
-		expectedResult    audit.ResultType
-		expectedReason    string
+		name            string
+		projectID       string
+		projectActive   bool
+		getProjectError error
+		expectedStatus  int
+		expectedAction  string
+		expectedResult  audit.ResultType
+		expectedReason  string
 	}{
 		{
 			name:           "project_inactive_403_audit",
@@ -81,7 +82,7 @@ func TestProxyAuditIntegration(t *testing.T) {
 			req := httptest.NewRequest("POST", "/v1/chat/completions", nil)
 			req.Header.Set("User-Agent", "test-integration/1.0")
 			req.RemoteAddr = "203.0.113.100:54321"
-			
+
 			// Add request ID and project ID to context
 			ctx := context.WithValue(req.Context(), ctxKeyRequestID, "integration-test-123")
 			ctx = logging.WithRequestID(ctx, "integration-test-123") // Use proper logging context
@@ -119,16 +120,16 @@ func TestProxyAuditIntegration(t *testing.T) {
 			assert.Equal(t, tt.projectID, event.ProjectID)
 			assert.Equal(t, "integration-test-123", event.RequestID)
 			assert.Equal(t, "203.0.113.100", event.ClientIP)
-			
+
 			// Verify details
 			method, ok := event.Details["http_method"].(string)
 			assert.True(t, ok)
 			assert.Equal(t, "POST", method)
-			
+
 			endpoint, ok := event.Details["endpoint"].(string)
 			assert.True(t, ok)
 			assert.Equal(t, "/v1/chat/completions", endpoint)
-			
+
 			userAgent, ok := event.Details["user_agent"].(string)
 			assert.True(t, ok)
 			assert.Equal(t, "test-integration/1.0", userAgent)
