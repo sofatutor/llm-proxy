@@ -12,7 +12,7 @@ MANAGEMENT_TOKEN=${MANAGEMENT_TOKEN:-e2e-management-token}
 echo "Starting LLM Proxy management API server on port $MGMT_PORT..."
 DB_PATH="./tmp/e2e-db-$$.sqlite"
 export DATABASE_PATH="$DB_PATH"
-MANAGEMENT_TOKEN="$MANAGEMENT_TOKEN" LLM_PROXY_EVENT_BUS="in-memory" ./bin/llm-proxy server --addr ":$MGMT_PORT" --debug &
+LOG_LEVEL="info" MANAGEMENT_TOKEN="$MANAGEMENT_TOKEN" LLM_PROXY_EVENT_BUS="in-memory" ./bin/llm-proxy server --addr ":$MGMT_PORT" &
 MGMT_PID=$!
 
 sleep 3
