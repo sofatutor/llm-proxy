@@ -157,3 +157,16 @@ func (m *MockProjectStore) UpdateProject(ctx context.Context, p proxy.Project) e
 func (m *MockProjectStore) DeleteProject(ctx context.Context, id string) error {
 	return m.DBDeleteProject(ctx, id)
 }
+
+// GetProjectActive retrieves the active status for a project by ID
+func (m *MockProjectStore) GetProjectActive(ctx context.Context, projectID string) (bool, error) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	project, exists := m.projects[projectID]
+	if !exists {
+		return false, errors.New("project not found")
+	}
+
+	return project.IsActive, nil
+}

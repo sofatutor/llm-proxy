@@ -280,3 +280,17 @@ func (d *DB) GetAPIKeyForProject(ctx context.Context, projectID string) (string,
 	}
 	return apiKey, nil
 }
+
+// GetProjectActive retrieves the active status for a project by ID
+func (d *DB) GetProjectActive(ctx context.Context, projectID string) (bool, error) {
+	query := `SELECT is_active FROM projects WHERE id = ?`
+	var isActive bool
+	err := d.db.QueryRowContext(ctx, query, projectID).Scan(&isActive)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, ErrProjectNotFound
+		}
+		return false, fmt.Errorf("failed to get project active status: %w", err)
+	}
+	return isActive, nil
+}

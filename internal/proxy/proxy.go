@@ -27,17 +27,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// Add context keys for timing
-type ctxKey string
-
-const (
-	ctxKeyProxyReceivedAt    ctxKey = "proxy_received_at"
-	ctxKeyProxySentBackendAt ctxKey = "proxy_sent_backend_at"
-	ctxKeyProxyFirstRespAt   ctxKey = "proxy_first_response_at"
-	ctxKeyProxyFinalRespAt   ctxKey = "proxy_final_response_at"
-	ctxKeyRequestID          ctxKey = "request_id"
-)
-
 // TransparentProxy implements the Proxy interface for transparent proxying
 type TransparentProxy struct {
 	config               ProxyConfig
@@ -664,6 +653,12 @@ func (p *TransparentProxy) Handler() http.Handler {
 		}
 		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
 
+		// Enforce project active status using shared helper (if enabled)
+		if allowed, status, er := shouldAllowProject(r.Context(), p.config.EnforceProjectActive, p.projectStore, projectID); !allowed {
+			writeErrorResponse(w, status, er)
+			return
+		}
+
 		// Wrap the ResponseWriter to allow us to set headers at first/last byte
 		rw := &timingResponseWriter{ResponseWriter: w}
 
@@ -807,6 +802,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 
 	var handler http.Handler = baseHandler
 	handler = p.ValidateRequestMiddleware()(handler)
+
 	if p.obsMiddleware != nil {
 		handler = p.obsMiddleware.Middleware()(handler)
 	}

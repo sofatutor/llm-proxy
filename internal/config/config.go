@@ -71,6 +71,11 @@ type Config struct {
 	// Cleanup
 	TokenCleanupInterval time.Duration // Interval for cleaning up expired tokens
 
+	// Project active guard configuration
+	EnforceProjectActive bool          // Whether to enforce project active status (default: true)
+	ActiveCacheTTL       time.Duration // TTL for project active status cache (e.g., 5s)
+	ActiveCacheMax       int           // Maximum entries in project active status cache (e.g., 10000)
+
 	// Event bus configuration
 	EventBusBackend string // Backend for event bus: "redis" or "in-memory"
 	RedisAddr       string // Redis server address (e.g., "localhost:6379")
@@ -156,6 +161,11 @@ func New() (*Config, error) {
 
 		// Cleanup defaults
 		TokenCleanupInterval: getEnvDuration("TOKEN_CLEANUP_INTERVAL", time.Hour),
+
+		// Project active guard defaults
+		EnforceProjectActive: getEnvBool("LLM_PROXY_ENFORCE_PROJECT_ACTIVE", true),
+		ActiveCacheTTL:       getEnvDuration("LLM_PROXY_ACTIVE_CACHE_TTL", 5*time.Second),
+		ActiveCacheMax:       getEnvInt("LLM_PROXY_ACTIVE_CACHE_MAX", 10000),
 
 		// Event bus configuration
 		EventBusBackend: getEnvString("LLM_PROXY_EVENT_BUS", "redis"),
@@ -308,6 +318,11 @@ func DefaultConfig() *Config {
 
 		// Cleanup defaults
 		TokenCleanupInterval: time.Hour,
+
+		// Project active guard defaults
+		EnforceProjectActive: true,
+		ActiveCacheTTL:       5 * time.Second,
+		ActiveCacheMax:       10000,
 
 		// Event bus configuration
 		EventBusBackend: "redis",

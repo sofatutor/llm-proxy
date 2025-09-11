@@ -47,6 +47,11 @@ func (m *MockProjectStore) GetAPIKeyForProject(ctx context.Context, projectID st
 	return args.String(0), args.Error(1)
 }
 
+func (m *MockProjectStore) GetProjectActive(ctx context.Context, projectID string) (bool, error) {
+	args := m.Called(ctx, projectID)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *MockProjectStore) ListProjects(ctx context.Context) ([]Project, error) { return nil, nil }
 func (m *MockProjectStore) CreateProject(ctx context.Context, p Project) error  { return nil }
 func (m *MockProjectStore) GetProjectByID(ctx context.Context, id string) (Project, error) {
@@ -120,8 +125,9 @@ func TestTransparentProxy_BasicProxying(t *testing.T) {
 	mockStore := new(MockProjectStore)
 
 	// Set up expected calls
-	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
-	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
+	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil).Maybe()
+	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil).Maybe()
+	mockStore.On("GetProjectActive", mock.Anything, "project123").Return(true, nil).Maybe()
 
 	// Create proxy configuration
 	config := ProxyConfig{
@@ -190,6 +196,7 @@ func TestHTTPCache_BasicHitOnSecondGET(t *testing.T) {
 	mockStore := new(MockProjectStore)
 	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
 	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
+	mockStore.On("GetProjectActive", mock.Anything, "project123").Return(true, nil)
 
 	cfg := ProxyConfig{
 		TargetBaseURL:       server.URL,
@@ -253,6 +260,7 @@ func TestHTTPCache_VaryAcceptSeparatesEntries(t *testing.T) {
 	mockStore := new(MockProjectStore)
 	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
 	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
+	mockStore.On("GetProjectActive", mock.Anything, "project123").Return(true, nil)
 
 	cfg := ProxyConfig{
 		TargetBaseURL:       srv.URL,
@@ -352,8 +360,9 @@ func TestTransparentProxy_StreamingResponses(t *testing.T) {
 	mockStore := new(MockProjectStore)
 
 	// Set up expected calls
-	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
-	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
+	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil).Maybe()
+	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil).Maybe()
+	mockStore.On("GetProjectActive", mock.Anything, "project123").Return(true, nil).Maybe()
 
 	// Create proxy configuration
 	config := ProxyConfig{
@@ -554,8 +563,9 @@ func TestTransparentProxy_LargeRequestBody(t *testing.T) {
 	mockStore := new(MockProjectStore)
 
 	// Set up expected calls
-	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
-	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
+	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil).Maybe()
+	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil).Maybe()
+	mockStore.On("GetProjectActive", mock.Anything, "project123").Return(true, nil).Maybe()
 
 	// Create proxy configuration
 	config := ProxyConfig{
@@ -1235,6 +1245,10 @@ func (s *stubProjectStore) GetAPIKeyForProject(ctx context.Context, projectID st
 	return "api-key", nil
 }
 
+func (s *stubProjectStore) GetProjectActive(ctx context.Context, projectID string) (bool, error) {
+	return true, nil // Default to active for testing
+}
+
 func (s *stubProjectStore) ListProjects(ctx context.Context) ([]Project, error) {
 	return nil, nil
 }
@@ -1477,6 +1491,7 @@ func TestTransparentProxy_Handler_ErrorAndEdgeCases(t *testing.T) {
 			},
 			store: func(s *MockProjectStore) {
 				s.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil).Once()
+				s.On("GetProjectActive", mock.Anything, "project123").Return(true, nil).Once()
 			},
 			config: ProxyConfig{
 				TargetBaseURL:    mockAPI.URL,
@@ -1497,6 +1512,7 @@ func TestTransparentProxy_Handler_ErrorAndEdgeCases(t *testing.T) {
 			},
 			store: func(s *MockProjectStore) {
 				s.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil).Once()
+				s.On("GetProjectActive", mock.Anything, "project123").Return(true, nil).Once()
 			},
 			config: ProxyConfig{
 				TargetBaseURL:    mockAPI.URL,
@@ -1655,4 +1671,73 @@ func TestNewTransparentProxyWithLoggerAndObservability(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, proxy)
 	assert.NotNil(t, proxy.obsMiddleware)
+}
+
+// --- Project Active Enforcement Coverage ---
+func TestProjectActiveEnforcement_DBErrorReturns503(t *testing.T) {
+	// Upstream that would return 200 if reached
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	v := new(MockTokenValidator)
+	s := new(MockProjectStore)
+	v.On("ValidateTokenWithTracking", mock.Anything, "tok").Return("p1", nil).Once()
+	s.On("GetAPIKeyForProject", mock.Anything, "p1").Return("sk", nil).Once()
+	s.On("GetProjectActive", mock.Anything, "p1").Return(false, errors.New("db down")).Once()
+
+	p, err := NewTransparentProxyWithLogger(ProxyConfig{
+		TargetBaseURL:        srv.URL,
+		AllowedEndpoints:     []string{"/v1/test"},
+		AllowedMethods:       []string{"GET"},
+		EnforceProjectActive: true,
+	}, v, s, zap.NewNop())
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/v1/test", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+	w := httptest.NewRecorder()
+	p.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	assert.Contains(t, w.Body.String(), "service_unavailable")
+	v.AssertExpectations(t)
+	s.AssertExpectations(t)
+}
+
+func TestProjectActiveEnforcement_DisabledSkipsLookup(t *testing.T) {
+	// Upstream that returns 200
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	v := new(MockTokenValidator)
+	s := new(MockProjectStore)
+	v.On("ValidateTokenWithTracking", mock.Anything, "tok").Return("p1", nil).Once()
+	s.On("GetAPIKeyForProject", mock.Anything, "p1").Return("sk", nil).Once()
+	// No expectation for GetProjectActive when disabled
+
+	p, err := NewTransparentProxyWithLogger(ProxyConfig{
+		TargetBaseURL:        srv.URL,
+		AllowedEndpoints:     []string{"/v1/test"},
+		AllowedMethods:       []string{"GET"},
+		EnforceProjectActive: false,
+	}, v, s, zap.NewNop())
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/v1/test", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+	w := httptest.NewRecorder()
+	p.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "ok")
+	v.AssertExpectations(t)
+	s.AssertExpectations(t)
 }
