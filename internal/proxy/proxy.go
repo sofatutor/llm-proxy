@@ -807,6 +807,11 @@ func (p *TransparentProxy) Handler() http.Handler {
 
 	var handler http.Handler = baseHandler
 	handler = p.ValidateRequestMiddleware()(handler)
+	
+	// Add project active guard middleware after token validation
+	// This ensures project ID is available in context from token validation
+	handler = ProjectActiveGuardMiddleware(p.config.EnforceProjectActive, p.projectStore)(handler)
+	
 	if p.obsMiddleware != nil {
 		handler = p.obsMiddleware.Middleware()(handler)
 	}

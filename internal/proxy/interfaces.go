@@ -21,6 +21,8 @@ type TokenValidator interface {
 type ProjectStore interface {
 	// GetAPIKeyForProject retrieves the API key for a project
 	GetAPIKeyForProject(ctx context.Context, projectID string) (string, error)
+	// GetProjectActive checks if a project is active
+	GetProjectActive(ctx context.Context, projectID string) (bool, error)
 	// Management API CRUD
 	ListProjects(ctx context.Context) ([]Project, error)
 	CreateProject(ctx context.Context, project Project) error
@@ -91,6 +93,9 @@ type ProxyConfig struct {
 
 	// RequiredHeaders is a list of required request headers (case-insensitive)
 	RequiredHeaders []string
+
+	// Project active guard configuration
+	EnforceProjectActive bool // Whether to enforce project active status
 
 	// --- HTTP cache (global, opt-in; set programmatically, not via YAML) ---
 	// HTTPCacheEnabled toggles the proxy cache for GET/HEAD based on HTTP semantics
