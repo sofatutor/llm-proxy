@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"time"
+
+	"github.com/sofatutor/llm-proxy/internal/audit"
 )
 
 // TokenValidator defines the interface for token validation
@@ -35,6 +37,12 @@ type ProjectStore interface {
 type ProjectActiveChecker interface {
 	// GetProjectActive checks if a project is active
 	GetProjectActive(ctx context.Context, projectID string) (bool, error)
+}
+
+// AuditLogger defines the interface for audit event logging
+type AuditLogger interface {
+	// Log records an audit event
+	Log(event *audit.Event) error
 }
 
 // Proxy defines the interface for a transparent HTTP proxy

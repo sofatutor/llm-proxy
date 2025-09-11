@@ -21,7 +21,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
-	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/middleware"
 	"github.com/sofatutor/llm-proxy/internal/token"
@@ -34,7 +33,7 @@ type TransparentProxy struct {
 	tokenValidator       TokenValidator
 	projectStore         ProjectStore
 	logger               *zap.Logger
-	auditLogger          *audit.Logger
+	auditLogger          AuditLogger
 	metrics              *ProxyMetrics
 	proxy                *httputil.ReverseProxy
 	httpServer           *http.Server
@@ -157,7 +156,7 @@ func NewTransparentProxyWithLoggerAndObservability(config ProxyConfig, validator
 }
 
 // NewTransparentProxyWithAudit creates a proxy with audit logging capabilities.
-func NewTransparentProxyWithAudit(config ProxyConfig, validator TokenValidator, store ProjectStore, logger *zap.Logger, auditLogger *audit.Logger, obsCfg middleware.ObservabilityConfig) (*TransparentProxy, error) {
+func NewTransparentProxyWithAudit(config ProxyConfig, validator TokenValidator, store ProjectStore, logger *zap.Logger, auditLogger AuditLogger, obsCfg middleware.ObservabilityConfig) (*TransparentProxy, error) {
 	p, err := NewTransparentProxyWithLoggerAndObservability(config, validator, store, logger, obsCfg)
 	if err != nil {
 		return nil, err

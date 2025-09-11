@@ -157,6 +157,64 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  /manage/projects/{projectId}/tokens/revoke:
+    parameters:
+      - name: projectId
+        in: path
+        description: Project ID
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Bulk revoke all tokens for a project
+      description: Revokes (deactivates) all active tokens associated with a project
+      operationId: bulkRevokeProjectTokens
+      tags:
+        - Tokens
+      security:
+        - ManagementToken: []
+      responses:
+        '200':
+          description: Bulk token revocation completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  revoked_count:
+                    type: integer
+                    description: Number of tokens successfully revoked
+                    example: 5
+                  already_revoked_count:
+                    type: integer
+                    description: Number of tokens that were already inactive
+                    example: 2
+                  total_tokens:
+                    type: integer
+                    description: Total number of tokens for the project
+                    example: 7
+                  failed_count:
+                    type: integer
+                    description: Number of tokens that failed to revoke
+                    example: 0
+                required:
+                  - revoked_count
+                  - already_revoked_count
+                  - total_tokens
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
   /manage/tokens:
     get:
       summary: List all tokens
@@ -257,6 +315,35 @@ paths:
           $ref: '#/components/responses/NotFound'
         '500':
           $ref: '#/components/responses/InternalServerError'
+    patch:
+      summary: Update token
+      description: Updates token properties like active status or request limits
+      operationId: updateToken
+      tags:
+        - Tokens
+      security:
+        - ManagementToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenUpdateRequest'
+      responses:
+        '200':
+          description: Token updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
     delete:
       summary: Revoke token
       description: Revokes (deactivates) a token
@@ -294,6 +381,15 @@ paths:
       responses:
         '200':
           description: Successful response from OpenAI API
+          headers:
+            X-Request-ID:
+              description: Unique request identifier for tracing
+              schema:
+                type: string
+            X-LLM-Proxy-Remote-Duration-Ms:
+              description: Time spent on upstream API call in milliseconds
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -303,13 +399,29 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: Project is inactive or access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Project is inactive"
+                code: "project_inactive"
         '404':
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalServerError'
+        '503':
+          description: Service temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Service temporarily unavailable"
+                code: "service_unavailable"
     post:
       summary: Proxy POST requests to OpenAI API
       description: Forwards POST requests to OpenAI API with token authentication
@@ -328,6 +440,15 @@ paths:
       responses:
         '200':
           description: Successful response from OpenAI API
+          headers:
+            X-Request-ID:
+              description: Unique request identifier for tracing
+              schema:
+                type: string
+            X-LLM-Proxy-Remote-Duration-Ms:
+              description: Time spent on upstream API call in milliseconds
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -337,13 +458,29 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: Project is inactive or access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Project is inactive"
+                code: "project_inactive"
         '404':
           $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalServerError'
+        '503':
+          description: Service temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Service temporarily unavailable"
+                code: "service_unavailable"
 
 components:
   schemas:
@@ -376,6 +513,10 @@ components:
           type: string
           description: Name of the project
           example: "My AI Project"
+        is_active:
+          type: boolean
+          description: Whether the project is active
+          example: true
         created_at:
           type: string
           format: date-time
@@ -389,6 +530,7 @@ components:
       required:
         - id
         - name
+        - is_active
         - created_at
         - updated_at
 
@@ -416,6 +558,9 @@ components:
         openai_api_key:
           type: string
           description: New OpenAI API key
+        is_active:
+          type: boolean
+          description: Whether the project is active
       # No required fields; partial update
 
     Token:
@@ -501,6 +646,36 @@ components:
       required:
         - code
         - message
+
+    TokenUpdateRequest:
+      type: object
+      properties:
+        is_active:
+          type: boolean
+          description: Whether the token is active
+        max_requests:
+          type: integer
+          description: Maximum number of requests allowed (0 = unlimited)
+      # No required fields; partial update
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "Project is inactive"
+        code:
+          type: string
+          description: Error code
+          example: "project_inactive"
+        description:
+          type: string
+          description: Additional error description
+          example: "The project associated with this token is currently inactive"
+      required:
+        - error
+        - code
 
   responses:
     BadRequest:

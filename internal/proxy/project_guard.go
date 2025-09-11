@@ -14,7 +14,7 @@ import (
 // shouldAllowProject determines whether the request should proceed based on project active status.
 // It returns (allowed, statusCode, errorResponse). When allowed is true, statusCode and errorResponse are ignored.
 // It also emits audit events for denied or error cases.
-func shouldAllowProject(ctx context.Context, enforceActive bool, checker ProjectActiveChecker, projectID string, auditLogger *audit.Logger, r *http.Request) (bool, int, ErrorResponse) {
+func shouldAllowProject(ctx context.Context, enforceActive bool, checker ProjectActiveChecker, projectID string, auditLogger AuditLogger, r *http.Request) (bool, int, ErrorResponse) {
 	if !enforceActive {
 		return true, 0, ErrorResponse{}
 	}
@@ -72,7 +72,7 @@ func shouldAllowProject(ctx context.Context, enforceActive bool, checker Project
 // ProjectActiveGuardMiddleware creates middleware that enforces project active status
 // If enforceActive is false, the middleware passes through all requests without checking
 // If enforceActive is true, inactive projects receive a 403 Forbidden response
-func ProjectActiveGuardMiddleware(enforceActive bool, checker ProjectActiveChecker, auditLogger *audit.Logger) Middleware {
+func ProjectActiveGuardMiddleware(enforceActive bool, checker ProjectActiveChecker, auditLogger AuditLogger) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Get project ID from context (should be set by token validation middleware)
