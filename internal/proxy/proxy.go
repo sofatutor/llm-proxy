@@ -35,6 +35,7 @@ type TransparentProxy struct {
 	logger               *zap.Logger
 	auditLogger          AuditLogger
 	metrics              *ProxyMetrics
+	cacheMetrics         *CacheMetrics
 	proxy                *httputil.ReverseProxy
 	httpServer           *http.Server
 	shuttingDown         bool
@@ -108,6 +109,7 @@ func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator,
 		projectStore:         store,
 		logger:               logger,
 		metrics:              &ProxyMetrics{},
+		cacheMetrics:         NewCacheMetrics(),
 		allowedMethodsHeader: allowedMethodsHeader,
 	}
 
@@ -353,6 +355,7 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 							expiresAt:  time.Now().Add(ttl),
 						}
 						p.cache.Set(key, cr)
+						p.cacheMetrics.Store.Inc()
 						res.Header.Set("X-PROXY-CACHE", "stored")
 						res.Header.Set("X-PROXY-CACHE-KEY", key)
 						if !fromResponse {
@@ -389,6 +392,7 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 						body:       append([]byte(nil), buf...),
 						expiresAt:  expiresAt,
 					})
+					p.cacheMetrics.Store.Inc()
 				})
 			}
 		}
@@ -757,6 +761,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 					w.Header().Set("Cache-Status", "llm-proxy; bypass")
 					w.Header().Set("X-PROXY-CACHE", "bypass")
 					w.Header().Set("X-PROXY-CACHE-KEY", key)
+					p.cacheMetrics.Bypass.Inc()
 					p.proxy.ServeHTTP(rw, r)
 					return
 				}
@@ -785,6 +790,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 						w.Header().Set("Cache-Status", "llm-proxy; conditional-hit")
 						w.Header().Set("X-PROXY-CACHE", "conditional-hit")
 						w.Header().Set("X-PROXY-CACHE-KEY", key)
+						p.cacheMetrics.Hits.Inc()
 						w.WriteHeader(http.StatusNotModified)
 						return
 					}
@@ -797,12 +803,15 @@ func (p *TransparentProxy) Handler() http.Handler {
 				w.Header().Set("Cache-Status", "llm-proxy; hit")
 				w.Header().Set("X-PROXY-CACHE", "hit")
 				w.Header().Set("X-PROXY-CACHE-KEY", key)
+				p.cacheMetrics.Hits.Inc()
 				w.WriteHeader(cr.statusCode)
 				if r.Method != http.MethodHead {
 					_, _ = w.Write(cr.body)
 				}
 				return
 			}
+			// Cache miss - record metric
+			p.cacheMetrics.Misses.Inc()
 			// Note: don't set miss status here; let modifyResponse handle cache status
 			// w.Header().Set("Cache-Status", "llm-proxy; miss")
 			// Do not set X-PROXY-CACHE(-KEY) on miss; only set definitive headers on hit/bypass/conditional-hit or store path

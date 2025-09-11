@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/config"
@@ -359,26 +360,9 @@ func (s *Server) handleLive(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("alive"))
 }
 
-// handleMetrics returns basic runtime metrics in JSON format.
+// handleMetrics returns metrics in Prometheus format.
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	m := struct {
-		UptimeSeconds float64 `json:"uptime_seconds"`
-		RequestCount  int64   `json:"request_count"`
-		ErrorCount    int64   `json:"error_count"`
-	}{
-		UptimeSeconds: time.Since(s.metrics.StartTime).Seconds(),
-	}
-	if s.proxy != nil {
-		pm := s.proxy.Metrics()
-		m.RequestCount = pm.RequestCount
-		m.ErrorCount = pm.ErrorCount
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(m); err != nil {
-		s.logger.Error("Failed to encode metrics", zap.Error(err))
-		http.Error(w, "Failed to encode metrics", http.StatusInternalServerError)
-	}
+	promhttp.Handler().ServeHTTP(w, r)
 }
 
 // managementAuthMiddleware checks the management token in the Authorization header
