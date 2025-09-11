@@ -471,20 +471,9 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 		return
 	}
 
-	// Handle checkbox: if "true" value is present among form values, it's checked
-	isActiveValues := c.Request.Form["is_active"]
-	var isActivePtr *bool
-	if len(isActiveValues) > 0 {
-		// Check if "true" is among the values (checkbox checked)
-		isActive := false
-		for _, val := range isActiveValues {
-			if val == "true" {
-				isActive = true
-				break
-			}
-		}
-		isActivePtr = &isActive
-	}
+	// Simplified checkbox handling: hidden field ensures "false" when unchecked
+	isActive := c.PostForm("is_active") == "true"
+	isActivePtr := &isActive
 
 	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
 	if ip := c.Request.Header.Get("X-Forwarded-For"); ip != "" {

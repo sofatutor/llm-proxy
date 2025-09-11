@@ -589,6 +589,25 @@ func TestHandleTokens(t *testing.T) {
 	})
 }
 
+func TestHandleTokens_ProjectInactiveForbidden(t *testing.T) {
+	server, _, projectStore := setupServerAndMocks(t)
+
+	// Project exists but is inactive
+	inactive := proxy.Project{ID: "pid-inactive", Name: "Inactive", IsActive: false}
+	projectStore.On("GetProjectByID", mock.Anything, "pid-inactive").Return(inactive, nil)
+
+	body, _ := json.Marshal(map[string]interface{}{"project_id": "pid-inactive", "duration_minutes": 5})
+	req := httptest.NewRequest("POST", "/manage/tokens", bytes.NewReader(body))
+	req.Header.Set("Authorization", "Bearer test_management_token")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	server.handleTokens(w, req)
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Contains(t, w.Body.String(), "project_inactive")
+}
+
 func TestGetRequestID(t *testing.T) {
 	// With request ID in context using new logging helpers
 	ctx := logging.WithRequestID(context.Background(), "test-id")

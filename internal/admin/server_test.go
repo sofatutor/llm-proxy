@@ -1181,6 +1181,110 @@ func TestServer_HandleTokensShow_Success(t *testing.T) {
 	}
 }
 
+func TestServer_HandleProjectsPostOverride(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// error.html template for bad request branches
+	errTpl := filepath.Join(testTemplateDir(), "error.html")
+	if err := os.WriteFile(errTpl, []byte("<html><body>error</body></html>"), 0644); err != nil {
+		t.Fatalf("write error.html: %v", err)
+	}
+	defer func() { _ = os.Remove(errTpl) }()
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "*.html"))
+
+	// Wire POST route to post-override handler
+	s.engine.POST("/projects/:id", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleProjectsPostOverride(c)
+	})
+
+	// 1) PUT override → delegates to update → 303
+	form := strings.NewReader("_method=PUT&name=Proj&openai_api_key=sk-test")
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("POST", "/projects/p1", form)
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	s.engine.ServeHTTP(w, r)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("projects POST override PUT expected 303, got %d", w.Code)
+	}
+
+	// 2) DELETE override → delegates to delete → 303
+	form2 := strings.NewReader("_method=DELETE")
+	w2 := httptest.NewRecorder()
+	r2, _ := http.NewRequest("POST", "/projects/p1", form2)
+	r2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	s.engine.ServeHTTP(w2, r2)
+	if w2.Code != http.StatusSeeOther {
+		t.Fatalf("projects POST override DELETE expected 303, got %d", w2.Code)
+	}
+
+	// 3) Unsupported override → 400
+	form3 := strings.NewReader("_method=PATCH")
+	w3 := httptest.NewRecorder()
+	r3, _ := http.NewRequest("POST", "/projects/p1", form3)
+	r3.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	s.engine.ServeHTTP(w3, r3)
+	if w3.Code != http.StatusBadRequest {
+		t.Fatalf("projects POST override unsupported expected 400, got %d", w3.Code)
+	}
+}
+
+func TestServer_HandleTokensPostOverride(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// error.html template for bad request branches
+	errTpl := filepath.Join(testTemplateDir(), "error.html")
+	if err := os.WriteFile(errTpl, []byte("<html><body>error</body></html>"), 0644); err != nil {
+		t.Fatalf("write error.html: %v", err)
+	}
+	defer func() { _ = os.Remove(errTpl) }()
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "*.html"))
+
+	// Wire POST route to post-override handler
+	s.engine.POST("/tokens/:token", func(c *gin.Context) {
+		var client APIClientInterface = &mockAPIClient{}
+		c.Set("apiClient", client)
+		s.handleTokensPostOverride(c)
+	})
+
+	// 1) PUT override → delegates to update → 303
+	form := strings.NewReader("_method=PUT&is_active=true&max_requests=10")
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("POST", "/tokens/tok-1", form)
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	s.engine.ServeHTTP(w, r)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("tokens POST override PUT expected 303, got %d", w.Code)
+	}
+
+	// 2) DELETE override → delegates to revoke → 303
+	form2 := strings.NewReader("_method=DELETE")
+	w2 := httptest.NewRecorder()
+	r2, _ := http.NewRequest("POST", "/tokens/tok-2", form2)
+	r2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	s.engine.ServeHTTP(w2, r2)
+	if w2.Code != http.StatusSeeOther {
+		t.Fatalf("tokens POST override DELETE expected 303, got %d", w2.Code)
+	}
+
+	// 3) Unsupported override → 400
+	form3 := strings.NewReader("_method=PATCH")
+	w3 := httptest.NewRecorder()
+	r3, _ := http.NewRequest("POST", "/tokens/tok-3", form3)
+	r3.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	s.engine.ServeHTTP(w3, r3)
+	if w3.Code != http.StatusBadRequest {
+		t.Fatalf("tokens POST override unsupported expected 400, got %d", w3.Code)
+	}
+}
+
 func TestServer_HandleTokensShow_NotFoundBranch(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	errTpl := filepath.Join(testTemplateDir(), "error.html")
