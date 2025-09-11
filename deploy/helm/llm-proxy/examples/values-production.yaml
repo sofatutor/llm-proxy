@@ -1,0 +1,258 @@
+# Example values for production environment
+# This configuration is suitable for production deployment with high availability
+
+# Use specific stable image tag
+image:
+  repository: ghcr.io/sofatutor/llm-proxy
+  tag: "v1.0.0"  # Use specific version tag
+  pullPolicy: IfNotPresent
+
+# Service account with annotations for AWS IRSA (if using AWS)
+serviceAccount:
+  create: true
+  annotations:
+    # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT:role/llm-proxy-role
+
+# Production resources
+resources:
+  limits:
+    cpu: 2000m
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+# Production configuration
+config:
+  # Use external secret for management token
+  managementToken: ""  # Provided via external secret
+  logLevel: "info"
+  logFormat: "json"
+  
+  # Database - use PostgreSQL for production
+  database:
+    type: "postgresql"
+    postgresql:
+      host: "llm-proxy-postgres.database.svc.cluster.local"
+      port: 5432
+      user: "llmproxy"
+      password: ""  # Provided via external secret
+      database: "llmproxy"
+      sslmode: "require"
+  
+  # Security - strict for production
+  security:
+    corsAllowedOrigins: "https://llm-proxy.example.com"
+    maskApiKeys: true
+    validateApiKeyFormat: true
+    defaultTokenLifetime: "30d"
+    defaultTokenRequestLimit: 5000
+  
+  # Rate limiting
+  rateLimiting:
+    globalRateLimit: 1000
+    ipRateLimit: 100
+  
+  # Performance tuning for production
+  performance:
+    maxConcurrentRequests: 500
+    workerPoolSize: 20
+  
+  # Monitoring enabled
+  monitoring:
+    enableMetrics: true
+  
+  # Observability
+  observability:
+    enabled: true
+    bufferSize: 10000
+
+# External Redis for production scalability
+redis:
+  enabled: false
+  external:
+    host: "llm-proxy-redis.cache.svc.cluster.local"
+    port: 6379
+    password: ""  # Provided via external secret
+
+# Dispatcher configuration for production
+dispatcher:
+  enabled: true
+  replicaCount: 2  # Multiple replicas for reliability
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  services:
+    file:
+      enabled: true
+      endpoint: "/app/logs/production-events.jsonl"
+    helicone:
+      enabled: true
+      apiKey: ""  # Provided via external secret
+
+# Admin UI enabled with secure configuration
+adminUI:
+  enabled: true
+  apiBaseUrl: "https://llm-proxy.example.com"
+
+# Enable autoscaling for production
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 30
+
+# Pod disruption budget for high availability
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Production storage
+persistence:
+  enabled: true
+  size: 100Gi
+  storageClass: "gp3"  # Use high-performance storage
+  accessModes:
+    - ReadWriteOnce
+
+# Ingress configuration for production
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+  hosts:
+    - host: llm-proxy.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: llm-proxy-tls
+      hosts:
+        - llm-proxy.example.com
+
+# Monitoring enabled for production
+serviceMonitor:
+  enabled: true
+  interval: 15s
+  labels:
+    release: prometheus-operator
+podMonitor:
+  enabled: true
+  interval: 15s
+  labels:
+    release: prometheus-operator
+
+# Network policies for security
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+
+# Production health checks
+healthChecks:
+  liveness:
+    enabled: true
+    initialDelaySeconds: 60
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  startup:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 60
+
+# Pod security context for production
+podSecurityContext:
+  fsGroup: 2000
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 3000
+  seccompProfile:
+    type: RuntimeDefault
+
+# Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Node selection for production workloads
+nodeSelector:
+  kubernetes.io/arch: amd64
+  node-type: compute
+
+# Tolerations for dedicated nodes (if using dedicated nodes)
+tolerations: []
+  # - key: "workload"
+  #   operator: "Equal"
+  #   value: "llm-proxy"
+  #   effect: "NoSchedule"
+
+# Anti-affinity for high availability
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - llm-proxy
+        topologyKey: kubernetes.io/hostname
+
+# Topology spread constraints for even distribution
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: llm-proxy
+
+# Use external secrets for sensitive data
+secrets:
+  create: false
+  external: true
+  externalSecrets:
+    managementToken: "llm-proxy-management-token"
+    openaiApiKey: "llm-proxy-openai-key"
+    databasePassword: "llm-proxy-db-password"
+    redisPassword: "llm-proxy-redis-password"

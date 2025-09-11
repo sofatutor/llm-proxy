@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "llm-proxy.fullname" . }}
+  labels:
+    {{- include "llm-proxy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: 1
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "llm-proxy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "llm-proxy.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: server
+    spec:
+      {{- with (concat .Values.global.imagePullSecrets .Values.imagePullSecrets) }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "llm-proxy.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ include "llm-proxy.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/app/entrypoint.sh"]
+          args: ["server"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+              protocol: TCP
+          env:
+            {{- include "llm-proxy.env" . | nindent 12 }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.healthChecks.liveness.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.healthChecks.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.healthChecks.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthChecks.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.healthChecks.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.healthChecks.liveness.failureThreshold }}
+            successThreshold: {{ .Values.healthChecks.liveness.successThreshold }}
+          {{- end }}
+          {{- if .Values.healthChecks.readiness.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.healthChecks.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.healthChecks.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthChecks.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.healthChecks.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.healthChecks.readiness.failureThreshold }}
+            successThreshold: {{ .Values.healthChecks.readiness.successThreshold }}
+          {{- end }}
+          {{- if .Values.healthChecks.startup.enabled }}
+          startupProbe:
+            httpGet:
+              path: {{ .Values.healthChecks.startup.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.healthChecks.startup.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthChecks.startup.periodSeconds }}
+            timeoutSeconds: {{ .Values.healthChecks.startup.timeoutSeconds }}
+            failureThreshold: {{ .Values.healthChecks.startup.failureThreshold }}
+            successThreshold: {{ .Values.healthChecks.startup.successThreshold }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            {{- include "llm-proxy.volumeMounts" . | nindent 12 }}
+            - name: config
+              mountPath: /app/config/api_providers.yaml
+              subPath: api_providers.yaml
+              readOnly: true
+            - name: config
+              mountPath: /app/config/health.yaml
+              subPath: health.yaml
+              readOnly: true
+      volumes:
+        {{- include "llm-proxy.volumes" . | nindent 8 }}
+        - name: config
+          configMap:
+            name: {{ include "llm-proxy.fullname" . }}-config
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,100 @@
+# Example values for development environment
+# This configuration is suitable for local development and testing
+
+# Image configuration - use latest for development
+image:
+  tag: "main"  # Use main branch builds for development
+
+# Single replica for development
+replicaCount: 1
+
+# Minimal resources for development
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+# Development configuration
+config:
+  managementToken: "dev-management-token-change-me"
+  logLevel: "debug"
+  logFormat: "text"  # Easier to read in development
+  
+  # Security - relaxed for development
+  security:
+    corsAllowedOrigins: "*"
+    defaultTokenLifetime: "7d"  # Longer lifetime for convenience
+  
+  # Observability
+  observability:
+    enabled: true
+    bufferSize: 100  # Smaller buffer for development
+
+# Enable Redis for event bus testing
+redis:
+  enabled: true
+  auth:
+    enabled: false  # No auth for development
+  master:
+    persistence:
+      enabled: false  # No persistence needed for development
+  replica:
+    replicaCount: 0  # No replicas needed for development
+
+# Enable file dispatcher for local debugging
+dispatcher:
+  enabled: true
+  services:
+    file:
+      enabled: true
+      endpoint: "/app/logs/dev-events.jsonl"
+    helicone:
+      enabled: false
+
+# Admin UI enabled for development
+adminUI:
+  enabled: true
+
+# Disable autoscaling for development
+autoscaling:
+  enabled: false
+
+# Disable pod disruption budget for development
+podDisruptionBudget:
+  enabled: false
+
+# Simple storage for development
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClass: ""  # Use default storage class
+
+# No ingress for development (use port-forward)
+ingress:
+  enabled: false
+
+# Disable monitoring for development
+serviceMonitor:
+  enabled: false
+podMonitor:
+  enabled: false
+
+# Disable network policies for development
+networkPolicy:
+  enabled: false
+
+# Health checks with shorter intervals for faster feedback
+healthChecks:
+  liveness:
+    initialDelaySeconds: 10
+    periodSeconds: 10
+  readiness:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+  startup:
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    failureThreshold: 10

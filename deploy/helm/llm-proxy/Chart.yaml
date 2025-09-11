@@ -1,0 +1,24 @@
+apiVersion: v2
+name: llm-proxy
+description: A Helm chart for deploying LLM Proxy - transparent OpenAI-compatible reverse proxy with token management, rate limiting, and async events
+version: 0.1.0
+appVersion: "latest"
+type: application
+keywords:
+  - llm
+  - proxy
+  - openai
+  - api
+  - reverse-proxy
+  - token-management
+home: https://github.com/sofatutor/llm-proxy
+sources:
+  - https://github.com/sofatutor/llm-proxy
+maintainers:
+  - name: sofatutor
+    url: https://github.com/sofatutor
+dependencies:
+  - name: redis
+    version: "18.1.5"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled

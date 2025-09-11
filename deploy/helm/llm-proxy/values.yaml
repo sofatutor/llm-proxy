@@ -1,0 +1,355 @@
+# Default values for llm-proxy.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Global configuration
+global:
+  # Image registry (e.g., ghcr.io, docker.io)
+  imageRegistry: ""
+  # Global image pull secrets
+  imagePullSecrets: []
+
+# Image configuration
+image:
+  repository: ghcr.io/sofatutor/llm-proxy
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: ""
+
+# Image pull secrets
+imagePullSecrets: []
+
+# Override the default name
+nameOverride: ""
+fullnameOverride: ""
+
+# Service account configuration
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# Pod annotations
+podAnnotations: {}
+
+# Pod security context
+podSecurityContext:
+  fsGroup: 2000
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 3000
+  seccompProfile:
+    type: RuntimeDefault
+
+# Container security context
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+  annotations: {}
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: llm-proxy.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: llm-proxy-tls
+  #    hosts:
+  #      - llm-proxy.local
+
+# Resource limits and requests
+resources:
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Horizontal Pod Autoscaler
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  targetMemoryUtilizationPercentage: 80
+  # Custom metrics (optional)
+  behavior: {}
+  metrics: []
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+  # maxUnavailable: 1
+
+# Node selection
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Topology spread constraints
+topologySpreadConstraints: []
+
+# LLM Proxy Configuration
+config:
+  # Management token for admin operations
+  # Required: Generate a strong, unique token for administrative access
+  managementToken: ""
+  
+  # Server configuration
+  listenAddr: ":8080"
+  logLevel: "info"
+  logFormat: "json"
+  
+  # Database configuration
+  database:
+    # Database type: sqlite or postgresql
+    type: "sqlite"
+    # SQLite configuration
+    sqlite:
+      path: "/app/data/llm-proxy.db"
+    # PostgreSQL configuration (when type is postgresql)
+    postgresql:
+      host: ""
+      port: 5432
+      user: ""
+      password: ""
+      database: ""
+      sslmode: "require"
+  
+  # OpenAI API configuration
+  openai:
+    apiUrl: "https://api.openai.com"
+    requestTimeout: "30s"
+    maxRequestSize: "10MB"
+    enableStreaming: true
+  
+  # Security configuration
+  security:
+    corsAllowedOrigins: "*"
+    corsAllowedMethods: "GET,POST,PUT,DELETE,OPTIONS"
+    corsAllowedHeaders: "Authorization,Content-Type"
+    corsMaxAge: 86400
+    maskApiKeys: true
+    validateApiKeyFormat: true
+    defaultTokenLifetime: "30d"
+    defaultTokenRequestLimit: 5000
+  
+  # Rate limiting
+  rateLimiting:
+    globalRateLimit: 100
+    ipRateLimit: 30
+  
+  # Performance tuning
+  performance:
+    maxConcurrentRequests: 100
+    workerPoolSize: 10
+  
+  # Monitoring
+  monitoring:
+    enableMetrics: true
+    metricsPath: "/metrics"
+  
+  # Token cleanup
+  tokenCleanupInterval: "1h"
+  
+  # Observability
+  observability:
+    enabled: true
+    bufferSize: 1000
+
+# Redis configuration
+redis:
+  # Enable Redis dependency
+  enabled: true
+  # External Redis configuration (when enabled: false)
+  external:
+    host: ""
+    port: 6379
+    password: ""
+    database: 0
+  # Bitnami Redis configuration (when enabled: true)
+  auth:
+    enabled: false
+    password: ""
+  master:
+    persistence:
+      enabled: true
+      size: 8Gi
+  replica:
+    replicaCount: 1
+    persistence:
+      enabled: true
+      size: 8Gi
+
+# Event Dispatcher configuration
+dispatcher:
+  # Enable event dispatcher deployment
+  enabled: true
+  # Number of dispatcher replicas
+  replicaCount: 1
+  # Image configuration (inherits from main image if not specified)
+  image:
+    repository: ""
+    tag: ""
+    pullPolicy: ""
+  # Resources for dispatcher pods
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  # Dispatcher services configuration
+  services:
+    file:
+      enabled: true
+      endpoint: "/app/logs/events.jsonl"
+    helicone:
+      enabled: false
+      apiKey: ""
+    # Add more dispatcher services as needed
+
+# Admin UI configuration
+adminUI:
+  # Enable admin UI
+  enabled: true
+  # Path for admin UI
+  path: "/admin"
+  # Base URL for API access
+  apiBaseUrl: ""
+
+# Secrets configuration
+secrets:
+  # Create secrets from values
+  create: true
+  # Use external secret store (set to false if using external secrets)
+  external: false
+  # External secret names (when external: true)
+  externalSecrets:
+    managementToken: ""
+    openaiApiKey: ""
+    databasePassword: ""
+    redisPassword: ""
+
+# Environment variables
+env: []
+  # - name: CUSTOM_VAR
+  #   value: "custom-value"
+
+# Environment variables from secrets/configmaps
+envFrom: []
+  # - secretRef:
+  #     name: custom-secret
+  # - configMapRef:
+  #     name: custom-configmap
+
+# Additional volumes
+volumes: []
+  # - name: custom-volume
+  #   configMap:
+  #     name: custom-configmap
+
+# Additional volume mounts
+volumeMounts: []
+  # - name: custom-volume
+  #   mountPath: /app/custom
+  #   readOnly: true
+
+# Health checks configuration
+healthChecks:
+  liveness:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+    path: "/health"
+  readiness:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+    path: "/ready"
+  startup:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+    successThreshold: 1
+    path: "/health"
+
+# Persistence configuration
+persistence:
+  enabled: true
+  # Storage class for persistent volumes
+  storageClass: ""
+  # Access modes
+  accessModes:
+    - ReadWriteOnce
+  # Size of the persistent volume
+  size: 10Gi
+  # Annotations
+  annotations: {}
+  # Data directory mount path
+  dataPath: "/app/data"
+  # Logs directory mount path
+  logsPath: "/app/logs"
+
+# Network policies
+networkPolicy:
+  enabled: false
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []
+
+# Service monitor for Prometheus (if using Prometheus Operator)
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  path: /metrics
+  labels: {}
+  annotations: {}
+
+# Pod monitor for Prometheus (if using Prometheus Operator)
+podMonitor:
+  enabled: false
+  interval: 30s
+  path: /metrics
+  labels: {}
+  annotations: {}

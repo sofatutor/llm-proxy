@@ -1,0 +1,63 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "llm-proxy.fullname" . }}
+  labels:
+    {{- include "llm-proxy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "llm-proxy.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    {{- range .Values.networkPolicy.policyTypes }}
+    - {{ . }}
+    {{- end }}
+  {{- if has "Ingress" .Values.networkPolicy.policyTypes }}
+  ingress:
+    # Allow ingress traffic on HTTP port
+    - from: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.targetPort }}
+    {{- with .Values.networkPolicy.ingress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+  {{- if has "Egress" .Values.networkPolicy.policyTypes }}
+  egress:
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow access to Redis
+    {{- if .Values.redis.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: redis
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: 6379
+    {{- else }}
+    # Allow access to external Redis
+    - to: []
+      ports:
+        - protocol: TCP
+          port: {{ .Values.redis.external.port }}
+    {{- end }}
+    # Allow access to OpenAI API
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+    {{- with .Values.networkPolicy.egress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+{{- end }}

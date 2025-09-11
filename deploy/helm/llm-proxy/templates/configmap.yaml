@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "llm-proxy.fullname" . }}-config
+  labels:
+    {{- include "llm-proxy.labels" . | nindent 4 }}
+data:
+  # API Providers configuration
+  api_providers.yaml: |
+    # Default API provider configuration for OpenAI
+    providers:
+      openai:
+        name: "OpenAI"
+        base_url: {{ .Values.config.openai.apiUrl | quote }}
+        endpoints:
+          - path: "/v1/chat/completions"
+            methods: ["POST"]
+            streaming: true
+          - path: "/v1/completions"
+            methods: ["POST"]
+            streaming: true
+          - path: "/v1/embeddings"
+            methods: ["POST"]
+            streaming: false
+          - path: "/v1/models"
+            methods: ["GET"]
+            streaming: false
+          - path: "/v1/audio/transcriptions"
+            methods: ["POST"]
+            streaming: false
+          - path: "/v1/audio/translations"
+            methods: ["POST"]
+            streaming: false
+          - path: "/v1/images/generations"
+            methods: ["POST"]
+            streaming: false
+        auth:
+          type: "bearer"
+          header: "Authorization"
+        rate_limiting:
+          default_limit: {{ .Values.config.security.defaultTokenRequestLimit }}
+        timeouts:
+          request: {{ .Values.config.openai.requestTimeout | quote }}
+        security:
+          validate_content_type: true
+          max_request_size: {{ .Values.config.openai.maxRequestSize | quote }}
+  
+  # Health check configuration  
+  health.yaml: |
+    health_checks:
+      liveness:
+        path: {{ .Values.healthChecks.liveness.path | quote }}
+        interval: {{ .Values.healthChecks.liveness.periodSeconds }}s
+        timeout: {{ .Values.healthChecks.liveness.timeoutSeconds }}s
+      readiness:
+        path: {{ .Values.healthChecks.readiness.path | quote }}
+        interval: {{ .Values.healthChecks.readiness.periodSeconds }}s
+        timeout: {{ .Values.healthChecks.readiness.timeoutSeconds }}s
