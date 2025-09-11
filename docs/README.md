@@ -18,6 +18,11 @@ Start with the main [README](../README.md) for a quick overview, installation, a
 - **[API Configuration](api-configuration.md)** - Configure API providers, endpoints, and security policies
 - **[Security Best Practices](security.md)** - Production security, secrets management, and hardening
 
+## Deployment
+
+- **[Kubernetes with Helm](kubernetes-helm.md)** - Complete Kubernetes deployment guide using Helm charts
+- **[Docker Deployment](../README.md#docker-deployment)** - Container deployment with Docker and Docker Compose
+
 ## Observability & Monitoring
 
 - **[Instrumentation Guide](instrumentation.md)** - Event system, async middleware, and monitoring

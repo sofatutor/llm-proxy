@@ -1,0 +1,64 @@
+# Development environment deployment
+# Use this for development and testing environments
+
+{
+  "stackName": "LlmProxyEksDev",
+  "clusterName": "llm-proxy-dev",
+  "namespace": "llm-proxy",
+  "environment": "dev",
+  "helmChartPath": "../../helm/llm-proxy",
+  "helmValues": {
+    "image": {
+      "tag": "main"
+    },
+    "resources": {
+      "limits": {
+        "cpu": "500m",
+        "memory": "256Mi"
+      },
+      "requests": {
+        "cpu": "50m",
+        "memory": "64Mi"
+      }
+    },
+    "redis": {
+      "enabled": true,
+      "auth": {
+        "enabled": false
+      },
+      "master": {
+        "persistence": {
+          "enabled": false
+        }
+      },
+      "replica": {
+        "replicaCount": 0
+      }
+    },
+    "dispatcher": {
+      "services": {
+        "file": {
+          "enabled": true
+        },
+        "helicone": {
+          "enabled": false
+        }
+      }
+    },
+    "autoscaling": {
+      "enabled": false
+    },
+    "ingress": {
+      "enabled": true,
+      "annotations": {
+        "alb.ingress.kubernetes.io/scheme": "internal"
+      }
+    },
+    "serviceMonitor": {
+      "enabled": false
+    },
+    "networkPolicy": {
+      "enabled": false
+    }
+  }
+}
