@@ -1,0 +1,65 @@
+{{ define "partials/pagination.html" }}
+{{ if gt .pagination.TotalPages 1 }}
+<nav aria-label="{{ if .paginationLabel }}{{ .paginationLabel }}{{ else }}Pagination{{ end }}" class="mt-3">
+    <ul class="pagination justify-content-center">
+        {{ if gt .pagination.Page 1 }}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ sub .pagination.Page 1 }}{{ .queryParams }}">Previous</a>
+        </li>
+        {{ end }}
+
+        {{/* Smart pagination logic */}}
+        {{ $currentPage := .pagination.Page }}
+        {{ $totalPages := .pagination.TotalPages }}
+        {{ $window := 2 }}
+        {{ $startPage := 1 }}
+        {{ $endPage := $totalPages }}
+        
+        {{/* Calculate window around current page */}}
+        {{ if gt $totalPages 7 }}
+            {{ $startPage = sub $currentPage $window }}
+            {{ $endPage = add $currentPage $window }}
+            {{ if lt $startPage 1 }}{{ $startPage = 1 }}{{ end }}
+            {{ if gt $endPage $totalPages }}{{ $endPage = $totalPages }}{{ end }}
+        {{ end }}
+
+        {{/* Show first page if not in window */}}
+        {{ if and (gt $totalPages 7) (gt $startPage 1) }}
+        <li class="page-item">
+            <a class="page-link" href="?page=1{{ .queryParams }}">1</a>
+        </li>
+        {{ if gt $startPage 2 }}
+        <li class="page-item disabled">
+            <span class="page-link">...</span>
+        </li>
+        {{ end }}
+        {{ end }}
+
+        {{/* Show pages in window */}}
+        {{ range seq $startPage $endPage }}
+        <li class="page-item {{ if eq . $currentPage }}active{{ end }}">
+            <a class="page-link" href="?page={{ . }}{{ $.queryParams }}">{{ . }}</a>
+        </li>
+        {{ end }}
+
+        {{/* Show last page if not in window */}}
+        {{ if and (gt $totalPages 7) (lt $endPage $totalPages) }}
+        {{ if lt $endPage (sub $totalPages 1) }}
+        <li class="page-item disabled">
+            <span class="page-link">...</span>
+        </li>
+        {{ end }}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ $totalPages }}{{ .queryParams }}">{{ $totalPages }}</a>
+        </li>
+        {{ end }}
+
+        {{ if lt .pagination.Page .pagination.TotalPages }}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ add .pagination.Page 1 }}{{ .queryParams }}">Next</a>
+        </li>
+        {{ end }}
+    </ul>
+</nav>
+{{ end }}
+{{ end }}

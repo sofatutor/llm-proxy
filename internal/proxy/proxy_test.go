@@ -14,6 +14,7 @@ import (
 
 	"errors"
 
+	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/middleware"
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/stretchr/testify/assert"
@@ -1740,4 +1741,101 @@ func TestProjectActiveEnforcement_DisabledSkipsLookup(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "ok")
 	v.AssertExpectations(t)
 	s.AssertExpectations(t)
+}
+
+// TestAuditLogger is a simple audit logger for testing
+type TestAuditLogger struct {
+	events []*audit.Event
+}
+
+func (t *TestAuditLogger) Log(event *audit.Event) error {
+	t.events = append(t.events, event)
+	return nil
+}
+
+func (t *TestAuditLogger) GetEvents() []*audit.Event {
+	return t.events
+}
+
+// TestNewTransparentProxyWithAudit tests the audit-enabled proxy constructor
+func TestNewTransparentProxyWithAudit(t *testing.T) {
+	// Create mock dependencies
+	validator := &MockTokenValidator{}
+	store := &MockProjectStore{}
+	logger := zap.NewNop()
+
+	// Create a simple audit logger that implements the interface
+	auditLogger := &TestAuditLogger{}
+
+	// Create basic config
+	config := ProxyConfig{
+		TargetBaseURL:    "https://api.example.com",
+		AllowedEndpoints: []string{"/v1/test"},
+		AllowedMethods:   []string{"GET", "POST"},
+	}
+
+	// Create observability config
+	obsCfg := middleware.ObservabilityConfig{
+		Enabled: false,
+	}
+
+	// Test successful creation
+	proxy, err := NewTransparentProxyWithAudit(config, validator, store, logger, auditLogger, obsCfg)
+
+	// Verify proxy was created successfully
+	assert.NoError(t, err)
+	assert.NotNil(t, proxy)
+	assert.Equal(t, auditLogger, proxy.auditLogger)
+	assert.Equal(t, config.TargetBaseURL, proxy.config.TargetBaseURL)
+}
+
+// TestTransparentProxyWithAudit_InactiveProject tests audit logging for inactive projects
+func TestTransparentProxyWithAudit_InactiveProject(t *testing.T) {
+	// Create mock dependencies
+	validator := &MockTokenValidator{}
+	store := &MockProjectStore{}
+	logger := zap.NewNop()
+	auditLogger := &TestAuditLogger{}
+
+	// Set up expected calls - token validation succeeds, project is inactive
+	validator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("inactive-project", nil)
+	store.On("GetAPIKeyForProject", mock.Anything, "inactive-project").Return("api_key_123", nil)
+	store.On("GetProjectActive", mock.Anything, "inactive-project").Return(false, nil)
+
+	// Create proxy with audit and project enforcement enabled
+	config := ProxyConfig{
+		TargetBaseURL:        "https://api.example.com",
+		AllowedEndpoints:     []string{"/v1/completions"},
+		AllowedMethods:       []string{"POST"},
+		EnforceProjectActive: true,
+	}
+
+	obsCfg := middleware.ObservabilityConfig{Enabled: false}
+	proxy, err := NewTransparentProxyWithAudit(config, validator, store, logger, auditLogger, obsCfg)
+	require.NoError(t, err)
+
+	// Create request
+	req := httptest.NewRequest("POST", "/v1/completions", strings.NewReader(`{"prompt":"test"}`))
+	req.Header.Set("Authorization", "Bearer test_token")
+	req.Header.Set("Content-Type", "application/json")
+
+	// Process request
+	w := httptest.NewRecorder()
+	proxy.Handler().ServeHTTP(w, req)
+
+	// Verify 403 response
+	assert.Equal(t, http.StatusForbidden, w.Code)
+
+	// Verify audit event was logged
+	events := auditLogger.GetEvents()
+	require.Len(t, events, 1, "Expected one audit event")
+
+	event := events[0]
+	assert.Equal(t, audit.ActionProxyRequest, event.Action)
+	assert.Equal(t, audit.ResultDenied, event.Result)
+	assert.Equal(t, "inactive-project", event.ProjectID)
+
+	// Verify mock expectations
+	validator.AssertExpectations(t)
+	store.AssertExpectations(t)
 }
