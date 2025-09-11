@@ -71,6 +71,25 @@ func (p *TransparentProxy) SetMetrics(m *ProxyMetrics) {
 	p.metrics = m
 }
 
+// isVaryCompatible reports whether a cached response with a given Vary header
+// is valid for the current request and lookup key.
+func isVaryCompatible(r *http.Request, cr cachedResponse, lookupKey string) bool {
+	if cr.vary == "" || cr.vary == "*" {
+		return true
+	}
+	varyKey := cacheKeyFromRequestWithVary(r, cr.vary)
+	return varyKey == lookupKey
+}
+
+// storageKeyForResponse returns the cache storage key to use for a response,
+// based on the upstream Vary header. Falls back to the lookup key when Vary is empty or '*'.
+func storageKeyForResponse(r *http.Request, varyHeader string, lookupKey string) string {
+	if varyHeader != "" && varyHeader != "*" {
+		return cacheKeyFromRequestWithVary(r, varyHeader)
+	}
+	return lookupKey
+}
+
 // incrementCacheMetric safely increments the specified cache metric counter.
 // Valid metric names: "hit", "miss", "bypass", "store"
 func (p *TransparentProxy) incrementCacheMetric(metric string) {
