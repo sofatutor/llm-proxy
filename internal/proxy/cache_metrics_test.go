@@ -138,7 +138,7 @@ func TestCacheMetrics_HitMissBypassStore(t *testing.T) {
 			if tt.setupResponse != nil {
 				// TODO: This test needs more complex setup to test store path
 				// For now, validate that store path increments counter when called directly
-				proxy.incrementCacheMetric("store")
+				proxy.incrementCacheMetric(CacheMetricStore)
 				newMetrics := proxy.Metrics()
 				if newMetrics.CacheStores != initialStores+1 {
 					t.Errorf("Expected CacheStores to be %d, got %d", initialStores+1, newMetrics.CacheStores)
@@ -238,8 +238,8 @@ func TestCacheMetrics_ThreadSafety(t *testing.T) {
 		go func() {
 			defer func() { done <- true }()
 			for j := 0; j < operationsPerGoroutine; j++ {
-				proxy.incrementCacheMetric("hit")
-				proxy.incrementCacheMetric("miss")
+				proxy.incrementCacheMetric(CacheMetricHit)
+				proxy.incrementCacheMetric(CacheMetricMiss)
 			}
 		}()
 	}

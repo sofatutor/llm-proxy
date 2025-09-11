@@ -15,6 +15,8 @@ type redisCache struct {
 	prefix string
 }
 
+const redisScanCount = 2048
+
 func newRedisCache(client *redis.Client, keyPrefix string) *redisCache {
 	if keyPrefix == "" {
 		keyPrefix = "llmproxy:cache:"
@@ -85,9 +87,10 @@ func (r *redisCache) PurgePrefix(prefix string) int {
 	var cursor uint64
 	total := 0
 	for {
-		keys, next, err := r.client.Scan(ctx, cursor, fullPrefix+"*", 1000).Result()
+		keys, next, err := r.client.Scan(ctx, cursor, fullPrefix+"*", redisScanCount).Result()
 		if err != nil {
-			break
+			// Abort on scan error to avoid infinite loop; return what we deleted so far
+			return total
 		}
 		cursor = next
 		if len(keys) > 0 {
