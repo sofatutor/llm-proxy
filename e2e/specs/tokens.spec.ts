@@ -74,4 +74,105 @@ test.describe('Tokens Management', () => {
     await expect(detailsSection.getByText('Project', { exact: true })).toBeVisible();
     await expect(detailsSection.getByText('Status', { exact: true })).toBeVisible();
   });
+
+  test('should revoke individual token via DELETE button with confirmation', async ({ page }) => {
+    await page.goto('/tokens');
+    
+    // Set up dialog handler for confirmation
+    page.on('dialog', async dialog => {
+      expect(dialog.type()).toBe('confirm');
+      expect(dialog.message()).toContain('revoke token');
+      await dialog.accept();
+    });
+    
+    // Click revoke button for specific token
+    const revokeButton = page.locator(`button[onclick*="${tokenId}"]`);
+    await expect(revokeButton).toBeVisible();
+    await revokeButton.click();
+    
+    // Should redirect back to tokens list
+    await expect(page).toHaveURL(/\/tokens(\/.*)?$/);
+  });
+
+  test('should handle token revocation confirmation dialog cancel', async ({ page }) => {
+    await page.goto('/tokens');
+    
+    // Set up dialog handler to cancel
+    page.on('dialog', async dialog => {
+      expect(dialog.type()).toBe('confirm');
+      expect(dialog.message()).toContain('revoke token');
+      await dialog.dismiss();
+    });
+    
+    // Click revoke button
+    const revokeButton = page.locator(`button[onclick*="${tokenId}"]`);
+    await revokeButton.click();
+    
+    // Should stay on tokens page
+    await expect(page).toHaveURL('/tokens');
+    
+    // Token should still be active (verify via API)
+    const token = await seed.getToken(tokenId);
+    expect(token.is_active).toBe(true);
+  });
+
+  test('should verify post-revoke status changes', async ({ page }) => {
+    // Navigate to token details page
+    await page.goto(`/tokens/${tokenId}`);
+    
+    // Verify token is initially active
+    await expect(page.locator('.badge:has-text("Active")')).toBeVisible();
+    
+    // Revoke token via API to change status
+    await seed.revokeToken(tokenId);
+    
+    // Refresh page to see updated status
+    await page.reload();
+    
+    // Should show revoked status
+    await expect(page.locator('.badge:has-text("Revoked"), .badge:has-text("Inactive")')).toBeVisible();
+  });
+
+  test('should show revoke button on token details page', async ({ page }) => {
+    await page.goto(`/tokens/${tokenId}`);
+    
+    // Should have revoke button in the danger zone or actions section
+    const revokeButton = page.locator('button:has-text("Revoke Token")');
+    await expect(revokeButton).toBeVisible();
+    
+    // Verify revoke button has appropriate styling (danger)
+    const buttonClasses = await revokeButton.getAttribute('class');
+    expect(buttonClasses).toMatch(/btn-danger|btn-outline-danger/);
+  });
+
+  test('should revoke token from details page with confirmation', async ({ page }) => {
+    await page.goto(`/tokens/${tokenId}`);
+    
+    // Set up dialog handler
+    page.on('dialog', async dialog => {
+      expect(dialog.type()).toBe('confirm');
+      expect(dialog.message()).toContain('revoke');
+      await dialog.accept();
+    });
+    
+    // Click revoke button
+    const revokeButton = page.locator('button:has-text("Revoke Token")');
+    await revokeButton.click();
+    
+    // Should redirect away from details page
+    await expect(page).toHaveURL(/\/tokens(?!\/.*\/edit).*$/);
+  });
+
+  test('should display token status badges correctly', async ({ page }) => {
+    await page.goto('/tokens');
+    
+    // Find the row containing our token and check status badge
+    const tokenRow = page.locator('table tbody tr').first();
+    const statusBadge = tokenRow.locator('.badge');
+    await expect(statusBadge).toBeVisible();
+    
+    // Should have appropriate color class for active status
+    const badgeClasses = await statusBadge.getAttribute('class');
+    expect(badgeClasses).toMatch(/badge\s+(bg-success|bg-danger|bg-warning|bg-secondary)/);
+  });
 });
