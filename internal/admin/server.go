@@ -471,7 +471,7 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 		return
 	}
 
-	// Simplified checkbox handling: hidden field ensures "false" when unchecked
+	// Checkbox handling: check if the posted value is "true"
 	isActive := c.PostForm("is_active") == "true"
 	isActivePtr := &isActive
 
@@ -598,6 +598,7 @@ func (s *Server) handleTokensList(c *gin.Context) {
 		"projectId":    projectID,
 		"projectNames": projectNames,
 		"now":          time.Now(),
+		"currentTime":  time.Now(),
 	})
 }
 
@@ -738,12 +739,13 @@ func (s *Server) handleTokensShow(c *gin.Context) {
 	}
 
 	c.HTML(http.StatusOK, "tokens/show.html", gin.H{
-		"title":   "Token Details",
-		"active":  "tokens",
-		"token":   token,
-		"project": project,
-		"tokenID": tokenID,
-		"now":     time.Now(),
+		"title":       "Token Details",
+		"active":      "tokens",
+		"token":       token,
+		"project":     project,
+		"tokenID":     tokenID,
+		"now":         time.Now(),
+		"currentTime": time.Now(),
 	})
 }
 

@@ -57,7 +57,7 @@ function revokeToken(tokenId, obfuscatedToken) {
 }
 
 function reactivateToken(tokenId, obfuscatedToken) {
-    if (confirm('Are you sure you want to reactivate token ' + obfuscatedToken + '?')) {
+    if (confirm('Are you sure you want to reactivate token ' + obfuscatedToken + '? This will make the token active again.')) {
         var form = document.createElement('form');
         form.method = 'POST';
         form.action = '/tokens/' + tokenId;

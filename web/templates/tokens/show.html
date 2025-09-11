@@ -134,7 +134,7 @@
                         Edit Token
                     </a>
                     {{ if .token.ExpiresAt }}
-                        {{ if .token.ExpiresAt.Before (now) }}
+                        {{ if .token.ExpiresAt.Before .currentTime }}
                         <!-- Token is expired - no actions available -->
                         <button type="button" class="btn btn-outline-secondary" disabled title="Token is expired">
                             <i class="bi bi-clock-history"></i>
