@@ -472,7 +472,12 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 	}
 
 	// Checkbox handling: check if the posted value is "true"
-	isActive := c.PostForm("is_active") == "true"
+	vals := c.PostFormArray("is_active")
+	isActive := false
+	if len(vals) > 0 {
+		// When both hidden=false and checkbox=true are submitted, the last value reflects the checkbox
+		isActive = strings.EqualFold(vals[len(vals)-1], "true")
+	}
 	isActivePtr := &isActive
 
 	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())

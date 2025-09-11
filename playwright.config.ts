@@ -24,6 +24,11 @@ export default defineConfig({
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL: process.env.ADMIN_BASE_URL || `http://localhost:${process.env.ADMIN_PORT || '8099'}`,
+    // Ensure tests themselves use the same management token and base URL as the spawned servers
+    env: {
+      MANAGEMENT_TOKEN: process.env.MANAGEMENT_TOKEN || 'e2e-management-token',
+      ADMIN_BASE_URL: process.env.ADMIN_BASE_URL || `http://localhost:${process.env.ADMIN_PORT || '8099'}`,
+    },
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -58,7 +63,9 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npm run start:e2e',
+    // Force a known MANAGEMENT_TOKEN for both Admin UI and Management API during E2E
+    // to avoid mismatches with developer local .env
+    command: `MANAGEMENT_TOKEN=${process.env.MANAGEMENT_TOKEN || 'e2e-management-token'} npm run start:e2e`,
     url: process.env.ADMIN_BASE_URL || `http://localhost:${process.env.ADMIN_PORT || '8099'}`,
     reuseExistingServer: !process.env.CI,
     timeout: 30000,
