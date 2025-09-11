@@ -190,7 +190,14 @@ llm-proxy manage project get <project-id> --manage-api-base-url http://localhost
 llm-proxy manage project create --name "My Project" --openai-key sk-... --manage-api-base-url http://localhost:8080 --management-token <token>
 
 # Update project (supports activation changes)
-llm-proxy manage project update <project-id> --name "New Name" --is-active=false --manage-api-base-url http://localhost:8080 --management-token <token>
+# Note: --is-active flag not yet available in CLI; use direct API calls for activation control
+curl -X PATCH http://localhost:8080/manage/projects/<project-id> \
+  -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"is_active": false}'
+
+# CLI currently supports name and API key updates
+llm-proxy manage project update <project-id> --name "New Name" --manage-api-base-url http://localhost:8080 --management-token <token>
 
 # Project deletion not supported (405) - use deactivation instead
 # llm-proxy manage project delete <project-id>  # This will fail with 405
@@ -198,20 +205,27 @@ llm-proxy manage project update <project-id> --name "New Name" --is-active=false
 
 ### Token Management
 ```sh
-# List tokens with filtering by project and active status
-llm-proxy manage token list --project-id <project-id> --active-only --manage-api-base-url http://localhost:8080 --management-token <token>
-
-# Get individual token details 
-llm-proxy manage token get <token-id> --manage-api-base-url http://localhost:8080 --management-token <token>
-
-# Generate token (blocked if project inactive)
+# Generate token (blocked if project inactive via API validation)
 llm-proxy manage token generate --project-id <project-id> --duration 24 --manage-api-base-url http://localhost:8080 --management-token <token>
 
-# Revoke token (soft deactivation)
-llm-proxy manage token revoke <token-id> --manage-api-base-url http://localhost:8080 --management-token <token>
+# Note: Token listing, details, and revocation not yet available in CLI
+# Use direct API calls for these operations:
 
-# Bulk revoke all tokens for a project
-llm-proxy manage project <project-id> tokens revoke --manage-api-base-url http://localhost:8080 --management-token <token>
+# List tokens with filtering
+curl -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  "http://localhost:8080/manage/tokens?project_id=<project-id>&active_only=true"
+
+# Get token details
+curl -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  "http://localhost:8080/manage/tokens/<token-id>"
+
+# Revoke individual token
+curl -X DELETE -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  "http://localhost:8080/manage/tokens/<token-id>"
+
+# Bulk revoke project tokens  
+curl -X POST -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  "http://localhost:8080/manage/projects/<project-id>/tokens/revoke"
 ```
 
 ### Flags

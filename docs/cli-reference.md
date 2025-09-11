@@ -30,12 +30,20 @@ The LLM Proxy CLI provides commands for:
 - Interactive chat with OpenAI
 
 ### Phase 5 Features (Completed)
-This CLI includes comprehensive **token and project lifecycle management** implemented in Phase 5:
+This CLI includes **token and project lifecycle management** APIs implemented in Phase 5. While the full feature set is available via direct API calls, the CLI currently provides basic operations:
+
+**CLI Available:**
+- **Project Management**: List, get, create, update (name/API key)
+- **Token Generation**: Create tokens with expiration and limits
+
+**API Available (Phase 5 Complete):**
 - **Soft Deactivation**: Projects and tokens use activation flags instead of destructive deletes
 - **Individual Token Management**: GET, PATCH (activate/deactivate), DELETE (revoke) operations
 - **Bulk Token Operations**: Revoke all tokens for a project
 - **Project Lifecycle Controls**: Activation/deactivation with audit trails
 - **Enhanced Filtering**: List tokens by project, active status, etc.
+
+**CLI Enhancement Opportunity:** Additional CLI commands for token listing, details, revocation, and project activation could be added in future releases.
 
 **Related Issues & PRs:** [#75](https://github.com/sofatutor/llm-proxy/issues/75), [#83](https://github.com/sofatutor/llm-proxy/issues/83), [#95](https://github.com/sofatutor/llm-proxy/pull/95), [#98](https://github.com/sofatutor/llm-proxy/pull/98)
 
@@ -212,7 +220,8 @@ llm-proxy manage project update <project-id> [flags]
 **Flags:**
 - `--name string`: New project name
 - `--openai-key string`: New OpenAI API key
-- `--is-active bool`: Project activation status (true/false)
+
+**Note:** Project activation control (`is_active`) is not yet available via CLI flags. Use direct API calls for activation management.
 
 **Examples:**
 ```bash
@@ -226,31 +235,51 @@ llm-proxy manage project update 123e4567-e89b-12d3-a456-426614174000 \
   --openai-key sk-new-api-key \
   --management-token your-token
 
-# Deactivate project
-llm-proxy manage project update 123e4567-e89b-12d3-a456-426614174000 \
-  --is-active=false \
-  --management-token your-token
+# For project activation control, use direct API call:
+curl -X PATCH http://localhost:8080/manage/projects/123e4567-e89b-12d3-a456-426614174000 \
+  -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"is_active": false}'
 
-# Update name and deactivate
-llm-proxy manage project update 123e4567-e89b-12d3-a456-426614174000 \
-  --name "Inactive Project" \
-  --is-active=false \
-  --management-token your-token
+# Update name and deactivate via API
+curl -X PATCH http://localhost:8080/manage/projects/123e4567-e89b-12d3-a456-426614174000 \
+  -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Inactive Project", "is_active": false}'
 ```
 
 ##### `llm-proxy manage project delete`
 
-**⚠️ Not Supported - Returns 405 Method Not Allowed**
+**⚠️ API Returns 405 Method Not Allowed**
 
-Project deletion is not supported in Phase 5 for data safety. Use project deactivation instead.
+The CLI command exists but the API intentionally returns 405 Method Not Allowed for project deletion in Phase 5 for data safety.
+
+**Usage:**
+```bash
+llm-proxy manage project delete <project-id> [flags]
+```
+
+**Arguments:**
+- `project-id`: UUID of the project to delete
+
+**Actual Result:**
+```bash
+# This command will fail with 405 Method Not Allowed
+llm-proxy manage project delete 123e4567-e89b-12d3-a456-426614174000 --management-token your-token
+# Error: HTTP 405: method not allowed
+```
 
 **Alternative - Deactivate Project:**
 ```bash
-# Deactivate project instead of deletion
-llm-proxy manage project update <project-id> --is-active=false --management-token your-token
+# Deactivate project instead of deletion via API
+curl -X PATCH http://localhost:8080/manage/projects/<project-id> \
+  -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"is_active": false}'
 
-# Optionally revoke all project tokens
-llm-proxy manage project <project-id> tokens revoke --management-token your-token
+# Optionally revoke all project tokens via API
+curl -X POST http://localhost:8080/manage/projects/<project-id>/tokens/revoke \
+  -H "Authorization: Bearer $MANAGEMENT_TOKEN"
 ```
 
 **Why No Deletion:**
@@ -261,48 +290,7 @@ llm-proxy manage project <project-id> tokens revoke --management-token your-toke
 
 #### Token Management
 
-##### `llm-proxy manage token list`
-
-List all tokens in the system.
-
-**Usage:**
-```bash
-llm-proxy manage token list [flags]
-```
-
-**Flags:**
-- `--project-id string`: Filter tokens by project ID
-- `--active-only`: Show only active tokens
-- `--json`: Output as JSON
-
-**Examples:**
-```bash
-# List all tokens
-llm-proxy manage token list --management-token your-token
-
-# List tokens for specific project
-llm-proxy manage token list --project-id 123e4567-e89b-12d3-a456-426614174000 --management-token your-token
-
-# List only active tokens
-llm-proxy manage token list --active-only --management-token your-token
-```
-
-##### `llm-proxy manage token get`
-
-Get details for a specific token.
-
-**Usage:**
-```bash
-llm-proxy manage token get <token-id> [flags]
-```
-
-**Arguments:**
-- `token-id`: UUID of the token to retrieve
-
-**Examples:**
-```bash
-llm-proxy manage token get sk-ABC123DEF456GHI789 --management-token your-token
-```
+**Current CLI Support:** The CLI currently provides token generation only. Additional token operations require direct API calls.
 
 ##### `llm-proxy manage token generate`
 
@@ -333,43 +321,41 @@ llm-proxy manage token generate \
   --management-token your-token
 ```
 
-##### `llm-proxy manage token revoke`
+##### Additional Token Operations (API Only)
 
-Revoke (deactivate) a token.
-
-**Usage:**
+**Token Listing:**
 ```bash
-llm-proxy manage token revoke <token-id> [flags]
+# List all tokens
+curl -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  "http://localhost:8080/manage/tokens"
+
+# List tokens for specific project
+curl -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  "http://localhost:8080/manage/tokens?project_id=123e4567-e89b-12d3-a456-426614174000"
+
+# List only active tokens
+curl -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  "http://localhost:8080/manage/tokens?active_only=true"
 ```
 
-**Arguments:**
-- `token-id`: Token to revoke
-
-**Examples:**
+**Token Details:**
 ```bash
-llm-proxy manage token revoke sk-ABC123DEF456GHI789 --management-token your-token
+curl -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  "http://localhost:8080/manage/tokens/sk-ABC123DEF456GHI789"
 ```
 
-##### `llm-proxy manage project tokens revoke`
-
-Bulk revoke all tokens for a project.
-
-**Usage:**
+**Token Revocation:**
 ```bash
-llm-proxy manage project <project-id> tokens revoke [flags]
+# Revoke individual token
+curl -X DELETE -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  "http://localhost:8080/manage/tokens/sk-ABC123DEF456GHI789"
 ```
 
-**Arguments:**
-- `project-id`: UUID of the project whose tokens to revoke
-
-**Examples:**
+**Bulk Token Revocation:**
 ```bash
 # Revoke all tokens for a project
-llm-proxy manage project 123e4567-e89b-12d3-a456-426614174000 tokens revoke --management-token your-token
-
-# Useful when deactivating a project
-llm-proxy manage project update 123e4567-e89b-12d3-a456-426614174000 --is-active=false --management-token your-token
-llm-proxy manage project 123e4567-e89b-12d3-a456-426614174000 tokens revoke --management-token your-token
+curl -X POST -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
+  "http://localhost:8080/manage/projects/123e4567-e89b-12d3-a456-426614174000/tokens/revoke"
 ```
 ```
 
