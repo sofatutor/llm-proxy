@@ -377,12 +377,8 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 			}
 
 			key := cacheKeyFromRequest(req)
-			// Use per-response Vary for storage key if Vary header is present
-			varyHeader := res.Header.Get("Vary")
-			storageKey := key // Default to lookup key
-			if varyHeader != "" && varyHeader != "*" {
-				storageKey = cacheKeyFromRequestWithVary(req, varyHeader)
-			}
+			// Compute storage key via helper to respect Vary
+			storageKey := storageKeyForResponse(req, res.Header.Get("Vary"), key)
 
 			if !isStreaming(res) {
 				bodyBytes, err := io.ReadAll(res.Body)
@@ -396,13 +392,13 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 							headers.Set("Cache-Control", fmt.Sprintf("public, max-age=%d", int(ttl.Seconds())))
 						}
 						// Store the Vary header for per-response cache key generation
-						varyHeader := res.Header.Get("Vary")
+						varyValue := res.Header.Get("Vary")
 						cr := cachedResponse{
 							statusCode: res.StatusCode,
 							headers:    headers,
 							body:       bodyBytes,
 							expiresAt:  time.Now().Add(ttl),
-							vary:       varyHeader,
+							vary:       varyValue,
 						}
 						p.cache.Set(storageKey, cr)
 						res.Header.Set("X-PROXY-CACHE", "stored")
@@ -428,12 +424,9 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 					headers.Set("Cache-Control", fmt.Sprintf("public, max-age=%d", int(ttl.Seconds())))
 				}
 				// Store the Vary header for per-response cache key generation
-				varyHeader := res.Header.Get("Vary")
-				// Use per-response Vary for storage key if Vary header is present
-				storageKey := key // Default to lookup key
-				if varyHeader != "" && varyHeader != "*" {
-					storageKey = cacheKeyFromRequestWithVary(req, varyHeader)
-				}
+				varyValue := res.Header.Get("Vary")
+				// Compute storage key via helper
+				storageKey := storageKeyForResponse(req, varyValue, key)
 				expiresAt := time.Now().Add(ttl)
 				orig := res.Body
 				res.Body = newStreamingCapture(orig, maxBytes, func(buf []byte) {
@@ -448,7 +441,7 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 						headers:    headers,
 						body:       append([]byte(nil), buf...),
 						expiresAt:  expiresAt,
-						vary:       varyHeader,
+						vary:       varyValue,
 					})
 					p.incrementCacheMetric("store")
 				})
