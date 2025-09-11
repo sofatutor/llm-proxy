@@ -394,3 +394,70 @@ func TestDBDeleteProject_And_DBUpdateProject_EdgeCases(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+func TestGetProjectActive(t *testing.T) {
+	// Create a test database
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Create a test project
+	project := proxy.Project{
+		ID:           "test-project-id",
+		Name:         "test-project",
+		OpenAIAPIKey: "test-api-key",
+		IsActive:     true,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	// Insert the project
+	err := db.CreateProject(ctx, project)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name           string
+		projectID      string
+		expectedActive bool
+		expectedError  bool
+	}{
+		{
+			name:           "active project",
+			projectID:      "test-project-id",
+			expectedActive: true,
+			expectedError:  false,
+		},
+		{
+			name:           "nonexistent project",
+			projectID:      "nonexistent-id",
+			expectedActive: false,
+			expectedError:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			isActive, err := db.GetProjectActive(ctx, tt.projectID)
+			if tt.expectedError {
+				require.Error(t, err)
+				require.Equal(t, ErrProjectNotFound, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.expectedActive, isActive)
+			}
+		})
+	}
+
+	// Test with inactive project
+	t.Run("inactive project", func(t *testing.T) {
+		// Update project to be inactive
+		project.IsActive = false
+		err := db.UpdateProject(ctx, project)
+		require.NoError(t, err)
+
+		isActive, err := db.GetProjectActive(ctx, "test-project-id")
+		require.NoError(t, err)
+		require.False(t, isActive)
+	})
+}

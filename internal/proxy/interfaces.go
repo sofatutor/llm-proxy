@@ -29,6 +29,12 @@ type ProjectStore interface {
 	DeleteProject(ctx context.Context, projectID string) error
 }
 
+// ProjectActiveChecker defines the interface for checking project active status
+type ProjectActiveChecker interface {
+	// GetProjectActive checks if a project is active
+	GetProjectActive(ctx context.Context, projectID string) (bool, error)
+}
+
 // Proxy defines the interface for a transparent HTTP proxy
 type Proxy interface {
 	// Handler returns an http.Handler for the proxy

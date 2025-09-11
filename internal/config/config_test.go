@@ -470,3 +470,73 @@ func TestLoadFromFile(t *testing.T) {
 		t.Errorf("Expected MaxRequestSize to be %d, got %d", defaultConfig.MaxRequestSize, config.MaxRequestSize)
 	}
 }
+
+func TestConfig_ProjectActiveGuard(t *testing.T) {
+	// Save original environment
+	originalEnv := make(map[string]string)
+	for _, env := range os.Environ() {
+		for i := 0; i < len(env); i++ {
+			if env[i] == '=' {
+				originalEnv[env[:i]] = env[i+1:]
+				break
+			}
+		}
+	}
+
+	// Restore environment after test
+	defer func() {
+		os.Clearenv()
+		for k, v := range originalEnv {
+			if err := os.Setenv(k, v); err != nil {
+				t.Fatalf("Failed to restore environment variable %s: %v", k, err)
+			}
+		}
+	}()
+
+	// Clear environment
+	os.Clearenv()
+
+	// Set required fields
+	if err := os.Setenv("MANAGEMENT_TOKEN", "test-token"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+
+	// Test project active guard configuration
+	if err := os.Setenv("LLM_PROXY_ENFORCE_PROJECT_ACTIVE", "false"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+	if err := os.Setenv("LLM_PROXY_ACTIVE_CACHE_TTL", "10s"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+	if err := os.Setenv("LLM_PROXY_ACTIVE_CACHE_MAX", "5000"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+
+	config, err := New()
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	if config.EnforceProjectActive != false {
+		t.Errorf("Expected EnforceProjectActive to be false, got %v", config.EnforceProjectActive)
+	}
+	if config.ActiveCacheTTL != 10*time.Second {
+		t.Errorf("Expected ActiveCacheTTL to be 10s, got %v", config.ActiveCacheTTL)
+	}
+	if config.ActiveCacheMax != 5000 {
+		t.Errorf("Expected ActiveCacheMax to be 5000, got %d", config.ActiveCacheMax)
+	}
+}
+
+func TestConfig_ProjectActiveGuardDefaults(t *testing.T) {
+	// Test defaults for project active guard
+	config := DefaultConfig()
+	if config.EnforceProjectActive != true {
+		t.Errorf("Expected EnforceProjectActive to be true, got %v", config.EnforceProjectActive)
+	}
+	if config.ActiveCacheTTL != 5*time.Second {
+		t.Errorf("Expected ActiveCacheTTL to be 5s, got %v", config.ActiveCacheTTL)
+	}
+	if config.ActiveCacheMax != 10000 {
+		t.Errorf("Expected ActiveCacheMax to be 10000, got %d", config.ActiveCacheMax)
+	}
+}
