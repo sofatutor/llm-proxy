@@ -133,11 +133,43 @@
                         <i class="bi bi-pencil"></i>
                         Edit Token
                     </a>
-                    <button type="button" class="btn btn-outline-danger" 
-                            onclick="revokeToken('{{ .tokenID }}', '{{ obfuscateToken .tokenID }}')">
-                        <i class="bi bi-x-circle"></i>
-                        Revoke Token
-                    </button>
+                    {{ if .token.ExpiresAt }}
+                        {{ if .token.ExpiresAt.Before (now) }}
+                        <!-- Token is expired - no actions available -->
+                        <button type="button" class="btn btn-outline-secondary" disabled title="Token is expired">
+                            <i class="bi bi-clock-history"></i>
+                            Expired - No Actions Available
+                        </button>
+                        {{ else if .token.IsActive }}
+                        <!-- Token is active - show revoke button -->
+                        <button type="button" class="btn btn-outline-danger" 
+                                onclick="revokeToken('{{ .tokenID }}', '{{ obfuscateToken .tokenID }}')">
+                            <i class="bi bi-x-circle"></i>
+                            Revoke Token
+                        </button>
+                        {{ else }}
+                        <!-- Token is inactive but not expired - show reactivate button -->
+                        <button type="button" class="btn btn-outline-success" 
+                                onclick="reactivateToken('{{ .tokenID }}', '{{ obfuscateToken .tokenID }}')">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            Reactivate Token
+                        </button>
+                        {{ end }}
+                    {{ else if .token.IsActive }}
+                        <!-- No expiry set and active -->
+                        <button type="button" class="btn btn-outline-danger" 
+                                onclick="revokeToken('{{ .tokenID }}', '{{ obfuscateToken .tokenID }}')">
+                            <i class="bi bi-x-circle"></i>
+                            Revoke Token
+                        </button>
+                    {{ else }}
+                        <!-- No expiry set and inactive -->
+                        <button type="button" class="btn btn-outline-success" 
+                                onclick="reactivateToken('{{ .tokenID }}', '{{ obfuscateToken .tokenID }}')">
+                            <i class="bi bi-arrow-clockwise"></i>
+                            Reactivate Token
+                        </button>
+                    {{ end }}
                     <hr>
                     <a href="/projects/{{ .project.ID }}" class="btn btn-outline-primary">
                         <i class="bi bi-folder"></i>

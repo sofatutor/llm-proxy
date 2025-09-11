@@ -508,6 +508,7 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		ID:           id,
 		Name:         req.Name,
 		OpenAIAPIKey: req.OpenAIAPIKey,
+		IsActive:     true, // Projects are active by default
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
@@ -946,8 +947,8 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"project_id is required"}`, http.StatusBadRequest)
 			return
 		}
-		// Check project exists
-		_, err := s.projectStore.GetProjectByID(ctx, req.ProjectID)
+		// Check project exists and is active
+		project, err := s.projectStore.GetProjectByID(ctx, req.ProjectID)
 		if err != nil {
 			s.logger.Error("project not found for token create", zap.String("project_id", req.ProjectID), zap.Error(err), zap.String("request_id", requestID))
 
@@ -958,6 +959,20 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 				WithDetail("error_type", "project not found"))
 
 			http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
+			return
+		}
+
+		// Check if project is active
+		if !project.IsActive {
+			s.logger.Warn("token creation denied for inactive project", zap.String("project_id", req.ProjectID), zap.String("request_id", requestID))
+
+			// Audit: token creation failure - project inactive
+			_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
+				WithProjectID(req.ProjectID).
+				WithDetail("error_type", "project_inactive").
+				WithDetail("reason", "cannot create tokens for inactive projects"))
+
+			http.Error(w, `{"error":"cannot create tokens for inactive projects","code":"project_inactive"}`, http.StatusForbidden)
 			return
 		}
 		// Generate token

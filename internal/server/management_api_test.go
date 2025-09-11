@@ -439,8 +439,9 @@ func TestHandleTokens(t *testing.T) {
 	server, tokenStore, projectStore := setupServerAndMocks(t)
 
 	testProject := proxy.Project{
-		ID:   "project-1",
-		Name: "Test Project",
+		ID:       "project-1",
+		Name:     "Test Project",
+		IsActive: true,
 	}
 
 	testTokens := []token.TokenData{
@@ -828,7 +829,7 @@ func TestHandleTokens_ProjectNotFound(t *testing.T) {
 
 func TestHandleTokens_TokenStoreError(t *testing.T) {
 	server, tokenStore, projectStore := setupServerAndMocks(t)
-	projectStore.On("GetProjectByID", mock.Anything, "pid").Return(proxy.Project{ID: "pid"}, nil)
+	projectStore.On("GetProjectByID", mock.Anything, "pid").Return(proxy.Project{ID: "pid", IsActive: true}, nil)
 	tokenStore.On("CreateToken", mock.Anything, mock.AnythingOfType("token.TokenData")).Return(errors.New("db error"))
 	body, _ := json.Marshal(map[string]interface{}{"project_id": "pid", "duration_minutes": 1})
 	req := httptest.NewRequest("POST", "/manage/tokens", bytes.NewReader(body))

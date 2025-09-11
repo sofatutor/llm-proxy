@@ -134,10 +134,33 @@
                                         <a href="/tokens/{{ .TokenID }}/edit" class="btn btn-outline-warning" title="Edit Token">
                                             <i class="bi bi-pencil"></i>
                                         </a>
-                                        <button type="button" class="btn btn-outline-danger" title="Revoke Token" 
-                                                onclick="revokeToken('{{ .TokenID }}', '{{ obfuscateToken .TokenID }}')">
-                                            <i class="bi bi-x-circle"></i>
-                                        </button>
+                                        {{ if .ExpiresAt }}
+                                            {{ if .ExpiresAt.Before (now) }}
+                                                <button type="button" class="btn btn-outline-secondary" disabled title="Token is expired">
+                                                    <i class="bi bi-clock-history"></i>
+                                                </button>
+                                            {{ else if .IsActive }}
+                                                <button type="button" class="btn btn-outline-danger" title="Revoke Token" 
+                                                        onclick="revokeToken('{{ .TokenID }}', '{{ obfuscateToken .TokenID }}')">
+                                                    <i class="bi bi-x-circle"></i>
+                                                </button>
+                                            {{ else }}
+                                                <button type="button" class="btn btn-outline-success" title="Reactivate Token" 
+                                                        onclick="reactivateToken('{{ .TokenID }}', '{{ obfuscateToken .TokenID }}')">
+                                                    <i class="bi bi-arrow-clockwise"></i>
+                                                </button>
+                                            {{ end }}
+                                        {{ else if .IsActive }}
+                                            <button type="button" class="btn btn-outline-danger" title="Revoke Token" 
+                                                    onclick="revokeToken('{{ .TokenID }}', '{{ obfuscateToken .TokenID }}')">
+                                                <i class="bi bi-x-circle"></i>
+                                            </button>
+                                        {{ else }}
+                                            <button type="button" class="btn btn-outline-success" title="Reactivate Token" 
+                                                    onclick="reactivateToken('{{ .TokenID }}', '{{ obfuscateToken .TokenID }}')">
+                                                <i class="bi bi-arrow-clockwise"></i>
+                                            </button>
+                                        {{ end }}
                                         <a href="/tokens/new?project_id={{ .ProjectID }}" class="btn btn-outline-success" title="Generate New Token">
                                             <i class="bi bi-key"></i>
                                         </a>
@@ -181,7 +204,6 @@
     </div>
 </div>
 {{ end }}
-{{ template "layout/end" . }}
-
 <script src="/static/js/token-utils.js"></script>
+{{ template "layout/end" . }}
 {{ end }}

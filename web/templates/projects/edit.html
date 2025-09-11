@@ -76,6 +76,8 @@
                     <div class="mb-3">
                         <label class="form-label">Project Status</label>
                         <div class="form-check form-switch">
+                            <!-- Hidden field to ensure false value is sent when checkbox is unchecked -->
+                            <input type="hidden" name="is_active" value="false">
                             <input class="form-check-input" 
                                    type="checkbox" 
                                    id="is_active" 
@@ -126,64 +128,30 @@
             </div>
         </div>
 
-        <!-- Danger Zone -->
-        <div class="card mt-4 border-danger">
-            <div class="card-header bg-danger text-white">
+        <!-- Project Security Info -->
+        <div class="card mt-4 border-info">
+            <div class="card-header bg-info text-white">
                 <h5 class="card-title mb-0">
-                    <i class="bi bi-exclamation-triangle"></i>
-                    Danger Zone
+                    <i class="bi bi-shield-check"></i>
+                    Security & Audit
                 </h5>
             </div>
             <div class="card-body">
                 <p class="text-muted">
-                    Once you delete a project, there is no going back. This will permanently delete 
-                    the project and all associated tokens.
+                    <i class="bi bi-info-circle"></i>
+                    Projects cannot be deleted for security and audit compliance. 
+                    To disable a project, uncheck "Active" above to revoke all tokens.
                 </p>
-                <button type="button" 
-                        class="btn btn-outline-danger" 
-                        onclick="confirmDelete('{{ .project.ID }}', '{{ .project.Name }}')">
-                    <i class="bi bi-trash"></i>
-                    Delete This Project
-                </button>
+                <a href="/tokens?project_id={{ .project.ID }}" class="btn btn-outline-primary">
+                    <i class="bi bi-list"></i>
+                    Manage Project Tokens
+                </a>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Delete Confirmation Modal -->
-<div class="modal fade" id="deleteModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Confirm Delete</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Are you sure you want to delete the project <strong id="deleteProjectName"></strong>?</p>
-                <p class="text-warning">
-                    <i class="bi bi-exclamation-triangle"></i>
-                    This action cannot be undone and will also delete all associated tokens.
-                </p>
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" id="confirmCheck">
-                    <label class="form-check-label" for="confirmCheck">
-                        I understand this action cannot be undone
-                    </label>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <form id="deleteForm" method="POST" style="display: inline;">
-                    <input type="hidden" name="_method" value="DELETE">
-                    <button type="submit" class="btn btn-danger" id="deleteBtn" disabled>
-                        <i class="bi bi-trash"></i>
-                        Delete Project
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- Delete functionality removed - projects cannot be deleted by design -->
 
 <script>
 function togglePassword(fieldId) {
@@ -199,23 +167,7 @@ function togglePassword(fieldId) {
     }
 }
 
-function confirmDelete(projectId, projectName) {
-    document.getElementById('deleteProjectName').textContent = projectName;
-    document.getElementById('deleteForm').action = '/projects/' + projectId;
-    
-    // Reset checkbox and button state
-    const checkbox = document.getElementById('confirmCheck');
-    const deleteBtn = document.getElementById('deleteBtn');
-    checkbox.checked = false;
-    deleteBtn.disabled = true;
-    
-    // Enable delete button when checkbox is checked
-    checkbox.onchange = function() {
-        deleteBtn.disabled = !this.checked;
-    };
-    
-    new bootstrap.Modal(document.getElementById('deleteModal')).show();
-}
+// confirmDelete function removed - projects cannot be deleted by design
 </script>
 {{ template "layout/end" . }}
 {{ end }}
