@@ -87,9 +87,9 @@ func cacheKeyFromRequest(r *http.Request) string {
 // from the upstream response. This enables per-response driven cache key generation.
 //
 // Behavior:
-// - When vary is empty or "*", this function returns a key that ignores header values
-//   (treated as "no vary" for key generation purposes).
-// - Header names parsed from vary are normalized to canonical MIME header names.
+//   - When vary is empty or "*", this function returns a key that ignores header values
+//     (treated as "no vary" for key generation purposes).
+//   - Header names parsed from vary are normalized to canonical MIME header names.
 func cacheKeyFromRequestWithVary(r *http.Request, vary string) string {
 	// Key: METHOD|PATH|sorted(query)
 	// Host/scheme are intentionally excluded to keep keys stable across proxy ↔ upstream phases.
