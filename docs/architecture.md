@@ -431,7 +431,7 @@ Endpoints for project and token management with comprehensive lifecycle operatio
 
 ### Admin UI (`/admin/*`)
 
-Web interface for system administration with Phase 5 lifecycle management:
+Web interface for system administration with lifecycle management:
 
 **Project Management:**
 - `/admin/projects`: Project listing with activation toggles

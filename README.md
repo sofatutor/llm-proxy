@@ -86,7 +86,7 @@ MANAGEMENT_TOKEN=your-secure-management-token ./bin/llm-proxy
 - `HTTP_CACHE_MAX_OBJECT_BYTES`: Maximum cached object size in bytes (default 1048576)
 - `HTTP_CACHE_DEFAULT_TTL`: Default TTL in seconds when upstream doesn't specify (default 300)
 
-See `docs/configuration.md` and [docs/instrumentation.md](docs/instrumentation.md) for all options and advanced usage.
+See `docs/api-configuration.md` and [docs/instrumentation.md](docs/instrumentation.md) for all options and advanced usage.
 
 ### Advanced Example
 ```yaml

@@ -24,19 +24,19 @@ This document provides a comprehensive reference for all LLM Proxy command-line 
 The LLM Proxy CLI provides commands for:
 - Starting the proxy server
 - Setting up the initial configuration
-- **Managing projects and tokens with Phase 5 lifecycle features**
+- **Managing projects and tokens with lifecycle features**
 - Running the event dispatcher
 - Benchmarking proxy performance and testing cache behavior
 - Interactive chat with OpenAI
 
-### Phase 5 Features (Completed)
-This CLI includes **token and project lifecycle management** APIs implemented in Phase 5. While the full feature set is available via direct API calls, the CLI currently provides basic operations:
+### Lifecycle Features
+This CLI includes **token and project lifecycle management** APIs. While the full feature set is available via direct API calls, the CLI currently provides basic operations:
 
 **CLI Available:**
 - **Project Management**: List, get, create, update (name/API key)
 - **Token Generation**: Create tokens with expiration and limits
 
-**API Available (Phase 5 Complete):**
+**API Available:**
 - **Soft Deactivation**: Projects and tokens use activation flags instead of destructive deletes
 - **Individual Token Management**: GET, PATCH (activate/deactivate), DELETE (revoke) operations
 - **Bulk Token Operations**: Revoke all tokens for a project
@@ -45,7 +45,7 @@ This CLI includes **token and project lifecycle management** APIs implemented in
 
 **CLI Enhancement Opportunity:** Additional CLI commands for token listing, details, revocation, and project activation could be added in future releases.
 
-**Related Issues & PRs:** [#75](https://github.com/sofatutor/llm-proxy/issues/75), [#83](https://github.com/sofatutor/llm-proxy/issues/83), [#95](https://github.com/sofatutor/llm-proxy/pull/95), [#98](https://github.com/sofatutor/llm-proxy/pull/98)
+**References:** API and admin features are documented in the main README and docs. 
 
 ## Global Options
 
@@ -252,7 +252,7 @@ curl -X PATCH http://localhost:8080/manage/projects/123e4567-e89b-12d3-a456-4266
 
 **⚠️ API Returns 405 Method Not Allowed**
 
-The CLI command exists but the API intentionally returns 405 Method Not Allowed for project deletion in Phase 5 for data safety.
+The CLI command exists but the API intentionally returns 405 Method Not Allowed for project deletion for data safety.
 
 **Usage:**
 ```bash
