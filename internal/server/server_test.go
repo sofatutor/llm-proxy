@@ -289,6 +289,9 @@ type mockProjectStore struct{}
 func (m *mockProjectStore) GetAPIKeyForProject(ctx context.Context, projectID string) (string, error) {
 	return "mock-key", nil
 }
+func (m *mockProjectStore) GetProjectActive(ctx context.Context, projectID string) (bool, error) {
+	return true, nil
+}
 func (m *mockProjectStore) ListProjects(ctx context.Context) ([]proxy.Project, error) {
 	return nil, nil
 }

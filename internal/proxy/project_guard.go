@@ -34,7 +34,7 @@ func ProjectActiveGuardMiddleware(enforceActive bool, checker ProjectActiveCheck
 			projectID, ok := projectIDValue.(string)
 			if !ok || projectID == "" {
 				writeErrorResponse(w, http.StatusInternalServerError, ErrorResponse{
-					Error:       "Internal server error", 
+					Error:       "Internal server error",
 					Code:        "internal_error",
 					Description: "invalid project ID in request context",
 				})
@@ -50,7 +50,7 @@ func ProjectActiveGuardMiddleware(enforceActive bool, checker ProjectActiveCheck
 						zap.String("project_id", projectID),
 						zap.Error(err))
 				}
-				
+
 				writeErrorResponse(w, http.StatusServiceUnavailable, ErrorResponse{
 					Error: "Service temporarily unavailable",
 					Code:  "service_unavailable",
@@ -78,12 +78,13 @@ func writeErrorResponse(w http.ResponseWriter, statusCode int, errorResp ErrorRe
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	if err := json.NewEncoder(w).Encode(errorResp); err != nil {
-		// If we can't encode the error response, at least log it
-		// (but we can't do much else since headers are already sent)
+		if logger := getLoggerFromContext(context.Background()); logger != nil {
+			logger.Error("failed to encode error response", zap.Error(err))
+		}
 	}
 }
 
-// getLoggerFromContext tries to get a logger from context 
+// getLoggerFromContext tries to get a logger from context
 // This is a helper function that works with the existing logging context
 func getLoggerFromContext(ctx context.Context) *zap.Logger {
 	// Try to get logger from context if available

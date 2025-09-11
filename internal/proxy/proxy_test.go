@@ -1672,3 +1672,72 @@ func TestNewTransparentProxyWithLoggerAndObservability(t *testing.T) {
 	require.NotNil(t, proxy)
 	assert.NotNil(t, proxy.obsMiddleware)
 }
+
+// --- Project Active Enforcement Coverage ---
+func TestProjectActiveEnforcement_DBErrorReturns503(t *testing.T) {
+	// Upstream that would return 200 if reached
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	v := new(MockTokenValidator)
+	s := new(MockProjectStore)
+	v.On("ValidateTokenWithTracking", mock.Anything, "tok").Return("p1", nil).Once()
+	s.On("GetAPIKeyForProject", mock.Anything, "p1").Return("sk", nil).Once()
+	s.On("GetProjectActive", mock.Anything, "p1").Return(false, errors.New("db down")).Once()
+
+	p, err := NewTransparentProxyWithLogger(ProxyConfig{
+		TargetBaseURL:        srv.URL,
+		AllowedEndpoints:     []string{"/v1/test"},
+		AllowedMethods:       []string{"GET"},
+		EnforceProjectActive: true,
+	}, v, s, zap.NewNop())
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/v1/test", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+	w := httptest.NewRecorder()
+	p.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+	assert.Contains(t, w.Body.String(), "service_unavailable")
+	v.AssertExpectations(t)
+	s.AssertExpectations(t)
+}
+
+func TestProjectActiveEnforcement_DisabledSkipsLookup(t *testing.T) {
+	// Upstream that returns 200
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+
+	v := new(MockTokenValidator)
+	s := new(MockProjectStore)
+	v.On("ValidateTokenWithTracking", mock.Anything, "tok").Return("p1", nil).Once()
+	s.On("GetAPIKeyForProject", mock.Anything, "p1").Return("sk", nil).Once()
+	// No expectation for GetProjectActive when disabled
+
+	p, err := NewTransparentProxyWithLogger(ProxyConfig{
+		TargetBaseURL:        srv.URL,
+		AllowedEndpoints:     []string{"/v1/test"},
+		AllowedMethods:       []string{"GET"},
+		EnforceProjectActive: false,
+	}, v, s, zap.NewNop())
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/v1/test", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+	w := httptest.NewRecorder()
+	p.Handler().ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "ok")
+	v.AssertExpectations(t)
+	s.AssertExpectations(t)
+}

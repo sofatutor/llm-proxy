@@ -118,6 +118,11 @@ func (m *MockProjectStoreExtended) DeleteProject(ctx context.Context, id string)
 	return args.Error(0)
 }
 
+func (m *MockProjectStoreExtended) GetProjectActive(ctx context.Context, projectID string) (bool, error) {
+	args := m.Called(ctx, projectID)
+	return args.Bool(0), args.Error(1)
+}
+
 func setupServerAndMocks(t *testing.T) (*Server, *MockTokenStoreExtended, *MockProjectStoreExtended) {
 	tokenStore := &MockTokenStoreExtended{Mock: &mock.Mock{}}
 	projectStore := &MockProjectStoreExtended{Mock: &mock.Mock{}}

@@ -17,7 +17,7 @@ func TestProjectActiveGuard_EndToEnd(t *testing.T) {
 	mockAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"message": "success"}`))
+		_, _ = w.Write([]byte(`{"message": "success"}`))
 	}))
 	defer mockAPI.Close()
 
@@ -60,7 +60,7 @@ func TestProjectActiveGuard_EndToEnd(t *testing.T) {
 			// Set up expectations
 			mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test-token").Return("test-project", nil).Maybe()
 			mockStore.On("GetAPIKeyForProject", mock.Anything, "test-project").Return("api-key", nil).Maybe()
-			
+
 			// Only expect GetProjectActive call if enforcement is enabled
 			if tt.enforceActive {
 				mockStore.On("GetProjectActive", mock.Anything, "test-project").Return(tt.projectActive, nil).Maybe()

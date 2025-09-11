@@ -664,6 +664,25 @@ func (p *TransparentProxy) Handler() http.Handler {
 		}
 		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
 
+		// Enforce project active status (if enabled)
+		if p.config.EnforceProjectActive {
+			isActive, err := p.projectStore.GetProjectActive(r.Context(), projectID)
+			if err != nil {
+				writeErrorResponse(w, http.StatusServiceUnavailable, ErrorResponse{
+					Error: "Service temporarily unavailable",
+					Code:  "service_unavailable",
+				})
+				return
+			}
+			if !isActive {
+				writeErrorResponse(w, http.StatusForbidden, ErrorResponse{
+					Error: "Project is inactive",
+					Code:  "project_inactive",
+				})
+				return
+			}
+		}
+
 		// Wrap the ResponseWriter to allow us to set headers at first/last byte
 		rw := &timingResponseWriter{ResponseWriter: w}
 
@@ -807,11 +826,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 
 	var handler http.Handler = baseHandler
 	handler = p.ValidateRequestMiddleware()(handler)
-	
-	// Add project active guard middleware after token validation
-	// This ensures project ID is available in context from token validation
-	handler = ProjectActiveGuardMiddleware(p.config.EnforceProjectActive, p.projectStore)(handler)
-	
+
 	if p.obsMiddleware != nil {
 		handler = p.obsMiddleware.Middleware()(handler)
 	}
