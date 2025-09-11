@@ -68,3 +68,35 @@ func (r *redisCache) Set(key string, value cachedResponse) {
 	}
 	_ = r.client.Set(ctx, r.prefix+key, payload, ttl).Err()
 }
+
+// Purge removes a single cache entry by exact key. Returns true if deleted.
+func (r *redisCache) Purge(key string) bool {
+	ctx := context.Background()
+	res := r.client.Del(ctx, r.prefix+key)
+	n, _ := res.Result()
+	return n > 0
+}
+
+// PurgePrefix removes all cache entries whose keys start with the given prefix.
+// Returns number of deleted keys. Uses SCAN to avoid blocking Redis.
+func (r *redisCache) PurgePrefix(prefix string) int {
+	ctx := context.Background()
+	fullPrefix := r.prefix + prefix
+	var cursor uint64
+	total := 0
+	for {
+		keys, next, err := r.client.Scan(ctx, cursor, fullPrefix+"*", 1000).Result()
+		if err != nil {
+			break
+		}
+		cursor = next
+		if len(keys) > 0 {
+			delCount, _ := r.client.Del(ctx, keys...).Result()
+			total += int(delCount)
+		}
+		if cursor == 0 {
+			break
+		}
+	}
+	return total
+}
