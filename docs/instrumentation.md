@@ -5,7 +5,7 @@ The async instrumentation middleware provides non-blocking, streaming-capable in
 
 **Note:** Instrumentation middleware and audit logging serve different purposes:
 - **Instrumentation**: Captures API request/response metadata for observability and analytics
-- **Audit Logging**: Records security-sensitive operations for compliance and investigations
+- **Audit Logging**: Records security-sensitive operations for compliance and investigations (see [Audit Events](#audit-events))
 
 Both systems operate independently and can be configured separately.
 
@@ -27,6 +27,25 @@ Both systems can run simultaneously:
 - Instrumentation events flow through the event bus to dispatchers
 - Audit events are written directly to audit logs (file and/or database)
 - No overlap in captured data - instrumentation focuses on API performance, audit focuses on security events
+
+## Audit Events
+
+The proxy emits audit events for security-sensitive operations:
+
+### Proxy Request Audit Events
+- **Project Inactive (403)**: When a request is denied due to inactive project status
+  - Action: `proxy_request`, Result: `denied`, Reason: `project_inactive`
+  - Includes: project ID, token ID, client IP, user agent, HTTP method, endpoint
+- **Service Unavailable (503)**: When project status check fails due to database errors
+  - Action: `proxy_request`, Result: `error`, Reason: `service_unavailable`
+  - Includes: error details, project ID, request metadata
+
+### Management API Audit Events
+- **Project Lifecycle**: Create, update (including `is_active` changes), delete operations
+- **Token Management**: Create, update, revoke (single and batch operations)
+- All events include actor identification, request IDs, and operation metadata
+
+Audit events are stored in the database and written to audit log files for compliance and security investigations.
 
 For complete system observability, both should be enabled in production environments.
 
