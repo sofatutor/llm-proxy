@@ -150,17 +150,23 @@ type contextKey string
 const version = "0.1.0"
 
 const (
-	// ctxKeyValidationError is the context key for validation errors
-	ctxKeyValidationError contextKey = "validation_error"
-
-	// ctxKeyRequestStart is the context key for request start time
-	ctxKeyRequestStart contextKey = "request_start"
-
-	// ctxKeyOriginalPath is the context key for the original request path
-	ctxKeyOriginalPath contextKey = "original_path"
-
+	// ctxKeyRequestID is the context key for the request ID
+	ctxKeyRequestID contextKey = "request_id"
 	// ctxKeyProjectID is the context key for the project ID
 	ctxKeyProjectID contextKey = "project_id"
+	// ctxKeyLogger is the context key for a request-scoped logger
+	ctxKeyLogger contextKey = "logger"
+	// ctxKeyOriginalPath stores the original request path before proxy rewriting
+	ctxKeyOriginalPath contextKey = "original_path"
+	// ctxKeyValidationError carries token validation error (if any)
+	ctxKeyValidationError contextKey = "validation_error"
+	// Timing keys for observability
+	ctxKeyProxyReceivedAt    contextKey = "proxy_received_at"
+	ctxKeyProxySentBackendAt contextKey = "proxy_sent_backend_at"
+	ctxKeyProxyFirstRespAt   contextKey = "proxy_first_resp_at"
+	ctxKeyProxyFinalRespAt   contextKey = "proxy_final_resp_at"
+	// ctxKeyRequestStart marks the time when a handler started processing
+	ctxKeyRequestStart contextKey = "request_start"
 )
 
 // Project represents a project for the management API and proxy
