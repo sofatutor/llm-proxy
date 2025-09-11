@@ -26,6 +26,7 @@ type redisCachedResponse struct {
 	StatusCode int                 `json:"status_code"`
 	Headers    map[string][]string `json:"headers"`
 	Body       []byte              `json:"body"`
+	Vary       string              `json:"vary"` // Vary header for per-response cache key generation
 }
 
 func (r *redisCache) Get(key string) (cachedResponse, bool) {
@@ -47,6 +48,7 @@ func (r *redisCache) Get(key string) (cachedResponse, bool) {
 		statusCode: rc.StatusCode,
 		headers:    hdr,
 		body:       rc.Body,
+		vary:       rc.Vary, // Include vary field
 		// expiresAt not needed; Redis TTL enforces expiry
 		expiresAt: time.Now().Add(time.Second),
 	}, true
@@ -55,7 +57,7 @@ func (r *redisCache) Get(key string) (cachedResponse, bool) {
 func (r *redisCache) Set(key string, value cachedResponse) {
 	ctx := context.Background()
 	// Serialize
-	ser := redisCachedResponse{StatusCode: value.statusCode, Headers: value.headers, Body: value.body}
+	ser := redisCachedResponse{StatusCode: value.statusCode, Headers: value.headers, Body: value.body, Vary: value.vary}
 	payload, err := json.Marshal(ser)
 	if err != nil {
 		return

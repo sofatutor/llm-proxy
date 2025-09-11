@@ -358,6 +358,13 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 			}
 
 			key := cacheKeyFromRequest(req)
+			// Use per-response Vary for storage key if Vary header is present
+			varyHeader := res.Header.Get("Vary")
+			storageKey := key // Default to lookup key
+			if varyHeader != "" && varyHeader != "*" {
+				storageKey = cacheKeyFromRequestWithVary(req, varyHeader)
+			}
+			
 			if !isStreaming(res) {
 				bodyBytes, err := io.ReadAll(res.Body)
 				if err == nil {
@@ -369,15 +376,18 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 						if !fromResponse {
 							headers.Set("Cache-Control", fmt.Sprintf("public, max-age=%d", int(ttl.Seconds())))
 						}
+						// Store the Vary header for per-response cache key generation
+						varyHeader := res.Header.Get("Vary")
 						cr := cachedResponse{
 							statusCode: res.StatusCode,
 							headers:    headers,
 							body:       bodyBytes,
 							expiresAt:  time.Now().Add(ttl),
+							vary:       varyHeader,
 						}
-						p.cache.Set(key, cr)
+						p.cache.Set(storageKey, cr)
 						res.Header.Set("X-PROXY-CACHE", "stored")
-						res.Header.Set("X-PROXY-CACHE-KEY", key)
+						res.Header.Set("X-PROXY-CACHE-KEY", storageKey)
 						p.incrementCacheMetric("store")
 						if !fromResponse {
 							res.Header.Set("Cache-Status", "llm-proxy; stored (forced)")
@@ -398,6 +408,13 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 				if !fromResponse {
 					headers.Set("Cache-Control", fmt.Sprintf("public, max-age=%d", int(ttl.Seconds())))
 				}
+				// Store the Vary header for per-response cache key generation
+				varyHeader := res.Header.Get("Vary")
+				// Use per-response Vary for storage key if Vary header is present
+				storageKey := key // Default to lookup key
+				if varyHeader != "" && varyHeader != "*" {
+					storageKey = cacheKeyFromRequestWithVary(req, varyHeader)
+				}
 				expiresAt := time.Now().Add(ttl)
 				orig := res.Body
 				res.Body = newStreamingCapture(orig, maxBytes, func(buf []byte) {
@@ -407,11 +424,12 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 					if int64(len(buf)) > maxBytes {
 						return
 					}
-					p.cache.Set(key, cachedResponse{
+					p.cache.Set(storageKey, cachedResponse{
 						statusCode: res.StatusCode,
 						headers:    headers,
 						body:       append([]byte(nil), buf...),
 						expiresAt:  expiresAt,
+						vary:       varyHeader,
 					})
 					p.incrementCacheMetric("store")
 				})
@@ -779,6 +797,21 @@ func (p *TransparentProxy) Handler() http.Handler {
 			}
 			key := cacheKeyFromRequest(r)
 			if cr, ok := p.cache.Get(key); ok {
+				// Validate Vary compatibility: if the cached response has a Vary header,
+				// check if this request would generate the same cache key
+				if cr.vary != "" && cr.vary != "*" {
+					// Generate key using the stored Vary header
+					varyKey := cacheKeyFromRequestWithVary(r, cr.vary)
+					if varyKey != key {
+						// This cached response is not valid for this request due to Vary mismatch
+						// Treat as cache miss
+						p.incrementCacheMetric("miss")
+						// Note: don't set miss status here; let modifyResponse handle cache status
+						p.proxy.ServeHTTP(rw, r)
+						return
+					}
+				}
+				
 				if !canServeCachedForRequest(r, cr.headers) {
 					// Authorization present but cached response not explicitly shared-cacheable
 					w.Header().Set("Cache-Status", "llm-proxy; bypass")

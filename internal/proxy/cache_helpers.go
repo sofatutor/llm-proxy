@@ -83,6 +83,101 @@ func cacheKeyFromRequest(r *http.Request) string {
 	return final.String()
 }
 
+// cacheKeyFromRequestWithVary generates a cache key using the specified Vary header
+// from the upstream response. This enables per-response driven cache key generation.
+func cacheKeyFromRequestWithVary(r *http.Request, vary string) string {
+	// Key: METHOD|PATH|sorted(query)
+	// Host/scheme are intentionally excluded to keep keys stable across proxy ↔ upstream phases.
+	b := strings.Builder{}
+	b.WriteString(r.Method)
+	b.WriteString("|")
+	b.WriteString(r.URL.Path)
+	b.WriteString("|")
+	// Sorted query to normalize key
+	keys := make([]string, 0, len(r.URL.Query()))
+	for k := range r.URL.Query() {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		vals := r.URL.Query()[k]
+		sort.Strings(vals)
+		b.WriteString(k)
+		b.WriteString("=")
+		b.WriteString(strings.Join(vals, ","))
+		b.WriteString("&")
+	}
+	raw := b.String()
+	sum := sha256.Sum256([]byte(raw))
+	baseKey := hex.EncodeToString(sum[:])
+
+	// Use per-response Vary header to determine which request headers to include
+	vb := strings.Builder{}
+	if vary != "" && vary != "*" {
+		varyHeaders := parseVaryHeader(vary)
+		sort.Strings(varyHeaders) // Sort to ensure consistent key generation
+		for _, hk := range varyHeaders {
+			if v := r.Header.Get(hk); v != "" {
+				vb.WriteString(strings.ToLower(hk))
+				vb.WriteString(":")
+				vb.WriteString(strings.TrimSpace(v))
+				vb.WriteString("|")
+			}
+		}
+	}
+	vraw := baseKey + vb.String()
+	vsum := sha256.Sum256([]byte(vraw))
+	varyKey := hex.EncodeToString(vsum[:])
+
+	final := strings.Builder{}
+	final.WriteString(varyKey)
+
+	// For methods with body, include X-Body-Hash when present (computed in proxy)
+	if r.Header.Get("X-Body-Hash") != "" {
+		final.WriteString("|body=")
+		final.WriteString(r.Header.Get("X-Body-Hash"))
+	}
+
+	// If client explicitly opts into shared caching with a TTL (public + max-age/s-maxage),
+	// include the requested TTL in the key so different TTLs do not collide with older entries.
+	// Only apply this for methods that can carry a body (POST/PUT/PATCH) to avoid splitting
+	// GET/HEAD cache keys unnecessarily when origin already provides TTLs.
+	if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch {
+		cc := parseCacheControl(r.Header.Get("Cache-Control"))
+		if cc.publicCache && (cc.sMaxAge > 0 || cc.maxAge > 0) {
+			final.WriteString("|ttl=")
+			if cc.sMaxAge > 0 {
+				final.WriteString("smax=")
+				final.WriteString(strconv.Itoa(cc.sMaxAge))
+			} else {
+				final.WriteString("max=")
+				final.WriteString(strconv.Itoa(cc.maxAge))
+			}
+		}
+	}
+
+	return final.String()
+}
+
+// parseVaryHeader parses a Vary header value and returns the list of header names.
+// It handles comma-separated values and normalizes header names.
+func parseVaryHeader(vary string) []string {
+	if vary == "" || vary == "*" {
+		return nil
+	}
+	
+	var headers []string
+	parts := strings.Split(vary, ",")
+	for _, part := range parts {
+		header := strings.TrimSpace(part)
+		if header != "" {
+			// Normalize to canonical header case for consistent lookup
+			headers = append(headers, textproto.CanonicalMIMEHeaderKey(header))
+		}
+	}
+	return headers
+}
+
 func isResponseCacheable(res *http.Response) bool {
 	if res == nil {
 		return false
@@ -321,4 +416,23 @@ func wantsRevalidation(r *http.Request) bool {
 		return true
 	}
 	return false
+}
+
+// smartCacheLookup attempts to find a cached response using multiple key generation strategies.
+// It tries per-response Vary first (for new entries), then falls back to conservative Vary (for compatibility).
+func smartCacheLookup(cache httpCache, r *http.Request) (cachedResponse, string, bool) {
+	if cache == nil {
+		return cachedResponse{}, "", false
+	}
+
+	// Strategy 1: Try the current conservative approach (for backward compatibility)
+	conservativeKey := cacheKeyFromRequest(r)
+	if cr, ok := cache.Get(conservativeKey); ok {
+		return cr, conservativeKey, true
+	}
+
+	// Strategy 2: Future enhancement - could try specific Vary combinations here
+	// For now, we'll rely on the conservative approach and new responses will use stored Vary
+	
+	return cachedResponse{}, "", false
 }
