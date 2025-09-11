@@ -293,7 +293,7 @@ func (s *Server) initializeAPIRoutes() error {
 
 	obsCfg := middleware.ObservabilityConfig{Enabled: s.config.ObservabilityEnabled, EventBus: s.eventBus}
 
-	proxyHandler, err := proxy.NewTransparentProxyWithLoggerAndObservability(*proxyConfig, cachedValidator, s.projectStore, s.logger, obsCfg)
+	proxyHandler, err := proxy.NewTransparentProxyWithAudit(*proxyConfig, cachedValidator, s.projectStore, s.logger, s.auditLogger, obsCfg)
 	if err != nil {
 		return fmt.Errorf("failed to initialize proxy: %w", err)
 	}
@@ -754,11 +754,10 @@ func (s *Server) handleBulkRevokeProjectTokens(w http.ResponseWriter, r *http.Re
 		s.logger.Error("project not found for bulk token revoke", zap.String("project_id", projectID), zap.Error(err), zap.String("request_id", requestID))
 
 		// Audit: bulk revoke failure - project not found
-		_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenRevoke, audit.ActorManagement, audit.ResultFailure, r, requestID).
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenRevokeBatch, audit.ActorManagement, audit.ResultFailure, r, requestID).
 			WithProjectID(projectID).
 			WithError(err).
-			WithDetail("error_type", "project not found").
-			WithDetail("operation", "bulk_revoke"))
+			WithDetail("error_type", "project not found"))
 
 		http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
 		return
@@ -770,11 +769,10 @@ func (s *Server) handleBulkRevokeProjectTokens(w http.ResponseWriter, r *http.Re
 		s.logger.Error("failed to get tokens for bulk revoke", zap.String("project_id", projectID), zap.Error(err), zap.String("request_id", requestID))
 
 		// Audit: bulk revoke failure - failed to get tokens
-		_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenRevoke, audit.ActorManagement, audit.ResultFailure, r, requestID).
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenRevokeBatch, audit.ActorManagement, audit.ResultFailure, r, requestID).
 			WithProjectID(projectID).
 			WithError(err).
-			WithDetail("error_type", "failed to get tokens").
-			WithDetail("operation", "bulk_revoke"))
+			WithDetail("error_type", "failed to get tokens"))
 
 		http.Error(w, `{"error":"failed to get project tokens"}`, http.StatusInternalServerError)
 		return
@@ -814,12 +812,11 @@ func (s *Server) handleBulkRevokeProjectTokens(w http.ResponseWriter, r *http.Re
 	)
 
 	// Audit: bulk revoke success
-	_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenRevoke, audit.ActorManagement, audit.ResultSuccess, r, requestID).
+	_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenRevokeBatch, audit.ActorManagement, audit.ResultSuccess, r, requestID).
 		WithProjectID(projectID).
 		WithRequestID(requestID).
 		WithHTTPMethod(r.Method).
 		WithEndpoint(r.URL.Path).
-		WithDetail("operation", "bulk_revoke").
 		WithDetail("total_tokens", len(tokens)).
 		WithDetail("revoked_count", revokedCount).
 		WithDetail("already_revoked_count", alreadyRevokedCount).

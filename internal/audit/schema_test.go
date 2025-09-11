@@ -258,17 +258,31 @@ func TestEvent_WithDuration(t *testing.T) {
 	assert.Equal(t, int64(150), result.Details["duration_ms"])
 }
 
+func TestEvent_WithReason(t *testing.T) {
+	event := NewEvent(ActionProxyRequest, ActorSystem, ResultDenied)
+	reason := "project_inactive"
+
+	result := event.WithReason(reason)
+
+	assert.Equal(t, reason, result.Details["reason"])
+	assert.Same(t, event, result) // Should return same instance for chaining
+}
+
 func TestResultTypeConstants(t *testing.T) {
 	assert.Equal(t, ResultType("success"), ResultSuccess)
 	assert.Equal(t, ResultType("failure"), ResultFailure)
+	assert.Equal(t, ResultType("denied"), ResultDenied)
+	assert.Equal(t, ResultType("error"), ResultError)
 }
 
 func TestActionConstants(t *testing.T) {
 	// Test a few key action constants
 	assert.Equal(t, "token.create", ActionTokenCreate)
 	assert.Equal(t, "token.validate", ActionTokenValidate)
+	assert.Equal(t, "token.revoke_batch", ActionTokenRevokeBatch)
 	assert.Equal(t, "project.create", ActionProjectCreate)
 	assert.Equal(t, "project.delete", ActionProjectDelete)
+	assert.Equal(t, "proxy_request", ActionProxyRequest)
 	assert.Equal(t, "admin.login", ActionAdminLogin)
 }
 

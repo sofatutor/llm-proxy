@@ -79,29 +79,11 @@
                     </table>
                 </div>
                 
-                {{ if gt .pagination.TotalPages 1 }}
-                <nav aria-label="Audit pagination" class="mt-3">
-                    <ul class="pagination justify-content-center">
-                        {{ if gt .pagination.Page 1 }}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ sub .pagination.Page 1 }}{{ if index $.filters "search" }}&search={{ index $.filters "search" }}{{ end }}">Previous</a>
-                        </li>
-                        {{ end }}
-
-                        {{ range seq 1 .pagination.TotalPages }}
-                        <li class="page-item {{ if eq . $.pagination.Page }}active{{ end }}">
-                            <a class="page-link" href="?page={{ . }}{{ if index $.filters "search" }}&search={{ index $.filters "search" }}{{ end }}">{{ . }}</a>
-                        </li>
-                        {{ end }}
-
-                        {{ if lt .pagination.Page .pagination.TotalPages }}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ add .pagination.Page 1 }}{{ if index $.filters "search" }}&search={{ index $.filters "search" }}{{ end }}">Next</a>
-                        </li>
-                        {{ end }}
-                    </ul>
-                </nav>
-                {{ end }}
+                {{/* Render pagination using partial */}}
+                {{ $searchParam := "" }}
+                {{ if index .filters "search" }}{{ $searchParam = printf "&search=%s" (index .filters "search") }}{{ end }}
+                {{ $paginationData := dict "pagination" .pagination "paginationLabel" "Audit pagination" "queryParams" $searchParam }}
+                {{ template "partials/pagination.html" $paginationData }}
             </div>
         </div>
     </div>

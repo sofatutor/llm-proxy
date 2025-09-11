@@ -76,7 +76,7 @@ func TestProjectActiveGuardMiddleware(t *testing.T) {
 			}
 
 			// Setup middleware
-			middleware := ProjectActiveGuardMiddleware(tt.enforceActive, mockChecker)
+			middleware := ProjectActiveGuardMiddleware(tt.enforceActive, mockChecker, nil) // Pass nil for audit logger in tests
 
 			// Setup handler that should be called if request is allowed
 			handlerCalled := false
@@ -119,7 +119,7 @@ func TestProjectActiveGuardMiddleware(t *testing.T) {
 
 func TestProjectActiveGuardMiddleware_MissingProjectID(t *testing.T) {
 	mockChecker := &MockProjectActiveChecker{}
-	middleware := ProjectActiveGuardMiddleware(true, mockChecker)
+	middleware := ProjectActiveGuardMiddleware(true, mockChecker, nil) // Pass nil for audit logger in tests
 
 	handlerCalled := false
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

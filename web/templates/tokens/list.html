@@ -149,29 +149,11 @@
                     </table>
                 </div>
                 
-                {{ if gt .pagination.TotalPages 1 }}
-                <nav aria-label="Tokens pagination" class="mt-3">
-                    <ul class="pagination justify-content-center">
-                        {{ if gt .pagination.Page 1 }}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ sub .pagination.Page 1 }}{{ if .projectId }}&project_id={{ .projectId }}{{ end }}">Previous</a>
-                        </li>
-                        {{ end }}
-
-                        {{ range seq 1 .pagination.TotalPages }}
-                        <li class="page-item {{ if eq . $.pagination.Page }}active{{ end }}">
-                            <a class="page-link" href="?page={{ . }}{{ if $.projectId }}&project_id={{ $.projectId }}{{ end }}">{{ . }}</a>
-                        </li>
-                        {{ end }}
-
-                        {{ if lt .pagination.Page .pagination.TotalPages }}
-                        <li class="page-item">
-                            <a class="page-link" href="?page={{ add .pagination.Page 1 }}{{ if .projectId }}&project_id={{ .projectId }}{{ end }}">Next</a>
-                        </li>
-                        {{ end }}
-                    </ul>
-                </nav>
-                {{ end }}
+                {{/* Render pagination using partial */}}
+                {{ $projectParam := "" }}
+                {{ if .projectId }}{{ $projectParam = printf "&project_id=%s" .projectId }}{{ end }}
+                {{ $paginationData := dict "pagination" .pagination "paginationLabel" "Tokens pagination" "queryParams" $projectParam }}
+                {{ template "partials/pagination.html" $paginationData }}
             </div>
         </div>
     </div>

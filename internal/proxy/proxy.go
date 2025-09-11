@@ -33,6 +33,7 @@ type TransparentProxy struct {
 	tokenValidator       TokenValidator
 	projectStore         ProjectStore
 	logger               *zap.Logger
+	auditLogger          AuditLogger
 	metrics              *ProxyMetrics
 	proxy                *httputil.ReverseProxy
 	httpServer           *http.Server
@@ -151,6 +152,16 @@ func NewTransparentProxyWithLoggerAndObservability(config ProxyConfig, validator
 		return nil, err
 	}
 	p.obsMiddleware = middleware.NewObservabilityMiddleware(obsCfg, logger)
+	return p, nil
+}
+
+// NewTransparentProxyWithAudit creates a proxy with audit logging capabilities.
+func NewTransparentProxyWithAudit(config ProxyConfig, validator TokenValidator, store ProjectStore, logger *zap.Logger, auditLogger AuditLogger, obsCfg middleware.ObservabilityConfig) (*TransparentProxy, error) {
+	p, err := NewTransparentProxyWithLoggerAndObservability(config, validator, store, logger, obsCfg)
+	if err != nil {
+		return nil, err
+	}
+	p.auditLogger = auditLogger
 	return p, nil
 }
 
@@ -654,7 +665,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
 
 		// Enforce project active status using shared helper (if enabled)
-		if allowed, status, er := shouldAllowProject(r.Context(), p.config.EnforceProjectActive, p.projectStore, projectID); !allowed {
+		if allowed, status, er := shouldAllowProject(r.Context(), p.config.EnforceProjectActive, p.projectStore, projectID, p.auditLogger, r); !allowed {
 			writeErrorResponse(w, status, er)
 			return
 		}

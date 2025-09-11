@@ -49,19 +49,26 @@ const (
 
 	// ResultFailure indicates the operation failed
 	ResultFailure ResultType = "failure"
+
+	// ResultDenied indicates the operation was denied (e.g., due to policy)
+	ResultDenied ResultType = "denied"
+
+	// ResultError indicates the operation encountered an error
+	ResultError ResultType = "error"
 )
 
 // Action constants for standardized audit event types
 const (
 	// Token lifecycle actions
-	ActionTokenCreate   = "token.create"
-	ActionTokenRead     = "token.read"
-	ActionTokenUpdate   = "token.update"
-	ActionTokenRevoke   = "token.revoke"
-	ActionTokenDelete   = "token.delete"
-	ActionTokenList     = "token.list"
-	ActionTokenValidate = "token.validate"
-	ActionTokenAccess   = "token.access"
+	ActionTokenCreate      = "token.create"
+	ActionTokenRead        = "token.read"
+	ActionTokenUpdate      = "token.update"
+	ActionTokenRevoke      = "token.revoke"
+	ActionTokenRevokeBatch = "token.revoke_batch"
+	ActionTokenDelete      = "token.delete"
+	ActionTokenList        = "token.list"
+	ActionTokenValidate    = "token.validate"
+	ActionTokenAccess      = "token.access"
 
 	// Project lifecycle actions
 	ActionProjectCreate = "project.create"
@@ -69,6 +76,9 @@ const (
 	ActionProjectUpdate = "project.update"
 	ActionProjectDelete = "project.delete"
 	ActionProjectList   = "project.list"
+
+	// Proxy request actions
+	ActionProxyRequest = "proxy_request"
 
 	// Admin actions
 	ActionAdminLogin  = "admin.login"
@@ -171,4 +181,9 @@ func (e *Event) WithEndpoint(endpoint string) *Event {
 // WithDuration adds the operation duration to the audit event details
 func (e *Event) WithDuration(duration time.Duration) *Event {
 	return e.WithDetail("duration_ms", duration.Milliseconds())
+}
+
+// WithReason adds a reason/description to the audit event details
+func (e *Event) WithReason(reason string) *Event {
+	return e.WithDetail("reason", reason)
 }
