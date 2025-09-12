@@ -401,6 +401,12 @@ llm-proxy manage cache purge \
   --management-token your-token
 ```
 
+**Responses:**
+- Exact purge: `{ "deleted": true|false }`
+- Prefix purge: `{ "deleted": <number_of_entries_deleted> }`
+
+Errors are returned with HTTP status and message. Use `--json` for machine-readable output.
+
 ---
 
 ### `llm-proxy dispatcher`

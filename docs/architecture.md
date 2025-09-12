@@ -164,13 +164,14 @@ flowchart LR
 
 4. **Cache Key Strategy**:
    - Includes HTTP method, path, and sorted query parameters
-   - Conservative `Vary` handling with subset of request headers (`Accept`, `Accept-Encoding`, `Accept-Language`)
+   - Per-response `Vary` handling: parse upstream `Vary` header and derive the exact key from only those request headers; when no `Vary` is present, fall back to a conservative subset (e.g., `Accept`, `Accept-Encoding`, `Accept-Language`)
    - Excludes `Authorization` and `X-*` headers from cache key
-   - For POST/PUT/PATCH requests, includes body hash when client opts in
+   - For POST/PUT/PATCH requests, includes body hash when client opts in via `Cache-Control`
 
 5. **Observability Integration**:
    - Cache hits bypass event bus publishing for performance
    - Cache misses and stores are published to event bus
+   - Lightweight counters track hits/misses/bypass/store for effectiveness insights
    - Response headers indicate cache status for debugging
 
 ### Configuration
@@ -183,6 +184,16 @@ Cache behavior is controlled through environment variables:
 - `REDIS_CACHE_KEY_PREFIX`: Key prefix for Redis keys (default: `llmproxy:cache:`)
 - `HTTP_CACHE_MAX_OBJECT_BYTES`: Maximum cached object size (default: 1048576)
 - `HTTP_CACHE_DEFAULT_TTL`: Default TTL when upstream doesn't specify (default: 300)
+
+### Operations: Purge Management
+
+Operational purging is available via a management endpoint and CLI:
+
+- Endpoint: `POST /manage/cache/purge` (requires `MANAGEMENT_TOKEN`)
+- Body: `{ "method": "GET", "url": "/v1/models", "prefix": "optional-prefix" }`
+- CLI: `llm-proxy manage cache purge --method GET --url "/v1/models" [--prefix "..."]`
+
+Audit logging records all purge operations.
 
 ## Async Event System Architecture
 

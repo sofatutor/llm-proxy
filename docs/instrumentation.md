@@ -275,6 +275,19 @@ When caching is enabled (`HTTP_CACHE_ENABLED=true`), the proxy adds observabilit
   - `stored`: Response was stored in cache after fetch
   - `conditional-hit`: Conditional request (e.g., `If-None-Match`) resulted in 304
 
+### Cache Metrics
+
+The proxy keeps lightweight, provider-agnostic counters to assess cache effectiveness:
+
+- `cache_hits_total`: Number of requests served from cache (including conditional hits)
+- `cache_misses_total`: Number of requests that missed the cache
+- `cache_bypass_total`: Number of requests where caching was bypassed (e.g., `no-store`)
+- `cache_store_total`: Number of responses stored in cache after upstream fetch
+
+Notes:
+- Counters are in-memory and surfaced via the existing metrics endpoint when enabled.
+- No external metrics provider is required; Prometheus export is optional and not a core dependency.
+
 ### Event Bus Behavior with Caching
 
 The caching system integrates with the instrumentation middleware to optimize performance:
