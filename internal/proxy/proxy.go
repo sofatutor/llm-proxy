@@ -812,7 +812,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 			allowedLookup := (r.Method == http.MethodGet || r.Method == http.MethodHead) || (r.Method == http.MethodPost && optIn)
 			if !allowedLookup {
 				// Cache is enabled but this request type/method is not cacheable - count as miss
-				p.incrementCacheMetric(CacheMetricMiss)
+				p.recordCacheMiss()
 				p.proxy.ServeHTTP(rw, r)
 				return
 			}
@@ -820,7 +820,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 			if cr, ok := p.cache.Get(key); ok {
 				// Validate Vary compatibility using helper
 				if !isVaryCompatible(r, cr, key) {
-					p.incrementCacheMetric(CacheMetricMiss)
+					p.recordCacheMiss()
 					// Note: don't set miss status here; let modifyResponse handle cache status
 					p.proxy.ServeHTTP(rw, r)
 					return
@@ -882,13 +882,13 @@ func (p *TransparentProxy) Handler() http.Handler {
 				return
 			}
 			// Cache miss - no entry found
-			p.incrementCacheMetric(CacheMetricMiss)
+			p.recordCacheMiss()
 			// Note: don't set miss status here; let modifyResponse handle cache status
 			// w.Header().Set("Cache-Status", "llm-proxy; miss")
 			// Do not set X-PROXY-CACHE(-KEY) on miss; only set definitive headers on hit/bypass/conditional-hit or store path
 		} else if p.cache != nil {
 			// Cache is enabled but method is not cacheable (e.g., DELETE, OPTIONS, etc.) - count as miss
-			p.incrementCacheMetric(CacheMetricMiss)
+			p.recordCacheMiss()
 		}
 
 		p.proxy.ServeHTTP(rw, r)
@@ -928,6 +928,12 @@ func (w *timingResponseWriter) Flush() {
 	if f, ok := w.ResponseWriter.(http.Flusher); ok {
 		f.Flush()
 	}
+}
+
+// recordCacheMiss centralizes cache miss accounting to reduce duplication and
+// ensure consistent metric semantics across all miss paths.
+func (p *TransparentProxy) recordCacheMiss() {
+	p.incrementCacheMetric(CacheMetricMiss)
 }
 
 func setTimingHeaders(res *http.Response, ctx context.Context) {

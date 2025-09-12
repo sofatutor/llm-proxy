@@ -15,6 +15,9 @@ type redisCache struct {
 	prefix string
 }
 
+// redisScanCount controls the SCAN batch size used when purging by prefix.
+// Larger values reduce round-trips but increase per-iteration workload.
+// This can be made configurable via environment or config if needed.
 const redisScanCount = 2048
 
 func newRedisCache(client *redis.Client, keyPrefix string) *redisCache {
