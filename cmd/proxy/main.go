@@ -853,7 +853,11 @@ func init() {
 			if err != nil {
 				return fmt.Errorf("failed to make request: %w", err)
 			}
-			defer resp.Body.Close()
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					log.Printf("Error closing response body: %v", err)
+				}
+			}()
 
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
