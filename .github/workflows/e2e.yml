@@ -49,9 +49,6 @@ jobs:
       
     - name: Run E2E tests
       run: npm run e2e:test
-      env:
-        # Generate a test management token for E2E tests
-        MANAGEMENT_TOKEN: "test-management-token-for-e2e-$(date +%s)"
         
     - name: Upload Playwright report
       uses: actions/upload-artifact@v4
