@@ -359,6 +359,48 @@ curl -X POST -H "Authorization: Bearer $MANAGEMENT_TOKEN" \
 ```
 ```
 
+#### Cache Management
+
+##### `llm-proxy manage cache purge`
+
+Purge cache entries by exact key (method + URL) or by prefix.
+
+**Usage:**
+```bash
+llm-proxy manage cache purge [flags]
+```
+
+**Flags:**
+- `--method string`: HTTP method (required)
+- `--url string`: URL path (required)  
+- `--prefix string`: Cache key prefix for bulk purge
+- `--api-base-url string`: Management API base URL (overrides env)
+- `--management-token string`: Management token (overrides env)
+- `--json`: Output as JSON
+
+**Examples:**
+```bash
+# Purge exact cache entry
+llm-proxy manage cache purge \
+  --method GET \
+  --url "/v1/models" \
+  --management-token your-token
+
+# Purge by prefix (bulk)
+llm-proxy manage cache purge \
+  --method GET \
+  --url "/v1/models" \
+  --prefix "models:" \
+  --management-token your-token
+
+# JSON output
+llm-proxy manage cache purge \
+  --method GET \
+  --url "/v1/models" \
+  --json \
+  --management-token your-token
+```
+
 ---
 
 ### `llm-proxy dispatcher`
