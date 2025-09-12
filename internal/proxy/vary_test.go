@@ -109,8 +109,8 @@ func TestVaryHandling_PerResponse(t *testing.T) {
 			}
 
 			// Generate cache keys using per-response Vary
-			key1 := cacheKeyFromRequestWithVary(req1, tt.varyHeader)
-			key2 := cacheKeyFromRequestWithVary(req2, tt.varyHeader)
+			key1 := CacheKeyFromRequestWithVary(req1, tt.varyHeader)
+			key2 := CacheKeyFromRequestWithVary(req2, tt.varyHeader)
 
 			if tt.expectSameKey {
 				assert.Equal(t, key1, key2, tt.description)
@@ -127,17 +127,17 @@ func TestVaryHandling_BackwardCompatibility(t *testing.T) {
 	req.Header.Set("Accept", "application/json")
 
 	// Old key generation (conservative approach)
-	oldKey := cacheKeyFromRequest(req)
+	oldKey := CacheKeyFromRequest(req)
 
 	// New key generation with empty Vary (backward compatibility)
-	newKey := cacheKeyFromRequestWithVary(req, "")
+	newKey := CacheKeyFromRequestWithVary(req, "")
 
 	// Keys should be different because the conservative approach includes Accept
 	// but empty Vary should not include any headers
 	assert.NotEqual(t, oldKey, newKey, "Old and new key generation should produce different keys")
 
 	// However, when no Vary is specified, the new approach should be consistent
-	newKey2 := cacheKeyFromRequestWithVary(req, "")
+	newKey2 := CacheKeyFromRequestWithVary(req, "")
 	assert.Equal(t, newKey, newKey2, "New key generation should be consistent for empty Vary")
 }
 
@@ -195,7 +195,7 @@ func TestVaryHandling_CacheValidation(t *testing.T) {
 	req := httptest.NewRequest("GET", "/v1/models", nil)
 	req.Header.Set("Accept", "application/json")
 
-	key := cacheKeyFromRequestWithVary(req, "Accept")
+	key := CacheKeyFromRequestWithVary(req, "Accept")
 	t.Logf("Storage key: %s", key)
 	cr := cachedResponse{
 		statusCode: 200,
@@ -209,7 +209,7 @@ func TestVaryHandling_CacheValidation(t *testing.T) {
 	// Test 1: Same Accept header should hit
 	req1 := httptest.NewRequest("GET", "/v1/models", nil)
 	req1.Header.Set("Accept", "application/json")
-	key1 := cacheKeyFromRequestWithVary(req1, "Accept")
+	key1 := CacheKeyFromRequestWithVary(req1, "Accept")
 	t.Logf("Lookup key: %s", key1)
 	if cached, ok := cache.Get(key1); ok {
 		assert.Equal(t, "Accept", cached.vary)
@@ -221,7 +221,7 @@ func TestVaryHandling_CacheValidation(t *testing.T) {
 	// Test 2: Different Accept header should miss
 	req2 := httptest.NewRequest("GET", "/v1/models", nil)
 	req2.Header.Set("Accept", "text/plain")
-	key2 := cacheKeyFromRequestWithVary(req2, "Accept")
+	key2 := CacheKeyFromRequestWithVary(req2, "Accept")
 	t.Logf("Different Accept key: %s", key2)
 	if _, ok := cache.Get(key2); ok {
 		t.Error("Expected cache miss for different Accept header")

@@ -54,6 +54,14 @@ When reviewing PRs, Copilot should:
 - Tests (unit + coverage): `make test-coverage-ci`
 - Format: `make fmt` or `gofmt -w -s .`
 
+## Mandatory Pre-commit Checks
+- Build: `make build` must succeed locally
+- Lint: `make lint` must return 0
+- Tests: `make test` must pass and `make test-coverage-ci` must show ≥ 90% total coverage
+- Formatting: `gofmt -l .` must print nothing (run `make fmt` if needed)
+
+Copilot should treat these as required before suggesting a commit is ready and call out any missing step in reviews.
+
 ## Documentation Updates
 - Update `docs/` and issue docs under `docs/issues/` when behavior changes.
 - Keep `PLAN.md` and `WIP.md` consistent with notable architectural changes.

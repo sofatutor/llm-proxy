@@ -81,13 +81,21 @@ func (p *TransparentProxy) SetMetrics(m *ProxyMetrics) {
 	p.metrics = m
 }
 
+// Cache returns the HTTP cache instance for management operations.
+// Returns nil if caching is disabled.
+func (p *TransparentProxy) Cache() httpCache {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.cache
+}
+
 // isVaryCompatible reports whether a cached response with a given Vary header
 // is valid for the current request and lookup key.
 func isVaryCompatible(r *http.Request, cr cachedResponse, lookupKey string) bool {
 	if cr.vary == "" || cr.vary == "*" {
 		return true
 	}
-	varyKey := cacheKeyFromRequestWithVary(r, cr.vary)
+	varyKey := CacheKeyFromRequestWithVary(r, cr.vary)
 	return varyKey == lookupKey
 }
 
@@ -95,7 +103,7 @@ func isVaryCompatible(r *http.Request, cr cachedResponse, lookupKey string) bool
 // based on the upstream Vary header. Falls back to the lookup key when Vary is empty or '*'.
 func storageKeyForResponse(r *http.Request, varyHeader string, lookupKey string) string {
 	if varyHeader != "" && varyHeader != "*" {
-		return cacheKeyFromRequestWithVary(r, varyHeader)
+		return CacheKeyFromRequestWithVary(r, varyHeader)
 	}
 	return lookupKey
 }
@@ -385,7 +393,7 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 				res.Header.Set("Cache-Status", "llm-proxy; miss")
 			}
 
-			key := cacheKeyFromRequest(req)
+			key := CacheKeyFromRequest(req)
 			// Compute storage key via helper to respect Vary
 			storageKey := storageKeyForResponse(req, res.Header.Get("Vary"), key)
 
@@ -816,7 +824,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 				p.proxy.ServeHTTP(rw, r)
 				return
 			}
-			key := cacheKeyFromRequest(r)
+			key := CacheKeyFromRequest(r)
 			if cr, ok := p.cache.Get(key); ok {
 				// Validate Vary compatibility using helper
 				if !isVaryCompatible(r, cr, key) {

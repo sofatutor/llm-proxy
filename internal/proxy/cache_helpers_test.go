@@ -65,11 +65,11 @@ func TestCacheTTLFromHeaders(t *testing.T) {
 func TestCacheKeyFromRequest_VaryAndBodyHash(t *testing.T) {
 	// Base GET request
 	r1 := &http.Request{Method: http.MethodGet, Header: http.Header{}, URL: &url.URL{Path: "/v1/x", RawQuery: "b=2&a=1"}}
-	k1 := cacheKeyFromRequest(r1)
+	k1 := CacheKeyFromRequest(r1)
 
 	// Different Accept should change key
 	r2 := &http.Request{Method: http.MethodGet, Header: http.Header{"Accept": {"text/plain"}}, URL: &url.URL{Path: "/v1/x", RawQuery: "a=1&b=2"}}
-	k2 := cacheKeyFromRequest(r2)
+	k2 := CacheKeyFromRequest(r2)
 	if k1 == k2 {
 		t.Fatalf("expected vary Accept to change key")
 	}
@@ -77,14 +77,14 @@ func TestCacheKeyFromRequest_VaryAndBodyHash(t *testing.T) {
 	// POST with body hash should change key vs without
 	r3 := &http.Request{Method: http.MethodPost, Header: http.Header{"X-Body-Hash": {"abc123"}}, URL: &url.URL{Path: "/v1/x"}}
 	r4 := &http.Request{Method: http.MethodPost, Header: http.Header{}, URL: &url.URL{Path: "/v1/x"}}
-	if cacheKeyFromRequest(r3) == cacheKeyFromRequest(r4) {
+	if CacheKeyFromRequest(r3) == CacheKeyFromRequest(r4) {
 		t.Fatalf("expected X-Body-Hash to affect key")
 	}
 
 	// Client-forced TTL on POST adds a ttl component so different TTLs do not collide
 	r5 := &http.Request{Method: http.MethodPost, Header: http.Header{"Cache-Control": {"public, max-age=60"}}, URL: &url.URL{Path: "/v1/x"}}
 	r6 := &http.Request{Method: http.MethodPost, Header: http.Header{"Cache-Control": {"public, max-age=10"}}, URL: &url.URL{Path: "/v1/x"}}
-	if cacheKeyFromRequest(r5) == cacheKeyFromRequest(r6) {
+	if CacheKeyFromRequest(r5) == CacheKeyFromRequest(r6) {
 		t.Fatalf("expected cache-forced TTL to influence key for POST")
 	}
 }
