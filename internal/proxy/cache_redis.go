@@ -18,24 +18,18 @@ type redisCache struct {
 	scanCount int
 }
 
-// redisScanCount controls the SCAN batch size used when purging by prefix.
-// Larger values reduce round-trips but increase per-iteration workload.
-// It can be configured via REDIS_SCAN_COUNT env var; defaults to 2048 when unset/invalid.
-var redisScanCount = func() int {
-	const defaultScan = 2048
-	if v := os.Getenv("REDIS_SCAN_COUNT"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			return n
-		}
-	}
-	return defaultScan
-}()
-
 func newRedisCache(client *redis.Client, keyPrefix string) *redisCache {
 	if keyPrefix == "" {
 		keyPrefix = "llmproxy:cache:"
 	}
-	return &redisCache{client: client, prefix: keyPrefix, scanCount: redisScanCount}
+	// Determine SCAN batch size from env (default 2048)
+	scan := 2048
+	if v := os.Getenv("REDIS_SCAN_COUNT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			scan = n
+		}
+	}
+	return &redisCache{client: client, prefix: keyPrefix, scanCount: scan}
 }
 
 type redisCachedResponse struct {
