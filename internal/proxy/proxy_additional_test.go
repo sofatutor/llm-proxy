@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"go.uber.org/zap"
@@ -50,6 +51,23 @@ type memoryCache struct{ m map[string]cachedResponse }
 func newMemoryCache() *memoryCache                           { return &memoryCache{m: map[string]cachedResponse{}} }
 func (m *memoryCache) Get(key string) (cachedResponse, bool) { v, ok := m.m[key]; return v, ok }
 func (m *memoryCache) Set(key string, value cachedResponse)  { m.m[key] = value }
+func (m *memoryCache) Purge(key string) bool {
+	if _, ok := m.m[key]; ok {
+		delete(m.m, key)
+		return true
+	}
+	return false
+}
+func (m *memoryCache) PurgePrefix(prefix string) int {
+	count := 0
+	for k := range m.m {
+		if strings.HasPrefix(k, prefix) {
+			delete(m.m, k)
+			count++
+		}
+	}
+	return count
+}
 
 // guard: test that streaming response returns early
 func TestModifyResponse_StreamingEarlyReturn(t *testing.T) {

@@ -9,7 +9,7 @@ Implement resource usage monitoring and provide Grafana dashboard templates for 
 flowchart TD
     Start([Proxy Running])
     Collect["Collect Resource Metrics (CPU, Memory, etc.)"]
-    Export["Export Metrics (Prometheus, etc.)"]
+    Export["Export Metrics (optional: Prometheus, etc.)"]
     Grafana["Grafana Dashboard"]
     Alert["Set Up Alerts"]
     End([Operational Visibility])

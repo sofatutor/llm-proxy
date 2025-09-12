@@ -1,6 +1,8 @@
 /**
  * Seeding fixture for creating test data via the Management API
  */
+const env = (((globalThis as any).process && (globalThis as any).process.env) || {}) as Record<string, string | undefined>;
+
 export class SeedFixture {
   private readonly baseUrl: string;
   private readonly managementToken: string;
@@ -8,10 +10,16 @@ export class SeedFixture {
   private readonly createdTokens: string[] = [];
 
   constructor(baseUrl: string, managementToken: string) {
-    // Prefer explicit Management API base URL from env; fallback to provided baseUrl
-    // If baseUrl looks like the Admin UI default (:8099), map to API default (:8080)
-    const envMgmt = process.env.MGMT_BASE_URL || process.env.MANAGE_API_BASE_URL;
-    this.baseUrl = envMgmt || baseUrl.replace(':8099', ':8080') || 'http://localhost:8080';
+    // Require explicit Management API base URL; do not fall back silently
+    const envMgmt = env.MGMT_BASE_URL || env.MANAGE_API_BASE_URL;
+    if (!envMgmt || typeof envMgmt !== 'string' || envMgmt.length === 0) {
+      throw new Error('MGMT_BASE_URL is required for seeding and was not provided');
+    }
+    this.baseUrl = envMgmt as string;
+
+    if (!managementToken || managementToken.length === 0) {
+      throw new Error('MANAGEMENT_TOKEN is required for seeding and was not provided');
+    }
     this.managementToken = managementToken;
   }
 

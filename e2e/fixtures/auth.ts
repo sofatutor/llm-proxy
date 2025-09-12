@@ -16,8 +16,11 @@ export class AuthFixture {
     // Fill in the management token
     await this.page.fill('#management_token', managementToken);
 
-    // Submit the login form
-    await this.page.click('button[type="submit"]');
+    // Submit the login form and wait for navigation
+    await Promise.all([
+      this.page.waitForResponse(resp => resp.url().includes('/auth/login') && resp.request().method() === 'POST'),
+      this.page.click('button[type="submit"]')
+    ]);
 
     // Wait for redirect to dashboard
     await this.page.waitForURL('/dashboard', { timeout: 10000 });

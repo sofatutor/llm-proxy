@@ -93,8 +93,55 @@ func TestMetricsEndpoint(t *testing.T) {
 	server, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
 	require.NoError(t, err)
 	p := &proxy.TransparentProxy{}
-	p.SetMetrics(&proxy.ProxyMetrics{RequestCount: 2, ErrorCount: 1})
+	p.SetMetrics(&proxy.ProxyMetrics{
+		RequestCount: 2,
+		ErrorCount:   1,
+		CacheHits:    3,
+		CacheMisses:  4,
+		CacheBypass:  5,
+		CacheStores:  6,
+	})
 	server.proxy = p
+
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	rr := httptest.NewRecorder()
+	server.handleMetrics(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, rr.Code)
+	}
+	var resp struct {
+		UptimeSeconds float64 `json:"uptime_seconds"`
+		RequestCount  int64   `json:"request_count"`
+		ErrorCount    int64   `json:"error_count"`
+		CacheHits     int64   `json:"cache_hits"`
+		CacheMisses   int64   `json:"cache_misses"`
+		CacheBypass   int64   `json:"cache_bypass"`
+		CacheStores   int64   `json:"cache_stores"`
+	}
+	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
+	if resp.RequestCount != 2 || resp.ErrorCount != 1 {
+		t.Errorf("unexpected metrics values: %+v", resp)
+	}
+	if resp.UptimeSeconds <= 0 {
+		t.Errorf("expected positive uptime, got %f", resp.UptimeSeconds)
+	}
+	if resp.CacheHits != 3 || resp.CacheMisses != 4 || resp.CacheBypass != 5 || resp.CacheStores != 6 {
+		t.Errorf("unexpected cache metrics: hits=%d misses=%d bypass=%d stores=%d", resp.CacheHits, resp.CacheMisses, resp.CacheBypass, resp.CacheStores)
+	}
+}
+
+func TestMetricsEndpoint_NoProxy(t *testing.T) {
+	cfg := &config.Config{
+		ListenAddr:      ":8080",
+		RequestTimeout:  30 * time.Second,
+		EnableMetrics:   true,
+		MetricsPath:     "/metrics",
+		EventBusBackend: "in-memory",
+	}
+	server, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	// Ensure proxy is nil to hit the no-proxy branch
+	server.proxy = nil
 
 	req := httptest.NewRequest("GET", "/metrics", nil)
 	rr := httptest.NewRecorder()
@@ -108,8 +155,8 @@ func TestMetricsEndpoint(t *testing.T) {
 		ErrorCount    int64   `json:"error_count"`
 	}
 	require.NoError(t, json.NewDecoder(rr.Body).Decode(&resp))
-	if resp.RequestCount != 2 || resp.ErrorCount != 1 {
-		t.Errorf("unexpected metrics values: %+v", resp)
+	if resp.RequestCount != 0 || resp.ErrorCount != 0 {
+		t.Errorf("unexpected non-zero metrics without proxy: %+v", resp)
 	}
 	if resp.UptimeSeconds <= 0 {
 		t.Errorf("expected positive uptime, got %f", resp.UptimeSeconds)
@@ -911,7 +958,10 @@ func TestHandleMetrics_EncodeError(t *testing.T) {
 
 	// Ensure some proxy metrics to exercise data path
 	p := &proxy.TransparentProxy{}
-	p.SetMetrics(&proxy.ProxyMetrics{RequestCount: 10, ErrorCount: 2})
+	p.SetMetrics(&proxy.ProxyMetrics{
+		RequestCount: 10,
+		ErrorCount:   2,
+	})
 	srv.proxy = p
 
 	r := httptest.NewRequest(http.MethodGet, "/metrics", nil)

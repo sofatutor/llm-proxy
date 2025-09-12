@@ -44,17 +44,25 @@ test.describe('Projects Management', () => {
   });
 
   test('should toggle project status', async ({ page }) => {
-    await page.goto(`/projects/${projectId}/edit`);
+    // Ensure we are authenticated before navigating to the edit page
+    const authFixture = new AuthFixture(page);
+    await authFixture.navigateAuthenticated(`/projects/${projectId}/edit`, MANAGEMENT_TOKEN);
     
-    // Toggle the is_active switch
+    // Toggle the is_active switch (ensure it is ON)
     const activeSwitch = page.locator('#is_active');
     await activeSwitch.check();
-    
-    // Submit the form
-    await page.click('button[type="submit"]');
-    
-    // Should redirect back to project show page (or, in rare cases, login)
-    await expect(page).toHaveURL(new RegExp(`/projects/${projectId}(?:/.*)?$|/auth/login$`));
+
+    // Submit the form (be specific to the update button)
+    await page.click('button:has-text("Update Project")');
+
+    // Must redirect back to the project show page (never accept login)
+    await expect(page).not.toHaveURL(/\/auth\/login$/);
+    await page.waitForURL(new RegExp(`/projects/${projectId}$`));
+
+    await expect(page.getByText('Status:')).toBeVisible();
+    await expect(page.locator('.badge.bg-success')).toContainText('Active');
+    // And the Quick Action button should allow generating tokens
+    await expect(page.locator('a.btn.btn-success:has-text("Generate Token")').first()).toBeVisible();
   });
 
   test('should bulk revoke project tokens', async ({ page }) => {
@@ -148,8 +156,8 @@ test.describe('Projects Management', () => {
     await page.fill('#name', 'Updated Project Name');
     await page.click('button:has-text("Update Project")');
     
-    // Should redirect on success
-    await expect(page).toHaveURL(new RegExp(`/projects/${projectId}(?:/.*)?$|/auth/login$`));
+    // Must redirect to the show page on success
+    await expect(page).toHaveURL(new RegExp(`^.*/projects/${projectId}$`));
   });
 
   test('should handle API key format validation in edit form', async ({ page }) => {
@@ -160,8 +168,8 @@ test.describe('Projects Management', () => {
     await page.fill('#openai_api_key', 'sk-test-valid-key');
     await page.click('button:has-text("Update Project")');
     
-    // Should redirect or stay on page
-    await expect(page).toHaveURL(new RegExp(`/projects/${projectId}|/auth/login`));
+    // Should redirect to the project page
+    await expect(page).toHaveURL(new RegExp(`^.*/projects/${projectId}$`));
   });
 
   test('should show form loading/submission states', async ({ page }) => {

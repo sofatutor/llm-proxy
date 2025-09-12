@@ -17,7 +17,7 @@ A transparent, secure proxy for OpenAI's API with token management, rate limitin
 - **Async Instrumentation Middleware**: Non-blocking, streaming-capable instrumentation for all API calls. See [docs/instrumentation.md](docs/instrumentation.md) for advanced usage and extension.
 - **Async Event Bus & Dispatcher**: All API instrumentation events are handled via an always-on, fully asynchronous event bus (in-memory or Redis) with support for multiple subscribers, batching, retry logic, and graceful shutdown. Persistent event logging is handled by a dispatcher CLI or the `--file-event-log` flag.
 - **OpenAI Token Counting**: Accurate prompt and completion token counting using tiktoken-go.
-- **Prometheus Monitoring**
+- **Metrics Endpoint (provider-agnostic)**: Optional JSON metrics endpoint; Prometheus scraping/export is optional and not required by core features
 - **SQLite Storage**
 - **Docker Deployment**
 

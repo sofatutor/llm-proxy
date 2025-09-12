@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Unified env accessor to avoid repetition and keep compatibility
+const env = (((globalThis as any).process && (globalThis as any).process.env) || {}) as Record<string, string | undefined>;
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -8,22 +11,31 @@ export default defineConfig({
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
-  forbidOnly: !!process.env.CI,
+  forbidOnly: !!env.CI,
   /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
+  retries: (env.CI ? 2 : 0) as number,
   /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
+  workers: (env.CI ? 1 : undefined) as number | undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: [
     ['html'],
     ['line'],
-    process.env.CI ? ['github'] : null
-  ].filter(Boolean),
+    ...((env.CI ? [['github']] : []) as any[])
+  ],
   
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: process.env.ADMIN_BASE_URL || `http://localhost:${process.env.ADMIN_PORT || '8099'}`,
+    // Use explicit E2E admin URL; wrapper starts admin on 8099
+    baseURL: 'http://localhost:8099',
+    // Ensure tests themselves use the same management token and base URL as the spawned servers
+    // @ts-expect-error Playwright supports use.env at runtime; typing may lag
+    env: {
+      // Keep token consistent with wrapper default
+      MANAGEMENT_TOKEN: (env.MANAGEMENT_TOKEN || 'e2e-management-token') as string,
+      ADMIN_BASE_URL: 'http://localhost:8099' as string,
+      MGMT_BASE_URL: 'http://localhost:8098' as string,
+    },
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -58,9 +70,12 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: 'npm run start:e2e',
-    url: process.env.ADMIN_BASE_URL || `http://localhost:${process.env.ADMIN_PORT || '8099'}`,
-    reuseExistingServer: !process.env.CI,
+    // Force a known MANAGEMENT_TOKEN for both Admin UI and Management API during E2E
+    // to avoid mismatches with developer local .env
+    command: `MANAGEMENT_TOKEN=${env.MANAGEMENT_TOKEN || 'e2e-management-token'} npm run start:e2e`,
+    url: 'http://localhost:8099' as string,
+    // Always start fresh to avoid reusing a stray dev server
+    reuseExistingServer: false,
     timeout: 30000,
     stdout: 'pipe',
     stderr: 'pipe',

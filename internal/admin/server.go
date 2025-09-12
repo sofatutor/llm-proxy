@@ -471,8 +471,8 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 		return
 	}
 
-	// Checkbox handling: check if the posted value is "true"
-	isActive := c.PostForm("is_active") == "true"
+	// Checkbox handling via helper for clarity and reuse
+	isActive := parseBoolFormField(c, "is_active")
 	isActivePtr := &isActive
 
 	ctx := context.WithValue(c.Request.Context(), ctxKeyForwardedUA, c.Request.UserAgent())
@@ -521,6 +521,16 @@ func (s *Server) handleProjectsPostOverride(c *gin.Context) {
 		})
 		return
 	}
+}
+
+// parseBoolFormField returns the boolean value of a form field that may submit
+// both a hidden "false" and a checkbox "true". The last value wins.
+func parseBoolFormField(c *gin.Context, name string) bool {
+	vals := c.PostFormArray(name)
+	if len(vals) == 0 {
+		return false
+	}
+	return strings.EqualFold(vals[len(vals)-1], "true")
 }
 
 func (s *Server) handleProjectsDelete(c *gin.Context) {
