@@ -11,8 +11,13 @@ import (
 	"time"
 )
 
-func cacheKeyFromRequest(r *http.Request) string {
-	// Key: METHOD|PATH|sorted(query)
+// generateCacheKey builds a cache key from method, path, query and an optional
+// ordered list of header names to include. When headersToInclude is nil or empty,
+// no header values are incorporated. For methods carrying a body (POST/PUT/PATCH)
+// this function also incorporates X-Body-Hash and an optional TTL derived from
+// Cache-Control (public, max-age/s-maxage) to avoid collisions across different TTLs.
+func generateCacheKey(r *http.Request, headersToInclude []string) string {
+	// Key base: METHOD|PATH|sorted(query)
 	// Host/scheme are intentionally excluded to keep keys stable across proxy ↔ upstream phases.
 	b := strings.Builder{}
 	b.WriteString(r.Method)
@@ -37,91 +42,10 @@ func cacheKeyFromRequest(r *http.Request) string {
 	sum := sha256.Sum256([]byte(raw))
 	baseKey := hex.EncodeToString(sum[:])
 
-	// Include a conservative Vary subset from request headers to avoid mismatched reps
-	// Pragmatic approach until per-response Vary handling is added.
-	varyHeaders := []string{"Accept", "Accept-Encoding", "Accept-Language"}
+	// Include selected request header values (normalized) deterministically
 	vb := strings.Builder{}
-	for _, hk := range varyHeaders {
-		if v := r.Header.Get(hk); v != "" {
-			vb.WriteString(strings.ToLower(hk))
-			vb.WriteString(":")
-			vb.WriteString(strings.TrimSpace(v))
-			vb.WriteString("|")
-		}
-	}
-	vraw := baseKey + vb.String()
-	vsum := sha256.Sum256([]byte(vraw))
-	varyKey := hex.EncodeToString(vsum[:])
-
-	final := strings.Builder{}
-	final.WriteString(varyKey)
-
-	// For methods with body, include X-Body-Hash when present (computed in proxy)
-	if r.Header.Get("X-Body-Hash") != "" {
-		final.WriteString("|body=")
-		final.WriteString(r.Header.Get("X-Body-Hash"))
-	}
-
-	// If client explicitly opts into shared caching with a TTL (public + max-age/s-maxage),
-	// include the requested TTL in the key so different TTLs do not collide with older entries.
-	// Only apply this for methods that can carry a body (POST/PUT/PATCH) to avoid splitting
-	// GET/HEAD cache keys unnecessarily when origin already provides TTLs.
-	if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch {
-		cc := parseCacheControl(r.Header.Get("Cache-Control"))
-		if cc.publicCache && (cc.sMaxAge > 0 || cc.maxAge > 0) {
-			final.WriteString("|ttl=")
-			if cc.sMaxAge > 0 {
-				final.WriteString("smax=")
-				final.WriteString(strconv.Itoa(cc.sMaxAge))
-			} else {
-				final.WriteString("max=")
-				final.WriteString(strconv.Itoa(cc.maxAge))
-			}
-		}
-	}
-
-	return final.String()
-}
-
-// cacheKeyFromRequestWithVary generates a cache key using the specified Vary header
-// from the upstream response. This enables per-response driven cache key generation.
-//
-// Behavior:
-//   - When vary is empty or "*", this function returns a key that ignores header values
-//     (treated as "no vary" for key generation purposes).
-//   - Header names parsed from vary are normalized to canonical MIME header names.
-func cacheKeyFromRequestWithVary(r *http.Request, vary string) string {
-	// Key: METHOD|PATH|sorted(query)
-	// Host/scheme are intentionally excluded to keep keys stable across proxy ↔ upstream phases.
-	b := strings.Builder{}
-	b.WriteString(r.Method)
-	b.WriteString("|")
-	b.WriteString(r.URL.Path)
-	b.WriteString("|")
-	// Sorted query to normalize key
-	keys := make([]string, 0, len(r.URL.Query()))
-	for k := range r.URL.Query() {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		vals := r.URL.Query()[k]
-		sort.Strings(vals)
-		b.WriteString(k)
-		b.WriteString("=")
-		b.WriteString(strings.Join(vals, ","))
-		b.WriteString("&")
-	}
-	raw := b.String()
-	sum := sha256.Sum256([]byte(raw))
-	baseKey := hex.EncodeToString(sum[:])
-
-	// Use per-response Vary header to determine which request headers to include
-	vb := strings.Builder{}
-	if vary != "" && vary != "*" {
-		varyHeaders := parseVaryHeader(vary)
-		sort.Strings(varyHeaders) // Sort to ensure consistent key generation
-		for _, hk := range varyHeaders {
+	if len(headersToInclude) > 0 {
+		for _, hk := range headersToInclude {
 			if v := r.Header.Get(hk); v != "" {
 				vb.WriteString(strings.ToLower(hk))
 				vb.WriteString(":")
@@ -162,6 +86,27 @@ func cacheKeyFromRequestWithVary(r *http.Request, vary string) string {
 	}
 
 	return final.String()
+}
+
+func cacheKeyFromRequest(r *http.Request) string {
+	// Conservative subset until per-response Vary handling is applied by caller
+	return generateCacheKey(r, []string{"Accept", "Accept-Encoding", "Accept-Language"})
+}
+
+// cacheKeyFromRequestWithVary generates a cache key using the specified Vary header
+// from the upstream response. This enables per-response driven cache key generation.
+//
+// Behavior:
+//   - When vary is empty or "*", this function returns a key that ignores header values
+//     (treated as "no vary" for key generation purposes).
+//   - Header names parsed from vary are normalized to canonical MIME header names.
+func cacheKeyFromRequestWithVary(r *http.Request, vary string) string {
+	var headers []string
+	if vary != "" && vary != "*" {
+		headers = parseVaryHeader(vary)
+		sort.Strings(headers) // ensure consistent ordering
+	}
+	return generateCacheKey(r, headers)
 }
 
 // parseVaryHeader parses a Vary header value and returns the list of header names.

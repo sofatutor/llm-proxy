@@ -13,8 +13,9 @@ import (
 // redisCache implements httpCache using Redis.
 // It stores cachedResponse as JSON and uses Redis TTL for expiration.
 type redisCache struct {
-	client *redis.Client
-	prefix string
+	client    *redis.Client
+	prefix    string
+	scanCount int
 }
 
 // redisScanCount controls the SCAN batch size used when purging by prefix.
@@ -34,7 +35,7 @@ func newRedisCache(client *redis.Client, keyPrefix string) *redisCache {
 	if keyPrefix == "" {
 		keyPrefix = "llmproxy:cache:"
 	}
-	return &redisCache{client: client, prefix: keyPrefix}
+	return &redisCache{client: client, prefix: keyPrefix, scanCount: redisScanCount}
 }
 
 type redisCachedResponse struct {
@@ -100,7 +101,7 @@ func (r *redisCache) PurgePrefix(prefix string) int {
 	var cursor uint64
 	total := 0
 	for {
-		keys, next, err := r.client.Scan(ctx, cursor, fullPrefix+"*", int64(redisScanCount)).Result()
+		keys, next, err := r.client.Scan(ctx, cursor, fullPrefix+"*", int64(r.scanCount)).Result()
 		if err != nil {
 			// Abort on scan error to avoid infinite loop; return what we deleted so far
 			return total
