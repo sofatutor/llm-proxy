@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -224,23 +223,23 @@ func createTestServerWithRealProxy(t *testing.T) *Server {
 
 	// Create a real proxy with caching enabled
 	proxyConfig := proxy.ProxyConfig{
-		TargetBaseURL:       "https://api.openai.com",
-		AllowedEndpoints:    []string{"/v1/models"},
-		AllowedMethods:      []string{"GET", "POST"},
-		RequestTimeout:      30 * time.Second,
+		TargetBaseURL:         "https://api.openai.com",
+		AllowedEndpoints:      []string{"/v1/models"},
+		AllowedMethods:        []string{"GET", "POST"},
+		RequestTimeout:        30 * time.Second,
 		ResponseHeaderTimeout: 10 * time.Second,
-		FlushInterval:       100 * time.Millisecond,
-		MaxIdleConns:        10,
-		MaxIdleConnsPerHost: 5,
-		IdleConnTimeout:     30 * time.Second,
-		HTTPCacheEnabled:    true, // Enable caching
-		HTTPCacheDefaultTTL: 300 * time.Second,
+		FlushInterval:         100 * time.Millisecond,
+		MaxIdleConns:          10,
+		MaxIdleConnsPerHost:   5,
+		IdleConnTimeout:       30 * time.Second,
+		HTTPCacheEnabled:      true, // Enable caching
+		HTTPCacheDefaultTTL:   300 * time.Second,
 	}
 
 	tokenStore := &mockTokenStore{}
 	projectStore := &mockProjectStore{}
 
-	transparentProxy, err := proxy.NewTransparentProxyWithLogger(proxyConfig, 
+	transparentProxy, err := proxy.NewTransparentProxyWithLogger(proxyConfig,
 		token.NewValidator(tokenStore), projectStore, zap.NewNop())
 	if err != nil {
 		t.Fatalf("failed to create proxy: %v", err)
@@ -266,22 +265,22 @@ func createTestServerWithCacheDisabled(t *testing.T) *Server {
 
 	// Create a proxy with caching disabled
 	proxyConfig := proxy.ProxyConfig{
-		TargetBaseURL:       "https://api.openai.com",
-		AllowedEndpoints:    []string{"/v1/models"},
-		AllowedMethods:      []string{"GET", "POST"},
-		RequestTimeout:      30 * time.Second,
+		TargetBaseURL:         "https://api.openai.com",
+		AllowedEndpoints:      []string{"/v1/models"},
+		AllowedMethods:        []string{"GET", "POST"},
+		RequestTimeout:        30 * time.Second,
 		ResponseHeaderTimeout: 10 * time.Second,
-		FlushInterval:       100 * time.Millisecond,
-		MaxIdleConns:        10,
-		MaxIdleConnsPerHost: 5,
-		IdleConnTimeout:     30 * time.Second,
-		HTTPCacheEnabled:    false, // Disable caching
+		FlushInterval:         100 * time.Millisecond,
+		MaxIdleConns:          10,
+		MaxIdleConnsPerHost:   5,
+		IdleConnTimeout:       30 * time.Second,
+		HTTPCacheEnabled:      false, // Disable caching
 	}
 
 	tokenStore := &mockTokenStore{}
 	projectStore := &mockProjectStore{}
 
-	transparentProxy, err := proxy.NewTransparentProxyWithLogger(proxyConfig, 
+	transparentProxy, err := proxy.NewTransparentProxyWithLogger(proxyConfig,
 		token.NewValidator(tokenStore), projectStore, zap.NewNop())
 	if err != nil {
 		t.Fatalf("failed to create proxy: %v", err)
@@ -297,10 +296,4 @@ func createTestServerWithCacheDisabled(t *testing.T) *Server {
 	return server
 }
 
-func mustParseURL(rawURL string) *url.URL {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		panic(err)
-	}
-	return u
-}
+// (removed unused mustParseURL helper)

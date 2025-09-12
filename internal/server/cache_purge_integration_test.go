@@ -30,20 +30,20 @@ func TestCachePurgeIntegration(t *testing.T) {
 
 	// Setup a real proxy with caching
 	proxyConfig := proxy.ProxyConfig{
-		TargetBaseURL:       "https://api.openai.com",
-		AllowedEndpoints:    []string{"/v1/models"},
-		AllowedMethods:      []string{"GET", "POST"},
-		RequestTimeout:      30 * time.Second,
+		TargetBaseURL:         "https://api.openai.com",
+		AllowedEndpoints:      []string{"/v1/models"},
+		AllowedMethods:        []string{"GET", "POST"},
+		RequestTimeout:        30 * time.Second,
 		ResponseHeaderTimeout: 10 * time.Second,
-		FlushInterval:       100 * time.Millisecond,
-		MaxIdleConns:        10,
-		MaxIdleConnsPerHost: 5,
-		IdleConnTimeout:     30 * time.Second,
-		HTTPCacheEnabled:    true,
-		HTTPCacheDefaultTTL: 300 * time.Second,
+		FlushInterval:         100 * time.Millisecond,
+		MaxIdleConns:          10,
+		MaxIdleConnsPerHost:   5,
+		IdleConnTimeout:       30 * time.Second,
+		HTTPCacheEnabled:      true,
+		HTTPCacheDefaultTTL:   300 * time.Second,
 	}
 
-	transparentProxy, err := proxy.NewTransparentProxyWithLogger(proxyConfig, 
+	transparentProxy, err := proxy.NewTransparentProxyWithLogger(proxyConfig,
 		token.NewValidator(&mockTokenStore{}), &mockProjectStore{}, zap.NewNop())
 	if err != nil {
 		t.Fatalf("failed to create proxy: %v", err)
@@ -113,7 +113,7 @@ func TestCachePurgeIntegration(t *testing.T) {
 
 			// Use the auth middleware wrapped handler
 			handler := server.logRequestMiddleware(server.managementAuthMiddleware(http.HandlerFunc(server.handleCachePurge)))
-			
+
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 
