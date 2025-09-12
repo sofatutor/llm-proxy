@@ -883,11 +883,21 @@ func init() {
 					if prefix != "" {
 						fmt.Printf("Cache prefix purge completed: %v entries deleted\n", response["deleted"])
 					} else {
-						deleted := response["deleted"].(bool)
-						if deleted {
-							fmt.Println("Cache entry deleted successfully")
+						if deleted, ok := response["deleted"].(bool); ok {
+							if deleted {
+								fmt.Println("Cache entry deleted successfully")
+							} else {
+								fmt.Println("Cache entry was not found")
+							}
+						} else if n, ok := response["deleted"].(float64); ok {
+							// Some servers may return a numeric indicator; treat >0 as success
+							if n > 0 {
+								fmt.Println("Cache entry deleted successfully")
+							} else {
+								fmt.Println("Cache entry was not found")
+							}
 						} else {
-							fmt.Println("Cache entry was not found")
+							fmt.Printf("Unexpected type for 'deleted' field: %T\n", response["deleted"])
 						}
 					}
 				}

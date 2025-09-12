@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/sofatutor/llm-proxy/internal/api"
@@ -462,4 +463,93 @@ func TestMain_InvalidArg(t *testing.T) {
 	defer func() { os.Args = origArgs }()
 	os.Args = []string{"proxy", "--notarealflag"}
 	main()
+}
+
+func TestCachePurgeCLI_BoolDeleted(t *testing.T) {
+    // Start a fake management API server that returns deleted: true
+    ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if r.URL.Path != "/manage/cache/purge" || r.Method != http.MethodPost {
+            w.WriteHeader(http.StatusNotFound)
+            return
+        }
+        if got := r.Header.Get("Authorization"); got == "" {
+            w.WriteHeader(http.StatusUnauthorized)
+            return
+        }
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+        _, _ = w.Write([]byte(`{"deleted": true}`))
+    }))
+    defer ts.Close()
+
+    // Capture stdout
+    oldStdout := os.Stdout
+    r, w, _ := os.Pipe()
+    os.Stdout = w
+    defer func() { os.Stdout = oldStdout }()
+
+    // Run command
+    rootCmd.SetArgs([]string{
+        "manage", "cache", "purge",
+        "--method", "GET",
+        "--url", "/v1/models",
+        "--management-token", "test",
+        "--api-base-url", ts.URL,
+    })
+    if err := rootCmd.Execute(); err != nil {
+        t.Fatalf("execute returned error: %v", err)
+    }
+
+    // Read output
+    _ = w.Close()
+    var buf bytes.Buffer
+    _, _ = buf.ReadFrom(r)
+    out := buf.String()
+
+    if out == "" || !strings.Contains(out, "Cache entry deleted successfully") {
+        t.Fatalf("unexpected output: %q", out)
+    }
+}
+
+func TestCachePurgeCLI_NumericDeleted_Prefix(t *testing.T) {
+    // Start a fake management API server that returns deleted: 2
+    ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if r.URL.Path != "/manage/cache/purge" || r.Method != http.MethodPost {
+            w.WriteHeader(http.StatusNotFound)
+            return
+        }
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+        _, _ = w.Write([]byte(`{"deleted": 2}`))
+    }))
+    defer ts.Close()
+
+    // Capture stdout
+    oldStdout := os.Stdout
+    r, w, _ := os.Pipe()
+    os.Stdout = w
+    defer func() { os.Stdout = oldStdout }()
+
+    // Run command with --prefix to trigger numeric branch printing
+    rootCmd.SetArgs([]string{
+        "manage", "cache", "purge",
+        "--method", "GET",
+        "--url", "/v1/models",
+        "--prefix", "models:",
+        "--management-token", "test",
+        "--api-base-url", ts.URL,
+    })
+    if err := rootCmd.Execute(); err != nil {
+        t.Fatalf("execute returned error: %v", err)
+    }
+
+    // Read output
+    _ = w.Close()
+    var buf bytes.Buffer
+    _, _ = buf.ReadFrom(r)
+    out := buf.String()
+
+    if out == "" || !strings.Contains(out, "entries deleted") {
+        t.Fatalf("unexpected output: %q", out)
+    }
 }
