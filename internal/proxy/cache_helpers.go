@@ -176,11 +176,15 @@ func parseVaryHeader(vary string) []string {
 	for _, part := range parts {
 		header := strings.TrimSpace(part)
 		if header != "" {
-			// Normalize to canonical header case for consistent lookup
-			headers = append(headers, textproto.CanonicalMIMEHeaderKey(header))
+			headers = append(headers, normalizeHeaderName(header))
 		}
 	}
 	return headers
+}
+
+// normalizeHeaderName canonicalizes a header name for consistent lookups.
+func normalizeHeaderName(name string) string {
+	return textproto.CanonicalMIMEHeaderKey(name)
 }
 
 func isResponseCacheable(res *http.Response) bool {

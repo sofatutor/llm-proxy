@@ -91,7 +91,7 @@ func TestVaryHandling_PerResponse(t *testing.T) {
 				"Accept": "text/plain",
 			},
 			expectSameKey: true,
-			description:   "Vary: * varies on unspecified parameters; for key generation treat as no vary (keys same)",
+			description:   "Vary: * indicates variation on unspecified parameters; for key generation, treat as no vary (keys same)",
 		},
 	}
 

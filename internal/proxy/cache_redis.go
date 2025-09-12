@@ -3,6 +3,8 @@ package proxy
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -17,8 +19,16 @@ type redisCache struct {
 
 // redisScanCount controls the SCAN batch size used when purging by prefix.
 // Larger values reduce round-trips but increase per-iteration workload.
-// This can be made configurable via environment or config if needed.
-const redisScanCount = 2048
+// It can be configured via REDIS_SCAN_COUNT env var; defaults to 2048 when unset/invalid.
+var redisScanCount = func() int {
+	const defaultScan = 2048
+	if v := os.Getenv("REDIS_SCAN_COUNT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return defaultScan
+}()
 
 func newRedisCache(client *redis.Client, keyPrefix string) *redisCache {
 	if keyPrefix == "" {
@@ -90,7 +100,7 @@ func (r *redisCache) PurgePrefix(prefix string) int {
 	var cursor uint64
 	total := 0
 	for {
-		keys, next, err := r.client.Scan(ctx, cursor, fullPrefix+"*", redisScanCount).Result()
+		keys, next, err := r.client.Scan(ctx, cursor, fullPrefix+"*", int64(redisScanCount)).Result()
 		if err != nil {
 			// Abort on scan error to avoid infinite loop; return what we deleted so far
 			return total
