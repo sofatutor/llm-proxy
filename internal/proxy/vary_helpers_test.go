@@ -7,7 +7,7 @@ import (
 
 func TestStorageKeyForResponse(t *testing.T) {
 	r := httptest.NewRequest("GET", "/v1/models?x=1", nil)
-	baseKey := cacheKeyFromRequest(r)
+	baseKey := CacheKeyFromRequest(r)
 
 	// Empty Vary -> base key
 	if got := storageKeyForResponse(r, "", baseKey); got != baseKey {
@@ -35,7 +35,7 @@ func TestStorageKeyForResponse(t *testing.T) {
 
 func TestIsVaryCompatible(t *testing.T) {
 	r := httptest.NewRequest("GET", "/v1/models", nil)
-	lookup := cacheKeyFromRequest(r)
+	lookup := CacheKeyFromRequest(r)
 
 	// No vary -> compatible
 	cr := cachedResponse{vary: ""}
@@ -52,7 +52,7 @@ func TestIsVaryCompatible(t *testing.T) {
 	r2 := httptest.NewRequest("GET", "/v1/models", nil)
 	r2.Header.Set("Origin", "https://example.com")
 	// Build a lookup key as if cache was filled without vary (base key)
-	baseLookup := cacheKeyFromRequest(r2)
+	baseLookup := CacheKeyFromRequest(r2)
 	// For compatibility, we require the vary-derived key to equal the lookup key
 	// Here they should not equal, so expect false
 	cr = cachedResponse{vary: "Origin"}
@@ -61,7 +61,7 @@ func TestIsVaryCompatible(t *testing.T) {
 	}
 
 	// If lookup key is computed with the same vary, it should be compatible
-	varyLookup := cacheKeyFromRequestWithVary(r2, "Origin")
+	varyLookup := CacheKeyFromRequestWithVary(r2, "Origin")
 	if !isVaryCompatible(r2, cr, varyLookup) {
 		t.Fatalf("expected compatible when vary-derived key matches lookup key")
 	}

@@ -783,6 +783,126 @@ func init() {
 	tokenGenerateCmd.Flags().Int("duration", 1440, "Token duration in minutes (default 1440 = 24h)")
 	tokenGenerateCmd.Flags().Bool("json", false, "Output as JSON")
 
+	// Cache command and subcommands
+	var cacheCmd = &cobra.Command{
+		Use:   "cache",
+		Short: "Manage cache operations",
+		Long:  `Cache management operations (purge).`,
+	}
+
+	var cachePurgeCmd = &cobra.Command{
+		Use:   "purge",
+		Short: "Purge cache entries",
+		Long:  `Purge cache entries by exact key (method + URL) or by prefix.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_ = godotenv.Load()
+
+			// Get flags
+			apiBaseURL, _ := cmd.Flags().GetString("api-base-url")
+			managementToken, _ := cmd.Flags().GetString("management-token")
+			method, _ := cmd.Flags().GetString("method")
+			url, _ := cmd.Flags().GetString("url")
+			prefix, _ := cmd.Flags().GetString("prefix")
+			jsonOutput, _ := cmd.Flags().GetBool("json")
+
+			// Fallback to env vars if flags not provided
+			if apiBaseURL == "" {
+				apiBaseURL = os.Getenv("MANAGEMENT_API_BASE_URL")
+				if apiBaseURL == "" {
+					apiBaseURL = "http://localhost:8080"
+				}
+			}
+			if managementToken == "" {
+				managementToken = os.Getenv("MANAGEMENT_TOKEN")
+			}
+
+			if managementToken == "" {
+				return fmt.Errorf("management token is required (use --management-token flag or MANAGEMENT_TOKEN env var)")
+			}
+
+			// Validate required fields
+			if method == "" || url == "" {
+				return fmt.Errorf("method and url are required")
+			}
+
+			// Prepare request body
+			reqBody := map[string]interface{}{
+				"method": method,
+				"url":    url,
+			}
+			if prefix != "" {
+				reqBody["prefix"] = prefix
+			}
+
+			jsonData, err := json.Marshal(reqBody)
+			if err != nil {
+				return fmt.Errorf("failed to marshal request: %w", err)
+			}
+
+			// Make HTTP request
+			client := &http.Client{Timeout: 30 * time.Second}
+			req, err := http.NewRequest("POST", strings.TrimRight(apiBaseURL, "/")+"/manage/cache/purge", bytes.NewBuffer(jsonData))
+			if err != nil {
+				return fmt.Errorf("failed to create request: %w", err)
+			}
+
+			req.Header.Set("Authorization", "Bearer "+managementToken)
+			req.Header.Set("Content-Type", "application/json")
+
+			resp, err := client.Do(req)
+			if err != nil {
+				return fmt.Errorf("failed to make request: %w", err)
+			}
+			defer resp.Body.Close()
+
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return fmt.Errorf("failed to read response: %w", err)
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				if jsonOutput {
+					fmt.Printf(`{"error": "HTTP %d: %s"}`+"\n", resp.StatusCode, string(body))
+				} else {
+					fmt.Printf("Error: HTTP %d: %s\n", resp.StatusCode, string(body))
+				}
+				return fmt.Errorf("cache purge failed")
+			}
+
+			if jsonOutput {
+				fmt.Println(string(body))
+			} else {
+				var response map[string]interface{}
+				if err := json.Unmarshal(body, &response); err != nil {
+					fmt.Println("Cache purge completed")
+				} else {
+					if prefix != "" {
+						fmt.Printf("Cache prefix purge completed: %v entries deleted\n", response["deleted"])
+					} else {
+						deleted := response["deleted"].(bool)
+						if deleted {
+							fmt.Println("Cache entry deleted successfully")
+						} else {
+							fmt.Println("Cache entry was not found")
+						}
+					}
+				}
+			}
+
+			return nil
+		},
+	}
+
+	cachePurgeCmd.Flags().String("api-base-url", "", "Management API base URL (overrides env)")
+	cachePurgeCmd.Flags().String("management-token", "", "Management token (overrides env)")
+	cachePurgeCmd.Flags().String("method", "", "HTTP method (required)")
+	cachePurgeCmd.Flags().String("url", "", "URL path (required)")
+	cachePurgeCmd.Flags().String("prefix", "", "Cache key prefix for bulk purge")
+	cachePurgeCmd.Flags().Bool("json", false, "Output as JSON")
+
+	// Register cache subcommands
+	cacheCmd.AddCommand(cachePurgeCmd)
+
 	// Register project subcommands
 	projectCmd.AddCommand(projectListCmd, projectGetCmd, projectCreateCmd, projectUpdateCmd, projectDeleteCmd)
 	// Register token subcommands
@@ -790,6 +910,7 @@ func init() {
 	// Register manage subcommands
 	manageCmd.AddCommand(projectCmd)
 	manageCmd.AddCommand(tokenCmd)
+	manageCmd.AddCommand(cacheCmd)
 	// Register manage command with root
 	cobraRoot.AddCommand(manageCmd)
 

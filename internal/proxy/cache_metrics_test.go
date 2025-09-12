@@ -25,7 +25,7 @@ func TestCacheMetrics_HitMissBypassStore(t *testing.T) {
 				cache := newInMemoryCache()
 				// Create a request to generate the same cache key
 				req := httptest.NewRequest("GET", "/v1/models", nil)
-				key := cacheKeyFromRequest(req)
+				key := CacheKeyFromRequest(req)
 				// Pre-populate cache with the correct key
 				cache.Set(key, cachedResponse{
 					statusCode: 200,
@@ -58,7 +58,7 @@ func TestCacheMetrics_HitMissBypassStore(t *testing.T) {
 				// Create a request to generate the same cache key
 				req := httptest.NewRequest("GET", "/v1/models", nil)
 				req.Header.Set("Authorization", "Bearer valid-token")
-				key := cacheKeyFromRequest(req)
+				key := CacheKeyFromRequest(req)
 				// Pre-populate cache with response that doesn't allow reuse for authorized requests
 				// (no explicit public/s-maxage cache control - private by default for auth requests)
 				cache.Set(key, cachedResponse{

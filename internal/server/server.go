@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -167,6 +168,7 @@ func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectSto
 	mux.HandleFunc("/manage/tokens/", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleTokenByID)))
 	mux.HandleFunc("/manage/audit", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleAuditEvents)))
 	mux.HandleFunc("/manage/audit/", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleAuditEventByID)))
+	mux.HandleFunc("/manage/cache/purge", s.logRequestMiddleware(s.managementAuthMiddleware(s.handleCachePurge)))
 
 	// Add catch-all handler for unmatched routes to ensure logging
 	mux.HandleFunc("/", s.logRequestMiddleware(s.handleNotFound))
@@ -1673,4 +1675,122 @@ func (s *Server) handleAuditEventByID(w http.ResponseWriter, r *http.Request) {
 	// Audit: successful audit event retrieval
 	_ = s.auditLogger.Log(s.auditEvent(audit.ActionAuditShow, audit.ActorManagement, audit.ResultSuccess, r, requestID).
 		WithDetail("audit_event_id", id))
+}
+
+// CachePurgeRequest represents the request body for cache purge operations
+type CachePurgeRequest struct {
+	Method string `json:"method" binding:"required"`
+	URL    string `json:"url" binding:"required"`
+	Prefix string `json:"prefix,omitempty"`
+}
+
+// CachePurgeResponse represents the response body for cache purge operations
+type CachePurgeResponse struct {
+	Deleted interface{} `json:"deleted"` // bool for exact purge, int for prefix purge
+}
+
+// Handler for POST /manage/cache/purge
+func (s *Server) handleCachePurge(w http.ResponseWriter, r *http.Request) {
+	requestID := getRequestID(r.Context())
+
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Check if proxy and cache are available
+	if s.proxy == nil {
+		s.logger.Error("proxy not initialized", zap.String("request_id", requestID))
+		http.Error(w, `{"error":"proxy not available"}`, http.StatusInternalServerError)
+		return
+	}
+
+	cache := s.proxy.Cache()
+	if cache == nil {
+		s.logger.Warn("cache purge attempted but caching is disabled", zap.String("request_id", requestID))
+		http.Error(w, `{"error":"caching is disabled"}`, http.StatusBadRequest)
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionCachePurge, audit.ActorManagement, audit.ResultFailure, r, requestID).
+			WithDetail("reason", "caching_disabled"))
+		return
+	}
+
+	var req CachePurgeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.logger.Warn("invalid JSON in cache purge request", zap.Error(err), zap.String("request_id", requestID))
+		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionCachePurge, audit.ActorManagement, audit.ResultFailure, r, requestID).
+			WithDetail("reason", "invalid_json"))
+		return
+	}
+
+	// Validate required fields
+	if req.Method == "" || req.URL == "" {
+		s.logger.Warn("missing required fields in cache purge request",
+			zap.String("method", req.Method), zap.String("url", req.URL), zap.String("request_id", requestID))
+		http.Error(w, `{"error":"method and url are required"}`, http.StatusBadRequest)
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionCachePurge, audit.ActorManagement, audit.ResultFailure, r, requestID).
+			WithDetail("reason", "missing_fields"))
+		return
+	}
+
+	var response CachePurgeResponse
+	var auditDetails map[string]interface{}
+
+	if req.Prefix != "" {
+		// Prefix purge
+		deleted := cache.PurgePrefix(req.Prefix)
+		response.Deleted = deleted
+		auditDetails = map[string]interface{}{
+			"purge_type": "prefix",
+			"prefix":     req.Prefix,
+			"deleted":    deleted,
+		}
+		s.logger.Info("cache prefix purge completed",
+			zap.String("prefix", req.Prefix), zap.Int("deleted", deleted), zap.String("request_id", requestID))
+	} else {
+		// Exact key purge - need to compute cache key from method and URL
+		// Create a mock request to generate the cache key
+		mockURL, err := url.Parse(req.URL)
+		if err != nil {
+			s.logger.Warn("invalid URL in cache purge request", zap.Error(err), zap.String("url", req.URL), zap.String("request_id", requestID))
+			http.Error(w, `{"error":"invalid URL"}`, http.StatusBadRequest)
+			_ = s.auditLogger.Log(s.auditEvent(audit.ActionCachePurge, audit.ActorManagement, audit.ResultFailure, r, requestID).
+				WithDetail("reason", "invalid_url"))
+			return
+		}
+
+		mockReq := &http.Request{
+			Method: req.Method,
+			URL:    mockURL,
+			Header: make(http.Header),
+		}
+
+		// Generate cache key using existing helper
+		cacheKey := proxy.CacheKeyFromRequest(mockReq)
+		deleted := cache.Purge(cacheKey)
+		response.Deleted = deleted
+		auditDetails = map[string]interface{}{
+			"purge_type": "exact",
+			"method":     req.Method,
+			"url":        req.URL,
+			"cache_key":  cacheKey,
+			"deleted":    deleted,
+		}
+		s.logger.Info("cache exact purge completed",
+			zap.String("method", req.Method), zap.String("url", req.URL),
+			zap.String("cache_key", cacheKey), zap.Bool("deleted", deleted), zap.String("request_id", requestID))
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		s.logger.Error("failed to encode cache purge response", zap.Error(err), zap.String("request_id", requestID))
+		return
+	}
+
+	// Audit: successful cache purge
+	auditEvent := s.auditEvent(audit.ActionCachePurge, audit.ActorManagement, audit.ResultSuccess, r, requestID)
+	for k, v := range auditDetails {
+		auditEvent = auditEvent.WithDetail(k, v)
+	}
+	_ = s.auditLogger.Log(auditEvent)
 }

@@ -88,19 +88,19 @@ func generateCacheKey(r *http.Request, headersToInclude []string) string {
 	return final.String()
 }
 
-func cacheKeyFromRequest(r *http.Request) string {
+func CacheKeyFromRequest(r *http.Request) string {
 	// Conservative subset until per-response Vary handling is applied by caller
 	return generateCacheKey(r, []string{"Accept", "Accept-Encoding", "Accept-Language"})
 }
 
-// cacheKeyFromRequestWithVary generates a cache key using the specified Vary header
+// CacheKeyFromRequestWithVary generates a cache key using the specified Vary header
 // from the upstream response. This enables per-response driven cache key generation.
 //
 // Behavior:
 //   - When vary is empty or "*", this function returns a key that ignores header values
 //     (treated as "no vary" for key generation purposes).
 //   - Header names parsed from vary are normalized to canonical MIME header names.
-func cacheKeyFromRequestWithVary(r *http.Request, vary string) string {
+func CacheKeyFromRequestWithVary(r *http.Request, vary string) string {
 	var headers []string
 	if vary != "" && vary != "*" {
 		headers = parseVaryHeader(vary)
