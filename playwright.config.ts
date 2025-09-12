@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Unified env accessor to avoid repetition and keep compatibility
+const env = (((globalThis as any).process && (globalThis as any).process.env) || {}) as Record<string, string | undefined>;
+
 /**
  * See https://playwright.dev/docs/test-configuration.
  */
@@ -8,16 +11,16 @@ export default defineConfig({
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
-  forbidOnly: !!(globalThis as any).process?.env?.CI,
+  forbidOnly: !!env.CI,
   /* Retry on CI only */
-  retries: ((globalThis as any).process?.env?.CI ? 2 : 0) as number,
+  retries: (env.CI ? 2 : 0) as number,
   /* Opt out of parallel tests on CI. */
-  workers: ((globalThis as any).process?.env?.CI ? 1 : undefined) as number | undefined,
+  workers: (env.CI ? 1 : undefined) as number | undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: [
     ['html'],
     ['line'],
-    ...(((globalThis as any).process?.env?.CI ? [['github']] : []) as any[])
+    ...((env.CI ? [['github']] : []) as any[])
   ],
   
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
@@ -29,7 +32,7 @@ export default defineConfig({
     // @ts-expect-error Playwright supports use.env at runtime; typing may lag
     env: {
       // Keep token consistent with wrapper default
-      MANAGEMENT_TOKEN: (((globalThis as any).process?.env?.MANAGEMENT_TOKEN) || 'e2e-management-token') as string,
+      MANAGEMENT_TOKEN: (env.MANAGEMENT_TOKEN || 'e2e-management-token') as string,
       ADMIN_BASE_URL: 'http://localhost:8099' as string,
       MGMT_BASE_URL: 'http://localhost:8098' as string,
     },
@@ -69,7 +72,7 @@ export default defineConfig({
   webServer: {
     // Force a known MANAGEMENT_TOKEN for both Admin UI and Management API during E2E
     // to avoid mismatches with developer local .env
-    command: `MANAGEMENT_TOKEN=${(globalThis as any).process?.env?.MANAGEMENT_TOKEN || 'e2e-management-token'} npm run start:e2e`,
+    command: `MANAGEMENT_TOKEN=${env.MANAGEMENT_TOKEN || 'e2e-management-token'} npm run start:e2e`,
     url: 'http://localhost:8099' as string,
     // Always start fresh to avoid reusing a stray dev server
     reuseExistingServer: false,
