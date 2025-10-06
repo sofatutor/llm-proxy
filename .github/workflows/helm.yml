@@ -1,0 +1,207 @@
+name: Helm Chart
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'deploy/helm/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'deploy/helm/**'
+
+jobs:
+  helm-lint:
+    name: Helm Lint and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.13.1'
+
+      - name: Add Helm repositories
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo update
+
+      - name: Lint Helm chart
+        run: |
+          cd deploy/helm/llm-proxy
+          helm lint .
+
+      - name: Update Helm dependencies
+        run: |
+          cd deploy/helm/llm-proxy
+          helm dependency update
+
+      - name: Test Helm template rendering - Default values
+        run: |
+          cd deploy/helm/llm-proxy
+          helm template test-release . \
+            --set config.managementToken=test-token \
+            --dry-run > /tmp/helm-default.yaml
+
+      - name: Test Helm template rendering - External Redis
+        run: |
+          cd deploy/helm/llm-proxy
+          helm template test-release . \
+            --set config.managementToken=test-token \
+            --set redis.enabled=false \
+            --set redis.external.host=redis.example.com \
+            --dry-run > /tmp/helm-external-redis.yaml
+
+      - name: Test Helm template rendering - Dispatcher disabled
+        run: |
+          cd deploy/helm/llm-proxy
+          helm template test-release . \
+            --set config.managementToken=test-token \
+            --set dispatcher.enabled=false \
+            --dry-run > /tmp/helm-no-dispatcher.yaml
+
+      - name: Test Helm template rendering - PostgreSQL
+        run: |
+          cd deploy/helm/llm-proxy
+          helm template test-release . \
+            --set config.managementToken=test-token \
+            --set config.database.type=postgresql \
+            --set config.database.postgresql.host=postgres.example.com \
+            --set config.database.postgresql.user=llmproxy \
+            --set config.database.postgresql.password=password \
+            --set config.database.postgresql.database=llmproxy \
+            --dry-run > /tmp/helm-postgresql.yaml
+
+      - name: Test Helm template rendering - Full production config
+        run: |
+          cd deploy/helm/llm-proxy
+          helm template test-release . \
+            --set config.managementToken=test-token \
+            --set ingress.enabled=true \
+            --set ingress.hosts[0].host=llm-proxy.example.com \
+            --set ingress.hosts[0].paths[0].path=/ \
+            --set ingress.hosts[0].paths[0].pathType=Prefix \
+            --set autoscaling.enabled=true \
+            --set autoscaling.minReplicas=2 \
+            --set autoscaling.maxReplicas=10 \
+            --set serviceMonitor.enabled=true \
+            --set networkPolicy.enabled=true \
+            --dry-run > /tmp/helm-production.yaml
+
+      - name: Validate Kubernetes manifests
+        run: |
+          # Install kubeval for validation
+          curl -sSL https://github.com/instrumenta/kubeval/releases/latest/download/kubeval-linux-amd64.tar.gz | tar xz
+          sudo mv kubeval /usr/local/bin/
+          
+          # Validate all generated manifests
+          for file in /tmp/helm-*.yaml; do
+            echo "Validating $file..."
+            kubeval "$file"
+          done
+
+      - name: Upload Helm test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-rendered-templates
+          path: |
+            /tmp/helm-*.yaml
+          retention-days: 7
+
+  helm-chart-test:
+    name: Helm Chart Testing (ct)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.13.1'
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@v2.6.0
+
+      - name: Add Helm repositories
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo update
+
+      - name: Run chart-testing (list)
+        run: ct list --config .github/ct.yaml
+
+      - name: Run chart-testing (lint)
+        run: ct lint --config .github/ct.yaml
+
+      # Note: Integration testing requires a Kubernetes cluster
+      # This would be enabled in a full CI environment with kind/minikube
+      # - name: Create kind cluster
+      #   uses: helm/kind-action@v1.5.0
+      # 
+      # - name: Run chart-testing (install)
+      #   run: ct install --config .github/ct.yaml
+
+  helm-security-scan:
+    name: Helm Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.13.1'
+
+      - name: Add Helm repositories
+        run: |
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo update
+
+      - name: Update Helm dependencies
+        run: |
+          cd deploy/helm/llm-proxy
+          helm dependency update
+
+      - name: Install Checkov
+        run: |
+          pip install checkov
+
+      - name: Render templates for security scanning
+        run: |
+          cd deploy/helm/llm-proxy
+          helm template security-scan . \
+            --set config.managementToken=test-token \
+            --output-dir /tmp/helm-security-scan
+
+      - name: Run Checkov security scan
+        run: |
+          checkov -d /tmp/helm-security-scan \
+            --framework kubernetes \
+            --output cli \
+            --output sarif \
+            --output-file-path /tmp/checkov-results.sarif \
+            --quiet || echo "Security scan completed with findings"
+
+      - name: Upload security scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-security-scan-results
+          path: |
+            /tmp/checkov-results.sarif
+          retention-days: 30

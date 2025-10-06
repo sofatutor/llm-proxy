@@ -1,0 +1,75 @@
+1. Get the application URL by running these commands:
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  {{- range .paths }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+{{- else if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "llm-proxy.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.service.type }}
+     NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+           You can watch the status of by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "llm-proxy.fullname" . }}'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "llm-proxy.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo http://$SERVICE_IP:{{ .Values.service.port }}
+{{- else if contains "ClusterIP" .Values.service.type }}
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "{{ include "llm-proxy.selectorLabels" . }}" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace {{ .Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+  echo "Visit http://127.0.0.1:8080 to use your application"
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8080:$CONTAINER_PORT
+{{- end }}
+
+2. Check the deployment status:
+  kubectl get pods --namespace {{ .Release.Namespace }} -l "{{ include "llm-proxy.selectorLabels" . }}"
+
+3. Get application logs:
+  kubectl logs --namespace {{ .Release.Namespace }} -l "{{ include "llm-proxy.selectorLabels" . }}" -f
+
+4. Check health status:
+{{- if .Values.ingress.enabled }}
+{{- $host := index .Values.ingress.hosts 0 }}
+  curl -f http{{ if .Values.ingress.tls }}s{{ end }}://{{ $host.host }}/health
+{{- else }}
+  kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "llm-proxy.fullname" . }} 8080:{{ .Values.service.port }}
+  curl -f http://localhost:8080/health
+{{- end }}
+
+5. Management API access:
+{{- if not .Values.config.managementToken }}
+   ⚠️  WARNING: No management token provided! 
+   You must set config.managementToken in your values or use an external secret.
+{{- else }}
+   Management token is configured. Use it for admin operations via:
+   - Management API: /manage/projects, /manage/tokens
+{{- if .Values.adminUI.enabled }}
+   - Admin UI: {{ .Values.adminUI.path }}
+{{- end }}
+{{- end }}
+
+6. {{- if .Values.redis.enabled }}Redis is deployed as a dependency.{{- else }}External Redis configuration: {{ include "llm-proxy.redisAddr" . }}{{- end }}
+
+{{- if .Values.dispatcher.enabled }}
+7. Event dispatchers are running:
+{{- if .Values.dispatcher.services.file.enabled }}
+   - File dispatcher: logs events to {{ .Values.dispatcher.services.file.endpoint }}
+{{- end }}
+{{- if .Values.dispatcher.services.helicone.enabled }}
+   - Helicone dispatcher: forwards events to Helicone
+{{- end }}
+{{- end }}
+
+{{- if .Values.autoscaling.enabled }}
+8. Horizontal Pod Autoscaler is enabled ({{ .Values.autoscaling.minReplicas }}-{{ .Values.autoscaling.maxReplicas }} replicas)
+{{- end }}
+
+{{- if .Values.persistence.enabled }}
+9. Persistent volumes are configured:
+   - Data: {{ .Values.persistence.dataPath }} ({{ .Values.persistence.size }})
+   - Logs: {{ .Values.persistence.logsPath }} ({{ .Values.persistence.size }})
+{{- end }}
+
+For more information and advanced configuration options, see:
+- GitHub: https://github.com/sofatutor/llm-proxy
+- Documentation: https://github.com/sofatutor/llm-proxy/tree/main/docs

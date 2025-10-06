@@ -1,0 +1,139 @@
+# Production environment deployment
+# Use this for production environments with high availability and security
+
+{
+  "stackName": "LlmProxyEksProd",
+  "clusterName": "llm-proxy-prod",
+  "namespace": "llm-proxy",
+  "environment": "prod",
+  "helmChartPath": "../../helm/llm-proxy",
+  "helmValues": {
+    "image": {
+      "tag": "v1.0.0"
+    },
+    "resources": {
+      "limits": {
+        "cpu": "2000m",
+        "memory": "1Gi"
+      },
+      "requests": {
+        "cpu": "500m",
+        "memory": "512Mi"
+      }
+    },
+    "redis": {
+      "enabled": false,
+      "external": {
+        "host": "llm-proxy-redis.cache.amazonaws.com",
+        "port": 6379
+      }
+    },
+    "config": {
+      "database": {
+        "type": "postgresql",
+        "postgresql": {
+          "host": "llm-proxy-postgres.rds.amazonaws.com",
+          "port": 5432,
+          "user": "llmproxy",
+          "database": "llmproxy",
+          "sslmode": "require"
+        }
+      }
+    },
+    "dispatcher": {
+      "enabled": true,
+      "replicaCount": 2,
+      "services": {
+        "file": {
+          "enabled": true
+        },
+        "helicone": {
+          "enabled": true
+        }
+      }
+    },
+    "autoscaling": {
+      "enabled": true,
+      "minReplicas": 3,
+      "maxReplicas": 20,
+      "targetCPUUtilizationPercentage": 70,
+      "targetMemoryUtilizationPercentage": 80
+    },
+    "podDisruptionBudget": {
+      "enabled": true,
+      "minAvailable": 2
+    },
+    "ingress": {
+      "enabled": true,
+      "className": "alb",
+      "annotations": {
+        "alb.ingress.kubernetes.io/scheme": "internet-facing",
+        "alb.ingress.kubernetes.io/ssl-redirect": "443",
+        "alb.ingress.kubernetes.io/certificate-arn": "arn:aws:acm:us-west-2:ACCOUNT:certificate/CERT-ID"
+      },
+      "hosts": [
+        {
+          "host": "llm-proxy.example.com",
+          "paths": [
+            {
+              "path": "/",
+              "pathType": "Prefix"
+            }
+          ]
+        }
+      ]
+    },
+    "serviceMonitor": {
+      "enabled": true,
+      "labels": {
+        "release": "prometheus-operator"
+      }
+    },
+    "networkPolicy": {
+      "enabled": true
+    },
+    "secrets": {
+      "create": false,
+      "external": true,
+      "externalSecrets": {
+        "managementToken": "llm-proxy-secrets",
+        "openaiApiKey": "llm-proxy-secrets",
+        "databasePassword": "llm-proxy-secrets",
+        "redisPassword": "llm-proxy-secrets"
+      }
+    },
+    "affinity": {
+      "podAntiAffinity": {
+        "preferredDuringSchedulingIgnoredDuringExecution": [
+          {
+            "weight": 100,
+            "podAffinityTerm": {
+              "labelSelector": {
+                "matchExpressions": [
+                  {
+                    "key": "app.kubernetes.io/name",
+                    "operator": "In",
+                    "values": ["llm-proxy"]
+                  }
+                ]
+              },
+              "topologyKey": "kubernetes.io/hostname"
+            }
+          }
+        ]
+      }
+    },
+    "topologySpreadConstraints": [
+      {
+        "maxSkew": 1,
+        "topologyKey": "topology.kubernetes.io/zone",
+        "whenUnsatisfiable": "DoNotSchedule",
+        "labelSelector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "llm-proxy"
+          }
+        }
+      }
+    ]
+  }
+}

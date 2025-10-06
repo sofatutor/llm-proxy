@@ -1,0 +1,176 @@
+{{- if .Values.dispatcher.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "llm-proxy.fullname" . }}-dispatcher
+  labels:
+    {{- include "llm-proxy.dispatcherLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.dispatcher.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "llm-proxy.dispatcherSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "llm-proxy.dispatcherSelectorLabels" . | nindent 8 }}
+    spec:
+      {{- with (concat .Values.global.imagePullSecrets .Values.imagePullSecrets) }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "llm-proxy.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        {{- if .Values.dispatcher.services.file.enabled }}
+        - name: file-dispatcher
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ include "llm-proxy.dispatcherImage" . }}
+          imagePullPolicy: {{ .Values.dispatcher.image.pullPolicy | default .Values.image.pullPolicy }}
+          command: ["/app/entrypoint.sh"]
+          args: 
+            - "dispatcher"
+            - "--service"
+            - "file"
+            - "--endpoint"
+            - {{ .Values.dispatcher.services.file.endpoint | quote }}
+          env:
+            - name: LLM_PROXY_EVENT_BUS
+              value: "redis"
+            - name: REDIS_ADDR
+              value: {{ include "llm-proxy.redisAddr" . | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.config.logLevel | quote }}
+            {{- range .Values.env }}
+            - name: {{ .name }}
+              {{- if .value }}
+              value: {{ .value | quote }}
+              {{- else if .valueFrom }}
+              valueFrom:
+                {{- toYaml .valueFrom | nindent 16 }}
+              {{- end }}
+            {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.dispatcher.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.persistence.enabled }}
+            - name: logs
+              mountPath: {{ .Values.persistence.logsPath }}
+            {{- end }}
+            - name: tmp
+              mountPath: /tmp
+            {{- range .Values.volumeMounts }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+              {{- if .readOnly }}
+              readOnly: {{ .readOnly }}
+              {{- end }}
+              {{- if .subPath }}
+              subPath: {{ .subPath }}
+              {{- end }}
+            {{- end }}
+        {{- end }}
+        {{- if .Values.dispatcher.services.helicone.enabled }}
+        - name: helicone-dispatcher
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ include "llm-proxy.dispatcherImage" . }}
+          imagePullPolicy: {{ .Values.dispatcher.image.pullPolicy | default .Values.image.pullPolicy }}
+          command: ["/app/entrypoint.sh"]
+          args: 
+            - "dispatcher"
+            - "--service"
+            - "helicone"
+            {{- if .Values.dispatcher.services.helicone.apiKey }}
+            - "--api-key"
+            - {{ .Values.dispatcher.services.helicone.apiKey | quote }}
+            {{- end }}
+          env:
+            - name: LLM_PROXY_EVENT_BUS
+              value: "redis"
+            - name: REDIS_ADDR
+              value: {{ include "llm-proxy.redisAddr" . | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.config.logLevel | quote }}
+            {{- range .Values.env }}
+            - name: {{ .name }}
+              {{- if .value }}
+              value: {{ .value | quote }}
+              {{- else if .valueFrom }}
+              valueFrom:
+                {{- toYaml .valueFrom | nindent 16 }}
+              {{- end }}
+            {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.dispatcher.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- range .Values.volumeMounts }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+              {{- if .readOnly }}
+              readOnly: {{ .readOnly }}
+              {{- end }}
+              {{- if .subPath }}
+              subPath: {{ .subPath }}
+              {{- end }}
+            {{- end }}
+        {{- end }}
+      volumes:
+        {{- if .Values.persistence.enabled }}
+        - name: logs
+          persistentVolumeClaim:
+            claimName: {{ include "llm-proxy.fullname" . }}-logs
+        {{- end }}
+        - name: tmp
+          emptyDir: {}
+        {{- range .Values.volumes }}
+        - name: {{ .name }}
+          {{- if .configMap }}
+          configMap:
+            name: {{ .configMap.name }}
+            {{- if .configMap.items }}
+            items:
+              {{- toYaml .configMap.items | nindent 14 }}
+            {{- end }}
+          {{- else if .secret }}
+          secret:
+            secretName: {{ .secret.secretName }}
+            {{- if .secret.items }}
+            items:
+              {{- toYaml .secret.items | nindent 14 }}
+            {{- end }}
+          {{- else if .emptyDir }}
+          emptyDir: {}
+          {{- end }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
