@@ -490,3 +490,27 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 - The event bus is now always enabled by default; configuration options have changed.
 - For persistent event logging, use the new dispatcher command or the `--file-event-log` flag.
 - OpenAI token counting is now accurate and uses tiktoken-go for all prompt/completion calculations.
+
+## Project Governance & Quality Assurance
+
+The project maintains high standards through systematic review and governance processes:
+
+### Code Quality Framework
+- **[Full Inventory & Review Process](docs/tasks/prd-full-inventory-review.md)**: Comprehensive codebase review framework for architectural compliance
+- **[Review Templates](docs/reviews/)**: Standardized templates for systematic quality assessment
+- **Quality Gates**: 90%+ coverage (enforced), clean lints, architectural alignment verification
+- **Test-Driven Development**: Mandatory TDD with failing tests before implementation
+
+### Governance Integration
+- **Architecture Compliance**: Regular verification against documented design principles
+- **Security Review**: Systematic assessment of access controls, secrets management, and dependency security
+- **Documentation Alignment**: Continuous validation of code-documentation consistency
+- **Non-blocking Process**: Reviews guide improvement without halting development
+
+### Review Scope
+- **Package-by-Package Analysis**: Systematic review of all `internal/*` and `cmd/*` components
+- **Dead Code Detection**: Identification and removal of unused code and dependencies
+- **Performance Assessment**: Latency, memory efficiency, and scalability compliance
+- **Maintainer Sign-off**: Governance oversight with clear accountability and follow-up tracking
+
+This governance framework ensures architectural integrity, security compliance, and code quality while maintaining development velocity and transparency.

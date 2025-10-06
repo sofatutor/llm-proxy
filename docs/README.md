@@ -44,6 +44,11 @@ The [OpenAPI specification](../api/openapi.yaml) provides machine-readable API d
 - **[Code Organization Guide](code-organization.md)** - Package structure, layering, and architectural boundaries
 - **[Development Setup](copilot-agent-setup.md)** - Development environment and tooling
 
+## Governance & Quality Assurance
+
+- **[Full Codebase Inventory & Review](tasks/prd-full-inventory-review.md)** - Comprehensive codebase review process and templates
+- **[Review Templates](reviews/)** - Templates for conducting systematic code reviews and quality assessments
+
 ## Implementation Details
 
 - **[Issues](issues/)** - Design decisions, architectural discussions, and implementation notes

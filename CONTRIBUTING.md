@@ -191,6 +191,25 @@ Documentation is a critical part of the project. All changes should include appr
 - **API Changes**: Update OpenAPI specifications and CLI reference
 - **Keep Current**: Remove outdated information and fix broken links
 
+## Code Governance & Quality Assurance
+
+The project maintains high code quality through systematic review processes:
+
+### Codebase Review Process
+
+- **[Full Inventory & Review](docs/tasks/prd-full-inventory-review.md)**: Comprehensive codebase review framework
+- **[Review Templates](docs/reviews/)**: Standardized templates for systematic quality assessment
+- **Review Scope**: Package-by-package analysis, documentation alignment, security audit
+- **Quality Gates**: 90%+ coverage, clean lints, architectural compliance
+- **Non-blocking**: Reviews don't halt development; used for continuous improvement
+
+### Quality Standards
+
+- **Architecture Alignment**: Regular verification against `docs/architecture.md`
+- **Security Compliance**: Access control, secret scanning, dependency audits
+- **Performance Monitoring**: Latency targets, memory efficiency, scalability assessment
+- **Documentation Currency**: Alignment between code and documentation
+
 ## Testing
 
 Comprehensive testing is mandatory. See the [Testing Guide](docs/testing-guide.md) for detailed information.
