@@ -350,7 +350,7 @@ func TestMigrations_AddColumn(t *testing.T) {
 	}
 	defer func() { _ = rawDB.Close() }()
 
-	// Create basic schema without the new columns
+	// Create basic schema without the new columns (simulating old database)
 	basicSchema := `
 		CREATE TABLE IF NOT EXISTS projects (
 			id TEXT PRIMARY KEY,
@@ -367,7 +367,7 @@ func TestMigrations_AddColumn(t *testing.T) {
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			expires_at DATETIME,
 			max_requests INTEGER,
-			used_requests INTEGER DEFAULT 0,
+			request_count INTEGER DEFAULT 0,
 			FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 		);
 	`
@@ -425,5 +425,93 @@ func TestMigrations_AddColumn(t *testing.T) {
 	}
 	if count != 1 {
 		t.Error("deactivated_at column should exist in tokens table after migration")
+	}
+}
+
+func TestMigrations_NewDatabase(t *testing.T) {
+	// Test that a new database gets all migrations applied
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	// Verify all tables exist
+	var count int
+	err := db.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('projects', 'tokens', 'audit_events')").Scan(&count)
+	if err != nil {
+		t.Fatalf("Failed to check tables: %v", err)
+	}
+	if count != 3 {
+		t.Errorf("Expected 3 tables, got %d", count)
+	}
+
+	// Verify migration columns exist
+	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'is_active'").Scan(&count)
+	if err != nil {
+		t.Fatalf("Failed to check is_active column: %v", err)
+	}
+	if count != 1 {
+		t.Error("is_active column should exist in projects table")
+	}
+
+	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'deactivated_at'").Scan(&count)
+	if err != nil {
+		t.Fatalf("Failed to check deactivated_at column: %v", err)
+	}
+	if count != 1 {
+		t.Error("deactivated_at column should exist in projects table")
+	}
+
+	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tokens') WHERE name = 'deactivated_at'").Scan(&count)
+	if err != nil {
+		t.Fatalf("Failed to check tokens deactivated_at column: %v", err)
+	}
+	if count != 1 {
+		t.Error("deactivated_at column should exist in tokens table")
+	}
+}
+
+func TestMigrations_VersionTracking(t *testing.T) {
+	// Test that migration version is tracked
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	// Check that goose_db_version table exists and has entries
+	var version int64
+	err := db.db.QueryRow("SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1").Scan(&version)
+	if err != nil {
+		t.Fatalf("Failed to get migration version: %v", err)
+	}
+
+	// Should be at least version 2 (initial schema + deactivation columns)
+	if version < 2 {
+		t.Errorf("Expected migration version >= 2, got %d", version)
+	}
+}
+
+func TestMigrations_Idempotent(t *testing.T) {
+	// Test that running migrations multiple times is safe
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	// Get initial version
+	var initialVersion int64
+	err := db.db.QueryRow("SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1").Scan(&initialVersion)
+	if err != nil {
+		t.Fatalf("Failed to get initial version: %v", err)
+	}
+
+	// Run migrations again (should be no-op)
+	if err := DBInitForTests(db); err != nil {
+		t.Fatalf("Failed to run migrations again: %v", err)
+	}
+
+	// Version should be the same
+	var finalVersion int64
+	err = db.db.QueryRow("SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1").Scan(&finalVersion)
+	if err != nil {
+		t.Fatalf("Failed to get final version: %v", err)
+	}
+
+	if initialVersion != finalVersion {
+		t.Errorf("Migration version changed from %d to %d on second run", initialVersion, finalVersion)
 	}
 }
