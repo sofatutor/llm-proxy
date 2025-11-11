@@ -7,7 +7,7 @@
 
 ## Overview
 
-Using the BMad brownfield-create-epic task, all technical debt parent issues have been broken down into actionable stories with clear acceptance criteria, tasks, and effort estimates. A total of **21 sub-issues** have been created across **7 parent issues**.
+Using the BMad brownfield-create-epic task, all technical debt parent issues have been broken down into actionable stories with clear acceptance criteria, tasks, and effort estimates. A total of **24 sub-issues** have been created across **8 parent issues** (including existing issue #57).
 
 ---
 

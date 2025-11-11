@@ -219,11 +219,13 @@ llm-proxy/
 
 **Actual State**:
 - **SQLite ONLY** - PostgreSQL support is planned but NOT implemented
-- Schema defined in `scripts/schema.sql`
-- No migration system - schema applied manually or via setup
+- Schema defined in both `scripts/schema.sql` **and** Go-based migrations in `internal/database/database.go`
+- No automated migration system - schema changes are applied manually via SQL and/or Go code migrations
 - Connection pooling: SQLite default (1 connection)
 
 **Critical Tables**:
+> **NOTE:** The actual schema is defined by both `scripts/schema.sql` (base schema) and Go-based migrations in `internal/database/database.go` (additional columns/tables). The columns listed below include those added via migrations.
+
 - `projects`: id (UUID), name, openai_api_key, is_active, created_at, updated_at, deactivated_at
 - `tokens`: token (UUID), project_id, expires_at, is_active, request_count, created_at, deactivated_at
 - `audit_events`: id, timestamp, action, actor, project_id, token_id, request_id, client_ip, result, details (JSON)
