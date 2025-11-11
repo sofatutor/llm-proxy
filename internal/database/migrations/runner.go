@@ -97,4 +97,3 @@ func (m *MigrationRunner) Status() (int64, error) {
 func (m *MigrationRunner) Version() (int64, error) {
 	return m.Status()
 }
-
