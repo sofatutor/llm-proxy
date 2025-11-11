@@ -269,14 +269,16 @@ When working with epics that have a base PR and multiple sub-PRs (story branches
 
 #### Temporary Documentation Files
 
-**Common Temporary Files Created During Development:**
-- `ACTION_REQUIRED.md` - Action items for reviewers
-- `IMPLEMENTATION_NOTES.md` - Technical implementation details
-- `INSTALLATION_STATUS.md` - Installation/status tracking
-- `MIGRATION_SETUP_README.md` - Setup instructions
-- `MIGRATION_IMPLEMENTATION_SUMMARY.md` - Implementation summaries
-- `STORY_*_FINAL_REPORT.md` - Story completion reports
-- Other `*_STATUS.md`, `*_NOTES.md`, `*_SUMMARY.md` files
+**What Are Temporary Documentation Files?**
+
+Temporary documentation files are created during development to:
+- Document workarounds for tooling constraints
+- Track installation or setup status
+- Provide action items for reviewers
+- Capture implementation notes and decisions
+- Summarize progress or completion status
+
+These files typically have patterns like `*_STATUS.md`, `*_NOTES.md`, `*_SUMMARY.md`, `ACTION_REQUIRED.md`, or similar naming conventions that indicate temporary/status documentation rather than permanent project documentation.
 
 #### Epic Workflow: When to Keep vs Remove
 
@@ -311,41 +313,22 @@ When working with epics that have a base PR and multiple sub-PRs (story branches
 
 **Before Merging Sub-PR to Epic Base Branch**:
 
-```bash
-# Remove temporary documentation files before merging to epic base
-rm -f ACTION_REQUIRED.md
-rm -f IMPLEMENTATION_NOTES.md
-rm -f INSTALLATION_STATUS.md
-rm -f MIGRATION_SETUP_README.md
-rm -f MIGRATION_IMPLEMENTATION_SUMMARY.md
-rm -f STORY_*_FINAL_REPORT.md
-rm -f *_STATUS.md
-rm -f *_NOTES.md
-rm -f *_SUMMARY.md
-
-# Archive important info to story file if needed
-# (Add to story file's Dev Agent Record or Completion Notes)
-
-# Commit cleanup
-git add -u
-git commit -m "docs: remove temporary documentation files
-
-- Remove workaround/status documentation (no longer needed)
-- Key information preserved in story file and permanent docs"
-
-# Verify only permanent docs remain
-git status
-```
+1. **Identify temporary files**: Look for files that document temporary state (workarounds, status tracking, installation steps, action items)
+2. **Archive important information**: Extract key technical decisions, workarounds, or critical notes to:
+   - Story file's Dev Agent Record or Completion Notes
+   - Permanent README.md or code comments
+   - GitHub issue comments
+3. **Remove temporary files**: Delete all temporary documentation files
+4. **Verify cleanup**: Ensure only permanent documentation remains
 
 **Before Merging Epic Base Branch to Main**:
 
-```bash
-# Verify no temporary files remain (should already be cleaned)
-git ls-files | grep -E '(_STATUS\.md|_NOTES\.md|_SUMMARY\.md|ACTION_REQUIRED\.md|IMPLEMENTATION_NOTES\.md|INSTALLATION_STATUS\.md)'
-
-# If any found, remove them
-# (This should be rare - cleanup should happen at sub-PR merge)
-```
+1. **Verify no temporary files remain**: Check for any temporary documentation files (should already be cleaned at sub-PR merge)
+2. **Keep only permanent documentation**:
+   - Epic document (`docs/epics/epic-{n}-*.md`)
+   - Code documentation (README.md, code comments)
+   - User-facing documentation
+3. **Archive important notes** in appropriate permanent locations if needed
 
 **Exception**: If a temporary file contains critical information that should be preserved:
 1. Extract key information to appropriate permanent location (story file, epic doc, issue comment)

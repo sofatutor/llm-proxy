@@ -106,7 +106,7 @@ required:
 - Add comments for complex logic if missing
 - Ensure any API changes are documented
 - **Check for temporary documentation files** (epic workflow):
-  - Flag presence of temporary files (`ACTION_REQUIRED.md`, `IMPLEMENTATION_NOTES.md`, `INSTALLATION_STATUS.md`, `*_STATUS.md`, `*_NOTES.md`, `*_SUMMARY.md`, etc.)
+  - Flag presence of temporary documentation files created during development (workarounds, status tracking, installation notes, etc.)
   - These should be removed before merging sub-PR to epic base branch
   - If found, add to `top_issues` with severity `medium` and suggested_owner `dev`
   - Reference `.bmad-core/working-in-the-brownfield.md` section 4 for guidance
