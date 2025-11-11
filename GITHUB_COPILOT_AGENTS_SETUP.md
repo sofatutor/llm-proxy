@@ -279,7 +279,6 @@ Start with in-memory for MVP. Add Redis as optional backend when:
 - **[GitHub Copilot CLI Guide](https://gh.io/customagents/cli)** - CLI testing and validation
 - **[.github/agents/README.md](.github/agents/README.md)** - Detailed agent documentation
 - **[AGENTS.md](AGENTS.md)** - Project agent guide
-- **[BMad Agents](.claude/commands/BMad/agents/)** - Original Claude agent definitions
 
 ## Next Steps
 

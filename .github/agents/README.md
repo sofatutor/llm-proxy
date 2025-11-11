@@ -175,7 +175,6 @@ gh copilot validate-agent .github/agents/dev.md
 - **[GitHub Custom Agents Config](https://gh.io/customagents/config)** - Official configuration reference
 - **[GitHub Custom Agents CLI](https://gh.io/customagents/cli)** - CLI testing guide
 - **[AGENTS.md](../../AGENTS.md)** - Project agent guide
-- **[BMad Agents](.claude/commands/BMad/agents/)** - Claude-specific agent definitions
 
 ## Agent Development Guidelines
 
