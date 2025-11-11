@@ -46,6 +46,11 @@ The [OpenAPI specification](../api/openapi.yaml) provides machine-readable API d
 
 ## Implementation Details
 
+- **[Brownfield Architecture](brownfield-architecture.md)** - **ACTUAL** system state, technical debt, and constraints
+- **[Technical Debt Register](technical-debt.md)** - Consolidated tracking of known issues and improvements
+- **[Technical Debt GitHub Issues](TECHNICAL_DEBT_GITHUB_ISSUES.md)** - Summary of GitHub issues created for technical debt
+- **[Epic Breakdown Summary](EPIC_BREAKDOWN_SUMMARY.md)** - Brownfield epic breakdown with 24 sub-issues for technical debt
+- **[PostgreSQL Epic Breakdown](POSTGRESQL_EPIC_BREAKDOWN.md)** - Detailed breakdown of PostgreSQL support (#57)
 - **[Issues](issues/)** - Design decisions, architectural discussions, and implementation notes
 - **[Tasks](tasks/)** - Development tasks and tracking
 - **[Done](done/)** - Completed features and implementation history

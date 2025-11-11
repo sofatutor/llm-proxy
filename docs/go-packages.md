@@ -1,14 +1,28 @@
 # Go Package Documentation
 
-This document provides documentation for using LLM Proxy packages in your own Go applications.
+> **⚠️ IMPORTANT**: This document is for **internal development reference only**. All packages are in the `internal/` directory, which means they are **not intended for external use** according to Go conventions. The `internal/` directory is a Go language feature that prevents external imports.
 
-## Import Path
+This document provides documentation for LLM Proxy internal packages to help developers understand and contribute to the codebase. **This is NOT an external API reference**.
+
+## For External Users
+
+If you need to integrate with LLM Proxy:
+- **Use the HTTP API**: See [API Configuration](api-configuration.md) and [CLI Reference](cli-reference.md)
+- **Use the CLI**: See [CLI Reference](cli-reference.md) for command-line integration
+- **Use Docker**: See [README](../README.md) for container deployment
+
+## For Internal Development
+
+This section documents internal packages for contributors and maintainers.
+
+### Import Path (Internal Only)
 
 ```go
+// These imports only work within the llm-proxy repository
 import "github.com/sofatutor/llm-proxy/internal/..."
 ```
 
-> **Note:** The packages are currently in the `internal/` directory, which means they are not intended for external use according to Go conventions. If you need to use these packages externally, consider moving them to a public location or vendoring them.
+> **Note:** Go's `internal/` directory convention prevents external packages from importing these. Attempting to import from outside this repository will result in a compile error.
 
 ## Core Packages
 
