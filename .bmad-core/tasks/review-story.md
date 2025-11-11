@@ -105,6 +105,11 @@ required:
 - Verify code is self-documenting where possible
 - Add comments for complex logic if missing
 - Ensure any API changes are documented
+- **Check for temporary documentation files** (epic workflow):
+  - Flag presence of temporary documentation files created during development (workarounds, status tracking, installation notes, etc.)
+  - These should be removed before merging sub-PR to epic base branch
+  - If found, add to `top_issues` with severity `medium` and suggested_owner `dev`
+  - Reference `.bmad-core/working-in-the-brownfield.md` section 4 for guidance
 
 ## Output 1: Update Story File - QA Results Section ONLY
 
