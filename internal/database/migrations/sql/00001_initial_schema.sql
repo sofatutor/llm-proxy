@@ -1,8 +1,9 @@
 -- +goose Up
 -- Initial database schema for llm-proxy
 -- This migration creates the base tables: projects, tokens, and audit_events
+-- Handles both new databases and existing databases (adds missing columns before indexes)
 
--- Projects table
+-- Projects table (without is_active - will be added via ALTER TABLE below)
 CREATE TABLE IF NOT EXISTS projects (
 	id TEXT PRIMARY KEY,
 	name TEXT NOT NULL UNIQUE,
@@ -11,21 +12,29 @@ CREATE TABLE IF NOT EXISTS projects (
 	updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Add is_active column to projects (works for both new and existing databases)
+-- For new databases: table just created, column added here
+-- For existing databases: table exists, column added here
+-- Note: This will fail if column already exists, but goose tracks versions so it only runs once
+ALTER TABLE projects ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1;
+
 -- Create index on project name
 CREATE INDEX IF NOT EXISTS idx_projects_name ON projects(name);
 
--- Tokens table
+-- Tokens table (without is_active - will be added via ALTER TABLE below)
 CREATE TABLE IF NOT EXISTS tokens (
 	token TEXT PRIMARY KEY,
 	project_id TEXT NOT NULL,
 	expires_at DATETIME,
-	is_active BOOLEAN NOT NULL DEFAULT 1,
 	request_count INTEGER NOT NULL DEFAULT 0,
 	max_requests INTEGER,
 	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	last_used_at DATETIME,
 	FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
+
+-- Add is_active column to tokens (works for both new and existing databases)
+ALTER TABLE tokens ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 1;
 
 -- Create indexes on tokens
 CREATE INDEX IF NOT EXISTS idx_tokens_project_id ON tokens(project_id);
@@ -71,7 +80,6 @@ DROP INDEX IF EXISTS idx_audit_action;
 DROP INDEX IF EXISTS idx_audit_timestamp;
 DROP TABLE IF EXISTS audit_events;
 
-DROP INDEX IF EXISTS idx_tokens_is_active;
 DROP INDEX IF EXISTS idx_tokens_expires_at;
 DROP INDEX IF EXISTS idx_tokens_project_id;
 DROP TABLE IF EXISTS tokens;

@@ -110,10 +110,15 @@ func ensureDirExists(dir string) error {
 // 1. Relative path from current working directory (for development)
 // 2. Path relative to this source file (for tests)
 // 3. Relative path from executable location (for production)
+// Debug logging is included to help diagnose path resolution issues in production.
 func getMigrationsPath() (string, error) {
+	var triedPaths []string
+
 	// Try relative path from current working directory first (development)
 	relPath := "internal/database/migrations/sql"
+	triedPaths = append(triedPaths, relPath)
 	if _, err := os.Stat(relPath); err == nil {
+		fmt.Printf("[migrations] Found migrations directory using relative path: %s\n", relPath)
 		return relPath, nil
 	}
 
@@ -124,7 +129,9 @@ func getMigrationsPath() (string, error) {
 		sourceDir := filepath.Dir(filename)
 		// migrations/sql is sibling to database package
 		sourceRelPath := filepath.Join(sourceDir, "migrations", "sql")
+		triedPaths = append(triedPaths, sourceRelPath)
 		if _, err := os.Stat(sourceRelPath); err == nil {
+			fmt.Printf("[migrations] Found migrations directory using source-relative path: %s\n", sourceRelPath)
 			return sourceRelPath, nil
 		}
 	}
@@ -135,17 +142,21 @@ func getMigrationsPath() (string, error) {
 		execDir := filepath.Dir(execPath)
 		// Try relative to executable directory
 		execRelPath := filepath.Join(execDir, "internal/database/migrations/sql")
+		triedPaths = append(triedPaths, execRelPath)
 		if _, err := os.Stat(execRelPath); err == nil {
+			fmt.Printf("[migrations] Found migrations directory using executable-relative path: %s\n", execRelPath)
 			return execRelPath, nil
 		}
 		// Try relative to executable's parent (if executable is in bin/)
 		binRelPath := filepath.Join(filepath.Dir(execDir), "internal/database/migrations/sql")
+		triedPaths = append(triedPaths, binRelPath)
 		if _, err := os.Stat(binRelPath); err == nil {
+			fmt.Printf("[migrations] Found migrations directory using executable parent path: %s\n", binRelPath)
 			return binRelPath, nil
 		}
 	}
 
-	return "", fmt.Errorf("migrations directory not found: tried relative path, source-relative path, and executable-relative paths")
+	return "", fmt.Errorf("migrations directory not found: tried paths %v", triedPaths)
 }
 
 // runMigrations runs database migrations using the migration runner.

@@ -351,6 +351,8 @@ func TestMigrations_AddColumn(t *testing.T) {
 	defer func() { _ = rawDB.Close() }()
 
 	// Create basic schema without the new columns (simulating old database)
+	// Note: This simulates a database created before migrations existed.
+	// Migration 00001 will add is_active to both tables, and 00002 will add deactivated_at.
 	basicSchema := `
 		CREATE TABLE IF NOT EXISTS projects (
 			id TEXT PRIMARY KEY,
@@ -363,7 +365,6 @@ func TestMigrations_AddColumn(t *testing.T) {
 		CREATE TABLE IF NOT EXISTS tokens (
 			token TEXT PRIMARY KEY,
 			project_id TEXT NOT NULL,
-			is_active BOOLEAN NOT NULL DEFAULT 1,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			expires_at DATETIME,
 			max_requests INTEGER,
@@ -400,22 +401,31 @@ func TestMigrations_AddColumn(t *testing.T) {
 	}
 	defer func() { _ = db.Close() }()
 
-	// Check that migrations added the column
-	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'deactivated_at'").Scan(&count)
-	if err != nil {
-		t.Fatalf("Failed to check column existence after migration: %v", err)
-	}
-	if count != 1 {
-		t.Error("deactivated_at column should exist after migration")
-	}
-
-	// Check is_active column was also added to projects
+	// Check that migrations added the columns
+	// Migration 00001 adds is_active to both tables
 	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'is_active'").Scan(&count)
 	if err != nil {
 		t.Fatalf("Failed to check is_active column existence: %v", err)
 	}
 	if count != 1 {
-		t.Error("is_active column should exist after migration")
+		t.Error("is_active column should exist in projects table after migration")
+	}
+
+	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tokens') WHERE name = 'is_active'").Scan(&count)
+	if err != nil {
+		t.Fatalf("Failed to check is_active column existence in tokens: %v", err)
+	}
+	if count != 1 {
+		t.Error("is_active column should exist in tokens table after migration")
+	}
+
+	// Migration 00002 adds deactivated_at to both tables
+	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'deactivated_at'").Scan(&count)
+	if err != nil {
+		t.Fatalf("Failed to check deactivated_at column existence: %v", err)
+	}
+	if count != 1 {
+		t.Error("deactivated_at column should exist in projects table after migration")
 	}
 
 	// Check deactivated_at column was added to tokens
