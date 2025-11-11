@@ -40,7 +40,7 @@ func writeMigrationFile(t *testing.T, dir, filename, content string) {
 
 func TestNewMigrationRunner(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	
 	migrationsDir := createTempMigrationsDir(t)
 	
@@ -52,7 +52,7 @@ func TestNewMigrationRunner(t *testing.T) {
 
 func TestMigrationRunner_Up_EmptyDatabase(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	
 	migrationsDir := createTempMigrationsDir(t)
 	
@@ -79,7 +79,7 @@ DROP TABLE test_table;
 
 func TestMigrationRunner_Up_MultipleMigrations(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	
 	migrationsDir := createTempMigrationsDir(t)
 	
@@ -119,7 +119,7 @@ DROP TABLE posts;
 
 func TestMigrationRunner_Up_AlreadyApplied(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	
 	migrationsDir := createTempMigrationsDir(t)
 	
@@ -145,7 +145,7 @@ DROP TABLE test_table;
 
 func TestMigrationRunner_Down(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	
 	migrationsDir := createTempMigrationsDir(t)
 	
@@ -179,7 +179,7 @@ DROP TABLE test_table;
 
 func TestMigrationRunner_Version_NoMigrations(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	
 	migrationsDir := createTempMigrationsDir(t)
 	runner := NewMigrationRunner(db, migrationsDir)
@@ -191,7 +191,7 @@ func TestMigrationRunner_Version_NoMigrations(t *testing.T) {
 
 func TestMigrationRunner_Version_AfterUp(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	
 	migrationsDir := createTempMigrationsDir(t)
 	
@@ -226,7 +226,7 @@ SELECT 1;
 
 func TestMigrationRunner_Status(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	
 	migrationsDir := createTempMigrationsDir(t)
 	
@@ -257,7 +257,7 @@ DROP TABLE test_table;
 
 func TestMigrationRunner_InvalidMigrationSQL(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	
 	migrationsDir := createTempMigrationsDir(t)
 	
@@ -277,7 +277,7 @@ DROP TABLE nonexistent;
 
 func TestMigrationRunner_TransactionRollback(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	
 	migrationsDir := createTempMigrationsDir(t)
 	
@@ -320,7 +320,7 @@ func TestMigrationRunner_NilDatabase(t *testing.T) {
 
 func TestMigrationRunner_EmptyMigrationsPath(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	
 	runner := NewMigrationRunner(db, "")
 	
@@ -336,7 +336,7 @@ func TestMigrationRunner_EmptyMigrationsPath(t *testing.T) {
 
 func TestMigrationRunner_NonexistentMigrationsPath(t *testing.T) {
 	db := setupTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	
 	runner := NewMigrationRunner(db, "/nonexistent/path/to/migrations")
 	
