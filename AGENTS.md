@@ -251,14 +251,19 @@ Fixes #issue-number
 4. **Extend context** by reading specific docs as needed
 
 **Development Workflow:**
-1. Understand the task from issue doc and PLAN.md
-2. Write failing tests first (TDD)
-3. Implement minimal solution
-4. Ensure tests pass and coverage ≥ 90%
-5. Run linters and fix issues
-6. Update documentation (issue doc, relevant docs)
-7. Create PR with proper format
-8. Monitor CI completion
+1. **CRITICAL: Create feature branch from epic/main** - NEVER work directly on epic/main branches
+   - Check current branch: `git branch --show-current`
+   - If on epic/main, create feature branch: `git checkout -b <feature-branch-name>`
+   - Verify branch name TWICE before starting work
+2. Understand the task from issue doc and PLAN.md
+3. Write failing tests first (TDD)
+4. Implement minimal solution
+5. Ensure tests pass and coverage ≥ 90%
+6. Run linters and fix issues
+7. **VERIFY BRANCH AGAIN before commit** - Check `git branch --show-current` one more time
+8. Update documentation (issue doc, relevant docs)
+9. Create PR with proper format (feature branch → epic branch)
+10. Monitor CI completion
 
 **Quality Standards:**
 - Prefer small, reviewable increments
