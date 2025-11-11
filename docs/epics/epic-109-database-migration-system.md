@@ -85,8 +85,10 @@ Implement a robust database migration system to track schema changes, enable rol
 
 ### Story 1.1: Migration Tool Selection and Initial Setup
 **GitHub Issue**: [#117](https://github.com/sofatutor/llm-proxy/issues/117)  
-**Status**: Ready  
-**Estimated Effort**: 3-5 days
+**Status**: ✅ **COMPLETE**  
+**Estimated Effort**: 3-5 days  
+**Actual Effort**: 1 day  
+**PR**: [#143](https://github.com/sofatutor/llm-proxy/pull/143)
 
 **Description**: Research migration tools (golang-migrate, goose, custom), document pros/cons, select tool, and create basic migration infrastructure.
 
@@ -109,7 +111,8 @@ Implement a robust database migration system to track schema changes, enable rol
 ---
 
 ### Story 1.2: Schema Migration Implementation
-**Status**: Pending (blocked by Story 1.1)  
+**GitHub Issue**: [#144](https://github.com/sofatutor/llm-proxy/issues/144)  
+**Status**: Ready (unblocked - Story 1.1 complete)  
 **Estimated Effort**: 2-3 days
 
 **Description**: Convert existing schema to migrations, implement full migration runner, and add version tracking.
@@ -132,6 +135,7 @@ Implement a robust database migration system to track schema changes, enable rol
 ---
 
 ### Story 1.3: CLI Integration and Documentation
+**GitHub Issue**: [#145](https://github.com/sofatutor/llm-proxy/issues/145)  
 **Status**: Pending (blocked by Story 1.2)  
 **Estimated Effort**: 1-2 days
 
