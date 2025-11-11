@@ -57,6 +57,9 @@ COPY --chown=appuser:appgroup web/templates /app/web/templates
 # Copy web assets
 COPY --chown=appuser:appgroup web/static /app/web/static
 
+# Copy database migrations (required for migration runner)
+COPY --from=builder --chown=appuser:appgroup internal/database/migrations /app/internal/database/migrations
+
 # Define volumes for data persistence
 VOLUME ["/app/data", "/app/logs", "/app/config", "/app/certs"]
 
