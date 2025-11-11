@@ -2,8 +2,8 @@
 // This is a Go-based alternative to setup_migrations.sh
 //
 // Usage:
-//   go run scripts/setup_migrations_structure.go
 //
+//	go run scripts/setup_migrations_structure.go
 package main
 
 import (
