@@ -61,6 +61,10 @@ The goal is quality delivery, not just checking boxes.]]
    - [ ] All tasks within the story file are marked as complete.
    - [ ] Any clarifications or decisions made during development are documented in the story file or linked appropriately.
    - [ ] The story wrap up section has been completed with notes of changes or information relevant to the next story or overall project, the agent model that was primarily used during development, and the changelog of any changes is properly updated.
+   - [ ] **Temporary documentation files removed** (if working in epic workflow):
+     - [ ] Removed temporary files (`ACTION_REQUIRED.md`, `IMPLEMENTATION_NOTES.md`, `INSTALLATION_STATUS.md`, `*_STATUS.md`, `*_NOTES.md`, `*_SUMMARY.md`, etc.)
+     - [ ] Important information extracted to story file's Dev Agent Record or Completion Notes if needed
+     - [ ] See `.bmad-core/working-in-the-brownfield.md` section 4 for epic workflow guidance
 
 6. **Dependencies, Build & Configuration:**
 
