@@ -112,8 +112,10 @@ Implement a robust database migration system to track schema changes, enable rol
 
 ### Story 1.2: Schema Migration Implementation
 **GitHub Issue**: [#144](https://github.com/sofatutor/llm-proxy/issues/144)  
-**Status**: Ready (unblocked - Story 1.1 complete)  
-**Estimated Effort**: 2-3 days
+**Status**: ✅ **COMPLETE**  
+**Estimated Effort**: 2-3 days  
+**Actual Effort**: 1 day  
+**PR**: [#146](https://github.com/sofatutor/llm-proxy/pull/146)
 
 **Description**: Convert existing schema to migrations, implement full migration runner, and add version tracking.
 
@@ -245,7 +247,7 @@ Gate: **PASS** → `docs/qa/gates/109.1.2-schema-migration-implementation.yml`
 
 ### Story 1.3: CLI Integration and Documentation
 **GitHub Issue**: [#145](https://github.com/sofatutor/llm-proxy/issues/145)  
-**Status**: Pending (blocked by Story 1.2)  
+**Status**: Ready (unblocked - Story 1.2 complete)  
 **Estimated Effort**: 1-2 days
 
 **Description**: Integrate migration runner with CLI commands and create comprehensive documentation.
