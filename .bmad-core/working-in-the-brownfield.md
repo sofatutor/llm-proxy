@@ -263,7 +263,86 @@ Brownfield changes should:
 - Include migration scripts
 - Maintain backwards compatibility
 
-### 4. Test Integration Thoroughly
+### 4. Manage Temporary Documentation in Epic Workflows
+
+When working with epics that have a base PR and multiple sub-PRs (story branches), temporary documentation files serve different purposes at different stages:
+
+#### Temporary Documentation Files
+
+**What Are Temporary Documentation Files?**
+
+Temporary documentation files are created during development to:
+- Document workarounds for tooling constraints
+- Track installation or setup status
+- Provide action items for reviewers
+- Capture implementation notes and decisions
+- Summarize progress or completion status
+
+These files typically have patterns like `*_STATUS.md`, `*_NOTES.md`, `*_SUMMARY.md`, `ACTION_REQUIRED.md`, or similar naming conventions that indicate temporary/status documentation rather than permanent project documentation.
+
+#### Epic Workflow: When to Keep vs Remove
+
+**During Development (Sub-PRs)**:
+- ✅ **Keep temporary documentation files** in story branches
+- ✅ Useful for review context and implementation tracking
+- ✅ Helps reviewers understand decisions and progress
+- ✅ Documents workarounds for tooling constraints
+
+**Before Merging Sub-PR to Epic Base Branch**:
+- ❌ **Remove ALL temporary documentation files** before merging to epic base
+- **Rationale**: These files document temporary state (workarounds, installation steps, status tracking). Once the workaround is complete or the story is done, this documentation is outdated and not useful for future stories.
+- ✅ **Archive important information** (if needed):
+  - Extract key technical decisions → Add to story file's Dev Agent Record
+  - Document workarounds → Add to story file's Completion Notes
+  - Installation steps → Already in permanent README.md or code comments
+  - Action items → Already addressed or documented in GitHub issue comments
+
+**Before Merging Epic Base Branch to Main**:
+- ❌ **Remove ALL temporary documentation files** (should already be removed)
+- ✅ Verify epic base branch is clean of temporary files
+- ✅ Keep only permanent documentation:
+  - Epic document (`docs/epics/epic-{n}-*.md`)
+  - Code documentation (README.md, code comments)
+  - User-facing documentation
+- ✅ Archive important notes in:
+  - Epic document (if relevant to epic scope)
+  - GitHub issue comments (if story-specific)
+  - Story files in `docs/stories/` (if story-specific)
+
+#### Cleanup Checklist
+
+**Before Merging Sub-PR to Epic Base Branch**:
+
+1. **Identify temporary files**: Look for files that document temporary state (workarounds, status tracking, installation steps, action items)
+2. **Archive important information**: Extract key technical decisions, workarounds, or critical notes to:
+   - Story file's Dev Agent Record or Completion Notes
+   - Permanent README.md or code comments
+   - GitHub issue comments
+3. **Remove temporary files**: Delete all temporary documentation files
+4. **Verify cleanup**: Ensure only permanent documentation remains
+
+**Before Merging Epic Base Branch to Main**:
+
+1. **Verify no temporary files remain**: Check for any temporary documentation files (should already be cleaned at sub-PR merge)
+2. **Keep only permanent documentation**:
+   - Epic document (`docs/epics/epic-{n}-*.md`)
+   - Code documentation (README.md, code comments)
+   - User-facing documentation
+3. **Archive important notes** in appropriate permanent locations if needed
+
+**Exception**: If a temporary file contains critical information that should be preserved:
+1. Extract key information to appropriate permanent location (story file, epic doc, issue comment)
+2. Then remove the temporary file
+
+#### Why This Matters
+
+- **Clean Repository**: Epic base and main branches should only contain permanent, production-ready documentation
+- **Review Efficiency**: Temporary files help during sub-PR review but become outdated once workarounds are complete
+- **Avoid Clutter**: Files documenting temporary state (tooling constraints, installation workarounds) are not useful for future stories
+- **Traceability**: Important information preserved in appropriate permanent locations (story files, epic docs, issue comments)
+- **Maintainability**: Future developers aren't confused by outdated temporary files documenting resolved workarounds
+
+### 5. Test Integration Thoroughly
 
 #### Why the Test Architect is Critical for Brownfield
 

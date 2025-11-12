@@ -18,9 +18,11 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/redis/go-redis/v9"
 	"github.com/sofatutor/llm-proxy/internal/api"
 	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/database/migrations"
 	"github.com/sofatutor/llm-proxy/internal/dispatcher"
 	"github.com/sofatutor/llm-proxy/internal/dispatcher/plugins"
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
@@ -201,6 +203,34 @@ func runInteractiveSetup() {
 
 	// Write configuration to file
 	writeConfig()
+
+	// Run migrations automatically during setup
+	if err := runMigrationsDuringSetup(); err != nil {
+		fmt.Printf("Warning: Failed to run migrations during setup: %v\n", err)
+		fmt.Println("You can run migrations manually later with: llm-proxy migrate up")
+	}
+}
+
+// runMigrationsDuringSetup runs migrations during setup
+func runMigrationsDuringSetup() error {
+	db, migrationsPath, err := getMigrationResources()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil {
+			// Log but don't fail setup if close fails
+			fmt.Printf("Warning: Failed to close database connection: %v\n", closeErr)
+		}
+	}()
+
+	runner := migrations.NewMigrationRunner(db, migrationsPath)
+	if err := runner.Up(); err != nil {
+		return fmt.Errorf("failed to apply migrations: %w", err)
+	}
+
+	fmt.Println("Database migrations applied successfully")
+	return nil
 }
 
 // runNonInteractiveSetup performs a non-interactive setup
@@ -222,6 +252,12 @@ func runNonInteractiveSetup() {
 	managementToken = setupCfg.ManagementToken
 	fmt.Printf("Generated Management Token: %s\n", token.ObfuscateToken(managementToken))
 	fmt.Printf("Configuration written to %s\n", configPath)
+
+	// Run migrations automatically during setup
+	if err := runMigrationsDuringSetup(); err != nil {
+		fmt.Printf("Warning: Failed to run migrations during setup: %v\n", err)
+		fmt.Println("You can run migrations manually later with: llm-proxy migrate up")
+	}
 }
 
 // writeConfig writes the configuration to a file
@@ -419,11 +455,19 @@ func init() {
 	}
 	openaiCmd.AddCommand(chatCmd)
 
+	// Register migrate subcommands and flags
+	migrateCmd.AddCommand(migrateUpCmd)
+	migrateCmd.AddCommand(migrateDownCmd)
+	migrateCmd.AddCommand(migrateStatusCmd)
+	migrateCmd.AddCommand(migrateVersionCmd)
+	migrateCmd.PersistentFlags().StringVar(&databasePath, "db", config.EnvOrDefault("DATABASE_PATH", "data/llm-proxy.db"), "Path to SQLite database (default: data/llm-proxy.db, overridden by DATABASE_PATH env var or --db flag)")
+
 	// Add all commands to root
 	cobraRoot.AddCommand(setupCmd)
 	cobraRoot.AddCommand(openaiCmd)
 	cobraRoot.AddCommand(serverCmd)
 	cobraRoot.AddCommand(adminCmd)
+	cobraRoot.AddCommand(migrateCmd)
 
 	// Manage command and subcommands
 	var manageCmd = &cobra.Command{

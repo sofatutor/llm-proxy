@@ -18,6 +18,8 @@ Guidelines for managing task lists in Markdown to track progress on completing a
       - Integration (targeted): `go test -v -race -parallel=4 -tags=integration -timeout=5m -run Integration ./...`
     - **Only if all tests pass**: Stage changes (`git add .`)
     - **Clean up**: Remove any temporary files and temporary code before committing
+      - For epic workflows: Remove temporary documentation files (`ACTION_REQUIRED.md`, `IMPLEMENTATION_NOTES.md`, `*_STATUS.md`, etc.) before merging sub-PR to epic base branch
+      - See `.bmad-core/working-in-the-brownfield.md` section 4 for epic workflow guidance
     - **Commit**: Use a descriptive commit message that:
       - Uses conventional commit format (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`)
       - Summarizes what was accomplished in the parent task
