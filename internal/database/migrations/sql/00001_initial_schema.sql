@@ -80,6 +80,7 @@ DROP INDEX IF EXISTS idx_audit_action;
 DROP INDEX IF EXISTS idx_audit_timestamp;
 DROP TABLE IF EXISTS audit_events;
 
+DROP INDEX IF EXISTS idx_tokens_is_active;
 DROP INDEX IF EXISTS idx_tokens_expires_at;
 DROP INDEX IF EXISTS idx_tokens_project_id;
 DROP TABLE IF EXISTS tokens;

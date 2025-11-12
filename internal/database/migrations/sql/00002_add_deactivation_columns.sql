@@ -17,10 +17,11 @@ ALTER TABLE tokens ADD COLUMN deactivated_at DATETIME;
 
 -- +goose Down
 -- Rollback: Remove deactivation columns
--- Note: SQLite doesn't support DROP COLUMN directly, but goose handles this
--- For proper rollback, we would need to recreate tables, but for simplicity
--- we'll document that rollback requires manual intervention for SQLite
--- In production with PostgreSQL, DROP COLUMN works directly
+-- Note: SQLite doesn't support DROP COLUMN directly. Goose cannot automatically
+-- generate the table recreation logic required for SQLite rollback, so manual
+-- intervention is needed for SQLite environments. For proper rollback, you would
+-- need to recreate the tables in SQLite. In production with PostgreSQL, DROP COLUMN
+-- works directly.
 
 -- SQLite limitation: Cannot DROP COLUMN directly
 -- This migration cannot be fully rolled back in SQLite without recreating tables
