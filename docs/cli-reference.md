@@ -8,6 +8,7 @@ This document is a snapshot of the LLM Proxy CLI capabilities and flags intended
 - [Commands](#commands)
   - [`llm-proxy server`](#llm-proxy-server)
   - [`llm-proxy setup`](#llm-proxy-setup)
+  - [`llm-proxy migrate`](#llm-proxy-migrate)
   - [`llm-proxy manage`](#llm-proxy-manage)
   - [`llm-proxy dispatcher`](#llm-proxy-dispatcher)
   - [`llm-proxy benchmark`](#llm-proxy-benchmark)
@@ -122,6 +123,96 @@ llm-proxy setup \
 # Setup without creating a project
 llm-proxy setup --openai-key sk-key --management-token token --skip-project
 ```
+
+**Note:** Migrations run automatically during setup. If migrations fail, you can run them manually with `llm-proxy migrate up`.
+
+---
+
+### `llm-proxy migrate`
+
+Database migration management commands.
+
+**Usage:**
+```bash
+llm-proxy migrate [command] [flags]
+```
+
+**Global Flags:**
+- `--db string`: Path to SQLite database (default: "data/llm-proxy.db", overridden by DATABASE_PATH env var)
+
+#### `llm-proxy migrate up`
+
+Apply all pending migrations to bring the database up to date.
+
+**Usage:**
+```bash
+llm-proxy migrate up [flags]
+```
+
+**Examples:**
+```bash
+# Apply migrations to default database
+llm-proxy migrate up
+
+# Apply migrations to custom database
+llm-proxy migrate up --db /path/to/database.db
+```
+
+#### `llm-proxy migrate down`
+
+Roll back the most recently applied migration.
+
+**Usage:**
+```bash
+llm-proxy migrate down [flags]
+```
+
+**Warning:** Only use rollback in development. Production rollbacks should be carefully planned.
+
+**Examples:**
+```bash
+# Rollback last migration
+llm-proxy migrate down
+
+# Rollback with custom database
+llm-proxy migrate down --db /path/to/database.db
+```
+
+#### `llm-proxy migrate status`
+
+Show the current migration version.
+
+**Usage:**
+```bash
+llm-proxy migrate status [flags]
+```
+
+**Examples:**
+```bash
+# Check migration status
+llm-proxy migrate status
+
+# Check status with custom database
+llm-proxy migrate status --db /path/to/database.db
+```
+
+#### `llm-proxy migrate version`
+
+Alias for `llm-proxy migrate status`. Shows the current migration version.
+
+**Usage:**
+```bash
+llm-proxy migrate version [flags]
+```
+
+**Examples:**
+```bash
+# Check migration version
+llm-proxy migrate version
+```
+
+**See Also:**
+- [Migration Guide](migrations.md) - Complete migration workflow documentation
 
 ---
 
