@@ -21,10 +21,10 @@ ENV CGO_ENABLED=1
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     GOMODCACHE=/go/pkg/mod \
-    go build -ldflags "-w" -trimpath -o /llm-proxy ./cmd/proxy
+    go build -ldflags "-w -s -extldflags '-static'" -a -trimpath -o /llm-proxy ./cmd/proxy
 
 # Use a small alpine image for the final container
-FROM alpine:3.18
+FROM alpine:3.20
 
 # Security: Add only required runtime libraries
 RUN --mount=type=cache,target=/var/cache/apk apk add ca-certificates tzdata sqlite-libs wget
