@@ -14,11 +14,11 @@ The `logging` package handles all application logging concerns:
 
 ## Configuration Options
 
-| Environment Variable | Description | Default | Values |
-|---------------------|-------------|---------|--------|
-| `LOG_LEVEL` | Minimum log level to output | `info` | `debug`, `info`, `warn`, `error` |
-| `LOG_FORMAT` | Output format | `json` | `json`, `console` |
-| `LOG_FILE` | File path for log output | - | File path (empty = stdout) |
+| Environment Variable | Description | Default |
+|---------------------|-------------|---------|
+| `LOG_LEVEL` | Minimum log level (`debug`, `info`, `warn`, `error`) | `info` |
+| `LOG_FORMAT` | Output format (`json`, `console`) | `json` |
+| `LOG_FILE` | File path for log output (empty = stdout) | - |
 
 ## Creating a Logger
 
