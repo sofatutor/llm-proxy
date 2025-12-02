@@ -18,6 +18,9 @@ Start with the main [README](../README.md) for a quick overview, installation, a
 - **[API Configuration](api-configuration.md)** - Configure API providers, endpoints, and security policies
 - **[Security Best Practices](security.md)** - Production security, secrets management, and hardening
 - **[Docker Compose PostgreSQL Setup](docker-compose-postgres.md)** - Run llm-proxy with PostgreSQL using Docker Compose
+- **[Database Selection Guide](database-selection.md)** - Choose between SQLite and PostgreSQL
+- **[Database Migrations Guide](migrations.md)** - Version-controlled schema changes
+- **[PostgreSQL Troubleshooting](postgresql-troubleshooting.md)** - Common PostgreSQL issues and solutions
 
 ## Observability & Monitoring
 

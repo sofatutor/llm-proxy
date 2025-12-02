@@ -18,7 +18,7 @@ A transparent, secure proxy for OpenAI's API with token management, rate limitin
 - **Async Event Bus & Dispatcher**: All API instrumentation events are handled via an always-on, fully asynchronous event bus (in-memory or Redis) with support for multiple subscribers, batching, retry logic, and graceful shutdown. Persistent event logging is handled by a dispatcher CLI or the `--file-event-log` flag.
 - **OpenAI Token Counting**: Accurate prompt and completion token counting using tiktoken-go.
 - **Metrics Endpoint (provider-agnostic)**: Optional JSON metrics endpoint; Prometheus scraping/export is optional and not required by core features
-- **SQLite Storage** with database migrations
+- **Multiple Database Support**: SQLite (default) and PostgreSQL with automatic migrations
 - **Database Migrations**: Version-controlled schema changes with rollback support. See [Migration Guide](docs/migrations.md)
 - **Docker Deployment**
 
@@ -66,7 +66,6 @@ MANAGEMENT_TOKEN=your-secure-management-token ./bin/llm-proxy
 ## Configuration (Essentials)
 - `MANAGEMENT_TOKEN` (required): Admin API access
 - `LISTEN_ADDR`: Default `:8080`
-- `DATABASE_PATH`: Default `./data/llm-proxy.db`
 - `LOG_LEVEL`: Default `info`
 - `LOG_FILE`: Path to log file (stdout if empty)
 - `LOG_MAX_SIZE_MB`: Rotate log after this size in MB (default 10)
@@ -78,6 +77,24 @@ MANAGEMENT_TOKEN=your-secure-management-token ./bin/llm-proxy
 - `OBSERVABILITY_ENABLED`: Deprecated; the async event bus is now always enabled
 - `OBSERVABILITY_BUFFER_SIZE`: Event buffer size for instrumentation events (default 1000)
 - `FILE_EVENT_LOG`: Path to persistent event log file (enables file event logging via dispatcher)
+
+### Database Configuration
+The LLM Proxy supports **SQLite** (default) and **PostgreSQL** as database backends.
+
+**SQLite (default):**
+- `DB_DRIVER`: Database driver, set to `sqlite` (default)
+- `DATABASE_PATH`: Path to SQLite database file (default `./data/llm-proxy.db`)
+
+**PostgreSQL:**
+- `DB_DRIVER`: Set to `postgres` for PostgreSQL
+- `DATABASE_URL`: PostgreSQL connection string (e.g., `postgres://user:password@localhost:5432/llmproxy?sslmode=require`)
+
+**Connection Pool (both drivers):**
+- `DATABASE_POOL_SIZE`: Maximum open connections (default `10`)
+- `DATABASE_MAX_IDLE_CONNS`: Maximum idle connections (default `5`)
+- `DATABASE_CONN_MAX_LIFETIME`: Connection max lifetime (default `1h`)
+
+See [PostgreSQL Setup Guide](docs/docker-compose-postgres.md) for detailed PostgreSQL configuration.
 
 ### Caching Configuration
 - `HTTP_CACHE_ENABLED`: Enable HTTP response caching (default `true`)

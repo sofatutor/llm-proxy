@@ -312,6 +312,66 @@ grep '"project_id":"proj-123"' /data/audit.log
 - Consider implementing a Web Application Firewall (WAF)
 - Use audit logs for compliance reporting and forensic analysis
 
+## Database Security
+
+### SQLite Security
+
+- **File Permissions**: Restrict database file access to the application user only
+  ```bash
+  chmod 600 ./data/llm-proxy.db
+  ```
+- **Directory Permissions**: Secure the data directory
+  ```bash
+  chmod 700 ./data
+  ```
+- **Encryption**: Consider SQLite encryption extensions for sensitive deployments
+- **Backup Security**: Encrypt database backups and secure backup storage
+
+### PostgreSQL Security
+
+- **Connection Security**: Always use SSL in production
+  ```bash
+  DATABASE_URL=postgres://user:pass@host:5432/db?sslmode=require
+  ```
+- **Authentication**: Use strong passwords and consider certificate-based authentication
+- **Network Security**: Limit PostgreSQL port access to application servers only
+- **User Privileges**: Create a dedicated database user with minimal required privileges
+  ```sql
+  CREATE USER llmproxy WITH PASSWORD 'secure_password';
+  GRANT CONNECT ON DATABASE llmproxy TO llmproxy;
+  GRANT USAGE ON SCHEMA public TO llmproxy;
+  GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO llmproxy;
+  GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO llmproxy;
+  ```
+- **Encryption at Rest**: Enable PostgreSQL data encryption for sensitive data
+- **Audit Logging**: Enable PostgreSQL audit logging for compliance
+  ```sql
+  ALTER SYSTEM SET log_statement = 'ddl';
+  ALTER SYSTEM SET log_connections = 'on';
+  ALTER SYSTEM SET log_disconnections = 'on';
+  ```
+
+### Connection Pool Security
+
+- **Limit Pool Size**: Set appropriate connection limits to prevent resource exhaustion
+  ```bash
+  DATABASE_POOL_SIZE=10
+  DATABASE_MAX_IDLE_CONNS=5
+  ```
+- **Connection Lifetime**: Rotate connections periodically
+  ```bash
+  DATABASE_CONN_MAX_LIFETIME=30m
+  ```
+
+### Data Protection
+
+- **API Key Storage**: API keys are stored in plaintext; consider:
+  - Using a secret manager for production deployments
+  - Implementing application-level encryption for sensitive columns
+  - Regular key rotation policies
+- **PII Handling**: Minimize storage of personally identifiable information
+- **Data Retention**: Implement automated data cleanup policies
+
 ## Regular Security Practices
 
 - Update dependencies regularly to patch security vulnerabilities
