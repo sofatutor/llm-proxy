@@ -22,8 +22,30 @@ jobs:
       - name: Install dependencies
         run: go mod download
       
-      - name: Build
+      - name: Build (default - SQLite only)
         run: go build -v ./...
       
-      - name: Build proxy binary
-        run: go build -v -o llm-proxy ./cmd/proxy 
+      - name: Build proxy binary (SQLite only)
+        run: |
+          go build -v -o llm-proxy-sqlite ./cmd/proxy
+          echo "SQLite-only binary size: $(du -h llm-proxy-sqlite | cut -f1)"
+      
+      - name: Build (with PostgreSQL support)
+        run: go build -tags postgres -v ./...
+      
+      - name: Build proxy binary (with PostgreSQL)
+        run: |
+          go build -tags postgres -v -o llm-proxy-postgres ./cmd/proxy
+          echo "PostgreSQL binary size: $(du -h llm-proxy-postgres | cut -f1)"
+      
+      - name: Verify build variants
+        run: |
+          echo "Verifying both binaries exist and have different sizes..."
+          ls -la llm-proxy-sqlite llm-proxy-postgres
+          SQLITE_SIZE=$(stat --printf="%s" llm-proxy-sqlite)
+          POSTGRES_SIZE=$(stat --printf="%s" llm-proxy-postgres)
+          if [ "$POSTGRES_SIZE" -le "$SQLITE_SIZE" ]; then
+            echo "ERROR: PostgreSQL binary should be larger than SQLite-only binary"
+            exit 1
+          fi
+          echo "✅ PostgreSQL binary is larger as expected (conditional compilation working)" 

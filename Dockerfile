@@ -3,6 +3,11 @@
 # Use target platform for CGO (ensures native GCC under QEMU for non-amd64)
 FROM --platform=$TARGETPLATFORM golang:1.23-alpine AS builder
 
+# Build argument for PostgreSQL support (default: enabled for backward compatibility)
+# Build without PostgreSQL: docker build --build-arg POSTGRES_SUPPORT=false .
+# Build with PostgreSQL:    docker build --build-arg POSTGRES_SUPPORT=true .
+ARG POSTGRES_SUPPORT=true
+
 WORKDIR /app
 
 # Copy go.mod and go.sum files first for better caching
@@ -17,12 +22,18 @@ COPY . .
 RUN --mount=type=cache,target=/var/cache/apk apk add gcc musl-dev sqlite-dev
 
 # Build the application with CGO enabled for go-sqlite3
-# Include postgres build tag for PostgreSQL advisory locking support
+# Include postgres build tag only if POSTGRES_SUPPORT is true
 ENV CGO_ENABLED=1
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    GOMODCACHE=/go/pkg/mod \
-    go build -tags=postgres -ldflags "-w" -trimpath -o /llm-proxy ./cmd/proxy
+    export GOMODCACHE=/go/pkg/mod && \
+    if [ "$POSTGRES_SUPPORT" = "true" ]; then \
+        echo "Building with PostgreSQL support..." && \
+        go build -tags=postgres -ldflags "-w" -trimpath -o /llm-proxy ./cmd/proxy; \
+    else \
+        echo "Building without PostgreSQL support..." && \
+        go build -ldflags "-w" -trimpath -o /llm-proxy ./cmd/proxy; \
+    fi
 
 # Use a small alpine image for the final container
 FROM alpine:3.18
