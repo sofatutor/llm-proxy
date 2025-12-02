@@ -18,7 +18,8 @@ import (
 
 // DB represents the database connection.
 type DB struct {
-	db *sql.DB
+	db     *sql.DB
+	driver DriverType
 }
 
 // Config contains the database configuration.
@@ -80,7 +81,7 @@ func New(config Config) (*DB, error) {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
-	return &DB{db: db}, nil
+	return &DB{db: db, driver: DriverSQLite}, nil
 }
 
 // Close closes the database connection.
@@ -219,4 +220,31 @@ func (d *DB) Transaction(ctx context.Context, fn func(*sql.Tx) error) error {
 // DB returns the underlying sql.DB instance.
 func (d *DB) DB() *sql.DB {
 	return d.db
+}
+
+// Driver returns the database driver type.
+func (d *DB) Driver() DriverType {
+	return d.driver
+}
+
+// HealthCheck performs a health check on the database connection.
+// It verifies that the database is reachable and responsive.
+func (d *DB) HealthCheck(ctx context.Context) error {
+	if d == nil || d.db == nil {
+		return fmt.Errorf("database is nil")
+	}
+
+	// Test the connection with a simple query
+	if err := d.db.PingContext(ctx); err != nil {
+		return fmt.Errorf("database ping failed: %w", err)
+	}
+
+	// Verify we can execute a simple query
+	var result int
+	err := d.db.QueryRowContext(ctx, "SELECT 1").Scan(&result)
+	if err != nil {
+		return fmt.Errorf("database query failed: %w", err)
+	}
+
+	return nil
 }

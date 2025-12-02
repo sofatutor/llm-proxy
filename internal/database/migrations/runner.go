@@ -185,8 +185,7 @@ func (m *MigrationRunner) acquireMigrationLock() (func(), error) {
 	case "sqlite3":
 		return m.acquireSQLiteLock()
 	case "postgres":
-		// PostgreSQL support not yet implemented - will be added when PostgreSQL driver is integrated
-		return nil, fmt.Errorf("PostgreSQL advisory locking not yet implemented")
+		return m.acquirePostgresLock()
 	default:
 		return m.acquireSQLiteLock() // Default to SQLite lock for backward compatibility
 	}
@@ -286,4 +285,40 @@ func (m *MigrationRunner) acquireSQLiteLock() (func(), error) {
 	}
 
 	return nil, fmt.Errorf("failed to acquire migration lock after %d retries", maxRetries)
+}
+
+// acquirePostgresLock acquires an advisory lock using PostgreSQL's pg_advisory_lock.
+// This prevents concurrent migrations when multiple instances start simultaneously.
+// The lock is automatically released when the connection closes.
+func (m *MigrationRunner) acquirePostgresLock() (func(), error) {
+	// Use a fixed lock ID for migrations (derived from "llm-proxy-migrations")
+	// This ID is unique enough for our purposes and consistent across instances
+	const lockID = 3141592653 // A fixed number to identify this application's migration lock
+
+	maxRetries := 10
+	retryDelay := 100 * time.Millisecond
+
+	for i := 0; i < maxRetries; i++ {
+		// Try to acquire the advisory lock (non-blocking)
+		var acquired bool
+		err := m.db.QueryRow("SELECT pg_try_advisory_lock($1)", lockID).Scan(&acquired)
+		if err != nil {
+			return nil, fmt.Errorf("failed to try advisory lock: %w", err)
+		}
+
+		if acquired {
+			// Lock acquired successfully
+			release := func() {
+				_, _ = m.db.Exec("SELECT pg_advisory_unlock($1)", lockID)
+			}
+			return release, nil
+		}
+
+		// Lock not acquired, wait and retry
+		if i < maxRetries-1 {
+			time.Sleep(retryDelay)
+		}
+	}
+
+	return nil, fmt.Errorf("failed to acquire PostgreSQL advisory lock after %d retries", maxRetries)
 }
