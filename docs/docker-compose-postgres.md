@@ -2,6 +2,60 @@
 
 This guide covers how to run llm-proxy with PostgreSQL using Docker Compose.
 
+## Build Tags
+
+The llm-proxy uses Go build tags to conditionally compile PostgreSQL support. This allows for smaller binaries when PostgreSQL support is not needed.
+
+### Default Build (SQLite Only)
+
+By default, the binary is built without PostgreSQL support:
+
+```bash
+# Build without PostgreSQL support (smaller binary)
+go build ./cmd/proxy
+
+# Or with explicit flags
+go build -o llm-proxy ./cmd/proxy
+```
+
+### Build with PostgreSQL Support
+
+To enable PostgreSQL support, use the `postgres` build tag:
+
+```bash
+# Build with PostgreSQL support
+go build -tags postgres ./cmd/proxy
+
+# Or with explicit flags
+go build -tags postgres -o llm-proxy ./cmd/proxy
+```
+
+### Docker Build Variants
+
+The Dockerfile supports both variants via the `POSTGRES_SUPPORT` build argument:
+
+```bash
+# Build with PostgreSQL support (default)
+docker build -t llm-proxy:postgres .
+
+# Build without PostgreSQL support (smaller image)
+docker build --build-arg POSTGRES_SUPPORT=false -t llm-proxy:sqlite .
+```
+
+### Binary Size Comparison
+
+| Variant | Approximate Size |
+|---------|-----------------|
+| SQLite only | ~31 MB |
+| With PostgreSQL | ~37 MB |
+
+### Error Handling
+
+If you try to use PostgreSQL with a binary built without the `postgres` tag, you'll receive this error:
+```
+PostgreSQL support not compiled in; build with -tags postgres to enable
+```
+
 ## Overview
 
 The llm-proxy supports both SQLite (default) and PostgreSQL as database backends. This guide explains how to run the PostgreSQL setup using Docker Compose.
