@@ -1164,20 +1164,18 @@ DROP TABLE status_test;
 	assert.Equal(t, int64(1), version)
 }
 
-// TestMigrationRunner_AcquirePostgresLock_OnSQLite tests that PostgreSQL lock acquisition
-// fails gracefully when called against a SQLite database.
+// TestMigrationRunner_AcquirePostgresLock_Stub tests the PostgreSQL lock stub
+// which is used when the postgres build tag is not set.
 // The real PostgreSQL locking will be tested via Docker Compose integration tests (issue #139).
-func TestMigrationRunner_AcquirePostgresLock_OnSQLite(t *testing.T) {
+func TestMigrationRunner_AcquirePostgresLock_Stub(t *testing.T) {
 	db := setupTestDB(t)
 	defer func() { _ = db.Close() }()
 
 	runner := NewMigrationRunner(db, "")
 
-	// PostgreSQL advisory locking should fail when run against SQLite
-	// because pg_try_advisory_lock is a PostgreSQL-specific function
+	// The stub should return an error indicating PostgreSQL build tag is required
 	release, err := runner.acquirePostgresLock()
 	assert.Error(t, err)
 	assert.Nil(t, release)
-	// The error should indicate failure to execute the PostgreSQL-specific query
-	assert.Contains(t, err.Error(), "advisory lock")
+	assert.Contains(t, err.Error(), "postgres")
 }

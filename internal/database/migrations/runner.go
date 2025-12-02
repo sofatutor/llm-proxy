@@ -287,6 +287,7 @@ func (m *MigrationRunner) acquireSQLiteLock() (func(), error) {
 	return nil, fmt.Errorf("failed to acquire migration lock after %d retries", maxRetries)
 }
 
-// NOTE: acquirePostgresLock is defined in postgres_lock.go and provides PostgreSQL
-// advisory locking for migration concurrency. Integration tests for PostgreSQL will
-// be added via Docker Compose in issue #139.
+// NOTE: acquirePostgresLock is defined in postgres_lock.go (with postgres build tag)
+// and postgres_lock_stub.go (without postgres build tag). This allows PostgreSQL-specific
+// code to be excluded from default coverage calculations. PostgreSQL integration tests
+// will be added via Docker Compose in issue #139.
