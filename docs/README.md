@@ -24,6 +24,7 @@ Start with the main [README](../README.md) for a quick overview, installation, a
 
 ## Observability & Monitoring
 
+- **[Log Search & Filter Guide](logging.md)** - Structured log fields, jq queries, and observability backend examples
 - **[Instrumentation Guide](instrumentation.md)** - Event system, async middleware, and monitoring
 - **[Security Best Practices](security.md)** - Production security, secrets management, audit logging, and hardening
 
