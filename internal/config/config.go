@@ -88,6 +88,9 @@ type Config struct {
 	EventBusBackend string // Backend for event bus: "redis" or "in-memory"
 	RedisAddr       string // Redis server address (e.g., "localhost:6379")
 	RedisDB         int    // Redis database number (default: 0)
+
+	// Cache stats aggregation
+	CacheStatsBufferSize int // Buffer size for async cache stats aggregation (default: 1000)
 }
 
 // AdminUIConfig holds configuration for the Admin UI server
@@ -187,6 +190,9 @@ func New() (*Config, error) {
 		EventBusBackend: getEnvString("LLM_PROXY_EVENT_BUS", "redis"),
 		RedisAddr:       getEnvString("REDIS_ADDR", "localhost:6379"),
 		RedisDB:         getEnvInt("REDIS_DB", 0),
+
+		// Cache stats aggregation
+		CacheStatsBufferSize: getEnvInt("CACHE_STATS_BUFFER_SIZE", 1000),
 	}
 
 	// Validate required settings
@@ -352,5 +358,8 @@ func DefaultConfig() *Config {
 		EventBusBackend: "redis",
 		RedisAddr:       "localhost:6379",
 		RedisDB:         0,
+
+		// Cache stats aggregation
+		CacheStatsBufferSize: 1000,
 	}
 }

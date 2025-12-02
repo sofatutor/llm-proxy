@@ -706,3 +706,124 @@ func TestQueryTokens_ErrorBranches(t *testing.T) {
 		t.Error("expected scan error for bad_tokens table")
 	}
 }
+
+func TestIncrementCacheHitCount(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Create a project and token
+	p := proxy.Project{ID: "proj-cache-1", Name: "Cache Test", OpenAIAPIKey: "key", IsActive: true, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	require.NoError(t, db.CreateProject(ctx, p))
+
+	tk := Token{Token: "token-cache-1", ProjectID: p.ID, IsActive: true, RequestCount: 0, CacheHitCount: 0, CreatedAt: time.Now()}
+	require.NoError(t, db.CreateToken(ctx, tk))
+
+	t.Run("increment single token", func(t *testing.T) {
+		err := db.IncrementCacheHitCount(ctx, tk.Token, 5)
+		require.NoError(t, err)
+
+		got, err := db.GetTokenByID(ctx, tk.Token)
+		require.NoError(t, err)
+		require.Equal(t, 5, got.CacheHitCount)
+	})
+
+	t.Run("increment again", func(t *testing.T) {
+		err := db.IncrementCacheHitCount(ctx, tk.Token, 3)
+		require.NoError(t, err)
+
+		got, err := db.GetTokenByID(ctx, tk.Token)
+		require.NoError(t, err)
+		require.Equal(t, 8, got.CacheHitCount)
+	})
+
+	t.Run("increment zero delta (no-op)", func(t *testing.T) {
+		err := db.IncrementCacheHitCount(ctx, tk.Token, 0)
+		require.NoError(t, err)
+
+		got, err := db.GetTokenByID(ctx, tk.Token)
+		require.NoError(t, err)
+		require.Equal(t, 8, got.CacheHitCount) // Unchanged
+	})
+
+	t.Run("increment negative delta (no-op)", func(t *testing.T) {
+		err := db.IncrementCacheHitCount(ctx, tk.Token, -1)
+		require.NoError(t, err)
+
+		got, err := db.GetTokenByID(ctx, tk.Token)
+		require.NoError(t, err)
+		require.Equal(t, 8, got.CacheHitCount) // Unchanged
+	})
+
+	t.Run("increment non-existent token (no error, just no rows affected)", func(t *testing.T) {
+		err := db.IncrementCacheHitCount(ctx, "nonexistent-token", 5)
+		require.NoError(t, err) // No error, just no rows updated
+	})
+}
+
+func TestIncrementCacheHitCountBatch(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	// Create a project and multiple tokens
+	p := proxy.Project{ID: "proj-cache-batch", Name: "Cache Batch Test", OpenAIAPIKey: "key", IsActive: true, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	require.NoError(t, db.CreateProject(ctx, p))
+
+	tk1 := Token{Token: "token-batch-1", ProjectID: p.ID, IsActive: true, CacheHitCount: 0, CreatedAt: time.Now()}
+	tk2 := Token{Token: "token-batch-2", ProjectID: p.ID, IsActive: true, CacheHitCount: 0, CreatedAt: time.Now()}
+	tk3 := Token{Token: "token-batch-3", ProjectID: p.ID, IsActive: true, CacheHitCount: 0, CreatedAt: time.Now()}
+	require.NoError(t, db.CreateToken(ctx, tk1))
+	require.NoError(t, db.CreateToken(ctx, tk2))
+	require.NoError(t, db.CreateToken(ctx, tk3))
+
+	t.Run("batch increment multiple tokens", func(t *testing.T) {
+		deltas := map[string]int{
+			tk1.Token: 5,
+			tk2.Token: 10,
+			tk3.Token: 3,
+		}
+		err := db.IncrementCacheHitCountBatch(ctx, deltas)
+		require.NoError(t, err)
+
+		got1, _ := db.GetTokenByID(ctx, tk1.Token)
+		got2, _ := db.GetTokenByID(ctx, tk2.Token)
+		got3, _ := db.GetTokenByID(ctx, tk3.Token)
+
+		require.Equal(t, 5, got1.CacheHitCount)
+		require.Equal(t, 10, got2.CacheHitCount)
+		require.Equal(t, 3, got3.CacheHitCount)
+	})
+
+	t.Run("batch with empty map (no-op)", func(t *testing.T) {
+		err := db.IncrementCacheHitCountBatch(ctx, map[string]int{})
+		require.NoError(t, err)
+	})
+
+	t.Run("batch with zero/negative deltas (skipped)", func(t *testing.T) {
+		deltas := map[string]int{
+			tk1.Token: 0,  // Skip
+			tk2.Token: -1, // Skip
+			tk3.Token: 2,  // Apply
+		}
+		err := db.IncrementCacheHitCountBatch(ctx, deltas)
+		require.NoError(t, err)
+
+		got1, _ := db.GetTokenByID(ctx, tk1.Token)
+		got2, _ := db.GetTokenByID(ctx, tk2.Token)
+		got3, _ := db.GetTokenByID(ctx, tk3.Token)
+
+		require.Equal(t, 5, got1.CacheHitCount)  // Unchanged from previous test
+		require.Equal(t, 10, got2.CacheHitCount) // Unchanged from previous test
+		require.Equal(t, 5, got3.CacheHitCount)  // 3 + 2 from previous test
+	})
+
+	t.Run("batch with nonexistent tokens (no error)", func(t *testing.T) {
+		deltas := map[string]int{
+			"nonexistent-1": 5,
+			"nonexistent-2": 10,
+		}
+		err := db.IncrementCacheHitCountBatch(ctx, deltas)
+		require.NoError(t, err) // No error, just no rows updated
+	})
+}

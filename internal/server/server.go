@@ -30,16 +30,17 @@ import (
 // It encapsulates the underlying http.Server along with application configuration
 // and handles request routing and server lifecycle management.
 type Server struct {
-	server       *http.Server
-	config       *config.Config
-	tokenStore   token.TokenStore
-	projectStore proxy.ProjectStore
-	logger       *zap.Logger
-	proxy        *proxy.TransparentProxy
-	metrics      Metrics
-	eventBus     eventbus.EventBus
-	auditLogger  *audit.Logger
-	db           *database.DB
+	server        *http.Server
+	config        *config.Config
+	tokenStore    token.TokenStore
+	projectStore  proxy.ProjectStore
+	logger        *zap.Logger
+	proxy         *proxy.TransparentProxy
+	metrics       Metrics
+	eventBus      eventbus.EventBus
+	auditLogger   *audit.Logger
+	db            *database.DB
+	cacheStatsAgg *proxy.CacheStatsAggregator
 }
 
 // HealthResponse is the response body for the health check endpoint.
@@ -301,6 +302,19 @@ func (s *Server) initializeAPIRoutes() error {
 	}
 	s.proxy = proxyHandler
 
+	// Initialize cache stats aggregator for per-token cache hit tracking
+	if s.db != nil && proxyConfig.HTTPCacheEnabled {
+		aggConfig := proxy.CacheStatsAggregatorConfig{
+			BufferSize:    s.config.CacheStatsBufferSize,
+			FlushInterval: 5 * time.Second,
+			BatchSize:     100,
+		}
+		s.cacheStatsAgg = proxy.NewCacheStatsAggregator(aggConfig, s.db, s.logger)
+		s.cacheStatsAgg.Start()
+		proxyHandler.SetCacheStatsAggregator(s.cacheStatsAgg)
+		s.logger.Info("Cache stats aggregator started", zap.Int("buffer_size", aggConfig.BufferSize))
+	}
+
 	// Register proxy routes
 	s.server.Handler.(*http.ServeMux).Handle("/v1/", proxyHandler.Handler())
 
@@ -318,7 +332,14 @@ func (s *Server) initializeAPIRoutes() error {
 // The context should typically include a timeout to prevent
 // the shutdown from blocking indefinitely.
 func (s *Server) Shutdown(ctx context.Context) error {
-	// Close audit logger first to ensure all events are written
+	// Stop cache stats aggregator first to flush pending stats
+	if s.cacheStatsAgg != nil {
+		s.logger.Info("Stopping cache stats aggregator")
+		if err := s.cacheStatsAgg.Stop(ctx); err != nil {
+			s.logger.Error("failed to stop cache stats aggregator during shutdown", zap.Error(err))
+		}
+	}
+	// Close audit logger to ensure all events are written
 	if s.auditLogger != nil {
 		if err := s.auditLogger.Close(); err != nil {
 			s.logger.Error("failed to close audit logger during shutdown", zap.Error(err))

@@ -148,6 +148,22 @@ The caching system follows HTTP standards:
 - **TTL precedence**: `s-maxage` (shared cache) takes precedence over `max-age`
 - **Headers**: Responses include `X-PROXY-CACHE`, `X-PROXY-CACHE-KEY`, and `Cache-Status` for observability
 
+### Cache Stats Aggregation
+
+The proxy supports per-token cache hit tracking for visibility in the Admin UI. This is implemented as an asynchronous, lossy-tolerant aggregation system that doesn't impact request latency.
+
+- `CACHE_STATS_BUFFER_SIZE`: Size of the buffered channel for cache hit events (default: `1000`). If the buffer is full, events are dropped without blocking the request.
+
+The aggregator:
+- Flushes stats to the database every 5 seconds or when 100 events accumulate (whichever first)
+- Uses non-blocking enqueue to avoid impacting hot path latency
+- Gracefully flushes pending stats on server shutdown
+
+In the Admin UI tokens list, you'll see:
+- **CACHED**: Number of cache-served responses for the token
+- **UPSTREAM**: Number of upstream-served responses (`request_count - cache_hit_count`)
+- **LIMIT**: Remaining requests until rate limit (or ∞ for unlimited tokens)
+
 ## Example Configuration
 
 See [api_providers_example.yaml](../config/api_providers_example.yaml) for a comprehensive example configuration with multiple API providers.
