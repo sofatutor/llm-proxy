@@ -1,10 +1,8 @@
 # Audit Package
 
-This package provides audit logging functionality for security-sensitive events in the LLM proxy. It implements a separate audit sink with immutable semantics for compliance and security investigations.
+Audit logging functionality for security-sensitive events in the LLM proxy, with immutable semantics for compliance.
 
 ## Purpose & Responsibilities
-
-The `audit` package handles security audit logging:
 
 - **Security Event Tracking**: Records security-sensitive operations (token lifecycle, project management, proxy access)
 - **Immutable Audit Trail**: Write-once semantics for compliance requirements
@@ -13,8 +11,6 @@ The `audit` package handles security audit logging:
 - **Token Obfuscation**: Automatically redacts sensitive token data
 
 ## Relationship to Application Logging
-
-The audit package is **separate from application logging**:
 
 | Aspect | Application Logging | Audit Logging |
 |--------|--------------------|--------------| 
@@ -33,30 +29,17 @@ The audit package is **separate from application logging**:
 
 ## Event Schema
 
-All audit events follow this structure:
-
-```go
-type Event struct {
-    Timestamp     time.Time              `json:"timestamp"`
-    Action        string                 `json:"action"`
-    Actor         string                 `json:"actor"`
-    ProjectID     string                 `json:"project_id,omitempty"`
-    RequestID     string                 `json:"request_id,omitempty"`
-    CorrelationID string                 `json:"correlation_id,omitempty"`
-    ClientIP      string                 `json:"client_ip,omitempty"`
-    Result        ResultType             `json:"result"`
-    Details       map[string]interface{} `json:"details,omitempty"`
-}
-```
-
-### Result Types
-
-| Result | Description |
-|--------|-------------|
-| `success` | Operation completed successfully |
-| `failure` | Operation failed |
-| `denied` | Operation denied by policy |
-| `error` | Operation encountered an error |
+| Field | Type | Description |
+|-------|------|-------------|
+| `Timestamp` | `time.Time` | When event occurred |
+| `Action` | `string` | Operation type (e.g., `token.create`) |
+| `Actor` | `string` | Who performed action |
+| `ProjectID` | `string` | Affected project |
+| `RequestID` | `string` | Request correlation |
+| `CorrelationID` | `string` | Distributed tracing |
+| `ClientIP` | `string` | Client IP address |
+| `Result` | `ResultType` | `success`, `failure`, `denied`, `error` |
+| `Details` | `map[string]any` | Additional context |
 
 ## Action Categories
 
@@ -80,138 +63,20 @@ type Event struct {
 |--------|-------------|
 | `project.create` | New project created |
 | `project.read` | Project details accessed |
-| `project.update` | Project modified (including `is_active` changes) |
+| `project.update` | Project modified |
 | `project.delete` | Project deleted |
 | `project.list` | Project listing accessed |
 
-### Proxy Request Actions
+### Other Actions
 
 | Action | Description |
 |--------|-------------|
-| `proxy_request` | API request proxied (with result: denied, error) |
-
-### Admin Actions
-
-| Action | Description |
-|--------|-------------|
+| `proxy_request` | API request proxied (denied/error) |
 | `admin.login` | Admin UI login |
 | `admin.logout` | Admin UI logout |
 | `admin.access` | Admin resource accessed |
 | `audit.list` | Audit log listing |
-| `audit.show` | Audit event details |
 | `cache.purge` | Cache purge operation |
-
-## Creating an Audit Logger
-
-### File-Only Logger
-
-```go
-package main
-
-import (
-    "github.com/sofatutor/llm-proxy/internal/audit"
-)
-
-func main() {
-    logger, err := audit.NewLogger(audit.LoggerConfig{
-        FilePath:  "/var/log/llm-proxy/audit.jsonl",
-        CreateDir: true,  // Create parent directories if needed
-    })
-    if err != nil {
-        panic(err)
-    }
-    defer logger.Close()
-    
-    // Log events...
-}
-```
-
-### File + Database Logger
-
-```go
-logger, err := audit.NewLogger(audit.LoggerConfig{
-    FilePath:       "/var/log/llm-proxy/audit.jsonl",
-    CreateDir:      true,
-    DatabaseStore:  dbStore,  // Implements audit.DatabaseStore
-    EnableDatabase: true,
-})
-```
-
-### Null Logger (for testing)
-
-```go
-logger := audit.NewNullLogger()  // Discards all events
-```
-
-## Creating and Logging Events
-
-### Basic Event
-
-```go
-event := audit.NewEvent(audit.ActionTokenCreate, "admin", audit.ResultSuccess)
-event.WithProjectID("proj-123")
-event.WithRequestID("req-abc")
-
-err := logger.Log(event)
-```
-
-### Event with Details
-
-```go
-event := audit.NewEvent(audit.ActionTokenRevoke, audit.ActorManagement, audit.ResultSuccess).
-    WithProjectID("proj-123").
-    WithRequestID("req-abc").
-    WithClientIP("192.168.1.100").
-    WithTokenID("sk-abc123...").  // Automatically obfuscated
-    WithDetail("reason", "expired").
-    WithUserAgent("Mozilla/5.0...")
-
-err := logger.Log(event)
-```
-
-### Error Events
-
-```go
-event := audit.NewEvent(audit.ActionProxyRequest, tokenID, audit.ResultError).
-    WithProjectID(projectID).
-    WithError(err).
-    WithReason("service_unavailable")
-
-logger.Log(event)
-```
-
-### Denied Events
-
-```go
-event := audit.NewEvent(audit.ActionProxyRequest, tokenID, audit.ResultDenied).
-    WithProjectID(projectID).
-    WithReason("project_inactive").
-    WithClientIP(clientIP).
-    WithHTTPMethod("POST").
-    WithEndpoint("/v1/chat/completions")
-
-logger.Log(event)
-```
-
-## Event Builder Methods
-
-All builder methods return the event for chaining:
-
-```go
-event := audit.NewEvent(action, actor, result).
-    WithProjectID(projectID).
-    WithRequestID(requestID).
-    WithCorrelationID(correlationID).
-    WithClientIP(clientIP).
-    WithTokenID(token).      // Obfuscated
-    WithError(err).
-    WithUserAgent(userAgent).
-    WithHTTPMethod(method).
-    WithEndpoint(endpoint).
-    WithDuration(duration).
-    WithReason(reason).
-    WithDetail("custom_key", customValue)
-```
 
 ## Actor Types
 
@@ -221,158 +86,76 @@ event := audit.NewEvent(action, actor, result).
 | `anonymous` | Unauthenticated operations |
 | `admin` | Admin UI operations |
 | `management_api` | Management API operations |
-| Token ID | API operations (use obfuscated token) |
+| Token ID | API operations (auto-obfuscated) |
 
-## Integration Patterns
+## Architecture
 
-### With HTTP Handlers
-
-```go
-func (h *Handler) CreateToken(c *gin.Context) {
-    // ... create token ...
+```mermaid
+flowchart TB
+    subgraph Sources
+        H[HTTP Handlers]
+        M[Middleware]
+        S[Services]
+    end
     
-    event := audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultSuccess).
-        WithProjectID(projectID).
-        WithRequestID(c.GetString("request_id")).
-        WithClientIP(c.ClientIP()).
-        WithTokenID(newToken.ID)
+    subgraph "Audit Logger"
+        L[Logger]
+        F[File Backend]
+        D[Database Backend]
+    end
     
-    h.auditLogger.Log(event)
-}
+    H -->|NewEvent| L
+    M -->|NewEvent| L
+    S -->|NewEvent| L
+    
+    L -->|JSONL| F
+    L -->|SQL| D
 ```
 
-### With Middleware
+## Event Builder Methods
 
-```go
-func AuditMiddleware(logger *audit.Logger) gin.HandlerFunc {
-    return func(c *gin.Context) {
-        // For denied requests (e.g., inactive project)
-        if projectInactive {
-            event := audit.NewEvent(audit.ActionProxyRequest, token, audit.ResultDenied).
-                WithProjectID(projectID).
-                WithReason("project_inactive").
-                WithClientIP(c.ClientIP())
-            logger.Log(event)
-            
-            c.AbortWithStatus(403)
-            return
-        }
-        
-        c.Next()
-    }
-}
-```
+Events are created using a fluent builder pattern:
 
-### With Services
-
-```go
-type TokenService struct {
-    auditLogger *audit.Logger
-}
-
-func (s *TokenService) RevokeToken(ctx context.Context, tokenID string) error {
-    err := s.store.RevokeToken(ctx, tokenID)
-    
-    result := audit.ResultSuccess
-    if err != nil {
-        result = audit.ResultFailure
-    }
-    
-    event := audit.NewEvent(audit.ActionTokenRevoke, audit.ActorManagement, result).
-        WithTokenID(tokenID).
-        WithError(err)
-    
-    s.auditLogger.Log(event)
-    return err
-}
-```
-
-## Database Store Interface
-
-To enable database storage, implement this interface:
-
-```go
-type DatabaseStore interface {
-    StoreAuditEvent(ctx context.Context, event *Event) error
-}
-```
-
-Example implementation:
-
-```go
-type SQLiteAuditStore struct {
-    db *sql.DB
-}
-
-func (s *SQLiteAuditStore) StoreAuditEvent(ctx context.Context, event *audit.Event) error {
-    details, _ := json.Marshal(event.Details)
-    _, err := s.db.ExecContext(ctx,
-        `INSERT INTO audit_events (timestamp, action, actor, project_id, request_id, result, details)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        event.Timestamp, event.Action, event.Actor, event.ProjectID, event.RequestID, event.Result, details,
-    )
-    return err
-}
-```
+| Method | Description |
+|--------|-------------|
+| `NewEvent(action, actor, result)` | Create new event |
+| `WithProjectID(id)` | Set project ID |
+| `WithRequestID(id)` | Set request ID |
+| `WithCorrelationID(id)` | Set correlation ID |
+| `WithClientIP(ip)` | Set client IP |
+| `WithTokenID(token)` | Set token (auto-obfuscated) |
+| `WithError(err)` | Add error details |
+| `WithUserAgent(ua)` | Add user agent |
+| `WithHTTPMethod(method)` | Add HTTP method |
+| `WithEndpoint(path)` | Add endpoint path |
+| `WithDuration(d)` | Add operation duration |
+| `WithReason(reason)` | Add reason/description |
+| `WithDetail(key, value)` | Add custom detail |
 
 ## File Output Format
 
 Audit events are written as JSON Lines (JSONL):
 
 ```json
-{"timestamp":"2024-01-15T10:30:45.123Z","action":"token.create","actor":"management_api","project_id":"proj-123","request_id":"req-abc","result":"success","details":{"token_id":"sk-ab...89"}}
-{"timestamp":"2024-01-15T10:31:00.456Z","action":"proxy_request","actor":"sk-ab...89","project_id":"proj-123","result":"denied","client_ip":"192.168.1.100","details":{"reason":"project_inactive"}}
+{"timestamp":"2024-01-15T10:30:45Z","action":"token.create","actor":"management_api","project_id":"proj-123","result":"success"}
+{"timestamp":"2024-01-15T10:31:00Z","action":"proxy_request","actor":"sk-ab...89","result":"denied","details":{"reason":"project_inactive"}}
 ```
 
-## Testing Guidance
+## Integration Flow
 
-### Using Null Logger
-
-```go
-func TestHandler(t *testing.T) {
-    logger := audit.NewNullLogger()
-    handler := NewHandler(logger)
+```mermaid
+sequenceDiagram
+    participant Handler
+    participant AuditLogger
+    participant File
+    participant Database
     
-    // Events are discarded
-    handler.CreateToken(ctx)
-}
-```
-
-### Testing Event Content
-
-```go
-func TestAuditEvent(t *testing.T) {
-    event := audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultSuccess).
-        WithProjectID("proj-123").
-        WithTokenID("sk-secret-token-12345")
+    Handler->>AuditLogger: NewEvent(action, actor, result)
+    Handler->>AuditLogger: WithProjectID(id)
+    Handler->>AuditLogger: Log(event)
     
-    assert.Equal(t, audit.ActionTokenCreate, event.Action)
-    assert.Equal(t, "proj-123", event.ProjectID)
-    // Token should be obfuscated
-    assert.NotContains(t, event.Details["token_id"], "secret")
-}
-```
-
-### Testing with File Output
-
-```go
-func TestAuditFileOutput(t *testing.T) {
-    tmpFile := filepath.Join(t.TempDir(), "audit.jsonl")
-    
-    logger, err := audit.NewLogger(audit.LoggerConfig{
-        FilePath:  tmpFile,
-        CreateDir: false,
-    })
-    require.NoError(t, err)
-    defer logger.Close()
-    
-    event := audit.NewEvent(audit.ActionTokenCreate, "admin", audit.ResultSuccess)
-    logger.Log(event)
-    
-    // Verify file content
-    data, _ := os.ReadFile(tmpFile)
-    assert.Contains(t, string(data), "token.create")
-}
+    AuditLogger->>File: Write JSONL
+    AuditLogger->>Database: INSERT (if enabled)
 ```
 
 ## Security Considerations
@@ -381,6 +164,13 @@ func TestAuditFileOutput(t *testing.T) {
 2. **No Secrets in Details**: Never add raw secrets to the `Details` map
 3. **File Permissions**: Audit log files are created with `0644` permissions
 4. **Sync on Write**: Each event triggers a file sync for durability
+
+## Testing Guidance
+
+- **Unit Tests**: Use `audit.NewNullLogger()` to discard events during tests
+- **Event Content**: Create events with `NewEvent()` and assert field values
+- **File Output**: Use `t.TempDir()` for testing file-based logging
+- **Existing Tests**: See `logger_test.go`, `schema_test.go` for examples
 
 ## Related Documentation
 

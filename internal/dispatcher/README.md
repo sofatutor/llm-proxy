@@ -1,10 +1,8 @@
 # Dispatcher Package
 
-This package provides a pluggable event dispatcher service that consumes events from the event bus and forwards them to external observability platforms. It supports batching, retry logic, and multiple backend plugins.
+Pluggable event dispatcher service that consumes events from the event bus and forwards them to external observability platforms.
 
 ## Purpose & Responsibilities
-
-The `dispatcher` package bridges the event bus with external services:
 
 - **Event Consumption**: Subscribes to the event bus and processes incoming events
 - **Event Transformation**: Converts internal events to formats required by external services
@@ -12,223 +10,68 @@ The `dispatcher` package bridges the event bus with external services:
 - **Retry Logic**: Handles transient failures with exponential backoff
 - **Plugin Architecture**: Supports multiple backend services via plugins
 
-## Architecture Overview
+## Architecture
 
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│    EventBus     │────▶│   Dispatcher    │────▶│ Backend Plugin  │
-│   (Source)      │     │   Service       │     │  (File/Cloud)   │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                              │
-                        ┌─────▼─────┐
-                        │Transformer│
-                        └───────────┘
-```
-
-## BackendPlugin Interface
-
-All backend plugins implement this interface:
-
-```go
-type BackendPlugin interface {
-    // Init initializes the plugin with configuration
-    Init(cfg map[string]string) error
+```mermaid
+flowchart LR
+    subgraph Input
+        EB[EventBus]
+    end
     
-    // SendEvents sends a batch of events to the backend
-    SendEvents(ctx context.Context, events []EventPayload) error
+    subgraph Dispatcher
+        T[Transformer]
+        B[Batcher]
+        R[Retry Logic]
+    end
     
-    // Close cleans up resources
-    Close() error
-}
-```
-
-## EventPayload Schema
-
-Events are transformed to this extended format for external services:
-
-```go
-type EventPayload struct {
-    Type         string          `json:"type"`
-    Event        string          `json:"event"`
-    RunID        string          `json:"runId"`
-    ParentRunID  *string         `json:"parentRunId,omitempty"`
-    Name         *string         `json:"name,omitempty"`
-    Timestamp    time.Time       `json:"timestamp"`
-    Input        json.RawMessage `json:"input,omitempty"`
-    Output       json.RawMessage `json:"output,omitempty"`
-    UserID       *string         `json:"userId,omitempty"`
-    TokensUsage  *TokensUsage    `json:"tokensUsage,omitempty"`
-    Metadata     map[string]any  `json:"metadata,omitempty"`
-    Tags         []string        `json:"tags,omitempty"`
-    LogID        int64           `json:"log_id"`
-}
+    subgraph Plugins
+        F[File Plugin]
+        L[Lunary Plugin]
+        H[Helicone Plugin]
+    end
+    
+    EB --> T
+    T --> B
+    B --> R
+    R --> F
+    R --> L
+    R --> H
 ```
 
 ## Available Backend Plugins
 
-### File Plugin
+| Plugin | Description | Use Case |
+|--------|-------------|----------|
+| **File** | Writes events to JSONL file | Local storage, debugging |
+| **Lunary** | Sends to [Lunary.ai](https://lunary.ai) | LLM observability |
+| **Helicone** | Sends to [Helicone](https://helicone.ai) | LLM analytics |
 
-Writes events to a JSONL (JSON Lines) file for local storage and debugging.
+### Plugin Configuration
 
-```go
-package main
+| Plugin | Key | Description | Required | Default |
+|--------|-----|-------------|----------|---------|
+| File | `endpoint` | File path for JSONL output | Yes | - |
+| Lunary | `api-key` | Lunary API key | Yes | - |
+| Lunary | `endpoint` | API endpoint URL | No | `https://api.lunary.ai/v1/runs/ingest` |
+| Helicone | `api-key` | Helicone API key | Yes | - |
+| Helicone | `endpoint` | API endpoint URL | No | `https://api.worker.helicone.ai/custom/v1/log` |
 
-import (
-    "context"
-    
-    "github.com/sofatutor/llm-proxy/internal/dispatcher"
-    "github.com/sofatutor/llm-proxy/internal/dispatcher/plugins"
-)
+**Helicone-Specific Features**: Automatic provider detection, token usage injection, request ID propagation, non-JSON response handling (base64).
 
-func main() {
-    plugin := plugins.NewFilePlugin()
-    
-    err := plugin.Init(map[string]string{
-        "endpoint": "/var/log/llm-proxy/events.jsonl",
-    })
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer plugin.Close()
-    
-    // Events will be written as JSON lines
-    err = plugin.SendEvents(ctx, events)
-}
-```
+## Service Configuration
 
-**Configuration**:
-| Key | Description | Required |
-|-----|-------------|----------|
-| `endpoint` | File path for JSONL output | Yes |
-
-### Lunary Plugin
-
-Sends events to [Lunary.ai](https://lunary.ai) for LLM observability.
-
-```go
-plugin := plugins.NewLunaryPlugin()
-
-err := plugin.Init(map[string]string{
-    "api-key":  os.Getenv("LUNARY_API_KEY"),
-    "endpoint": "https://api.lunary.ai/v1/runs/ingest",  // Optional
-})
-```
-
-**Configuration**:
-| Key | Description | Required | Default |
-|-----|-------------|----------|---------|
-| `api-key` | Lunary API key | Yes | - |
-| `endpoint` | API endpoint URL | No | `https://api.lunary.ai/v1/runs/ingest` |
-
-### Helicone Plugin
-
-Sends events to [Helicone](https://helicone.ai) using their Manual Logger format.
-
-```go
-plugin := plugins.NewHeliconePlugin()
-
-err := plugin.Init(map[string]string{
-    "api-key":  os.Getenv("HELICONE_API_KEY"),
-    "endpoint": "https://api.worker.helicone.ai/custom/v1/log",  // Optional
-})
-```
-
-**Configuration**:
-| Key | Description | Required | Default |
-|-----|-------------|----------|---------|
-| `api-key` | Helicone API key | Yes | - |
-| `endpoint` | API endpoint URL | No | `https://api.worker.helicone.ai/custom/v1/log` |
-
-**Helicone-Specific Features**:
-- Automatic provider detection (sets `Helicone-Provider` header)
-- Token usage injection into response JSON
-- Request ID propagation for correlation
-- Non-JSON response handling (base64 encoding)
-
-## Dispatcher Service
-
-### Service Configuration
-
-```go
-type Config struct {
-    BufferSize       int           // Event bus buffer size (default: 1000)
-    BatchSize        int           // Events per batch (default: 100)
-    FlushInterval    time.Duration // Max time between flushes (default: 5s)
-    RetryAttempts    int           // Retry count on failure (default: 3)
-    RetryBackoff     time.Duration // Initial backoff duration (default: 1s)
-    Plugin           BackendPlugin // Required: backend plugin
-    EventTransformer EventTransformer // Optional: custom transformer
-    PluginName       string        // Plugin name for offset tracking
-    Verbose          bool          // Include debug info in payloads
-}
-```
-
-### Basic Usage
-
-```go
-package main
-
-import (
-    "context"
-    
-    "github.com/sofatutor/llm-proxy/internal/dispatcher"
-    "github.com/sofatutor/llm-proxy/internal/dispatcher/plugins"
-    "go.uber.org/zap"
-)
-
-func main() {
-    logger, _ := zap.NewProduction()
-    
-    // Create and initialize plugin
-    plugin := plugins.NewFilePlugin()
-    plugin.Init(map[string]string{"endpoint": "events.jsonl"})
-    
-    // Create dispatcher service
-    svc, err := dispatcher.NewService(dispatcher.Config{
-        BufferSize:    1000,
-        BatchSize:     100,
-        FlushInterval: 5 * time.Second,
-        Plugin:        plugin,
-    }, logger)
-    if err != nil {
-        log.Fatal(err)
-    }
-    
-    // Run dispatcher (blocks until stopped)
-    ctx := context.Background()
-    if err := svc.Run(ctx, false); err != nil {
-        log.Fatal(err)
-    }
-}
-```
-
-### With External Event Bus
-
-For distributed setups using Redis:
-
-```go
-// Create Redis event bus
-redisClient := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
-adapter := &eventbus.RedisGoClientAdapter{Client: redisClient}
-bus := eventbus.NewRedisEventBusLog(adapter, "llm-proxy:events", 24*time.Hour, 10000)
-
-// Create dispatcher with external bus
-svc, err := dispatcher.NewServiceWithBus(dispatcher.Config{
-    Plugin:     plugin,
-    PluginName: "file",  // Used for offset tracking
-}, logger, bus)
-```
-
-### Service Statistics
-
-```go
-processed, dropped, sent := svc.Stats()
-log.Printf("Processed: %d, Dropped: %d, Sent: %d", processed, dropped, sent)
-```
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `BufferSize` | Event bus buffer size | `1000` |
+| `BatchSize` | Events per batch | `100` |
+| `FlushInterval` | Max time between flushes | `5s` |
+| `RetryAttempts` | Retry count on failure | `3` |
+| `RetryBackoff` | Initial backoff duration | `1s` |
+| `Plugin` | Backend plugin (required) | - |
+| `PluginName` | Plugin name for offset tracking | - |
+| `Verbose` | Include debug info in payloads | `false` |
 
 ## CLI Usage
-
-The dispatcher can be run as a standalone service:
 
 ```bash
 # File output
@@ -239,12 +82,6 @@ llm-proxy dispatcher --service lunary --api-key $LUNARY_API_KEY
 
 # Helicone integration
 llm-proxy dispatcher --service helicone --api-key $HELICONE_API_KEY
-
-# With custom buffer and batch settings
-llm-proxy dispatcher --service lunary \
-    --api-key $LUNARY_API_KEY \
-    --buffer 2000 \
-    --batch-size 50
 ```
 
 ### CLI Options
@@ -258,171 +95,73 @@ llm-proxy dispatcher --service lunary \
 | `--batch-size` | Batch size for sending events | `100` |
 | `--detach` | Run in background (daemon mode) | `false` |
 
-## Configuration Options
+## Environment Variables
 
-| Environment Variable | Description | Default |
-|---------------------|-------------|---------|
+| Variable | Description | Default |
+|----------|-------------|---------|
 | `LLM_PROXY_API_KEY` | API key for selected service | - |
 | `LLM_PROXY_ENDPOINT` | Default endpoint URL | - |
 | `LLM_PROXY_EVENT_BUS` | Event bus backend (`memory` or `redis`) | `memory` |
 
-## Batching and Retry Logic
+## Batching and Retry Flow
 
-### Batching
-
-Events are batched to improve throughput:
-
-1. Events accumulate until `BatchSize` is reached
-2. Or `FlushInterval` elapses since last flush
-3. Or service shutdown is initiated
-
-### Retry Behavior
-
-On backend failure:
-
-1. Exponential backoff: `attempt * RetryBackoff`
-2. Up to `RetryAttempts` retries per batch
-3. Permanent errors (HTTP 4xx) are not retried
-4. After all retries exhausted, batch is dropped and logged
-
-```go
-// Permanent error (not retried)
-type PermanentBackendError struct {
-    Message string
-}
+```mermaid
+flowchart TD
+    E[Events Arrive] --> A{Batch Full?}
+    A -->|Yes| S[Send Batch]
+    A -->|No| T{Flush Timer?}
+    T -->|Yes| S
+    T -->|No| E
+    
+    S --> R{Success?}
+    R -->|Yes| C[Clear Batch]
+    R -->|No| B{Retries Left?}
+    B -->|Yes| W[Backoff Wait]
+    W --> S
+    B -->|No| D[Drop & Log]
+    
+    C --> E
+    D --> E
 ```
+
+**Retry Behavior**:
+- Exponential backoff: `attempt * RetryBackoff`
+- Permanent errors (HTTP 4xx) are not retried
+- After all retries exhausted, batch is dropped and logged
 
 ## Event Transformation
 
-### Default Transformer
+The transformer converts `eventbus.Event` to `EventPayload` for external services.
 
-The default transformer converts `eventbus.Event` to `EventPayload`:
+**EventPayload fields**: `Type`, `Event`, `RunID`, `Timestamp`, `Input`, `Output`, `TokensUsage`, `Metadata`, `Tags`, `LogID`
 
-```go
-transformer := dispatcher.NewDefaultEventTransformer(verbose)
-payload, err := transformer.Transform(evt)
-```
-
-### Custom Transformer
-
-Implement the `EventTransformer` interface for custom logic:
-
-```go
-type EventTransformer interface {
-    Transform(evt eventbus.Event) (*EventPayload, error)
-}
-
-type MyTransformer struct{}
-
-func (t *MyTransformer) Transform(evt eventbus.Event) (*EventPayload, error) {
-    // Custom transformation logic
-    return &EventPayload{
-        RunID:     evt.RequestID,
-        Timestamp: time.Now(),
-        // ...
-    }, nil
-}
-```
-
-## Plugin Registry
-
-The plugin registry provides factory functions for creating plugins:
-
-```go
-// Get available plugins
-names := plugins.ListPlugins()  // ["file", "lunary", "helicone"]
-
-// Create plugin by name
-plugin, err := plugins.NewPlugin("lunary")
-```
-
-### Adding Custom Plugins
-
-```go
-// Register a custom plugin factory
-plugins.Registry["custom"] = func() dispatcher.BackendPlugin {
-    return NewCustomPlugin()
-}
-```
+**Key Functions**: `NewDefaultEventTransformer(verbose)`, `Transform(evt)`, implement `EventTransformer` interface for custom logic.
 
 ## Integration Patterns
 
-### With Proxy Server
-
-The dispatcher typically runs alongside the proxy server, sharing an event bus:
-
-```go
-// In server initialization
-bus := eventbus.NewInMemoryEventBus(bufferSize)
-
-// Pass bus to instrumentation middleware
-instrumentationHandler := middleware.NewInstrumentation(bus, logger)
-
-// Create dispatcher with same bus
-dispatcherSvc, _ := dispatcher.NewServiceWithBus(cfg, logger, bus)
-go dispatcherSvc.Run(ctx, false)
-```
-
-### Standalone Dispatcher
-
-For distributed setups, run the dispatcher as a separate process consuming from Redis:
-
-```go
-// Connect to shared Redis event bus
-redisClient := redis.NewClient(&redis.Options{Addr: redisURL})
-adapter := &eventbus.RedisGoClientAdapter{Client: redisClient}
-bus := eventbus.NewRedisEventBusLog(adapter, "llm-proxy:events", 24*time.Hour, 10000)
-
-// Create standalone dispatcher
-svc, _ := dispatcher.NewServiceWithBus(cfg, logger, bus)
-svc.Run(ctx, false)
+```mermaid
+flowchart TB
+    subgraph "Single Process"
+        P1[Proxy] --> EB1[In-Memory EventBus]
+        EB1 --> D1[Dispatcher]
+    end
+    
+    subgraph "Distributed"
+        P2[Proxy 1] --> R[Redis EventBus]
+        P3[Proxy 2] --> R
+        R --> D2[Standalone Dispatcher]
+    end
 ```
 
 ## Testing Guidance
 
-### Unit Testing with Mock Plugin
-
-```go
-type MockPlugin struct {
-    events []dispatcher.EventPayload
-    mu     sync.Mutex
-}
-
-func (m *MockPlugin) Init(cfg map[string]string) error { return nil }
-
-func (m *MockPlugin) SendEvents(ctx context.Context, events []dispatcher.EventPayload) error {
-    m.mu.Lock()
-    defer m.mu.Unlock()
-    m.events = append(m.events, events...)
-    return nil
-}
-
-func (m *MockPlugin) Close() error { return nil }
-```
-
-### Testing Transformer
-
-```go
-func TestTransformer(t *testing.T) {
-    transformer := dispatcher.NewDefaultEventTransformer(false)
-    
-    evt := eventbus.Event{
-        RequestID: "test-123",
-        Method:    "POST",
-        Path:      "/v1/chat/completions",
-        Status:    200,
-    }
-    
-    payload, err := transformer.Transform(evt)
-    assert.NoError(t, err)
-    assert.Equal(t, "test-123", payload.RunID)
-}
-```
+- **Unit Tests**: Create a mock implementing `BackendPlugin` interface to capture sent events
+- **Transformer Tests**: Use `NewDefaultEventTransformer` with test events
+- **Existing Tests**: See `service_test.go`, `transformer_test.go`, `plugins/plugins_test.go`
 
 ## Related Documentation
 
 - [EventBus Package](../eventbus/README.md) - Event publishing and subscription
-- [EventTransformer Package](../eventtransformer/README.md) - Event transformation utilities
 - [Instrumentation Guide](../../docs/instrumentation.md) - Complete observability documentation
 
 ## Files
