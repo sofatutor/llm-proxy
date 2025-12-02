@@ -22,6 +22,7 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/database/migrations"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/stretchr/testify/assert"
@@ -257,54 +258,34 @@ func TestPostgresIntegration_AuditEvents(t *testing.T) {
 
 	ctx := context.Background()
 
-	projectID := "test-project"
-	requestID := "req-123"
-	correlationID := "corr-456"
-	clientIP := "192.168.1.1"
-	method := "POST"
-	path := "/v1/chat/completions"
-	userAgent := "test-agent/1.0"
-	tokenID := "token-123"
-	metadata := `{"key": "value"}`
+	// Create audit event using the audit.Event type
+	event := audit.NewEvent("test_action", "test_actor", audit.ResultSuccess).
+		WithProjectID("test-project").
+		WithRequestID("req-123").
+		WithCorrelationID("corr-456").
+		WithClientIP("192.168.1.1").
+		WithHTTPMethod("POST").
+		WithEndpoint("/v1/chat/completions").
+		WithUserAgent("test-agent/1.0").
+		WithDetail("key", "value")
 
-	// Create audit event
-	event := AuditEvent{
-		ID:            "audit-event-pg-" + time.Now().Format("20060102150405"),
-		Timestamp:     time.Now(),
-		Action:        "test_action",
-		Actor:         "test_actor",
-		ProjectID:     &projectID,
-		RequestID:     &requestID,
-		CorrelationID: &correlationID,
-		ClientIP:      &clientIP,
-		Method:        &method,
-		Path:          &path,
-		UserAgent:     &userAgent,
-		Outcome:       "success",
-		Reason:        nil,
-		TokenID:       &tokenID,
-		Metadata:      &metadata,
-	}
+	err := db.StoreAuditEvent(ctx, event)
+	require.NoError(t, err, "Failed to store audit event")
 
-	err := db.CreateAuditEvent(ctx, event)
-	require.NoError(t, err, "Failed to create audit event")
-
-	// Query audit events
-	events, err := db.GetAuditEvents(ctx, AuditEventQuery{
+	// Query audit events using AuditEventFilters
+	events, err := db.ListAuditEvents(ctx, AuditEventFilters{
 		Action: "test_action",
 		Limit:  10,
 	})
-	require.NoError(t, err, "Failed to query audit events")
+	require.NoError(t, err, "Failed to list audit events")
 	assert.NotEmpty(t, events)
 
 	// Verify event data
 	found := false
 	for _, e := range events {
-		if e.ID == event.ID {
+		if e.Action == "test_action" && e.Actor == "test_actor" {
 			found = true
-			assert.Equal(t, event.Action, e.Action)
-			assert.Equal(t, event.Actor, e.Actor)
-			assert.Equal(t, event.Outcome, e.Outcome)
+			assert.Equal(t, "success", e.Outcome)
 			break
 		}
 	}
@@ -422,11 +403,15 @@ func TestPostgresIntegration_GetStats(t *testing.T) {
 	db, cleanup := setupPostgresTestDB(t)
 	defer cleanup()
 
-	stats := db.GetStats()
+	ctx := context.Background()
+
+	stats, err := db.GetStats(ctx)
+	require.NoError(t, err, "GetStats should not return error")
 
 	assert.NotNil(t, stats)
-	assert.GreaterOrEqual(t, stats.MaxOpenConnections, 0)
-	assert.GreaterOrEqual(t, stats.OpenConnections, 0)
+	assert.Contains(t, stats, "database_size_bytes")
+	assert.Contains(t, stats, "project_count")
+	assert.Contains(t, stats, "active_token_count")
 }
 
 // Helper function to create a pointer to an int
