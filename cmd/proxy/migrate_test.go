@@ -266,3 +266,37 @@ func TestRunMigrateStatus_ErrorHandling(t *testing.T) {
 		t.Log("Note: Status command succeeded (may have created database)")
 	}
 }
+
+func TestGetMigrationsPathForCLI_ErrorPath(t *testing.T) {
+	// Save current working directory
+	originalWd, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() {
+		// Restore working directory
+		_ = os.Chdir(originalWd)
+	}()
+
+	// Change to a temp directory where migrations won't be found
+	tempDir := t.TempDir()
+	err = os.Chdir(tempDir)
+	require.NoError(t, err)
+
+	// getMigrationsPathForCLI should fail when not in project directory
+	_, err = getMigrationsPathForCLI()
+	assert.Error(t, err, "Should fail when migrations not found")
+	assert.Contains(t, err.Error(), "migrations directory not found")
+}
+
+func TestRunMigrationsDuringSetup_ErrorPath(t *testing.T) {
+	// Save original database path
+	originalPath := databasePath
+	defer func() {
+		databasePath = originalPath
+	}()
+
+	// Set to an invalid path that will fail
+	databasePath = "/proc/invalid/cannot/write/here.db"
+
+	err := runMigrationsDuringSetup()
+	assert.Error(t, err, "Should fail with invalid database path")
+}

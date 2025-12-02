@@ -1065,3 +1065,101 @@ func TestMigrationRunner_AcquireSQLiteLock_MaxRetries(t *testing.T) {
 	assert.Error(t, err, "Lock acquisition should fail after max retries")
 	assert.Contains(t, err.Error(), "retried", "Error should mention retries")
 }
+
+func TestMigrationRunner_Up_VerifyLockRelease(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	migrationsDir := createTempMigrationsDir(t)
+
+	// Create a simple migration
+	migrationFile := filepath.Join(migrationsDir, "00001_lock_test.sql")
+	migrationSQL := `-- +goose Up
+CREATE TABLE lock_test (id INTEGER PRIMARY KEY);
+
+-- +goose Down
+DROP TABLE lock_test;
+`
+	err := os.WriteFile(migrationFile, []byte(migrationSQL), 0644)
+	require.NoError(t, err)
+
+	runner := NewMigrationRunner(db, migrationsDir)
+
+	// Up() should succeed
+	err = runner.Up()
+	assert.NoError(t, err)
+
+	// Verify lock table exists and is unlocked
+	var locked bool
+	err = db.QueryRow(`SELECT locked FROM migration_lock WHERE id = 1`).Scan(&locked)
+	assert.NoError(t, err)
+	assert.False(t, locked, "Lock should be released after Up()")
+}
+
+func TestMigrationRunner_Down_VerifyLockRelease(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	migrationsDir := createTempMigrationsDir(t)
+
+	// Create a simple migration
+	migrationFile := filepath.Join(migrationsDir, "00001_test.sql")
+	migrationSQL := `-- +goose Up
+CREATE TABLE test_down_lock (id INTEGER PRIMARY KEY);
+
+-- +goose Down
+DROP TABLE test_down_lock;
+`
+	err := os.WriteFile(migrationFile, []byte(migrationSQL), 0644)
+	require.NoError(t, err)
+
+	runner := NewMigrationRunner(db, migrationsDir)
+
+	// Apply migration
+	err = runner.Up()
+	require.NoError(t, err)
+
+	// Down() should succeed and release lock
+	err = runner.Down()
+	assert.NoError(t, err)
+
+	// Verify lock is released
+	var locked bool
+	err = db.QueryRow(`SELECT locked FROM migration_lock WHERE id = 1`).Scan(&locked)
+	assert.NoError(t, err)
+	assert.False(t, locked, "Lock should be released after Down()")
+}
+
+func TestMigrationRunner_Status_AfterMigrations(t *testing.T) {
+	db := setupTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	migrationsDir := createTempMigrationsDir(t)
+
+	// Create a migration
+	migrationFile := filepath.Join(migrationsDir, "00001_status_test.sql")
+	migrationSQL := `-- +goose Up
+CREATE TABLE status_test (id INTEGER PRIMARY KEY);
+
+-- +goose Down
+DROP TABLE status_test;
+`
+	err := os.WriteFile(migrationFile, []byte(migrationSQL), 0644)
+	require.NoError(t, err)
+
+	runner := NewMigrationRunner(db, migrationsDir)
+
+	// Status should be 0 initially
+	version, err := runner.Status()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(0), version)
+
+	// Apply migration
+	err = runner.Up()
+	require.NoError(t, err)
+
+	// Status should now be 1
+	version, err = runner.Status()
+	assert.NoError(t, err)
+	assert.Equal(t, int64(1), version)
+}
