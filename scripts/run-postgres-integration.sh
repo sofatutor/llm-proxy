@@ -154,7 +154,7 @@ case "${1:-}" in
     start)
         start_postgres
         log_info "PostgreSQL is running. Connection string:"
-        echo "  postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable"
+        echo "  postgres://${POSTGRES_USER}:******@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable"
         log_info "To stop: ./scripts/run-postgres-integration.sh teardown"
         ;;
     test)

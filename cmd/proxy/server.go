@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -273,6 +274,11 @@ func runServerForeground() {
 		dbDriver = "sqlite" // Default to SQLite for backward compatibility
 	}
 
+	// Read database pool configuration from environment with defaults
+	maxOpenConns := getEnvInt("DATABASE_POOL_SIZE", 10)
+	maxIdleConns := getEnvInt("DATABASE_MAX_IDLE_CONNS", 5)
+	connMaxLifetime := getEnvDuration("DATABASE_CONN_MAX_LIFETIME", time.Hour)
+
 	var db *database.DB
 	var dbErr error
 
@@ -286,9 +292,9 @@ func runServerForeground() {
 		dbConfig := database.FullConfig{
 			Driver:          database.DriverPostgres,
 			DatabaseURL:     databaseURL,
-			MaxOpenConns:    10,
-			MaxIdleConns:    5,
-			ConnMaxLifetime: time.Hour,
+			MaxOpenConns:    maxOpenConns,
+			MaxIdleConns:    maxIdleConns,
+			ConnMaxLifetime: connMaxLifetime,
 		}
 		db, dbErr = database.NewFromConfig(dbConfig)
 		if dbErr != nil {
@@ -305,9 +311,9 @@ func runServerForeground() {
 		dbConfig := database.FullConfig{
 			Driver:          database.DriverSQLite,
 			Path:            cfg.DatabasePath,
-			MaxOpenConns:    10,
-			MaxIdleConns:    5,
-			ConnMaxLifetime: time.Hour,
+			MaxOpenConns:    maxOpenConns,
+			MaxIdleConns:    maxIdleConns,
+			ConnMaxLifetime: connMaxLifetime,
 		}
 		db, dbErr = database.NewFromConfig(dbConfig)
 		if dbErr != nil {
@@ -409,4 +415,25 @@ func runServerForeground() {
 	}
 
 	zapLogger.Info("Server exited gracefully")
+}
+
+// getEnvInt reads an integer from an environment variable with a default value.
+func getEnvInt(key string, defaultVal int) int {
+	if val := os.Getenv(key); val != "" {
+		if i, err := strconv.Atoi(val); err == nil {
+			return i
+		}
+	}
+	return defaultVal
+}
+
+// getEnvDuration reads a duration from an environment variable with a default value.
+// Accepts formats like "1h", "30m", "1h30m", etc.
+func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
+	if val := os.Getenv(key); val != "" {
+		if d, err := time.ParseDuration(val); err == nil {
+			return d
+		}
+	}
+	return defaultVal
 }
