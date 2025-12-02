@@ -49,8 +49,8 @@ The proxy uses structured JSON logging via `internal/logging/logger.go`. All fie
 | `client_ip` | string | Client IP address |
 | `method` | string | HTTP method |
 | `path` | string | Request URL path |
-| `status_code` | int | HTTP response status code |
-| `duration_ms` | int | Request duration in milliseconds |
+| `status_code` | int64 | HTTP response status code |
+| `duration_ms` | int64 | Request duration in milliseconds |
 | `component` | string | Logger component name |
 | `error` | string | Error message (when applicable) |
 
@@ -85,10 +85,12 @@ flowchart TB
 |-------|:-----:|:------:|:-----:|
 | Base fields (`ts`, `level`, `msg`, `caller`) | ✓ | ✓ | ✓ |
 | `request_id` | ✓ | ✓ | ✓ |
-| `correlation_id` | ✓ | - | - |
+| `correlation_id` | ✓* | ✓* | ✓* |
 | `project_id`, `token_id` | ✓ | - | ✓ |
 | `client_ip`, `method`, `path` | ✓ | ✓ | ✓ |
 | `status_code`, `duration_ms` | ✓ | ✓ | ✓ |
+
+\* `correlation_id` is available in any component when present in the request context. It is typically set by the proxy for incoming requests and propagated to other components if the context includes it.
 
 ## Token ID Obfuscation
 
