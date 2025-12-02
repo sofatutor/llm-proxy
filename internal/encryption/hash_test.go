@@ -10,7 +10,7 @@ import (
 func TestNewTokenHasher(t *testing.T) {
 	hasher := NewTokenHasher()
 	if hasher == nil {
-		t.Error("NewTokenHasher() returned nil")
+		t.Fatal("NewTokenHasher() returned nil")
 	}
 	if hasher.bcryptCost != DefaultBcryptCost {
 		t.Errorf("bcryptCost = %d, want %d", hasher.bcryptCost, DefaultBcryptCost)
@@ -62,9 +62,10 @@ func TestNewTokenHasherWithCost(t *testing.T) {
 
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
+				return
 			}
 			if hasher == nil {
-				t.Error("expected hasher, got nil")
+				t.Fatal("expected hasher, got nil")
 			}
 			if hasher.bcryptCost != tt.cost {
 				t.Errorf("bcryptCost = %d, want %d", hasher.bcryptCost, tt.cost)
