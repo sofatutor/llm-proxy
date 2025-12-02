@@ -410,3 +410,52 @@ func (e *errorReader) Read(p []byte) (n int, err error) {
 func (e *errorReader) Close() error {
 	return nil
 }
+
+func TestObservabilityMiddleware_CacheHitSkipsPublish(t *testing.T) {
+	bus := eventbus.NewInMemoryEventBus(10)
+	mw := NewObservabilityMiddleware(ObservabilityConfig{Enabled: true, EventBus: bus}, nil)
+
+	tests := []struct {
+		name        string
+		cacheHeader string
+		shouldSkip  bool
+	}{
+		{"cache hit skips publish", "hit", true},
+		{"conditional hit skips publish", "conditional-hit", true},
+		{"HIT uppercase skips publish", "HIT", true},
+		{"cache miss publishes event", "miss", false},
+		{"no cache header publishes event", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tt.cacheHeader != "" {
+					w.Header().Set("X-PROXY-CACHE", tt.cacheHeader)
+				}
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte("ok"))
+			})
+
+			wrapped := mw.Middleware()(handler)
+
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			req.Header.Set("X-Request-ID", "req1")
+			rr := httptest.NewRecorder()
+
+			ch := bus.Subscribe()
+			wrapped.ServeHTTP(rr, req)
+
+			select {
+			case <-ch:
+				if tt.shouldSkip {
+					t.Fatal("event should not be emitted for cache hit")
+				}
+			case <-time.After(100 * time.Millisecond):
+				if !tt.shouldSkip {
+					t.Fatal("event should have been emitted")
+				}
+			}
+		})
+	}
+}

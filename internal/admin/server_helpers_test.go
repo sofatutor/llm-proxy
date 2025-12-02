@@ -98,3 +98,76 @@ func TestTemplateFuncs(t *testing.T) {
 		t.Fatal("obfuscateToken empty")
 	}
 }
+
+func TestParseBoolFormField(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name     string
+		formData string
+		expected bool
+	}{
+		{"empty form returns false", "", false},
+		{"single true returns true", "isActive=true", true},
+		{"single false returns false", "isActive=false", false},
+		{"hidden false then checkbox true returns true", "isActive=false&isActive=true", true},
+		{"case insensitive TRUE", "isActive=TRUE", true},
+		{"case insensitive True", "isActive=True", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := gin.New()
+			var result bool
+			r.POST("/test", func(c *gin.Context) {
+				result = parseBoolFormField(c, "isActive")
+				c.Status(200)
+			})
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest("POST", "/test", nil)
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			if tt.formData != "" {
+				req = httptest.NewRequest("POST", "/test?"+tt.formData, nil)
+				req.URL.RawQuery = ""
+				req.Body = nil
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				// Set form data directly
+				req.ParseForm()
+				req.PostForm = make(map[string][]string)
+				for _, pair := range splitFormData(tt.formData) {
+					parts := splitKV(pair)
+					if len(parts) == 2 {
+						req.PostForm[parts[0]] = append(req.PostForm[parts[0]], parts[1])
+					}
+				}
+			}
+			r.ServeHTTP(w, req)
+
+			if result != tt.expected {
+				t.Errorf("parseBoolFormField() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func splitFormData(data string) []string {
+	return splitBy(data, '&')
+}
+
+func splitKV(pair string) []string {
+	return splitBy(pair, '=')
+}
+
+func splitBy(s string, sep byte) []string {
+	var result []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == sep {
+			result = append(result, s[start:i])
+			start = i + 1
+		}
+	}
+	result = append(result, s[start:])
+	return result
+}
