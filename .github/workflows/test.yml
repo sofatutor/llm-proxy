@@ -24,58 +24,33 @@ jobs:
       - name: Validate migrations
         run: |
           echo "Validating migration files..."
-          # Check that migration files exist and are valid SQL
           if [ ! -d "internal/database/migrations/sql" ]; then
             echo "::error::Migrations directory not found"
             exit 1
           fi
           
-          # Build the binary once (faster than go run)
           echo "Building proxy binary..."
           go build -o llm-proxy ./cmd/proxy
           
-          # Test migrations can be applied to clean database
           echo "Testing migration application..."
           TEST_DB="test_migrations.db"
           ./llm-proxy migrate up --db "$TEST_DB" || exit 1
           
-          # Test migrations can be rolled back
           echo "Testing migration rollback..."
           ./llm-proxy migrate down --db "$TEST_DB" || exit 1
           
-          # Clean up
           rm -f "$TEST_DB" llm-proxy
           echo "✅ Migrations validated successfully"
       
-      - name: Run unit tests
-        run: go test -v -race -parallel=4 -coverprofile=coverage.txt -covermode=atomic -coverpkg=./internal/... ./...
+      - name: Run unit tests with coverage
+        run: go test -v -race -parallel=4 -coverprofile=coverage-unit.txt -covermode=atomic -coverpkg=./internal/... ./...
       
-      - name: Enforce 90%+ code coverage
-        run: |
-          total=$(go tool cover -func=coverage.txt | grep total: | awk '{print substr($3, 1, length($3)-1)}')
-          echo "Total coverage: $total%"
-          cov=${total%.*}
-          if (( cov < 90 )); then
-            echo "::error::Test coverage $total% is below the required 90%."
-            exit 1
-          fi
-      
-      - name: Generate HTML coverage report
-        run: |
-          go tool cover -html=coverage.txt -o coverage.html
-          echo "📊 HTML coverage report generated: coverage.html"
-      
-      - name: Upload coverage report
+      - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
-          path: coverage.html
-          retention-days: 30
-      
-      - name: Test Summary
-        run: |
-          echo "✅ Unit tests completed successfully"
-          echo "📊 Code coverage enforced at 90%+"
+          name: coverage-unit
+          path: coverage-unit.txt
+          retention-days: 1
 
   integration-tests:
     name: Integration Tests
@@ -92,15 +67,17 @@ jobs:
       - name: Install dependencies
         run: go mod download
       
-      - name: Run integration tests
-        run: go test -v -race -parallel=4 -tags=integration -timeout=5m -run=Integration ./...
+      - name: Run integration tests with coverage
+        run: go test -v -race -parallel=4 -tags=integration -timeout=5m -run=Integration -coverprofile=coverage-integration.txt -covermode=atomic -coverpkg=./internal/... ./...
         env:
           CGO_ENABLED: 1
       
-      - name: Test Summary
-        run: |
-          echo "✅ Integration tests completed successfully"
-          echo "🔗 Full E2E management API workflow tested"
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-integration
+          path: coverage-integration.txt
+          retention-days: 1
 
   postgres-integration-tests:
     name: PostgreSQL Integration Tests
@@ -144,15 +121,87 @@ jobs:
             sleep 1
           done
       
-      - name: Run PostgreSQL integration tests
-        run: go test -v -race -tags=postgres,integration -timeout=5m ./internal/database/...
+      - name: Run PostgreSQL integration tests with coverage
+        run: go test -v -race -tags=postgres,integration -timeout=5m -coverprofile=coverage-postgres.txt -covermode=atomic -coverpkg=./internal/... ./internal/database/...
         env:
           CGO_ENABLED: 1
           TEST_POSTGRES_URL: postgres://llmproxy:secret@localhost:5432/llmproxy?sslmode=disable
           DATABASE_URL: postgres://llmproxy:secret@localhost:5432/llmproxy?sslmode=disable
           DB_DRIVER: postgres
       
-      - name: Test Summary
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-postgres
+          path: coverage-postgres.txt
+          retention-days: 1
+
+  coverage:
+    name: Combined Coverage
+    needs: [unit-tests, integration-tests, postgres-integration-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+          cache: true
+      
+      - name: Download all coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+      
+      - name: List downloaded files
+        run: ls -la coverage*.txt || echo "No coverage files found"
+      
+      - name: Merge coverage profiles
         run: |
-          echo "✅ PostgreSQL integration tests completed successfully"
-          echo "🐘 Database operations verified against real PostgreSQL"
+          # Install gocovmerge
+          go install github.com/wadey/gocovmerge@latest
+          
+          # Merge all coverage files
+          echo "Merging coverage profiles..."
+          gocovmerge coverage-*.txt > coverage-combined.txt
+          
+          echo "Combined coverage generated"
+      
+      - name: Enforce 90%+ code coverage
+        run: |
+          total=$(go tool cover -func=coverage-combined.txt | grep total: | awk '{print substr($3, 1, length($3)-1)}')
+          echo "Total combined coverage: $total%"
+          cov=${total%.*}
+          if (( cov < 90 )); then
+            echo "::error::Combined test coverage $total% is below the required 90%."
+            exit 1
+          fi
+          echo "✅ Coverage check passed: $total%"
+      
+      - name: Generate HTML coverage report
+        run: |
+          go tool cover -html=coverage-combined.txt -o coverage.html
+          echo "📊 Combined HTML coverage report generated"
+      
+      - name: Upload combined coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage-combined.txt
+            coverage.html
+          retention-days: 30
+      
+      - name: Coverage Summary
+        run: |
+          echo "## 📊 Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          total=$(go tool cover -func=coverage-combined.txt | grep total: | awk '{print $3}')
+          echo "**Combined Coverage: $total**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage from:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Unit Tests" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Integration Tests" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ PostgreSQL Integration Tests" >> $GITHUB_STEP_SUMMARY
