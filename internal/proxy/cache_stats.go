@@ -10,6 +10,15 @@ import (
 )
 
 // CacheStatsStore defines the interface for persisting cache hit counts.
+//
+// Consistency invariant: Under normal operation, CacheHitCount ≤ RequestCount should
+// always hold for any token. Cache hits are only recorded when responses are served
+// from cache, which requires a prior upstream request that incremented RequestCount.
+//
+// If CacheHitCount > RequestCount is observed, it indicates a system issue that should
+// be investigated (e.g., request count increment failed while cache hit was recorded).
+// The Admin UI uses safeSub to display max(0, RequestCount-CacheHitCount) to handle
+// this edge case gracefully.
 type CacheStatsStore interface {
 	// IncrementCacheHitCountBatch increments cache_hit_count for multiple tokens.
 	// The deltas map has token IDs as keys and increment values as values.

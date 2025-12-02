@@ -809,6 +809,13 @@ func (s *Server) templateFuncs() template.FuncMap {
 		"sub": func(a, b int) int {
 			return a - b
 		},
+		"safeSub": func(a, b int) int {
+			// Returns max(0, a-b) to prevent negative values in templates
+			if a < b {
+				return 0
+			}
+			return a - b
+		},
 		"inc": func(a int) int {
 			return a + 1
 		},

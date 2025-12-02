@@ -302,7 +302,10 @@ func (s *Server) initializeAPIRoutes() error {
 	}
 	s.proxy = proxyHandler
 
-	// Initialize cache stats aggregator for per-token cache hit tracking
+	// Initialize cache stats aggregator for per-token cache hit tracking.
+	// NOTE: Cache stats tracking is only enabled when HTTP caching is enabled (HTTPCacheEnabled=true).
+	// When caching is disabled, no cache hits occur, so tracking is not needed.
+	// The Admin UI will show CacheHitCount=0 for all tokens when caching is disabled.
 	if s.db != nil && proxyConfig.HTTPCacheEnabled {
 		aggConfig := proxy.CacheStatsAggregatorConfig{
 			BufferSize:    s.config.CacheStatsBufferSize,

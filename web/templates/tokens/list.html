@@ -74,13 +74,13 @@
                                     </span>
                                     <span class="text-muted">|</span>
                                     <span class="badge bg-primary" title="Responses fetched from upstream (RequestCount - CacheHitCount)" data-bs-toggle="tooltip">
-                                        <i class="bi bi-cloud-arrow-up"></i> {{ sub .RequestCount .CacheHitCount }}
+                                        <i class="bi bi-cloud-arrow-up"></i> {{ safeSub .RequestCount .CacheHitCount }}
                                     </span>
                                     <span class="text-muted">/</span>
                                     {{ if .MaxRequests }}
                                         {{ if gt .MaxRequests 0 }}
                                             <span class="badge bg-warning text-dark" title="Remaining requests until rate limit" data-bs-toggle="tooltip">
-                                                <i class="bi bi-speedometer2"></i> {{ sub .MaxRequests .RequestCount }}
+                                                <i class="bi bi-speedometer2"></i> {{ safeSub .MaxRequests .RequestCount }}
                                             </span>
                                         {{ else }}
                                             <span class="badge bg-secondary" title="Unlimited requests" data-bs-toggle="tooltip">
