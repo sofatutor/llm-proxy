@@ -116,9 +116,11 @@ func NewFromConfig(config FullConfig) (*DB, error) {
 
 // newSQLiteDB creates a new SQLite database connection.
 func newSQLiteDB(config FullConfig) (*DB, error) {
-	// Ensure database directory exists
-	if err := ensureDirExists(filepath.Dir(config.Path)); err != nil {
-		return nil, fmt.Errorf("failed to create database directory: %w", err)
+	// Ensure database directory exists (skip for in-memory databases)
+	if config.Path != ":memory:" {
+		if err := ensureDirExists(filepath.Dir(config.Path)); err != nil {
+			return nil, fmt.Errorf("failed to create database directory: %w", err)
+		}
 	}
 
 	// Open connection

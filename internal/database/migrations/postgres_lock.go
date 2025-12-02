@@ -4,6 +4,7 @@ package migrations
 
 import (
 	"fmt"
+	"log"
 	"time"
 )
 
@@ -33,7 +34,11 @@ func (m *MigrationRunner) acquirePostgresLock() (func(), error) {
 		if acquired {
 			// Lock acquired successfully
 			release := func() {
-				_, _ = m.db.Exec("SELECT pg_advisory_unlock($1)", lockID)
+				_, err := m.db.Exec("SELECT pg_advisory_unlock($1)", lockID)
+				if err != nil {
+					// Log warning but don't fail - connection close will release the lock anyway
+					log.Printf("Warning: failed to release PostgreSQL advisory lock: %v", err)
+				}
 			}
 			return release, nil
 		}

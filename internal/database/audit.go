@@ -101,7 +101,7 @@ func (d *DB) StoreAuditEvent(ctx context.Context, event *audit.Event) error {
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := d.db.ExecContext(ctx, query,
+	_, err := d.ExecContextRebound(ctx, query,
 		id,
 		event.Timestamp,
 		event.Action,
@@ -194,7 +194,7 @@ func (d *DB) ListAuditEvents(ctx context.Context, filters AuditEventFilters) ([]
 		}
 	}
 
-	rows, err := d.db.QueryContext(ctx, query, args...)
+	rows, err := d.QueryContextRebound(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query audit events: %w", err)
 	}
@@ -290,7 +290,7 @@ func (d *DB) CountAuditEvents(ctx context.Context, filters AuditEventFilters) (i
 	}
 
 	var count int
-	err := d.db.QueryRowContext(ctx, query, args...).Scan(&count)
+	err := d.QueryRowContextRebound(ctx, query, args...).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count audit events: %w", err)
 	}
@@ -302,7 +302,7 @@ func (d *DB) CountAuditEvents(ctx context.Context, filters AuditEventFilters) (i
 func (d *DB) GetAuditEventByID(ctx context.Context, id string) (*AuditEvent, error) {
 	query := "SELECT id, timestamp, action, actor, project_id, request_id, correlation_id, client_ip, method, path, user_agent, outcome, reason, token_id, metadata FROM audit_events WHERE id = ?"
 
-	row := d.db.QueryRowContext(ctx, query, id)
+	row := d.QueryRowContextRebound(ctx, query, id)
 
 	var event AuditEvent
 	err := row.Scan(

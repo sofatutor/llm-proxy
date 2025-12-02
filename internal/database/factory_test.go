@@ -29,7 +29,8 @@ func TestDefaultFullConfig(t *testing.T) {
 }
 
 func TestConfigFromEnv(t *testing.T) {
-	// Save original env vars
+	// Save original env vars and restore after test using t.Setenv
+	// t.Setenv automatically restores the original value after the test
 	origDriver := os.Getenv("DB_DRIVER")
 	origPath := os.Getenv("DATABASE_PATH")
 	origURL := os.Getenv("DATABASE_URL")
@@ -39,12 +40,12 @@ func TestConfigFromEnv(t *testing.T) {
 
 	// Cleanup after test
 	defer func() {
-		os.Setenv("DB_DRIVER", origDriver)
-		os.Setenv("DATABASE_PATH", origPath)
-		os.Setenv("DATABASE_URL", origURL)
-		os.Setenv("DATABASE_POOL_SIZE", origPoolSize)
-		os.Setenv("DATABASE_MAX_IDLE_CONNS", origIdleConns)
-		os.Setenv("DATABASE_CONN_MAX_LIFETIME", origLifetime)
+		_ = os.Setenv("DB_DRIVER", origDriver)
+		_ = os.Setenv("DATABASE_PATH", origPath)
+		_ = os.Setenv("DATABASE_URL", origURL)
+		_ = os.Setenv("DATABASE_POOL_SIZE", origPoolSize)
+		_ = os.Setenv("DATABASE_MAX_IDLE_CONNS", origIdleConns)
+		_ = os.Setenv("DATABASE_CONN_MAX_LIFETIME", origLifetime)
 	}()
 
 	tests := []struct {
@@ -142,16 +143,16 @@ func TestConfigFromEnv(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clear env vars
-			os.Unsetenv("DB_DRIVER")
-			os.Unsetenv("DATABASE_PATH")
-			os.Unsetenv("DATABASE_URL")
-			os.Unsetenv("DATABASE_POOL_SIZE")
-			os.Unsetenv("DATABASE_MAX_IDLE_CONNS")
-			os.Unsetenv("DATABASE_CONN_MAX_LIFETIME")
+			_ = os.Unsetenv("DB_DRIVER")
+			_ = os.Unsetenv("DATABASE_PATH")
+			_ = os.Unsetenv("DATABASE_URL")
+			_ = os.Unsetenv("DATABASE_POOL_SIZE")
+			_ = os.Unsetenv("DATABASE_MAX_IDLE_CONNS")
+			_ = os.Unsetenv("DATABASE_CONN_MAX_LIFETIME")
 
 			// Set env vars for test
 			for k, v := range tt.envVars {
-				os.Setenv(k, v)
+				_ = os.Setenv(k, v)
 			}
 
 			config := ConfigFromEnv()

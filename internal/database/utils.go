@@ -40,14 +40,19 @@ func (d *DB) RebindQuery(query string) string {
 		return query
 	}
 
-	// Convert ? to $1, $2, $3, etc.
-	result := query
+	// Convert ? to $1, $2, $3, etc. (single pass for better performance)
+	var builder strings.Builder
+	builder.Grow(len(query) + 10) // pre-allocate with some buffer
 	count := 0
-	for strings.Contains(result, "?") {
-		count++
-		result = strings.Replace(result, "?", fmt.Sprintf("$%d", count), 1)
+	for i := 0; i < len(query); i++ {
+		if query[i] == '?' {
+			count++
+			builder.WriteString(fmt.Sprintf("$%d", count))
+		} else {
+			builder.WriteByte(query[i])
+		}
 	}
-	return result
+	return builder.String()
 }
 
 // ExecContextRebound executes a query with automatic placeholder rebinding.
