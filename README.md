@@ -351,11 +351,10 @@ Workflow: `.github/workflows/docker.yml` builds for `linux/amd64` and `linux/arm
 
 This README provides a quick overview and getting started guide. For comprehensive documentation, see the `/docs` directory:
 
-### 📚 **[Complete Documentation Index](docs/README.md)**
+### 📚 **[Documentation Site](https://sofatutor.github.io/llm-proxy/)** | **[Source Index](docs/README.md)**
 
 **Key Documentation:**
 - **[CLI Reference](docs/cli-reference.md)** - Complete command-line interface documentation
-- **[Go Package Documentation](docs/go-packages.md)** - Using LLM Proxy packages in your applications
 - **[Architecture Guide](docs/architecture.md)** - System architecture and design
 - **[API Configuration](docs/api-configuration.md)** - Advanced API provider configuration
 - **[Security Best Practices](docs/security.md)** - Production security guidelines
@@ -364,6 +363,7 @@ This README provides a quick overview and getting started guide. For comprehensi
 **For Developers:**
 - [OpenAPI Specification](api/openapi.yaml) - Machine-readable API definitions
 - [Contributing Guidelines](CONTRIBUTING.md) - How to contribute to the project
+- [Test Coverage Report](https://sofatutor.github.io/llm-proxy/coverage/) - Live coverage metrics
 
 ## License
 MIT License
