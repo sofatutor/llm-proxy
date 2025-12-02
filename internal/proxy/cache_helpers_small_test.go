@@ -61,9 +61,9 @@ func TestAtoiSafe(t *testing.T) {
 		{"", 0},
 		{"0", 0},
 		{"123", 123},
-		{"42abc", 42},  // stops at non-digit
-		{"abc", 0},     // no leading digits
-		{"12 34", 12},  // stops at space
+		{"42abc", 42}, // stops at non-digit
+		{"abc", 0},    // no leading digits
+		{"12 34", 12}, // stops at space
 	}
 	for _, tc := range tests {
 		t.Run(tc.input, func(t *testing.T) {
@@ -78,11 +78,11 @@ func TestCloneHeadersForCache(t *testing.T) {
 	h := http.Header{
 		"Content-Type":      {"application/json"},
 		"X-Custom":          {"value1", "value2"},
-		"Connection":        {"keep-alive"},        // hop-by-hop, should be dropped
-		"Transfer-Encoding": {"chunked"},           // hop-by-hop, should be dropped
+		"Connection":        {"keep-alive"}, // hop-by-hop, should be dropped
+		"Transfer-Encoding": {"chunked"},    // hop-by-hop, should be dropped
 	}
 	cloned := cloneHeadersForCache(h)
-	
+
 	// Check kept headers
 	if cloned.Get("Content-Type") != "application/json" {
 		t.Errorf("expected Content-Type to be preserved")
@@ -90,7 +90,7 @@ func TestCloneHeadersForCache(t *testing.T) {
 	if v := cloned["X-Custom"]; len(v) != 2 || v[0] != "value1" || v[1] != "value2" {
 		t.Errorf("expected X-Custom values preserved, got %v", v)
 	}
-	
+
 	// Check dropped hop-by-hop headers
 	if cloned.Get("Connection") != "" {
 		t.Errorf("expected Connection to be dropped")

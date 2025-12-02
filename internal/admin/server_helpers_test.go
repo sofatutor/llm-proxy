@@ -133,7 +133,7 @@ func TestParseBoolFormField(t *testing.T) {
 				req.Body = nil
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				// Set form data directly
-				req.ParseForm()
+				_ = req.ParseForm()
 				req.PostForm = make(map[string][]string)
 				for _, pair := range splitFormData(tt.formData) {
 					parts := splitKV(pair)
