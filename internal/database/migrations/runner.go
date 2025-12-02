@@ -287,38 +287,7 @@ func (m *MigrationRunner) acquireSQLiteLock() (func(), error) {
 	return nil, fmt.Errorf("failed to acquire migration lock after %d retries", maxRetries)
 }
 
-// acquirePostgresLock acquires an advisory lock using PostgreSQL's pg_advisory_lock.
-// This prevents concurrent migrations when multiple instances start simultaneously.
-// The lock is automatically released when the connection closes.
-func (m *MigrationRunner) acquirePostgresLock() (func(), error) {
-	// Use a fixed lock ID for migrations (derived from "llm-proxy-migrations")
-	// This ID is unique enough for our purposes and consistent across instances
-	const lockID = 3141592653 // A fixed number to identify this application's migration lock
-
-	maxRetries := 10
-	retryDelay := 100 * time.Millisecond
-
-	for i := 0; i < maxRetries; i++ {
-		// Try to acquire the advisory lock (non-blocking)
-		var acquired bool
-		err := m.db.QueryRow("SELECT pg_try_advisory_lock($1)", lockID).Scan(&acquired)
-		if err != nil {
-			return nil, fmt.Errorf("failed to try advisory lock: %w", err)
-		}
-
-		if acquired {
-			// Lock acquired successfully
-			release := func() {
-				_, _ = m.db.Exec("SELECT pg_advisory_unlock($1)", lockID)
-			}
-			return release, nil
-		}
-
-		// Lock not acquired, wait and retry
-		if i < maxRetries-1 {
-			time.Sleep(retryDelay)
-		}
-	}
-
-	return nil, fmt.Errorf("failed to acquire PostgreSQL advisory lock after %d retries", maxRetries)
-}
+// NOTE: acquirePostgresLock is defined in postgres_lock.go (with postgres build tag)
+// and postgres_lock_stub.go (without postgres build tag). This allows PostgreSQL-specific
+// code to be excluded from default coverage calculations. PostgreSQL integration tests
+// will be added via Docker Compose in issue #139.
