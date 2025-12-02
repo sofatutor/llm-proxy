@@ -6,13 +6,9 @@ on:
   pull_request:
 
 jobs:
-  test:
-    name: ${{ matrix.test-type == 'unit' && 'Unit Tests' || 'Integration Tests' }}
+  unit-tests:
+    name: Unit Tests
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        test-type: [unit, integration]
-      fail-fast: false
     steps:
       - uses: actions/checkout@v3
       
@@ -26,7 +22,6 @@ jobs:
         run: go mod download
       
       - name: Validate migrations
-        if: matrix.test-type == 'unit'
         run: |
           echo "Validating migration files..."
           # Check that migration files exist and are valid SQL
@@ -53,18 +48,9 @@ jobs:
           echo "✅ Migrations validated successfully"
       
       - name: Run unit tests
-        if: matrix.test-type == 'unit'
         run: go test -v -race -parallel=4 -coverprofile=coverage.txt -covermode=atomic -coverpkg=./internal/... ./...
       
-      - name: Run integration tests
-        if: matrix.test-type == 'integration'
-        run: go test -v -race -parallel=4 -tags=integration -timeout=5m -run=Integration ./...
-        env:
-          # Ensure integration tests have clean environment
-          CGO_ENABLED: 1
-      
       - name: Enforce 90%+ code coverage
-        if: matrix.test-type == 'unit'
         run: |
           total=$(go tool cover -func=coverage.txt | grep total: | awk '{print substr($3, 1, length($3)-1)}')
           echo "Total coverage: $total%"
@@ -75,13 +61,11 @@ jobs:
           fi
       
       - name: Generate HTML coverage report
-        if: matrix.test-type == 'unit'
         run: |
           go tool cover -html=coverage.txt -o coverage.html
           echo "📊 HTML coverage report generated: coverage.html"
       
       - name: Upload coverage report
-        if: matrix.test-type == 'unit'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
@@ -90,17 +74,85 @@ jobs:
       
       - name: Test Summary
         run: |
-          if [ "${{ matrix.test-type }}" = "unit" ]; then
-            echo "✅ Unit tests completed successfully"
-            echo "📊 Code coverage enforced at 90%+"
-          else
-            echo "✅ Integration tests completed successfully"
-            echo "🔗 Full E2E management API workflow tested"
-          fi
+          echo "✅ Unit tests completed successfully"
+          echo "📊 Code coverage enforced at 90%+"
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
       
-      # - name: Upload coverage to Codecov
-      #   uses: codecov/codecov-action@v3
-      #   with:
-      #     file: ./coverage.txt
-      #     fail_ci_if_error: false 
-      # TODO: Replace the above with Coveralls upload step once setup is complete 
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+          cache: true
+      
+      - name: Install dependencies
+        run: go mod download
+      
+      - name: Run integration tests
+        run: go test -v -race -parallel=4 -tags=integration -timeout=5m -run=Integration ./...
+        env:
+          CGO_ENABLED: 1
+      
+      - name: Test Summary
+        run: |
+          echo "✅ Integration tests completed successfully"
+          echo "🔗 Full E2E management API workflow tested"
+
+  postgres-integration-tests:
+    name: PostgreSQL Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: llmproxy
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: llmproxy
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+          cache: true
+      
+      - name: Install dependencies
+        run: go mod download
+      
+      - name: Wait for PostgreSQL
+        run: |
+          echo "Waiting for PostgreSQL to be ready..."
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5432 -U llmproxy; then
+              echo "PostgreSQL is ready!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 1
+          done
+      
+      - name: Run PostgreSQL integration tests
+        run: go test -v -race -tags=postgres,integration -timeout=5m ./internal/database/...
+        env:
+          CGO_ENABLED: 1
+          TEST_POSTGRES_URL: postgres://llmproxy:secret@localhost:5432/llmproxy?sslmode=disable
+          DATABASE_URL: postgres://llmproxy:secret@localhost:5432/llmproxy?sslmode=disable
+          DB_DRIVER: postgres
+      
+      - name: Test Summary
+        run: |
+          echo "✅ PostgreSQL integration tests completed successfully"
+          echo "🐘 Database operations verified against real PostgreSQL"
