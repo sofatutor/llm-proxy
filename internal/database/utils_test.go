@@ -250,3 +250,24 @@ func TestGetStats_DBError(t *testing.T) {
 		t.Error("expected error for closed DB in GetStats")
 	}
 }
+
+func TestBoolValue(t *testing.T) {
+	sqliteDB := &DB{driver: DriverSQLite}
+	postgresDB := &DB{driver: DriverPostgres}
+
+	// SQLite uses 1/0 for boolean values
+	if sqliteDB.boolValue(true) != 1 {
+		t.Errorf("SQLite boolValue(true) = %v, want 1", sqliteDB.boolValue(true))
+	}
+	if sqliteDB.boolValue(false) != 0 {
+		t.Errorf("SQLite boolValue(false) = %v, want 0", sqliteDB.boolValue(false))
+	}
+
+	// PostgreSQL uses true/false for boolean values
+	if postgresDB.boolValue(true) != true {
+		t.Errorf("PostgreSQL boolValue(true) = %v, want true", postgresDB.boolValue(true))
+	}
+	if postgresDB.boolValue(false) != false {
+		t.Errorf("PostgreSQL boolValue(false) = %v, want false", postgresDB.boolValue(false))
+	}
+}

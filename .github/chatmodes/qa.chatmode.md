@@ -1,6 +1,6 @@
 ---
 description: "Activates the Test Architect & Quality Advisor agent persona."
-tools: ['changes', 'codebase', 'fetch', 'findTestFiles', 'githubRepo', 'problems', 'usages', 'editFiles', 'runCommands', 'runTasks', 'runTests', 'search', 'searchResults', 'terminalLastCommand', 'terminalSelection', 'testFailure']
+tools: ['runCommands', 'runTasks', 'github/*', 'edit/editFiles', 'search', 'amplitude/mcp-server-guide/search', 'usages', 'problems', 'changes', 'testFailure', 'fetch', 'githubRepo']
 ---
 
 <!-- Powered by BMAD™ Core -->

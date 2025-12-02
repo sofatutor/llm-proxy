@@ -27,7 +27,7 @@ func (d *DB) GetProjectByName(ctx context.Context, name string) (Project, error)
 
 	var project Project
 	var deactivatedAt sql.NullTime
-	err := d.db.QueryRowContext(ctx, query, name).Scan(
+	err := d.QueryRowContextRebound(ctx, query, name).Scan(
 		&project.ID,
 		&project.Name,
 		&project.OpenAIAPIKey,
@@ -84,7 +84,7 @@ func (d *DB) DBListProjects(ctx context.Context) ([]Project, error) {
 	ORDER BY name ASC
 	`
 
-	rows, err := d.db.QueryContext(ctx, query)
+	rows, err := d.QueryContextRebound(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list projects: %w", err)
 	}
@@ -126,7 +126,7 @@ func (d *DB) DBCreateProject(ctx context.Context, project Project) error {
 	VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := d.db.ExecContext(
+	_, err := d.ExecContextRebound(
 		ctx,
 		query,
 		project.ID,
@@ -153,7 +153,7 @@ func (d *DB) DBGetProjectByID(ctx context.Context, projectID string) (Project, e
 
 	var project Project
 	var deactivatedAt sql.NullTime
-	err := d.db.QueryRowContext(ctx, query, projectID).Scan(
+	err := d.QueryRowContextRebound(ctx, query, projectID).Scan(
 		&project.ID,
 		&project.Name,
 		&project.OpenAIAPIKey,
@@ -185,7 +185,7 @@ func (d *DB) DBUpdateProject(ctx context.Context, project Project) error {
 	WHERE id = ?
 	`
 
-	result, err := d.db.ExecContext(
+	result, err := d.ExecContextRebound(
 		ctx,
 		query,
 		project.Name,
@@ -217,7 +217,7 @@ func (d *DB) DBDeleteProject(ctx context.Context, projectID string) error {
 	WHERE id = ?
 	`
 
-	result, err := d.db.ExecContext(ctx, query, projectID)
+	result, err := d.ExecContextRebound(ctx, query, projectID)
 	if err != nil {
 		return fmt.Errorf("failed to delete project: %w", err)
 	}
@@ -271,7 +271,7 @@ func (d *DB) DeleteProject(ctx context.Context, id string) error {
 func (d *DB) GetAPIKeyForProject(ctx context.Context, projectID string) (string, error) {
 	query := `SELECT openai_api_key FROM projects WHERE id = ?`
 	var apiKey string
-	err := d.db.QueryRowContext(ctx, query, projectID).Scan(&apiKey)
+	err := d.QueryRowContextRebound(ctx, query, projectID).Scan(&apiKey)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", ErrProjectNotFound
@@ -285,7 +285,7 @@ func (d *DB) GetAPIKeyForProject(ctx context.Context, projectID string) (string,
 func (d *DB) GetProjectActive(ctx context.Context, projectID string) (bool, error) {
 	query := `SELECT is_active FROM projects WHERE id = ?`
 	var isActive bool
-	err := d.db.QueryRowContext(ctx, query, projectID).Scan(&isActive)
+	err := d.QueryRowContextRebound(ctx, query, projectID).Scan(&isActive)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, ErrProjectNotFound

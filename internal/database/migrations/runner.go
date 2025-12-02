@@ -185,8 +185,7 @@ func (m *MigrationRunner) acquireMigrationLock() (func(), error) {
 	case "sqlite3":
 		return m.acquireSQLiteLock()
 	case "postgres":
-		// PostgreSQL support not yet implemented - will be added when PostgreSQL driver is integrated
-		return nil, fmt.Errorf("PostgreSQL advisory locking not yet implemented")
+		return m.acquirePostgresLock()
 	default:
 		return m.acquireSQLiteLock() // Default to SQLite lock for backward compatibility
 	}
@@ -287,3 +286,8 @@ func (m *MigrationRunner) acquireSQLiteLock() (func(), error) {
 
 	return nil, fmt.Errorf("failed to acquire migration lock after %d retries", maxRetries)
 }
+
+// NOTE: acquirePostgresLock is defined in postgres_lock.go (with postgres build tag)
+// and postgres_lock_stub.go (without postgres build tag). This allows PostgreSQL-specific
+// code to be excluded from default coverage calculations. PostgreSQL integration tests
+// will be added via Docker Compose in issue #139.

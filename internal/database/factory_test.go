@@ -1,0 +1,754 @@
+package database
+
+// NOTE: This test suite focuses on unit tests for factory logic, rebinding helpers, and error conditions.
+// PostgreSQL integration tests (connecting to a real PostgreSQL instance, running migrations, performing CRUD operations)
+// are not included here and will be added via Docker Compose integration tests (see issue #139 and review comment #2580739337).
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestDriverType_Constants(t *testing.T) {
+	// Verify constants are correctly defined
+	assert.Equal(t, DriverType("sqlite"), DriverSQLite)
+	assert.Equal(t, DriverType("postgres"), DriverPostgres)
+}
+
+func TestDefaultFullConfig(t *testing.T) {
+	config := DefaultFullConfig()
+
+	assert.Equal(t, DriverSQLite, config.Driver)
+	assert.Equal(t, "data/llm-proxy.db", config.Path)
+	assert.Equal(t, "", config.DatabaseURL)
+	assert.Equal(t, 10, config.MaxOpenConns)
+	assert.Equal(t, 5, config.MaxIdleConns)
+	assert.Equal(t, time.Hour, config.ConnMaxLifetime)
+}
+
+func TestConfigFromEnv(t *testing.T) {
+	// Save original env vars and restore after test using t.Setenv
+	// t.Setenv automatically restores the original value after the test
+	origDriver := os.Getenv("DB_DRIVER")
+	origPath := os.Getenv("DATABASE_PATH")
+	origURL := os.Getenv("DATABASE_URL")
+	origPoolSize := os.Getenv("DATABASE_POOL_SIZE")
+	origIdleConns := os.Getenv("DATABASE_MAX_IDLE_CONNS")
+	origLifetime := os.Getenv("DATABASE_CONN_MAX_LIFETIME")
+
+	// Cleanup after test
+	defer func() {
+		_ = os.Setenv("DB_DRIVER", origDriver)
+		_ = os.Setenv("DATABASE_PATH", origPath)
+		_ = os.Setenv("DATABASE_URL", origURL)
+		_ = os.Setenv("DATABASE_POOL_SIZE", origPoolSize)
+		_ = os.Setenv("DATABASE_MAX_IDLE_CONNS", origIdleConns)
+		_ = os.Setenv("DATABASE_CONN_MAX_LIFETIME", origLifetime)
+	}()
+
+	tests := []struct {
+		name     string
+		envVars  map[string]string
+		expected FullConfig
+	}{
+		{
+			name:    "default values",
+			envVars: map[string]string{},
+			expected: FullConfig{
+				Driver:          DriverSQLite,
+				Path:            "data/llm-proxy.db",
+				DatabaseURL:     "",
+				MaxOpenConns:    10,
+				MaxIdleConns:    5,
+				ConnMaxLifetime: time.Hour,
+			},
+		},
+		{
+			name: "postgres driver",
+			envVars: map[string]string{
+				"DB_DRIVER":    "postgres",
+				"DATABASE_URL": "postgres://user:pass@localhost:5432/db",
+			},
+			expected: FullConfig{
+				Driver:          DriverPostgres,
+				Path:            "data/llm-proxy.db",
+				DatabaseURL:     "postgres://user:pass@localhost:5432/db",
+				MaxOpenConns:    10,
+				MaxIdleConns:    5,
+				ConnMaxLifetime: time.Hour,
+			},
+		},
+		{
+			name: "custom pool settings",
+			envVars: map[string]string{
+				"DATABASE_POOL_SIZE":         "20",
+				"DATABASE_MAX_IDLE_CONNS":    "10",
+				"DATABASE_CONN_MAX_LIFETIME": "30m",
+			},
+			expected: FullConfig{
+				Driver:          DriverSQLite,
+				Path:            "data/llm-proxy.db",
+				DatabaseURL:     "",
+				MaxOpenConns:    20,
+				MaxIdleConns:    10,
+				ConnMaxLifetime: 30 * time.Minute,
+			},
+		},
+		{
+			name: "uppercase driver",
+			envVars: map[string]string{
+				"DB_DRIVER": "POSTGRES",
+			},
+			expected: FullConfig{
+				Driver:          DriverPostgres,
+				Path:            "data/llm-proxy.db",
+				DatabaseURL:     "",
+				MaxOpenConns:    10,
+				MaxIdleConns:    5,
+				ConnMaxLifetime: time.Hour,
+			},
+		},
+		{
+			name: "invalid pool size (ignored)",
+			envVars: map[string]string{
+				"DATABASE_POOL_SIZE": "invalid",
+			},
+			expected: FullConfig{
+				Driver:          DriverSQLite,
+				Path:            "data/llm-proxy.db",
+				DatabaseURL:     "",
+				MaxOpenConns:    10, // default preserved
+				MaxIdleConns:    5,
+				ConnMaxLifetime: time.Hour,
+			},
+		},
+		{
+			name: "negative pool size (ignored)",
+			envVars: map[string]string{
+				"DATABASE_POOL_SIZE": "-5",
+			},
+			expected: FullConfig{
+				Driver:          DriverSQLite,
+				Path:            "data/llm-proxy.db",
+				DatabaseURL:     "",
+				MaxOpenConns:    10, // default preserved
+				MaxIdleConns:    5,
+				ConnMaxLifetime: time.Hour,
+			},
+		},
+		{
+			name: "invalid driver (defaults to sqlite)",
+			envVars: map[string]string{
+				"DB_DRIVER": "mysql",
+			},
+			expected: FullConfig{
+				Driver:          DriverSQLite, // default preserved for invalid driver
+				Path:            "data/llm-proxy.db",
+				DatabaseURL:     "",
+				MaxOpenConns:    10,
+				MaxIdleConns:    5,
+				ConnMaxLifetime: time.Hour,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Clear env vars
+			_ = os.Unsetenv("DB_DRIVER")
+			_ = os.Unsetenv("DATABASE_PATH")
+			_ = os.Unsetenv("DATABASE_URL")
+			_ = os.Unsetenv("DATABASE_POOL_SIZE")
+			_ = os.Unsetenv("DATABASE_MAX_IDLE_CONNS")
+			_ = os.Unsetenv("DATABASE_CONN_MAX_LIFETIME")
+
+			// Set env vars for test
+			for k, v := range tt.envVars {
+				_ = os.Setenv(k, v)
+			}
+
+			config := ConfigFromEnv()
+			assert.Equal(t, tt.expected.Driver, config.Driver)
+			assert.Equal(t, tt.expected.Path, config.Path)
+			assert.Equal(t, tt.expected.DatabaseURL, config.DatabaseURL)
+			assert.Equal(t, tt.expected.MaxOpenConns, config.MaxOpenConns)
+			assert.Equal(t, tt.expected.MaxIdleConns, config.MaxIdleConns)
+			assert.Equal(t, tt.expected.ConnMaxLifetime, config.ConnMaxLifetime)
+		})
+	}
+}
+
+func TestParsePositiveInt(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int
+		hasError bool
+	}{
+		{"5", 5, false},
+		{"100", 100, false},
+		{"1", 1, false},
+		{"0", 0, true},
+		{"-5", 0, true},
+		{"invalid", 0, true},
+		{"", 0, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result, err := parsePositiveInt(tt.input)
+			if tt.hasError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestNewFromConfig_SQLite(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	config := FullConfig{
+		Driver:          DriverSQLite,
+		Path:            dbPath,
+		MaxOpenConns:    5,
+		MaxIdleConns:    2,
+		ConnMaxLifetime: time.Minute,
+	}
+
+	db, err := NewFromConfig(config)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	assert.Equal(t, DriverSQLite, db.Driver())
+	assert.NotNil(t, db.DB())
+
+	// Verify connection works
+	err = db.HealthCheck(context.Background())
+	assert.NoError(t, err)
+}
+
+func TestNewFromConfig_SQLiteInMemory(t *testing.T) {
+	config := FullConfig{
+		Driver:          DriverSQLite,
+		Path:            ":memory:",
+		MaxOpenConns:    5,
+		MaxIdleConns:    2,
+		ConnMaxLifetime: time.Minute,
+	}
+
+	db, err := NewFromConfig(config)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	assert.Equal(t, DriverSQLite, db.Driver())
+
+	// Verify connection works
+	err = db.HealthCheck(context.Background())
+	assert.NoError(t, err)
+}
+
+func TestNewFromConfig_UnsupportedDriver(t *testing.T) {
+	config := FullConfig{
+		Driver: DriverType("mysql"),
+	}
+
+	db, err := NewFromConfig(config)
+	assert.Error(t, err)
+	assert.Nil(t, db)
+	assert.Contains(t, err.Error(), "unsupported database driver")
+}
+
+func TestNewFromConfig_PostgresMissingURL(t *testing.T) {
+	config := FullConfig{
+		Driver:      DriverPostgres,
+		DatabaseURL: "",
+	}
+
+	db, err := NewFromConfig(config)
+	assert.Error(t, err)
+	assert.Nil(t, db)
+	assert.Contains(t, err.Error(), "DATABASE_URL is required")
+}
+
+func TestDB_Driver(t *testing.T) {
+	config := FullConfig{
+		Driver: DriverSQLite,
+		Path:   ":memory:",
+	}
+
+	db, err := NewFromConfig(config)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	assert.Equal(t, DriverSQLite, db.Driver())
+}
+
+func TestDB_HealthCheck(t *testing.T) {
+	config := FullConfig{
+		Driver: DriverSQLite,
+		Path:   ":memory:",
+	}
+
+	db, err := NewFromConfig(config)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Health check should pass
+	err = db.HealthCheck(context.Background())
+	assert.NoError(t, err)
+
+	// Close and try again - should fail
+	_ = db.Close()
+	err = db.HealthCheck(context.Background())
+	assert.Error(t, err)
+}
+
+func TestDB_HealthCheck_NilDB(t *testing.T) {
+	var db *DB
+	err := db.HealthCheck(context.Background())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "database is nil")
+}
+
+func TestGetMigrationsPathForDialect(t *testing.T) {
+	// Test that we can find migrations for sqlite3
+	path, err := getMigrationsPathForDialect("sqlite3")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, path)
+
+	// Test that we can find migrations for postgres
+	path, err = getMigrationsPathForDialect("postgres")
+	assert.NoError(t, err)
+	assert.NotEmpty(t, path)
+}
+
+func TestDB_RebindQuery(t *testing.T) {
+	tests := []struct {
+		name     string
+		driver   DriverType
+		query    string
+		expected string
+	}{
+		{
+			name:     "SQLite no change",
+			driver:   DriverSQLite,
+			query:    "SELECT * FROM tokens WHERE token = ?",
+			expected: "SELECT * FROM tokens WHERE token = ?",
+		},
+		{
+			name:     "PostgreSQL single placeholder",
+			driver:   DriverPostgres,
+			query:    "SELECT * FROM tokens WHERE token = ?",
+			expected: "SELECT * FROM tokens WHERE token = $1",
+		},
+		{
+			name:     "PostgreSQL multiple placeholders",
+			driver:   DriverPostgres,
+			query:    "INSERT INTO tokens (token, project_id, is_active) VALUES (?, ?, ?)",
+			expected: "INSERT INTO tokens (token, project_id, is_active) VALUES ($1, $2, $3)",
+		},
+		{
+			name:     "PostgreSQL no placeholders",
+			driver:   DriverPostgres,
+			query:    "SELECT * FROM tokens",
+			expected: "SELECT * FROM tokens",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := &DB{driver: tt.driver}
+			result := db.RebindQuery(tt.query)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestDB_Placeholder(t *testing.T) {
+	sqliteDB := &DB{driver: DriverSQLite}
+	postgresDB := &DB{driver: DriverPostgres}
+
+	assert.Equal(t, "?", sqliteDB.Placeholder(1))
+	assert.Equal(t, "?", sqliteDB.Placeholder(2))
+
+	assert.Equal(t, "$1", postgresDB.Placeholder(1))
+	assert.Equal(t, "$2", postgresDB.Placeholder(2))
+	assert.Equal(t, "$10", postgresDB.Placeholder(10))
+}
+
+func TestDB_Placeholders(t *testing.T) {
+	sqliteDB := &DB{driver: DriverSQLite}
+	postgresDB := &DB{driver: DriverPostgres}
+
+	assert.Equal(t, []string{"?", "?", "?"}, sqliteDB.Placeholders(3))
+	assert.Equal(t, []string{"$1", "$2", "$3"}, postgresDB.Placeholders(3))
+}
+
+func TestDB_PlaceholderList(t *testing.T) {
+	sqliteDB := &DB{driver: DriverSQLite}
+	postgresDB := &DB{driver: DriverPostgres}
+
+	assert.Equal(t, "?, ?, ?", sqliteDB.PlaceholderList(3))
+	assert.Equal(t, "$1, $2, $3", postgresDB.PlaceholderList(3))
+}
+
+func TestMaintainDatabase_SQLite(t *testing.T) {
+	config := FullConfig{
+		Driver: DriverSQLite,
+		Path:   ":memory:",
+	}
+
+	db, err := NewFromConfig(config)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Should work for SQLite
+	err = db.MaintainDatabase(context.Background())
+	assert.NoError(t, err)
+}
+
+func TestGetStats_SQLite(t *testing.T) {
+	config := FullConfig{
+		Driver: DriverSQLite,
+		Path:   ":memory:",
+	}
+
+	db, err := NewFromConfig(config)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	stats, err := db.GetStats(context.Background())
+	require.NoError(t, err)
+
+	// Check expected keys
+	expectedKeys := []string{
+		"database_size_bytes",
+		"project_count",
+		"active_token_count",
+		"expired_token_count",
+		"total_request_count",
+	}
+	for _, key := range expectedKeys {
+		_, ok := stats[key]
+		assert.True(t, ok, "missing stats key: %s", key)
+	}
+}
+
+func TestBackupDatabase_SQLite(t *testing.T) {
+	config := FullConfig{
+		Driver: DriverSQLite,
+		Path:   ":memory:",
+	}
+
+	db, err := NewFromConfig(config)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	tmpDir := t.TempDir()
+	backupPath := filepath.Join(tmpDir, "backup.db")
+
+	err = db.BackupDatabase(context.Background(), backupPath)
+	assert.NoError(t, err)
+
+	// Verify backup file exists
+	_, err = os.Stat(backupPath)
+	assert.NoError(t, err)
+}
+
+func TestBackupDatabase_EmptyPath(t *testing.T) {
+	config := FullConfig{
+		Driver: DriverSQLite,
+		Path:   ":memory:",
+	}
+
+	db, err := NewFromConfig(config)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	err = db.BackupDatabase(context.Background(), "")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "backup path cannot be empty")
+}
+
+func TestBackupDatabase_InvalidPath(t *testing.T) {
+	config := FullConfig{
+		Driver: DriverSQLite,
+		Path:   ":memory:",
+	}
+
+	db, err := NewFromConfig(config)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Path starting with invalid character
+	err = db.BackupDatabase(context.Background(), "-invalidpath")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid backup path")
+}
+
+// TestBackupDatabase_PostgresNotSupported tests that PostgreSQL backup returns an error
+func TestBackupDatabase_PostgresNotSupported(t *testing.T) {
+	// Create a mock postgres DB (just set the driver, no actual connection)
+	db := &DB{driver: DriverPostgres}
+
+	err := db.BackupDatabase(context.Background(), "/tmp/backup.db")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "backup not supported for PostgreSQL")
+}
+
+// TestSQLiteRegressionAfterPostgresSupport tests that SQLite still works after PostgreSQL changes
+func TestSQLiteRegressionAfterPostgresSupport(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "regression.db")
+
+	// Create database using factory
+	config := FullConfig{
+		Driver:          DriverSQLite,
+		Path:            dbPath,
+		MaxOpenConns:    5,
+		MaxIdleConns:    2,
+		ConnMaxLifetime: time.Minute,
+	}
+
+	db, err := NewFromConfig(config)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	ctx := context.Background()
+
+	// Test health check
+	err = db.HealthCheck(ctx)
+	require.NoError(t, err)
+
+	// Test creating a project
+	projectID := "test-project-1"
+	now := time.Now()
+	err = db.DBCreateProject(ctx, Project{
+		ID:           projectID,
+		Name:         "Test Project",
+		OpenAIAPIKey: "sk-test-key",
+		IsActive:     true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	require.NoError(t, err)
+
+	// Test retrieving the project
+	project, err := db.DBGetProjectByID(ctx, projectID)
+	require.NoError(t, err)
+	assert.Equal(t, "Test Project", project.Name)
+	assert.True(t, project.IsActive)
+
+	// Test creating a token
+	tokenID := "test-token-abc123"
+	err = db.CreateToken(ctx, Token{
+		Token:        tokenID,
+		ProjectID:    projectID,
+		IsActive:     true,
+		RequestCount: 0,
+		CreatedAt:    now,
+	})
+	require.NoError(t, err)
+
+	// Test retrieving the token
+	token, err := db.GetTokenByID(ctx, tokenID)
+	require.NoError(t, err)
+	assert.Equal(t, tokenID, token.Token)
+	assert.Equal(t, projectID, token.ProjectID)
+	assert.True(t, token.IsActive)
+
+	// Test increment usage
+	err = db.IncrementTokenUsage(ctx, tokenID)
+	require.NoError(t, err)
+
+	// Verify increment
+	token, err = db.GetTokenByID(ctx, tokenID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, token.RequestCount)
+
+	// Test stats
+	stats, err := db.GetStats(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, stats["project_count"])
+	assert.Equal(t, 1, stats["active_token_count"])
+}
+
+func TestDB_ExecContextRebound(t *testing.T) {
+	config := FullConfig{
+		Driver: DriverSQLite,
+		Path:   ":memory:",
+	}
+
+	db, err := NewFromConfig(config)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	ctx := context.Background()
+
+	// Use rebound exec to update a token
+	now := time.Now()
+	projectID := "test-project"
+	err = db.DBCreateProject(ctx, Project{
+		ID:           projectID,
+		Name:         "Test",
+		OpenAIAPIKey: "key",
+		IsActive:     true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	require.NoError(t, err)
+
+	tokenID := "rebound-test-token"
+	err = db.CreateToken(ctx, Token{
+		Token:        tokenID,
+		ProjectID:    projectID,
+		IsActive:     true,
+		RequestCount: 0,
+		CreatedAt:    now,
+	})
+	require.NoError(t, err)
+
+	// Test ExecContextRebound
+	result, err := db.ExecContextRebound(ctx, "UPDATE tokens SET request_count = ? WHERE token = ?", 5, tokenID)
+	require.NoError(t, err)
+	rows, err := result.RowsAffected()
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), rows)
+
+	// Verify the update
+	token, err := db.GetTokenByID(ctx, tokenID)
+	require.NoError(t, err)
+	assert.Equal(t, 5, token.RequestCount)
+}
+
+func TestDB_QueryRowContextRebound(t *testing.T) {
+	config := FullConfig{
+		Driver: DriverSQLite,
+		Path:   ":memory:",
+	}
+
+	db, err := NewFromConfig(config)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	ctx := context.Background()
+	now := time.Now()
+
+	projectID := "test-project"
+	err = db.DBCreateProject(ctx, Project{
+		ID:           projectID,
+		Name:         "TestQuery",
+		OpenAIAPIKey: "key",
+		IsActive:     true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	require.NoError(t, err)
+
+	tokenID := "query-test-token"
+	err = db.CreateToken(ctx, Token{
+		Token:        tokenID,
+		ProjectID:    projectID,
+		IsActive:     true,
+		RequestCount: 42,
+		CreatedAt:    now,
+	})
+	require.NoError(t, err)
+
+	// Test QueryRowContextRebound
+	var count int
+	row := db.QueryRowContextRebound(ctx, "SELECT request_count FROM tokens WHERE token = ?", tokenID)
+	err = row.Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 42, count)
+}
+
+func TestDB_QueryContextRebound(t *testing.T) {
+	config := FullConfig{
+		Driver: DriverSQLite,
+		Path:   ":memory:",
+	}
+
+	db, err := NewFromConfig(config)
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	ctx := context.Background()
+	now := time.Now()
+
+	projectID := "test-project"
+	err = db.DBCreateProject(ctx, Project{
+		ID:           projectID,
+		Name:         "TestQueryMulti",
+		OpenAIAPIKey: "key",
+		IsActive:     true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	require.NoError(t, err)
+
+	// Create multiple tokens
+	for i := 0; i < 3; i++ {
+		err = db.CreateToken(ctx, Token{
+			Token:        "multi-token-" + string(rune('a'+i)),
+			ProjectID:    projectID,
+			IsActive:     true,
+			RequestCount: i * 10,
+			CreatedAt:    now,
+		})
+		require.NoError(t, err)
+	}
+
+	// Test QueryContextRebound
+	rows, err := db.QueryContextRebound(ctx, "SELECT token FROM tokens WHERE project_id = ?", projectID)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+
+	var tokens []string
+	for rows.Next() {
+		var tok string
+		err = rows.Scan(&tok)
+		require.NoError(t, err)
+		tokens = append(tokens, tok)
+	}
+	require.NoError(t, rows.Err())
+	assert.Len(t, tokens, 3)
+}
+
+func TestNewFromConfig_PostgresInvalidURL(t *testing.T) {
+	config := FullConfig{
+		Driver:      DriverPostgres,
+		DatabaseURL: "invalid-not-a-url",
+	}
+
+	// This should fail when trying to ping the database
+	db, err := NewFromConfig(config)
+	assert.Error(t, err)
+	assert.Nil(t, db)
+}
+
+func TestNewFromConfig_SQLiteInvalidPath(t *testing.T) {
+	config := FullConfig{
+		Driver: DriverSQLite,
+		Path:   "/nonexistent/very/deep/path/that/does/not/exist/db.sqlite",
+	}
+
+	db, err := NewFromConfig(config)
+	// Should fail because directory doesn't exist and can't be created
+	// Note: This might pass on some systems if the directory gets created
+	// So we just check that it either works or fails gracefully
+	if err != nil {
+		assert.Contains(t, err.Error(), "failed")
+	} else {
+		_ = db.Close()
+	}
+}

@@ -25,7 +25,7 @@ func (d *DB) CreateToken(ctx context.Context, token Token) error {
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	_, err := d.db.ExecContext(
+	_, err := d.ExecContextRebound(
 		ctx,
 		query,
 		token.Token,
@@ -57,7 +57,7 @@ func (d *DB) GetTokenByID(ctx context.Context, tokenID string) (Token, error) {
 	var expiresAt, lastUsedAt, deactivatedAt sql.NullTime
 	var maxRequests sql.NullInt32
 
-	err := d.db.QueryRowContext(ctx, query, tokenID).Scan(
+	err := d.QueryRowContextRebound(ctx, query, tokenID).Scan(
 		&token.Token,
 		&token.ProjectID,
 		&expiresAt,
@@ -100,7 +100,7 @@ func (d *DB) UpdateToken(ctx context.Context, token Token) error {
 	WHERE token = ?
 	`
 
-	result, err := d.db.ExecContext(
+	result, err := d.ExecContextRebound(
 		ctx,
 		query,
 		token.ProjectID,
@@ -134,7 +134,7 @@ func (d *DB) DeleteToken(ctx context.Context, tokenID string) error {
 	WHERE token = ?
 	`
 
-	result, err := d.db.ExecContext(ctx, query, tokenID)
+	result, err := d.ExecContextRebound(ctx, query, tokenID)
 	if err != nil {
 		return fmt.Errorf("failed to delete token: %w", err)
 	}
@@ -183,7 +183,7 @@ func (d *DB) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	WHERE token = ?
 	`
 
-	result, err := d.db.ExecContext(ctx, query, now, tokenID)
+	result, err := d.ExecContextRebound(ctx, query, now, tokenID)
 	if err != nil {
 		return fmt.Errorf("failed to increment token usage: %w", err)
 	}
@@ -208,7 +208,7 @@ func (d *DB) CleanExpiredTokens(ctx context.Context) (int64, error) {
 	WHERE expires_at IS NOT NULL AND expires_at < ?
 	`
 
-	result, err := d.db.ExecContext(ctx, query, now)
+	result, err := d.ExecContextRebound(ctx, query, now)
 	if err != nil {
 		return 0, fmt.Errorf("failed to clean expired tokens: %w", err)
 	}
@@ -223,7 +223,7 @@ func (d *DB) CleanExpiredTokens(ctx context.Context) (int64, error) {
 
 // queryTokens is a helper function to query tokens.
 func (d *DB) queryTokens(ctx context.Context, query string, args ...interface{}) ([]Token, error) {
-	rows, err := d.db.QueryContext(ctx, query, args...)
+	rows, err := d.QueryContextRebound(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tokens: %w", err)
 	}
@@ -372,7 +372,7 @@ func (a *DBTokenStoreAdapter) RevokeToken(ctx context.Context, tokenID string) e
 
 	now := time.Now()
 	query := `UPDATE tokens SET is_active = ?, deactivated_at = COALESCE(deactivated_at, ?) WHERE token = ? AND is_active = ?`
-	result, err := a.db.db.ExecContext(ctx, query, false, now, tokenID, true)
+	result, err := a.db.ExecContextRebound(ctx, query, false, now, tokenID, true)
 	if err != nil {
 		return fmt.Errorf("failed to revoke token: %w", err)
 	}
@@ -386,7 +386,7 @@ func (a *DBTokenStoreAdapter) RevokeToken(ctx context.Context, tokenID string) e
 		// Check if token exists at all (could be already inactive)
 		var exists bool
 		checkQuery := `SELECT 1 FROM tokens WHERE token = ? LIMIT 1`
-		err = a.db.db.QueryRowContext(ctx, checkQuery, tokenID).Scan(&exists)
+		err = a.db.QueryRowContextRebound(ctx, checkQuery, tokenID).Scan(&exists)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return token.ErrTokenNotFound
@@ -404,7 +404,7 @@ func (a *DBTokenStoreAdapter) DeleteToken(ctx context.Context, tokenID string) e
 	if tokenID == "" {
 		return token.ErrTokenNotFound
 	}
-	result, err := a.db.db.ExecContext(ctx, "DELETE FROM tokens WHERE token = ?", tokenID)
+	result, err := a.db.ExecContextRebound(ctx, "DELETE FROM tokens WHERE token = ?", tokenID)
 	if err != nil {
 		return fmt.Errorf("failed to delete token: %w", err)
 	}
@@ -435,7 +435,7 @@ func (a *DBTokenStoreAdapter) RevokeBatchTokens(ctx context.Context, tokenIDs []
 	// Append active-state filter parameter
 	args[len(args)-1] = true
 	query := fmt.Sprintf(`UPDATE tokens SET is_active = ?, deactivated_at = COALESCE(deactivated_at, ?) WHERE token IN (%s) AND is_active = ?`, strings.Join(placeholders, ","))
-	result, err := a.db.db.ExecContext(ctx, query, args...)
+	result, err := a.db.ExecContextRebound(ctx, query, args...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to revoke batch tokens: %w", err)
 	}
@@ -453,7 +453,7 @@ func (a *DBTokenStoreAdapter) RevokeProjectTokens(ctx context.Context, projectID
 	}
 	now := time.Now()
 	query := `UPDATE tokens SET is_active = ?, deactivated_at = COALESCE(deactivated_at, ?) WHERE project_id = ? AND is_active = ?`
-	result, err := a.db.db.ExecContext(ctx, query, false, now, projectID, true)
+	result, err := a.db.ExecContextRebound(ctx, query, false, now, projectID, true)
 	if err != nil {
 		return 0, fmt.Errorf("failed to revoke project tokens: %w", err)
 	}
@@ -468,7 +468,7 @@ func (a *DBTokenStoreAdapter) RevokeProjectTokens(ctx context.Context, projectID
 func (a *DBTokenStoreAdapter) RevokeExpiredTokens(ctx context.Context) (int, error) {
 	now := time.Now()
 	query := `UPDATE tokens SET is_active = ?, deactivated_at = COALESCE(deactivated_at, ?) WHERE expires_at IS NOT NULL AND expires_at < ? AND is_active = ?`
-	result, err := a.db.db.ExecContext(ctx, query, false, now, now, true)
+	result, err := a.db.ExecContextRebound(ctx, query, false, now, now, true)
 	if err != nil {
 		return 0, fmt.Errorf("failed to revoke expired tokens: %w", err)
 	}
