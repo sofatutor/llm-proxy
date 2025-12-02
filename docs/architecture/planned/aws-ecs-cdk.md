@@ -443,59 +443,40 @@ pie title Monthly Cost Distribution
 sequenceDiagram
     participant Dev as Developer
     participant GH as GitHub Actions
-    participant ECR as ECR
+    participant ECR as ECR (Staging)
+    participant ECR_Prod as ECR (Production)
     participant ECS as ECS Service
     
     Dev->>GH: Push to main
     GH->>GH: Run tests
-    GH->>ECR: Build & push Docker image
+    GH->>ECR: Build & push (staging)
+    
+    Dev->>GH: Tag v1.2.3-stable
+    GH->>ECR_Prod: Push to production ECR
     GH->>ECS: Force new deployment
     ECS->>ECS: Rolling deployment
-    Note over ECS: Blue/green with<br/>circuit breaker rollback
 ```
 
-**GitHub Actions Workflow:**
+### Deployment Environments
 
-```yaml
-name: Deploy
+| Trigger | Target | ECR Tag | ECS Deploy |
+|---------|--------|---------|------------|
+| Push to `main` | Staging (optional) | `sha-abc123`, `latest` | Configurable |
+| Tag `*-stable` | Production | `v1.2.3`, `stable` | Yes |
 
-on:
-  push:
-    branches: [main]
+**Production deployment requires explicit `-stable` tag** (e.g., `v1.2.3-stable`).
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: eu-central-1
-      
-      - name: Login to ECR
-        uses: aws-actions/amazon-ecr-login@v2
-      
-      - name: Build and push
-        run: |
-          docker build -t $ECR_REPO:${{ github.sha }} -t $ECR_REPO:latest .
-          docker push $ECR_REPO:${{ github.sha }}
-          docker push $ECR_REPO:latest
-      
-      - name: Deploy to ECS
-        run: |
-          aws ecs update-service \
-            --cluster llm-proxy \
-            --service proxy \
-            --force-new-deployment
-          
-          aws ecs update-service \
-            --cluster llm-proxy \
-            --service dispatcher \
-            --force-new-deployment
-```
+### Configuration
+
+Environment-specific settings via GitHub repository variables:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `DEPLOY_STAGING` | Enable staging deployment on main push | `true` / `false` |
+| `AWS_REGION` | AWS region | `eu-central-1` |
+| `ECR_REPO_STAGING` | Staging ECR repository | `123.dkr.ecr...` |
+| `ECR_REPO_PRODUCTION` | Production ECR repository | `123.dkr.ecr...` |
+| `ECS_CLUSTER` | ECS cluster name | `llm-proxy` |
 
 ### Infrastructure Deployment (Manual)
 
