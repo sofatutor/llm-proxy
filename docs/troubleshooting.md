@@ -499,7 +499,7 @@ Projects cannot be deleted (405 Method Not Allowed) for data safety. Instead:
 1. POST requests require explicit opt-in via `Cache-Control: public` header
 2. Responses with `Cache-Control: no-store` are not cached
 3. Responses larger than `HTTP_CACHE_MAX_OBJECT_BYTES` are not cached
-4. Unique prompts create separate cache entries
+4. Each unique request creates a separate cache entry
 
 ### How do I enable Prometheus metrics?
 

@@ -95,7 +95,6 @@ Docker Compose is recommended for multi-service deployments.
 Create a `docker-compose.yml`:
 
 ```yaml
-version: '3.8'
 
 services:
   llm-proxy:
@@ -131,7 +130,6 @@ docker compose up -d
 For production with caching and event logging:
 
 ```yaml
-version: '3.8'
 
 services:
   llm-proxy:
@@ -190,7 +188,6 @@ volumes:
 For production deployments requiring a robust database:
 
 ```yaml
-version: '3.8'
 
 services:
   postgres:
