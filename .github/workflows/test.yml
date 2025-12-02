@@ -26,6 +26,7 @@ jobs:
         run: go mod download
       
       - name: Validate migrations
+        if: matrix.test-type == 'unit'
         run: |
           echo "Validating migration files..."
           # Check that migration files exist and are valid SQL
@@ -34,17 +35,21 @@ jobs:
             exit 1
           fi
           
+          # Build the binary once (faster than go run)
+          echo "Building proxy binary..."
+          go build -o llm-proxy ./cmd/proxy
+          
           # Test migrations can be applied to clean database
           echo "Testing migration application..."
           TEST_DB="test_migrations.db"
-          go run ./cmd/proxy migrate up --db "$TEST_DB" || exit 1
+          ./llm-proxy migrate up --db "$TEST_DB" || exit 1
           
           # Test migrations can be rolled back
           echo "Testing migration rollback..."
-          go run ./cmd/proxy migrate down --db "$TEST_DB" || exit 1
+          ./llm-proxy migrate down --db "$TEST_DB" || exit 1
           
           # Clean up
-          rm -f "$TEST_DB"
+          rm -f "$TEST_DB" llm-proxy
           echo "✅ Migrations validated successfully"
       
       - name: Run unit tests
