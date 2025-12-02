@@ -267,23 +267,57 @@ func runServerForeground() {
 		_ = ln.Close()
 	}
 
-	// Make sure the database directory exists
-	dbDir := filepath.Dir(cfg.DatabasePath)
-	if err := os.MkdirAll(dbDir, 0755); err != nil {
-		zapLogger.Fatal("Failed to create database directory", zap.Error(err))
+	// Determine database driver from environment
+	dbDriver := os.Getenv("DB_DRIVER")
+	if dbDriver == "" {
+		dbDriver = "sqlite" // Default to SQLite for backward compatibility
 	}
 
-	// Create and start the server with actual database stores (not mocks)
-	dbConfig := database.DefaultConfig()
-	dbConfig.Path = cfg.DatabasePath
-	db, err := database.New(dbConfig)
-	if err != nil {
-		zapLogger.Fatal("Failed to connect to database", zap.Error(err))
-	}
-	if dbConfig.Path == ":memory:" {
-		zapLogger.Info("Connected to in-memory SQLite database")
+	var db *database.DB
+	var dbErr error
+
+	if dbDriver == "postgres" {
+		// PostgreSQL configuration
+		databaseURL := os.Getenv("DATABASE_URL")
+		if databaseURL == "" {
+			zapLogger.Fatal("DATABASE_URL is required when DB_DRIVER=postgres")
+		}
+
+		dbConfig := database.FullConfig{
+			Driver:          database.DriverPostgres,
+			DatabaseURL:     databaseURL,
+			MaxOpenConns:    10,
+			MaxIdleConns:    5,
+			ConnMaxLifetime: time.Hour,
+		}
+		db, dbErr = database.NewFromConfig(dbConfig)
+		if dbErr != nil {
+			zapLogger.Fatal("Failed to connect to PostgreSQL database", zap.Error(dbErr))
+		}
+		zapLogger.Info("Connected to PostgreSQL database")
 	} else {
-		zapLogger.Info("Connected to SQLite database", zap.String("path", dbConfig.Path))
+		// SQLite configuration (default)
+		dbDir := filepath.Dir(cfg.DatabasePath)
+		if err := os.MkdirAll(dbDir, 0755); err != nil {
+			zapLogger.Fatal("Failed to create database directory", zap.Error(err))
+		}
+
+		dbConfig := database.FullConfig{
+			Driver:          database.DriverSQLite,
+			Path:            cfg.DatabasePath,
+			MaxOpenConns:    10,
+			MaxIdleConns:    5,
+			ConnMaxLifetime: time.Hour,
+		}
+		db, dbErr = database.NewFromConfig(dbConfig)
+		if dbErr != nil {
+			zapLogger.Fatal("Failed to connect to SQLite database", zap.Error(dbErr))
+		}
+		if cfg.DatabasePath == ":memory:" {
+			zapLogger.Info("Connected to in-memory SQLite database")
+		} else {
+			zapLogger.Info("Connected to SQLite database", zap.String("path", cfg.DatabasePath))
+		}
 	}
 
 	tokenStore := database.NewDBTokenStoreAdapter(db)

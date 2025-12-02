@@ -17,11 +17,12 @@ COPY . .
 RUN --mount=type=cache,target=/var/cache/apk apk add gcc musl-dev sqlite-dev
 
 # Build the application with CGO enabled for go-sqlite3
+# Include postgres build tag for PostgreSQL advisory locking support
 ENV CGO_ENABLED=1
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     GOMODCACHE=/go/pkg/mod \
-    go build -ldflags "-w" -trimpath -o /llm-proxy ./cmd/proxy
+    go build -tags=postgres -ldflags "-w" -trimpath -o /llm-proxy ./cmd/proxy
 
 # Use a small alpine image for the final container
 FROM alpine:3.18
