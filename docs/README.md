@@ -17,6 +17,7 @@ Start with the main [README](../README.md) for a quick overview, installation, a
 
 - **[API Configuration](api-configuration.md)** - Configure API providers, endpoints, and security policies
 - **[Security Best Practices](security.md)** - Production security, secrets management, and hardening
+- **[Docker Compose PostgreSQL Setup](docker-compose-postgres.md)** - Run llm-proxy with PostgreSQL using Docker Compose
 
 ## Observability & Monitoring
 
@@ -63,7 +64,9 @@ The [OpenAPI specification](../api/openapi.yaml) provides machine-readable API d
 |----------|---------|---------|
 | `MANAGEMENT_TOKEN` | Admin API access | **Required** |
 | `LISTEN_ADDR` | Server address | `:8080` |
-| `DATABASE_PATH` | SQLite database | `./data/llm-proxy.db` |
+| `DB_DRIVER` | Database driver (`sqlite` or `postgres`) | `sqlite` |
+| `DATABASE_PATH` | SQLite database path | `./data/llm-proxy.db` |
+| `DATABASE_URL` | PostgreSQL connection string | - |
 | `LOG_LEVEL` | Logging level | `info` |
 | `AUDIT_ENABLED` | Enable audit logging | `true` |
 | `AUDIT_LOG_FILE` | Audit log file path | `./data/audit.log` |
