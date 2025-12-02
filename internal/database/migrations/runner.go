@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/pressly/goose/v3"
@@ -150,26 +151,30 @@ func (m *MigrationRunner) detectDriver() (string, error) {
 		return "sqlite3", nil
 	}
 
-	// Detect PostgreSQL (common drivers: lib/pq, pgx)
-	if driverType == "*pq.driver" || driverType == "*pgx.Conn" || driverType == "*pgxpool.Pool" {
+	// Detect PostgreSQL (common drivers: lib/pq, pgx, pgx/stdlib)
+	// pgx/stdlib registers as *stdlib.Driver when using sql.Open("pgx", ...)
+	if driverType == "*pq.driver" || driverType == "*pgx.Conn" || driverType == "*pgxpool.Pool" ||
+		driverType == "*stdlib.Driver" {
 		return "postgres", nil
 	}
 
-	// Try to detect via connection string or query
-	// For SQLite, try a SQLite-specific query
-	var result int
-	err := m.db.QueryRow("SELECT 1").Scan(&result)
-	if err == nil {
-		// Try SQLite-specific pragma
-		var journalMode string
-		pragmaErr := m.db.QueryRow("PRAGMA journal_mode").Scan(&journalMode)
-		if pragmaErr == nil {
-			return "sqlite3", nil
-		}
+	// Try to detect via database-specific queries
+	// First, try PostgreSQL-specific query
+	var version string
+	pgErr := m.db.QueryRow("SELECT version()").Scan(&version)
+	if pgErr == nil && strings.HasPrefix(version, "PostgreSQL") {
+		// version() is PostgreSQL-specific and returns something like "PostgreSQL 15.x ..."
+		return "postgres", nil
+	}
+
+	// Try SQLite-specific pragma
+	var journalMode string
+	pragmaErr := m.db.QueryRow("PRAGMA journal_mode").Scan(&journalMode)
+	if pragmaErr == nil {
+		return "sqlite3", nil
 	}
 
 	// Default to sqlite3 for backward compatibility
-	// This will be updated when PostgreSQL support is added
 	return "sqlite3", nil
 }
 

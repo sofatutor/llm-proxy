@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -267,23 +268,62 @@ func runServerForeground() {
 		_ = ln.Close()
 	}
 
-	// Make sure the database directory exists
-	dbDir := filepath.Dir(cfg.DatabasePath)
-	if err := os.MkdirAll(dbDir, 0755); err != nil {
-		zapLogger.Fatal("Failed to create database directory", zap.Error(err))
+	// Determine database driver from environment
+	dbDriver := os.Getenv("DB_DRIVER")
+	if dbDriver == "" {
+		dbDriver = "sqlite" // Default to SQLite for backward compatibility
 	}
 
-	// Create and start the server with actual database stores (not mocks)
-	dbConfig := database.DefaultConfig()
-	dbConfig.Path = cfg.DatabasePath
-	db, err := database.New(dbConfig)
-	if err != nil {
-		zapLogger.Fatal("Failed to connect to database", zap.Error(err))
-	}
-	if dbConfig.Path == ":memory:" {
-		zapLogger.Info("Connected to in-memory SQLite database")
+	// Read database pool configuration from environment with defaults
+	maxOpenConns := getEnvInt("DATABASE_POOL_SIZE", 10)
+	maxIdleConns := getEnvInt("DATABASE_MAX_IDLE_CONNS", 5)
+	connMaxLifetime := getEnvDuration("DATABASE_CONN_MAX_LIFETIME", time.Hour)
+
+	var db *database.DB
+	var dbErr error
+
+	if dbDriver == "postgres" {
+		// PostgreSQL configuration
+		databaseURL := os.Getenv("DATABASE_URL")
+		if databaseURL == "" {
+			zapLogger.Fatal("DATABASE_URL is required when DB_DRIVER=postgres")
+		}
+
+		dbConfig := database.FullConfig{
+			Driver:          database.DriverPostgres,
+			DatabaseURL:     databaseURL,
+			MaxOpenConns:    maxOpenConns,
+			MaxIdleConns:    maxIdleConns,
+			ConnMaxLifetime: connMaxLifetime,
+		}
+		db, dbErr = database.NewFromConfig(dbConfig)
+		if dbErr != nil {
+			zapLogger.Fatal("Failed to connect to PostgreSQL database", zap.Error(dbErr))
+		}
+		zapLogger.Info("Connected to PostgreSQL database")
 	} else {
-		zapLogger.Info("Connected to SQLite database", zap.String("path", dbConfig.Path))
+		// SQLite configuration (default)
+		dbDir := filepath.Dir(cfg.DatabasePath)
+		if err := os.MkdirAll(dbDir, 0755); err != nil {
+			zapLogger.Fatal("Failed to create database directory", zap.Error(err))
+		}
+
+		dbConfig := database.FullConfig{
+			Driver:          database.DriverSQLite,
+			Path:            cfg.DatabasePath,
+			MaxOpenConns:    maxOpenConns,
+			MaxIdleConns:    maxIdleConns,
+			ConnMaxLifetime: connMaxLifetime,
+		}
+		db, dbErr = database.NewFromConfig(dbConfig)
+		if dbErr != nil {
+			zapLogger.Fatal("Failed to connect to SQLite database", zap.Error(dbErr))
+		}
+		if cfg.DatabasePath == ":memory:" {
+			zapLogger.Info("Connected to in-memory SQLite database")
+		} else {
+			zapLogger.Info("Connected to SQLite database", zap.String("path", cfg.DatabasePath))
+		}
 	}
 
 	tokenStore := database.NewDBTokenStoreAdapter(db)
@@ -375,4 +415,29 @@ func runServerForeground() {
 	}
 
 	zapLogger.Info("Server exited gracefully")
+}
+
+// getEnvInt reads an integer from an environment variable with a default value.
+// Logs a warning if the value exists but is invalid.
+func getEnvInt(key string, defaultVal int) int {
+	if val := os.Getenv(key); val != "" {
+		if i, err := strconv.Atoi(val); err == nil {
+			return i
+		}
+		log.Printf("Warning: invalid integer value for %s: %q, using default: %d", key, val, defaultVal)
+	}
+	return defaultVal
+}
+
+// getEnvDuration reads a duration from an environment variable with a default value.
+// Accepts formats like "1h", "30m", "1h30m", etc.
+// Logs a warning if the value exists but is invalid.
+func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
+	if val := os.Getenv(key); val != "" {
+		if d, err := time.ParseDuration(val); err == nil {
+			return d
+		}
+		log.Printf("Warning: invalid duration value for %s: %q, using default: %v", key, val, defaultVal)
+	}
+	return defaultVal
 }

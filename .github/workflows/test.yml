@@ -6,13 +6,9 @@ on:
   pull_request:
 
 jobs:
-  test:
-    name: ${{ matrix.test-type == 'unit' && 'Unit Tests' || 'Integration Tests' }}
+  unit-tests:
+    name: Unit Tests
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        test-type: [unit, integration]
-      fail-fast: false
     steps:
       - uses: actions/checkout@v3
       
@@ -26,81 +22,192 @@ jobs:
         run: go mod download
       
       - name: Validate migrations
-        if: matrix.test-type == 'unit'
         run: |
           echo "Validating migration files..."
-          # Check that migration files exist and are valid SQL
           if [ ! -d "internal/database/migrations/sql" ]; then
             echo "::error::Migrations directory not found"
             exit 1
           fi
           
-          # Build the binary once (faster than go run)
           echo "Building proxy binary..."
           go build -o llm-proxy ./cmd/proxy
           
-          # Test migrations can be applied to clean database
           echo "Testing migration application..."
           TEST_DB="test_migrations.db"
           ./llm-proxy migrate up --db "$TEST_DB" || exit 1
           
-          # Test migrations can be rolled back
           echo "Testing migration rollback..."
           ./llm-proxy migrate down --db "$TEST_DB" || exit 1
           
-          # Clean up
           rm -f "$TEST_DB" llm-proxy
           echo "✅ Migrations validated successfully"
       
-      - name: Run unit tests
-        if: matrix.test-type == 'unit'
-        run: go test -v -race -parallel=4 -coverprofile=coverage.txt -covermode=atomic -coverpkg=./internal/... ./...
+      - name: Run unit tests with coverage
+        run: go test -v -race -parallel=4 -coverprofile=coverage-unit.txt -covermode=atomic -coverpkg=./internal/... ./...
       
-      - name: Run integration tests
-        if: matrix.test-type == 'integration'
-        run: go test -v -race -parallel=4 -tags=integration -timeout=5m -run=Integration ./...
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit
+          path: coverage-unit.txt
+          retention-days: 1
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+          cache: true
+      
+      - name: Install dependencies
+        run: go mod download
+      
+      - name: Run integration tests with coverage
+        run: go test -v -race -parallel=4 -tags=integration -timeout=5m -run=Integration -coverprofile=coverage-integration.txt -covermode=atomic -coverpkg=./internal/... ./...
         env:
-          # Ensure integration tests have clean environment
           CGO_ENABLED: 1
       
-      - name: Enforce 90%+ code coverage
-        if: matrix.test-type == 'unit'
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-integration
+          path: coverage-integration.txt
+          retention-days: 1
+
+  postgres-integration-tests:
+    name: PostgreSQL Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: llmproxy
+          POSTGRES_PASSWORD: secret
+          POSTGRES_DB: llmproxy
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+          cache: true
+      
+      - name: Install dependencies
+        run: go mod download
+      
+      - name: Wait for PostgreSQL
         run: |
-          total=$(go tool cover -func=coverage.txt | grep total: | awk '{print substr($3, 1, length($3)-1)}')
-          echo "Total coverage: $total%"
+          echo "Waiting for PostgreSQL to be ready..."
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5432 -U llmproxy; then
+              echo "PostgreSQL is ready!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 1
+          done
+      
+      - name: Run PostgreSQL integration tests with coverage
+        run: go test -v -race -tags=postgres,integration -timeout=5m -coverprofile=coverage-postgres.txt -covermode=atomic -coverpkg=./internal/... ./internal/database/...
+        env:
+          CGO_ENABLED: 1
+          TEST_POSTGRES_URL: postgres://llmproxy:secret@localhost:5432/llmproxy?sslmode=disable
+          DATABASE_URL: postgres://llmproxy:secret@localhost:5432/llmproxy?sslmode=disable
+          DB_DRIVER: postgres
+      
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-postgres
+          path: coverage-postgres.txt
+          retention-days: 1
+
+  coverage:
+    name: Combined Coverage
+    needs: [unit-tests, integration-tests, postgres-integration-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+          cache: true
+      
+      - name: Download all coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+      
+      - name: List downloaded files
+        run: ls -la coverage*.txt || echo "No coverage files found"
+      
+      - name: Merge coverage profiles
+        run: |
+          # Merge coverage files using shell (no external dependency)
+          echo "Merging coverage profiles..."
+          
+          # Get the mode line from first file
+          head -1 coverage-unit.txt > coverage-combined.txt
+          
+          # Append all coverage data (skip mode lines)
+          for f in coverage-*.txt; do
+            if [ "$f" != "coverage-combined.txt" ]; then
+              tail -n +2 "$f" >> coverage-combined.txt
+            fi
+          done
+          
+          echo "Combined coverage generated ($(wc -l < coverage-combined.txt) lines)"
+      
+      - name: Enforce 90%+ code coverage
+        run: |
+          total=$(go tool cover -func=coverage-combined.txt | grep total: | awk '{print substr($3, 1, length($3)-1)}')
+          echo "Total combined coverage: $total%"
           cov=${total%.*}
           if (( cov < 90 )); then
-            echo "::error::Test coverage $total% is below the required 90%."
+            echo "::error::Combined test coverage $total% is below the required 90%."
             exit 1
           fi
+          echo "✅ Coverage check passed: $total%"
       
       - name: Generate HTML coverage report
-        if: matrix.test-type == 'unit'
         run: |
-          go tool cover -html=coverage.txt -o coverage.html
-          echo "📊 HTML coverage report generated: coverage.html"
+          go tool cover -html=coverage-combined.txt -o coverage.html
+          echo "📊 Combined HTML coverage report generated"
       
-      - name: Upload coverage report
-        if: matrix.test-type == 'unit'
+      - name: Upload combined coverage report
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: coverage.html
+          path: |
+            coverage-combined.txt
+            coverage.html
           retention-days: 30
       
-      - name: Test Summary
+      - name: Coverage Summary
         run: |
-          if [ "${{ matrix.test-type }}" = "unit" ]; then
-            echo "✅ Unit tests completed successfully"
-            echo "📊 Code coverage enforced at 90%+"
-          else
-            echo "✅ Integration tests completed successfully"
-            echo "🔗 Full E2E management API workflow tested"
-          fi
-      
-      # - name: Upload coverage to Codecov
-      #   uses: codecov/codecov-action@v3
-      #   with:
-      #     file: ./coverage.txt
-      #     fail_ci_if_error: false 
-      # TODO: Replace the above with Coveralls upload step once setup is complete 
+          echo "## 📊 Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          total=$(go tool cover -func=coverage-combined.txt | grep total: | awk '{print $3}')
+          echo "**Combined Coverage: $total**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Coverage from:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Unit Tests" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Integration Tests" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ PostgreSQL Integration Tests" >> $GITHUB_STEP_SUMMARY
