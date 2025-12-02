@@ -74,33 +74,33 @@ This register tracks all known technical debt, workarounds, and future improveme
 
 ---
 
-### 3. Distributed Rate Limiting Not Implemented
+### 3. Distributed Rate Limiting ✅ IMPLEMENTED
 
-**Status**: 🔴 Planned but not implemented  
-**Impact**: MEDIUM-HIGH - Rate limiting is per-instance, not global  
-**Location**: `internal/token/ratelimit.go`  
+**Status**: 🟢 Implemented  
+**Impact**: MEDIUM-HIGH - Rate limiting is now global across all instances  
+**Location**: `internal/token/redis_ratelimit.go`  
 **GitHub Issue**: [#110](https://github.com/sofatutor/llm-proxy/issues/110)
 
-**Description**:
-- Rate limiting is per-token, per-instance
-- Each proxy instance has its own counters
-- Multi-instance deployments can exceed intended rate limits
-- No shared state across instances
+**Implementation Details**:
+- Redis-backed rate limit counters using atomic INCR operations
+- Sliding window algorithm for accurate rate limiting
+- Graceful fallback to in-memory when Redis is unavailable
+- Per-token configurable rate limits
+- Configuration via environment variables
 
-**Workaround**:
-- Deploy single instance only
-- Use sticky sessions to route same token to same instance
-- Set conservative rate limits accounting for multiple instances
+**Configuration**:
+```bash
+DISTRIBUTED_RATE_LIMIT_ENABLED=true    # Enable Redis-backed rate limiting
+DISTRIBUTED_RATE_LIMIT_PREFIX=ratelimit:  # Redis key prefix
+DISTRIBUTED_RATE_LIMIT_WINDOW=1m       # Window duration
+DISTRIBUTED_RATE_LIMIT_MAX=60          # Max requests per window
+DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
+```
 
-**Effort Estimate**: 1-2 weeks
-- Implement Redis-backed rate limit counters
-- Add distributed locking for atomic increments
-- Update tests for distributed scenario
-- Document configuration and deployment
-
-**References**:
-- PLAN.md line 347
-- Brownfield architecture: "Rate Limiting" section
+**Files**:
+- `internal/token/redis_ratelimit.go` - Main implementation
+- `internal/token/redis_adapter.go` - Redis client adapter
+- `internal/config/config.go` - Configuration options
 
 ---
 

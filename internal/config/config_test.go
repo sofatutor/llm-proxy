@@ -540,3 +540,91 @@ func TestConfig_ProjectActiveGuardDefaults(t *testing.T) {
 		t.Errorf("Expected ActiveCacheMax to be 10000, got %d", config.ActiveCacheMax)
 	}
 }
+
+func TestConfig_DistributedRateLimit(t *testing.T) {
+	// Save original environment
+	originalEnv := make(map[string]string)
+	for _, env := range os.Environ() {
+		for i := 0; i < len(env); i++ {
+			if env[i] == '=' {
+				originalEnv[env[:i]] = env[i+1:]
+				break
+			}
+		}
+	}
+
+	// Restore environment after test
+	defer func() {
+		os.Clearenv()
+		for k, v := range originalEnv {
+			if err := os.Setenv(k, v); err != nil {
+				t.Fatalf("Failed to restore environment variable %s: %v", k, err)
+			}
+		}
+	}()
+
+	// Clear environment
+	os.Clearenv()
+
+	// Set required fields
+	if err := os.Setenv("MANAGEMENT_TOKEN", "test-token"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+
+	// Test distributed rate limiting configuration
+	if err := os.Setenv("DISTRIBUTED_RATE_LIMIT_ENABLED", "true"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+	if err := os.Setenv("DISTRIBUTED_RATE_LIMIT_PREFIX", "myapp:ratelimit:"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+	if err := os.Setenv("DISTRIBUTED_RATE_LIMIT_WINDOW", "30s"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+	if err := os.Setenv("DISTRIBUTED_RATE_LIMIT_MAX", "100"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+	if err := os.Setenv("DISTRIBUTED_RATE_LIMIT_FALLBACK", "false"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+
+	config, err := New()
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+	if config.DistributedRateLimitEnabled != true {
+		t.Errorf("Expected DistributedRateLimitEnabled to be true, got %v", config.DistributedRateLimitEnabled)
+	}
+	if config.DistributedRateLimitPrefix != "myapp:ratelimit:" {
+		t.Errorf("Expected DistributedRateLimitPrefix to be 'myapp:ratelimit:', got %s", config.DistributedRateLimitPrefix)
+	}
+	if config.DistributedRateLimitWindow != 30*time.Second {
+		t.Errorf("Expected DistributedRateLimitWindow to be 30s, got %v", config.DistributedRateLimitWindow)
+	}
+	if config.DistributedRateLimitMax != 100 {
+		t.Errorf("Expected DistributedRateLimitMax to be 100, got %d", config.DistributedRateLimitMax)
+	}
+	if config.DistributedRateLimitFallback != false {
+		t.Errorf("Expected DistributedRateLimitFallback to be false, got %v", config.DistributedRateLimitFallback)
+	}
+}
+
+func TestConfig_DistributedRateLimitDefaults(t *testing.T) {
+	// Test defaults for distributed rate limiting
+	config := DefaultConfig()
+	if config.DistributedRateLimitEnabled != false {
+		t.Errorf("Expected DistributedRateLimitEnabled to be false, got %v", config.DistributedRateLimitEnabled)
+	}
+	if config.DistributedRateLimitPrefix != "ratelimit:" {
+		t.Errorf("Expected DistributedRateLimitPrefix to be 'ratelimit:', got %s", config.DistributedRateLimitPrefix)
+	}
+	if config.DistributedRateLimitWindow != time.Minute {
+		t.Errorf("Expected DistributedRateLimitWindow to be 1m, got %v", config.DistributedRateLimitWindow)
+	}
+	if config.DistributedRateLimitMax != 60 {
+		t.Errorf("Expected DistributedRateLimitMax to be 60, got %d", config.DistributedRateLimitMax)
+	}
+	if config.DistributedRateLimitFallback != true {
+		t.Errorf("Expected DistributedRateLimitFallback to be true, got %v", config.DistributedRateLimitFallback)
+	}
+}
