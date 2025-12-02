@@ -149,10 +149,9 @@ func (r *RedisRateLimiter) Allow(ctx context.Context, tokenID string) (bool, err
 	if count == 1 {
 		// Set TTL slightly longer than window to handle edge cases
 		ttl := windowDuration + time.Second
-		if expireErr := r.client.Expire(ctx, key, ttl); expireErr != nil {
-			// Log but don't fail - key will be orphaned but Redis will eventually clean it up
-			// In production, this should be logged
-		}
+		// Ignore expire errors - key will be orphaned but Redis will eventually clean it up
+		// In production, this should be logged
+		_ = r.client.Expire(ctx, key, ttl)
 	}
 
 	// Check if request is within limit
@@ -203,16 +202,17 @@ func (r *RedisRateLimiter) GetRemainingRequests(ctx context.Context, tokenID str
 	// Get current count from Redis
 	countStr, err := r.client.Get(ctx, key)
 	if err != nil {
-		// Key doesn't exist or Redis error
-		if countStr == "" {
-			// Key doesn't exist - all requests remain
-			return maxRequests, nil
-		}
+		// Redis error - mark unavailable and use fallback
 		r.markRedisUnavailable()
 		if r.config.EnableFallback {
 			return r.config.FallbackCapacity, nil
 		}
 		return 0, fmt.Errorf("failed to get rate limit counter: %w", err)
+	}
+
+	// Key doesn't exist (empty string returned, no error) - all requests remain
+	if countStr == "" {
+		return maxRequests, nil
 	}
 
 	// Parse count

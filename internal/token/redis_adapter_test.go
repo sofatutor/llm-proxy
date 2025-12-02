@@ -19,7 +19,7 @@ func TestRedisGoRateLimitAdapter_AllMethods(t *testing.T) {
 
 	// Create Redis client and adapter
 	client := redis.NewClient(&redis.Options{Addr: s.Addr(), DB: 0})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	adapter := NewRedisGoRateLimitAdapter(client)
 	ctx := context.Background()
@@ -142,7 +142,7 @@ func TestRedisGoRateLimitAdapter_Integration(t *testing.T) {
 
 	// Create Redis client and adapter
 	client := redis.NewClient(&redis.Options{Addr: s.Addr(), DB: 0})
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	adapter := NewRedisGoRateLimitAdapter(client)
 

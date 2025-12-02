@@ -100,12 +100,6 @@ func (m *mockRedisRateLimitClient) Del(ctx context.Context, key string) error {
 	return nil
 }
 
-func (m *mockRedisRateLimitClient) getCounter(key string) int64 {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.counters[key]
-}
-
 func TestRedisRateLimiter_Allow(t *testing.T) {
 	ctx := context.Background()
 	client := newMockRedisRateLimitClient()
@@ -235,12 +229,12 @@ func TestRedisRateLimiter_GetRemainingRequests(t *testing.T) {
 	}
 
 	// Check remaining (note: Get returns the counter value)
-	remaining, err = limiter.GetRemainingRequests(ctx, tokenID)
+	// The mock returns a single char, so we just verify no error
+	// In a real scenario with proper int parsing, this would be 7
+	_, err = limiter.GetRemainingRequests(ctx, tokenID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// The mock returns a single char, so we just verify no error
-	// In a real scenario with proper int parsing, this would be 7
 }
 
 func TestRedisRateLimiter_SetTokenLimit(t *testing.T) {
@@ -308,7 +302,7 @@ func TestRedisRateLimiter_RemoveTokenLimit(t *testing.T) {
 	limiter.RemoveTokenLimit(tokenID)
 
 	// Should now use defaults
-	maxReqs, windowDur = limiter.getTokenLimit(tokenID)
+	maxReqs, _ = limiter.getTokenLimit(tokenID)
 	if maxReqs != 100 {
 		t.Fatalf("expected default maxRequests 100, got %d", maxReqs)
 	}
