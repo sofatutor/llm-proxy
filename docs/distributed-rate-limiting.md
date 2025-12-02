@@ -41,6 +41,7 @@ In multi-instance deployments, each proxy instance would normally maintain its o
 |----------|---------|-------------|
 | `DISTRIBUTED_RATE_LIMIT_ENABLED` | `false` | Enable Redis-backed distributed rate limiting |
 | `DISTRIBUTED_RATE_LIMIT_PREFIX` | `ratelimit:` | Redis key prefix for rate limit counters |
+| `DISTRIBUTED_RATE_LIMIT_KEY_SECRET` | `` | HMAC secret for hashing token IDs in Redis keys (recommended for production) |
 | `DISTRIBUTED_RATE_LIMIT_WINDOW` | `1m` | Sliding window duration (e.g., `30s`, `1m`, `5m`) |
 | `DISTRIBUTED_RATE_LIMIT_MAX` | `60` | Maximum requests per window |
 | `DISTRIBUTED_RATE_LIMIT_FALLBACK` | `true` | Enable fallback to in-memory when Redis unavailable |
@@ -53,6 +54,9 @@ In multi-instance deployments, each proxy instance would normally maintain its o
 # Enable distributed rate limiting
 export DISTRIBUTED_RATE_LIMIT_ENABLED=true
 export REDIS_ADDR=redis:6379
+
+# Security: Hash token IDs in Redis keys (recommended for production)
+export DISTRIBUTED_RATE_LIMIT_KEY_SECRET=your-secret-key-here
 
 # Custom rate limit: 100 requests per 30 seconds
 export DISTRIBUTED_RATE_LIMIT_WINDOW=30s
@@ -78,13 +82,20 @@ The rate limiter uses a sliding window counter algorithm:
 
 Redis keys follow this format:
 ```
-ratelimit:{tokenID}:{windowStartUnix}
+ratelimit:{tokenID or hash}:{windowStartUnix}
 ```
 
-Example:
+**Without key secret (default):**
 ```
 ratelimit:sk-abc123:1701388800
 ```
+
+**With key secret (recommended for production):**
+```
+ratelimit:a1b2c3d4e5f67890:1701388800
+```
+
+When `DISTRIBUTED_RATE_LIMIT_KEY_SECRET` is configured, token IDs are hashed using HMAC-SHA256, and only the first 16 hex characters of the hash are used. This prevents raw token IDs from being exposed in Redis keys while maintaining deterministic key generation.
 
 ### TTL Management
 
@@ -155,6 +166,31 @@ if err := limiter.CheckRedisHealth(ctx); err != nil {
 }
 ```
 
+## Security Considerations
+
+### Token ID Hashing
+
+By default, raw token IDs are stored in Redis keys, which could expose sensitive bearer tokens to anyone with Redis access. To prevent this, configure `DISTRIBUTED_RATE_LIMIT_KEY_SECRET`:
+
+```bash
+# Generate a secure secret (recommended: 32+ characters)
+export DISTRIBUTED_RATE_LIMIT_KEY_SECRET=$(openssl rand -hex 32)
+```
+
+**Important notes:**
+- The secret should be generated once and stored securely
+- All proxy instances must use the same secret
+- If the secret is rotated, existing rate limit counters will be orphaned (acceptable since they have TTLs)
+- The hash is deterministic: the same token always maps to the same key
+
+### Redis Security
+
+In addition to token ID hashing:
+- Use Redis authentication (`requirepass`)
+- Enable TLS for Redis connections in production
+- Restrict Redis network access using firewalls
+- Monitor Redis access logs for suspicious activity
+
 ## Best Practices
 
 1. **Enable Fallback**: Always enable fallback in production for high availability
@@ -162,6 +198,7 @@ if err := limiter.CheckRedisHealth(ctx); err != nil {
 3. **Tune Window Size**: Smaller windows provide more accurate limiting but increase Redis operations
 4. **Key Prefix**: Use unique prefixes if sharing Redis with other applications
 5. **TTL Buffer**: The implementation adds 1 second to TTL to handle edge cases
+6. **Hash Token IDs**: Configure `DISTRIBUTED_RATE_LIMIT_KEY_SECRET` in production to prevent token exposure
 
 ## Troubleshooting
 

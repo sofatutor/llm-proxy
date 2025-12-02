@@ -65,11 +65,12 @@ type Config struct {
 	IPRateLimit     int // Maximum requests per minute per IP
 
 	// Distributed rate limiting
-	DistributedRateLimitEnabled  bool          // Enable Redis-backed distributed rate limiting
-	DistributedRateLimitPrefix   string        // Redis key prefix for rate limit counters
-	DistributedRateLimitWindow   time.Duration // Sliding window duration for rate limiting
-	DistributedRateLimitMax      int           // Maximum requests per window
-	DistributedRateLimitFallback bool          // Enable fallback to in-memory when Redis unavailable
+	DistributedRateLimitEnabled   bool          // Enable Redis-backed distributed rate limiting
+	DistributedRateLimitPrefix    string        // Redis key prefix for rate limit counters
+	DistributedRateLimitKeySecret string        // HMAC secret for hashing token IDs in Redis keys (security)
+	DistributedRateLimitWindow    time.Duration // Sliding window duration for rate limiting
+	DistributedRateLimitMax       int           // Maximum requests per window
+	DistributedRateLimitFallback  bool          // Enable fallback to in-memory when Redis unavailable
 
 	// Monitoring
 	EnableMetrics bool   // Whether to enable a lightweight metrics endpoint (provider-agnostic)
@@ -163,11 +164,12 @@ func New() (*Config, error) {
 		IPRateLimit:     getEnvInt("IP_RATE_LIMIT", 30),
 
 		// Distributed rate limiting defaults
-		DistributedRateLimitEnabled:  getEnvBool("DISTRIBUTED_RATE_LIMIT_ENABLED", false),
-		DistributedRateLimitPrefix:   getEnvString("DISTRIBUTED_RATE_LIMIT_PREFIX", "ratelimit:"),
-		DistributedRateLimitWindow:   getEnvDuration("DISTRIBUTED_RATE_LIMIT_WINDOW", time.Minute),
-		DistributedRateLimitMax:      getEnvInt("DISTRIBUTED_RATE_LIMIT_MAX", 60),
-		DistributedRateLimitFallback: getEnvBool("DISTRIBUTED_RATE_LIMIT_FALLBACK", true),
+		DistributedRateLimitEnabled:   getEnvBool("DISTRIBUTED_RATE_LIMIT_ENABLED", false),
+		DistributedRateLimitPrefix:    getEnvString("DISTRIBUTED_RATE_LIMIT_PREFIX", "ratelimit:"),
+		DistributedRateLimitKeySecret: getEnvString("DISTRIBUTED_RATE_LIMIT_KEY_SECRET", ""),
+		DistributedRateLimitWindow:    getEnvDuration("DISTRIBUTED_RATE_LIMIT_WINDOW", time.Minute),
+		DistributedRateLimitMax:       getEnvInt("DISTRIBUTED_RATE_LIMIT_MAX", 60),
+		DistributedRateLimitFallback:  getEnvBool("DISTRIBUTED_RATE_LIMIT_FALLBACK", true),
 
 		// Monitoring defaults
 		EnableMetrics: getEnvBool("ENABLE_METRICS", true),
@@ -327,11 +329,12 @@ func DefaultConfig() *Config {
 		IPRateLimit:     30,
 
 		// Distributed rate limiting defaults
-		DistributedRateLimitEnabled:  false,
-		DistributedRateLimitPrefix:   "ratelimit:",
-		DistributedRateLimitWindow:   time.Minute,
-		DistributedRateLimitMax:      60,
-		DistributedRateLimitFallback: true,
+		DistributedRateLimitEnabled:   false,
+		DistributedRateLimitPrefix:    "ratelimit:",
+		DistributedRateLimitKeySecret: "",
+		DistributedRateLimitWindow:    time.Minute,
+		DistributedRateLimitMax:       60,
+		DistributedRateLimitFallback:  true,
 
 		// Monitoring defaults
 		EnableMetrics: true,

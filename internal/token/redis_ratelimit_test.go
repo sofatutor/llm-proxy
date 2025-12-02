@@ -2,8 +2,10 @@ package token
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -717,5 +719,188 @@ func TestRedisRateLimiter_GetRemainingRequests_GetFails(t *testing.T) {
 	}
 	if remaining != 5 {
 		t.Fatalf("expected fallback capacity 5, got %d", remaining)
+	}
+}
+
+func TestHashTokenID(t *testing.T) {
+	secret := []byte("test-secret-key")
+	tokenID := "sk-abc123"
+
+	// Hash should be deterministic
+	hash1 := hashTokenID(tokenID, secret)
+	hash2 := hashTokenID(tokenID, secret)
+	if hash1 != hash2 {
+		t.Fatalf("hash should be deterministic: got %s and %s", hash1, hash2)
+	}
+
+	// Hash should be 16 characters (hex)
+	if len(hash1) != 16 {
+		t.Fatalf("hash should be 16 characters, got %d: %s", len(hash1), hash1)
+	}
+
+	// Different tokens should produce different hashes
+	hash3 := hashTokenID("sk-different", secret)
+	if hash1 == hash3 {
+		t.Fatal("different tokens should produce different hashes")
+	}
+
+	// Different secrets should produce different hashes
+	hash4 := hashTokenID(tokenID, []byte("different-secret"))
+	if hash1 == hash4 {
+		t.Fatal("different secrets should produce different hashes")
+	}
+
+	// Hash should be valid hex string
+	_, err := decodeHex(hash1)
+	if err != nil {
+		t.Fatalf("hash should be valid hex: %v", err)
+	}
+}
+
+func decodeHex(s string) ([]byte, error) {
+	return hex.DecodeString(s)
+}
+
+func TestRedisRateLimiter_BuildKey_WithHashSecret(t *testing.T) {
+	client := newMockRedisRateLimitClient()
+	secret := []byte("my-secret-key")
+
+	config := RedisRateLimiterConfig{
+		KeyPrefix:             "ratelimit:",
+		KeyHashSecret:         secret,
+		DefaultWindowDuration: time.Minute,
+		DefaultMaxRequests:    60,
+		EnableFallback:        false,
+	}
+
+	limiter := NewRedisRateLimiter(client, config)
+
+	tokenID := "sk-abc123"
+	windowStart := int64(1701388800)
+
+	key := limiter.buildKey(tokenID, windowStart)
+
+	// Key should NOT contain the raw token ID
+	if strings.Contains(key, tokenID) {
+		t.Fatalf("key should not contain raw token ID: %s", key)
+	}
+
+	// Key should start with prefix
+	if !strings.HasPrefix(key, "ratelimit:") {
+		t.Fatalf("key should start with prefix: %s", key)
+	}
+
+	// Key should end with window timestamp
+	if !strings.HasSuffix(key, ":1701388800") {
+		t.Fatalf("key should end with window timestamp: %s", key)
+	}
+
+	// Key should be deterministic
+	key2 := limiter.buildKey(tokenID, windowStart)
+	if key != key2 {
+		t.Fatalf("key should be deterministic: got %s and %s", key, key2)
+	}
+
+	// Expected format: ratelimit:{hash}:{timestamp}
+	// Hash is 16 chars, so total format is prefix + 16 + ":" + timestamp
+	expectedHash := hashTokenID(tokenID, secret)
+	expectedKey := "ratelimit:" + expectedHash + ":1701388800"
+	if key != expectedKey {
+		t.Fatalf("key mismatch: expected %s, got %s", expectedKey, key)
+	}
+}
+
+func TestRedisRateLimiter_BuildKey_WithoutHashSecret(t *testing.T) {
+	client := newMockRedisRateLimitClient()
+
+	config := RedisRateLimiterConfig{
+		KeyPrefix:             "ratelimit:",
+		KeyHashSecret:         nil, // No secret configured
+		DefaultWindowDuration: time.Minute,
+		DefaultMaxRequests:    60,
+		EnableFallback:        false,
+	}
+
+	limiter := NewRedisRateLimiter(client, config)
+
+	tokenID := "sk-abc123"
+	windowStart := int64(1701388800)
+
+	key := limiter.buildKey(tokenID, windowStart)
+
+	// Key SHOULD contain the raw token ID when no secret is configured
+	expectedKey := "ratelimit:sk-abc123:1701388800"
+	if key != expectedKey {
+		t.Fatalf("key mismatch: expected %s, got %s", expectedKey, key)
+	}
+}
+
+func TestRedisRateLimiter_BuildKey_EmptyHashSecret(t *testing.T) {
+	client := newMockRedisRateLimitClient()
+
+	config := RedisRateLimiterConfig{
+		KeyPrefix:             "ratelimit:",
+		KeyHashSecret:         []byte{}, // Empty secret
+		DefaultWindowDuration: time.Minute,
+		DefaultMaxRequests:    60,
+		EnableFallback:        false,
+	}
+
+	limiter := NewRedisRateLimiter(client, config)
+
+	tokenID := "sk-abc123"
+	windowStart := int64(1701388800)
+
+	key := limiter.buildKey(tokenID, windowStart)
+
+	// Key SHOULD contain the raw token ID when secret is empty
+	expectedKey := "ratelimit:sk-abc123:1701388800"
+	if key != expectedKey {
+		t.Fatalf("key mismatch: expected %s, got %s", expectedKey, key)
+	}
+}
+
+func TestRedisRateLimiter_Allow_WithHashedKeys(t *testing.T) {
+	ctx := context.Background()
+	client := newMockRedisRateLimitClient()
+	secret := []byte("test-secret")
+
+	config := RedisRateLimiterConfig{
+		KeyPrefix:             "test:",
+		KeyHashSecret:         secret,
+		DefaultWindowDuration: time.Minute,
+		DefaultMaxRequests:    5,
+		EnableFallback:        false,
+	}
+
+	limiter := NewRedisRateLimiter(client, config)
+
+	tokenID := "sk-test-token"
+
+	// Should allow first 5 requests
+	for i := 0; i < 5; i++ {
+		allowed, err := limiter.Allow(ctx, tokenID)
+		if err != nil {
+			t.Fatalf("unexpected error on request %d: %v", i+1, err)
+		}
+		if !allowed {
+			t.Fatalf("request %d should be allowed", i+1)
+		}
+	}
+
+	// 6th request should be denied
+	allowed, err := limiter.Allow(ctx, tokenID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if allowed {
+		t.Fatal("6th request should be denied")
+	}
+
+	// Verify that the Redis key does NOT contain the raw token ID
+	for key := range client.counters {
+		if strings.Contains(key, tokenID) {
+			t.Fatalf("Redis key should not contain raw token ID: %s", key)
+		}
 	}
 }

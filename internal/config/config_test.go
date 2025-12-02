@@ -587,6 +587,9 @@ func TestConfig_DistributedRateLimit(t *testing.T) {
 	if err := os.Setenv("DISTRIBUTED_RATE_LIMIT_FALLBACK", "false"); err != nil {
 		t.Fatalf("Failed to set environment variable: %v", err)
 	}
+	if err := os.Setenv("DISTRIBUTED_RATE_LIMIT_KEY_SECRET", "my-secret-key"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
 
 	config, err := New()
 	if err != nil {
@@ -597,6 +600,9 @@ func TestConfig_DistributedRateLimit(t *testing.T) {
 	}
 	if config.DistributedRateLimitPrefix != "myapp:ratelimit:" {
 		t.Errorf("Expected DistributedRateLimitPrefix to be 'myapp:ratelimit:', got %s", config.DistributedRateLimitPrefix)
+	}
+	if config.DistributedRateLimitKeySecret != "my-secret-key" {
+		t.Errorf("Expected DistributedRateLimitKeySecret to be 'my-secret-key', got %s", config.DistributedRateLimitKeySecret)
 	}
 	if config.DistributedRateLimitWindow != 30*time.Second {
 		t.Errorf("Expected DistributedRateLimitWindow to be 30s, got %v", config.DistributedRateLimitWindow)
@@ -617,6 +623,9 @@ func TestConfig_DistributedRateLimitDefaults(t *testing.T) {
 	}
 	if config.DistributedRateLimitPrefix != "ratelimit:" {
 		t.Errorf("Expected DistributedRateLimitPrefix to be 'ratelimit:', got %s", config.DistributedRateLimitPrefix)
+	}
+	if config.DistributedRateLimitKeySecret != "" {
+		t.Errorf("Expected DistributedRateLimitKeySecret to be empty, got %s", config.DistributedRateLimitKeySecret)
 	}
 	if config.DistributedRateLimitWindow != time.Minute {
 		t.Errorf("Expected DistributedRateLimitWindow to be 1m, got %v", config.DistributedRateLimitWindow)
