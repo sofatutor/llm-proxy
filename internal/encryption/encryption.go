@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sync"
 )
 
 const (
@@ -38,10 +37,10 @@ var (
 	ErrInvalidCiphertext = errors.New("invalid ciphertext format")
 )
 
-// Encryptor provides thread-safe encryption and decryption operations.
+// Encryptor provides encryption and decryption operations.
+// It is safe for concurrent use - cipher.AEAD implementations are thread-safe.
 type Encryptor struct {
 	gcm cipher.AEAD
-	mu  sync.RWMutex
 }
 
 // NewEncryptor creates a new Encryptor with the given 32-byte key.
@@ -84,9 +83,6 @@ func (e *Encryptor) Encrypt(plaintext string) (string, error) {
 		return "", nil // Empty strings are not encrypted
 	}
 
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
 	// Generate a random nonce
 	nonce := make([]byte, NonceSize)
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
@@ -112,9 +108,6 @@ func (e *Encryptor) Decrypt(ciphertext string) (string, error) {
 	if !IsEncrypted(ciphertext) {
 		return ciphertext, nil // Return unencrypted values as-is (backward compatibility)
 	}
-
-	e.mu.RLock()
-	defer e.mu.RUnlock()
 
 	// Remove the prefix
 	encoded := ciphertext[len(EncryptedPrefix):]

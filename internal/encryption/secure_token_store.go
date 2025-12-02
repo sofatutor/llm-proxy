@@ -52,8 +52,8 @@ func (s *SecureTokenStore) CreateToken(ctx context.Context, td token.TokenData) 
 // UpdateToken updates an existing token.
 // The token value is hashed before the operation.
 func (s *SecureTokenStore) UpdateToken(ctx context.Context, td token.TokenData) error {
-	// Hash the token value if it's not already hashed
-	if !IsHashed(td.Token) && len(td.Token) != 64 {
+	// Hash the token value if it's not already a SHA-256 hex string (64 chars)
+	if len(td.Token) != 64 {
 		td.Token = s.hasher.CreateLookupKey(td.Token)
 	}
 	return s.store.UpdateToken(ctx, td)
