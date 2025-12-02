@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/pressly/goose/v3"
@@ -161,11 +162,9 @@ func (m *MigrationRunner) detectDriver() (string, error) {
 	// First, try PostgreSQL-specific query
 	var version string
 	pgErr := m.db.QueryRow("SELECT version()").Scan(&version)
-	if pgErr == nil && len(version) > 0 {
+	if pgErr == nil && strings.HasPrefix(version, "PostgreSQL") {
 		// version() is PostgreSQL-specific and returns something like "PostgreSQL 15.x ..."
-		if len(version) >= 10 && version[:10] == "PostgreSQL" {
-			return "postgres", nil
-		}
+		return "postgres", nil
 	}
 
 	// Try SQLite-specific pragma

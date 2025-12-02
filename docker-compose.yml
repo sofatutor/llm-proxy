@@ -57,7 +57,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5432:5432"  # Development only - remove or restrict for production
     restart: unless-stopped
 
   # LLM Proxy with PostgreSQL backend (for postgres profile)

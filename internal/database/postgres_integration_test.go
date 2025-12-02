@@ -67,9 +67,15 @@ func setupPostgresTestDB(t *testing.T) (*DB, func()) {
 		// Clean up test data
 		// Note: projects deletion cascades to tokens (FK with ON DELETE CASCADE)
 		ctx := context.Background()
-		_, _ = db.db.ExecContext(ctx, "DELETE FROM audit_events")
-		_, _ = db.db.ExecContext(ctx, "DELETE FROM projects") // Cascades to tokens
-		_ = db.Close()
+		if _, err := db.db.ExecContext(ctx, "DELETE FROM audit_events"); err != nil {
+			t.Logf("Warning: Failed to clean up audit_events: %v", err)
+		}
+		if _, err := db.db.ExecContext(ctx, "DELETE FROM projects"); err != nil {
+			t.Logf("Warning: Failed to clean up projects: %v", err)
+		}
+		if err := db.Close(); err != nil {
+			t.Logf("Warning: Failed to close DB: %v", err)
+		}
 	}
 
 	return db, cleanup

@@ -418,22 +418,26 @@ func runServerForeground() {
 }
 
 // getEnvInt reads an integer from an environment variable with a default value.
+// Logs a warning if the value exists but is invalid.
 func getEnvInt(key string, defaultVal int) int {
 	if val := os.Getenv(key); val != "" {
 		if i, err := strconv.Atoi(val); err == nil {
 			return i
 		}
+		log.Printf("Warning: invalid integer value for %s: %q, using default: %d", key, val, defaultVal)
 	}
 	return defaultVal
 }
 
 // getEnvDuration reads a duration from an environment variable with a default value.
 // Accepts formats like "1h", "30m", "1h30m", etc.
+// Logs a warning if the value exists but is invalid.
 func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
 	if val := os.Getenv(key); val != "" {
 		if d, err := time.ParseDuration(val); err == nil {
 			return d
 		}
+		log.Printf("Warning: invalid duration value for %s: %q, using default: %v", key, val, defaultVal)
 	}
 	return defaultVal
 }
