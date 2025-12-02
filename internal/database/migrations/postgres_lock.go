@@ -3,8 +3,8 @@
 package migrations
 
 import (
-"fmt"
-"time"
+	"fmt"
+	"time"
 )
 
 // acquirePostgresLock acquires an advisory lock using PostgreSQL's pg_advisory_lock.
@@ -15,9 +15,9 @@ import (
 // Docker Compose integration tests (see issue #139). It is excluded from
 // default coverage calculations using the postgres build tag.
 func (m *MigrationRunner) acquirePostgresLock() (func(), error) {
-// Use a fixed lock ID for migrations (derived from "llm-proxy-migrations")
-// This ID is unique enough for our purposes and consistent across instances
-const lockID = 3141592653 // A fixed number to identify this application's migration lock
+	// Use a fixed lock ID for migrations (derived from "llm-proxy-migrations")
+	// This ID is unique enough for our purposes and consistent across instances
+	const lockID = 3141592653 // A fixed number to identify this application's migration lock
 
 	maxRetries := 10
 	retryDelay := 100 * time.Millisecond
