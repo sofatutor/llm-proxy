@@ -418,7 +418,7 @@ sequenceDiagram
 
 ### Required Code Changes
 
-1. **PostgreSQL Driver**: Enable PostgreSQL support (Phase 5 backlog)
+1. **PostgreSQL Driver**: ✅ Already completed in Phase 5 (build with `-tags postgres`)
 2. **Redis TLS**: Support `rediss://` URL scheme for ElastiCache
 3. **Health Check**: Include DB/Redis connectivity in `/health`
 4. **Graceful Shutdown**: Handle SIGTERM from ECS
@@ -429,16 +429,17 @@ sequenceDiagram
 
 1. **Initialize CDK Project**: Create `infra/` directory with TypeScript setup
 2. **Implement Stacks**: VPC → Secrets → Data → ECS → ALB → Observability
-3. **Enable PostgreSQL**: Complete Phase 5 PostgreSQL support
-4. **CI/CD Pipeline**: GitHub Actions workflow for CDK deployment
-5. **Testing**: Load testing and failover testing
+3. **CI/CD Pipeline**: GitHub Actions workflow for CDK deployment
+4. **Testing**: Load testing and failover testing
+
+> **Note**: PostgreSQL support is already complete (Phase 5). Build with `-tags postgres` to enable.
 
 ---
 
 ## Related Documents
 
 - [Phase 6 AWS ECS Issue](../../issues/planned/phase-6-aws-ecs.md)
-- [Phase 5 PostgreSQL Support](../../issues/backlog/phase-5-postgres-support.md)
-- [Main Architecture](../architecture.md)
+- [Phase 5 PostgreSQL Support](../../issues/done/phase-5-postgres-support.md) ✅
+- [Main Architecture](../../architecture.md)
 - [Brownfield Architecture](../../brownfield-architecture.md)
 

@@ -49,9 +49,13 @@ go build ./...
 export DB_DRIVER=sqlite
 export DATABASE_PATH=./data/proxy.db
 
-# PostgreSQL
+# PostgreSQL (local development)
 export DB_DRIVER=postgres
 export DATABASE_URL=postgres://user:pass@localhost:5432/llmproxy?sslmode=disable
+
+# PostgreSQL (production - use TLS)
+export DB_DRIVER=postgres
+export DATABASE_URL="postgres://user:pass@aurora-endpoint:5432/llmproxy?sslmode=verify-full&sslrootcert=/path/to/rds-ca.pem"
 ```
 
 ---

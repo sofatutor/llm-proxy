@@ -62,7 +62,7 @@ flowchart TB
 ### Phase 2: Data Layer
 - [ ] Implement `DataStack` (Aurora PostgreSQL Serverless v2)
 - [ ] Implement ElastiCache Redis cluster with encryption
-- [ ] Enable PostgreSQL driver in llm-proxy codebase
+- [x] Enable PostgreSQL driver in llm-proxy codebase (completed in Phase 5)
 - [ ] Add TLS support for Redis connections (`rediss://`)
 - [ ] Test database migrations with Aurora
 
@@ -135,6 +135,6 @@ flowchart TB
 
 ## Related Issues
 
-- [Phase 5: PostgreSQL Support](../backlog/phase-5-postgres-support.md)
+- [Phase 5: PostgreSQL Support](../done/phase-5-postgres-support.md) ✅
 - [Phase 6: Kubernetes/Helm](phase-6-kubernetes-helm.md)
 - [Phase 7: AWS EventBridge Connector](../backlog/phase-7-aws-eventbridge-connector.md) 
