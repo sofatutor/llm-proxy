@@ -184,6 +184,9 @@ ERROR: syntax error at or near "..."
 docker compose --profile postgres exec postgres \
   psql -U llmproxy -c "ALTER SYSTEM SET log_min_duration_statement = '100ms';"
 
+# Enable pg_stat_statements extension (required for the next query)
+docker compose --profile postgres exec postgres \
+  psql -U llmproxy -c "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
 # Check slow queries
 docker compose --profile postgres exec postgres \
   psql -U llmproxy -c "SELECT * FROM pg_stat_statements ORDER BY total_time DESC LIMIT 10;"

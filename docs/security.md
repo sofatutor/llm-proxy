@@ -342,6 +342,9 @@ grep '"project_id":"proj-123"' /data/audit.log
   GRANT USAGE ON SCHEMA public TO llmproxy;
   GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO llmproxy;
   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO llmproxy;
+  -- Ensure future tables/sequences also get privileges:
+  ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO llmproxy;
+  ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO llmproxy;
   ```
 - **Encryption at Rest**: Enable PostgreSQL data encryption for sensitive data
 - **Audit Logging**: Enable PostgreSQL audit logging for compliance
