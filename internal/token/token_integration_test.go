@@ -495,10 +495,7 @@ func TestTokenUtilitiesWithManagement(t *testing.T) {
 	store.AddToken(tokenStr, token)
 
 	// Get token info
-	info, err := GetTokenInfo(token)
-	if err != nil {
-		t.Errorf("GetTokenInfo() error = %v", err)
-	}
+	info := GetTokenInfo(token)
 
 	// Check format
 	if info.ObfuscatedToken == tokenStr {
@@ -531,10 +528,7 @@ func TestTokenUtilitiesWithManagement(t *testing.T) {
 	}
 
 	// Get updated token info
-	updatedInfo, err := GetTokenInfo(updatedToken)
-	if err != nil {
-		t.Errorf("GetTokenInfo() error = %v", err)
-	}
+	updatedInfo := GetTokenInfo(updatedToken)
 
 	// Check revoked status
 	if updatedInfo.IsValid {

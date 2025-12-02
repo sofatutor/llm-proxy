@@ -169,3 +169,39 @@ func TestGetLoggerFromContext(t *testing.T) {
 		assert.Nil(t, result)
 	})
 }
+
+func TestWriteErrorResponse(t *testing.T) {
+	t.Run("successful write", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		errorResp := ErrorResponse{
+			Error: "Test error message",
+			Code:  "test_code",
+		}
+
+		writeErrorResponse(rr, http.StatusBadRequest, errorResp)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+		assert.Contains(t, rr.Body.String(), "Test error message")
+		assert.Contains(t, rr.Body.String(), "test_code")
+	})
+
+	t.Run("different status codes", func(t *testing.T) {
+		codes := []int{
+			http.StatusForbidden,
+			http.StatusInternalServerError,
+			http.StatusServiceUnavailable,
+		}
+
+		for _, code := range codes {
+			rr := httptest.NewRecorder()
+			errorResp := ErrorResponse{
+				Error: "Error message",
+				Code:  "error_code",
+			}
+
+			writeErrorResponse(rr, code, errorResp)
+			assert.Equal(t, code, rr.Code)
+		}
+	})
+}

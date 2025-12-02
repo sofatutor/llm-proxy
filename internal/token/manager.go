@@ -119,11 +119,7 @@ func (m *Manager) GetTokenInfo(ctx context.Context, tokenID string) (*TokenInfo,
 		return nil, err
 	}
 
-	info, err := GetTokenInfo(tokenData)
-	if err != nil {
-		return nil, err
-	}
-
+	info := GetTokenInfo(tokenData)
 	return &info, nil
 }
 

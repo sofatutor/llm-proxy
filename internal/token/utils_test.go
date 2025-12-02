@@ -568,10 +568,7 @@ func TestGetTokenInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info, err := GetTokenInfo(tt.tokenData)
-			if err != nil {
-				t.Fatalf("GetTokenInfo() error = %v", err)
-			}
+			info := GetTokenInfo(tt.tokenData)
 
 			if info.IsValid != tt.wantValid {
 				t.Errorf("GetTokenInfo().IsValid = %v, want %v", info.IsValid, tt.wantValid)
