@@ -461,3 +461,43 @@ func TestGetProjectActive(t *testing.T) {
 		require.False(t, isActive)
 	})
 }
+
+func TestGetProjectByName_ClosedDB(t *testing.T) {
+	db, cleanup := testDB(t)
+	cleanup()
+	ctx := context.Background()
+	_, err := db.GetProjectByName(ctx, "test")
+	if err == nil {
+		t.Error("expected error for GetProjectByName on closed DB")
+	}
+}
+
+func TestDBListProjects_ClosedDB(t *testing.T) {
+	db, cleanup := testDB(t)
+	cleanup()
+	ctx := context.Background()
+	_, err := db.DBListProjects(ctx)
+	if err == nil {
+		t.Error("expected error for DBListProjects on closed DB")
+	}
+}
+
+func TestGetAPIKeyForProject_ClosedDB(t *testing.T) {
+	db, cleanup := testDB(t)
+	cleanup()
+	ctx := context.Background()
+	_, err := db.GetAPIKeyForProject(ctx, "test-id")
+	if err == nil {
+		t.Error("expected error for GetAPIKeyForProject on closed DB")
+	}
+}
+
+func TestGetProjectActive_ClosedDB(t *testing.T) {
+	db, cleanup := testDB(t)
+	cleanup()
+	ctx := context.Background()
+	_, err := db.GetProjectActive(ctx, "test-id")
+	if err == nil {
+		t.Error("expected error for GetProjectActive on closed DB")
+	}
+}

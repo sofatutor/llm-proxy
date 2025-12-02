@@ -358,3 +358,60 @@ func TestAuditLogger_DatabaseIntegration(t *testing.T) {
 		t.Errorf("Stored project ID = %v, want test-project", stored.ProjectID)
 	}
 }
+
+func TestDB_ListAuditEvents_ClosedDB(t *testing.T) {
+	db, err := New(Config{Path: ":memory:"})
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	_ = db.Close()
+
+	ctx := context.Background()
+	_, err = db.ListAuditEvents(ctx, AuditEventFilters{})
+	if err == nil {
+		t.Error("Expected error for ListAuditEvents on closed DB")
+	}
+}
+
+func TestDB_CountAuditEvents_ClosedDB(t *testing.T) {
+	db, err := New(Config{Path: ":memory:"})
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	_ = db.Close()
+
+	ctx := context.Background()
+	_, err = db.CountAuditEvents(ctx, AuditEventFilters{})
+	if err == nil {
+		t.Error("Expected error for CountAuditEvents on closed DB")
+	}
+}
+
+func TestDB_GetAuditEventByID_NotFound(t *testing.T) {
+	db, err := New(Config{Path: ":memory:"})
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+
+	ctx := context.Background()
+	_, err = db.GetAuditEventByID(ctx, "nonexistent-id")
+	if err == nil {
+		t.Error("Expected error for GetAuditEventByID with non-existent ID")
+	}
+}
+
+func TestDB_StoreAuditEvent_ClosedDB(t *testing.T) {
+	db, err := New(Config{Path: ":memory:"})
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	_ = db.Close()
+
+	ctx := context.Background()
+	event := audit.NewEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultSuccess)
+	err = db.StoreAuditEvent(ctx, event)
+	if err == nil {
+		t.Error("Expected error for StoreAuditEvent on closed DB")
+	}
+}

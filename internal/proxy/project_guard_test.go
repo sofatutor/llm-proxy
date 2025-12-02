@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.uber.org/zap"
 )
 
 // MockProjectActiveChecker is a mock for the ProjectActiveChecker interface
@@ -137,4 +138,34 @@ func TestProjectActiveGuardMiddleware_MissingProjectID(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
 	assert.False(t, handlerCalled)
 	assert.Contains(t, rr.Body.String(), "missing project ID")
+}
+
+func TestGetLoggerFromContext(t *testing.T) {
+	t.Run("logger present in context", func(t *testing.T) {
+		// Create a test logger
+		logger, _ := zap.NewDevelopment()
+		ctx := context.WithValue(context.Background(), ctxKeyLogger, logger)
+
+		// Should return the logger from context
+		result := getLoggerFromContext(ctx)
+		assert.NotNil(t, result)
+		assert.Equal(t, logger, result)
+	})
+
+	t.Run("no logger in context", func(t *testing.T) {
+		ctx := context.Background()
+
+		// Should return nil when no logger in context
+		result := getLoggerFromContext(ctx)
+		assert.Nil(t, result)
+	})
+
+	t.Run("wrong type in context", func(t *testing.T) {
+		// Put wrong type in context at logger key
+		ctx := context.WithValue(context.Background(), ctxKeyLogger, "not a logger")
+
+		// Should return nil when value is wrong type
+		result := getLoggerFromContext(ctx)
+		assert.Nil(t, result)
+	})
 }
