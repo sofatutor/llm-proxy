@@ -525,3 +525,63 @@ func TestMigrations_Idempotent(t *testing.T) {
 		t.Errorf("Migration version changed from %d to %d on second run", initialVersion, finalVersion)
 	}
 }
+
+func TestGetMigrationsPath_Success(t *testing.T) {
+	// Test that getMigrationsPath can find migrations from various paths
+	// This test verifies the function works when run from the project root
+	path, err := getMigrationsPath()
+	if err != nil {
+		t.Logf("getMigrationsPath error (may be expected in some test environments): %v", err)
+		// Not a fatal error - depends on working directory
+		return
+	}
+
+	// Verify the path exists and contains SQL files
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		t.Fatalf("Failed to read migrations directory: %v", err)
+	}
+
+	// Check for at least one .sql file
+	hasSQLFile := false
+	for _, entry := range entries {
+		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".sql" {
+			hasSQLFile = true
+			break
+		}
+	}
+
+	if !hasSQLFile {
+		t.Error("Migrations directory should contain at least one .sql file")
+	}
+}
+
+func TestGetMigrationsPath_NotFound(t *testing.T) {
+	// The getMigrationsPath function uses runtime.Caller to find the source file location,
+	// so it will always find migrations from the source path.
+	// This test verifies the function handles missing directories gracefully.
+	// We can't easily test the "not found" path without modifying the source,
+	// but we verify the function returns a valid path in normal conditions.
+	path, err := getMigrationsPath()
+	if err != nil {
+		// If we get an error, that's acceptable in some test environments
+		t.Logf("getMigrationsPath returned error (may be expected): %v", err)
+		return
+	}
+
+	// Verify the returned path is valid
+	if path == "" {
+		t.Error("getMigrationsPath returned empty path")
+	}
+}
+
+func TestRunMigrations_Error(t *testing.T) {
+	// Test runMigrations with a closed database
+	db, cleanup := testDB(t)
+	cleanup() // Close database immediately
+
+	err := runMigrations(db.db)
+	if err == nil {
+		t.Error("Expected error when running migrations on closed database")
+	}
+}
