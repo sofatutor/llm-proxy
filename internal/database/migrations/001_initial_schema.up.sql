@@ -1,6 +1,5 @@
--- LLM Proxy Database Schema
--- This file defines the complete database schema for the LLM Proxy.
--- The schema is also available as a migration in internal/database/migrations/001_initial_schema.up.sql
+-- Initial schema migration for LLM Proxy
+-- This migration creates the core tables and indexes
 
 -- Projects table
 CREATE TABLE IF NOT EXISTS projects (
@@ -62,9 +61,3 @@ CREATE INDEX IF NOT EXISTS idx_audit_client_ip ON audit_events(client_ip);
 CREATE INDEX IF NOT EXISTS idx_audit_request_id ON audit_events(request_id);
 CREATE INDEX IF NOT EXISTS idx_audit_outcome ON audit_events(outcome);
 CREATE INDEX IF NOT EXISTS idx_audit_ip_action ON audit_events(client_ip, action);
-
--- Enable foreign key support
-PRAGMA foreign_keys = ON;
-
--- Use Write-Ahead Logging for better concurrency
-PRAGMA journal_mode = WAL;
