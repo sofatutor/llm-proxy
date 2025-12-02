@@ -32,4 +32,3 @@ func TestMigrationRunner_AcquirePostgresLock_Stub(t *testing.T) {
 func setupTestDBForStub() (*sql.DB, error) {
 	return sql.Open("sqlite3", ":memory:")
 }
-

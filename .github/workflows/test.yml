@@ -160,14 +160,20 @@ jobs:
       
       - name: Merge coverage profiles
         run: |
-          # Install gocovmerge
-          go install github.com/wadey/gocovmerge@latest
-          
-          # Merge all coverage files
+          # Merge coverage files using shell (no external dependency)
           echo "Merging coverage profiles..."
-          gocovmerge coverage-*.txt > coverage-combined.txt
           
-          echo "Combined coverage generated"
+          # Get the mode line from first file
+          head -1 coverage-unit.txt > coverage-combined.txt
+          
+          # Append all coverage data (skip mode lines)
+          for f in coverage-*.txt; do
+            if [ "$f" != "coverage-combined.txt" ]; then
+              tail -n +2 "$f" >> coverage-combined.txt
+            fi
+          done
+          
+          echo "Combined coverage generated ($(wc -l < coverage-combined.txt) lines)"
       
       - name: Enforce 90%+ code coverage
         run: |
