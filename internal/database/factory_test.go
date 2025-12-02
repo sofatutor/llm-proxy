@@ -1,5 +1,9 @@
 package database
 
+// NOTE: This test suite focuses on unit tests for factory logic, rebinding helpers, and error conditions.
+// PostgreSQL integration tests (connecting to a real PostgreSQL instance, running migrations, performing CRUD operations)
+// are not included here and will be added via Docker Compose integration tests (see issue #139 and review comment #2580739337).
+
 import (
 	"context"
 	"os"

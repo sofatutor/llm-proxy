@@ -4,9 +4,9 @@
 
 -- Projects table
 CREATE TABLE IF NOT EXISTS projects (
-	id TEXT PRIMARY KEY,
+	id TEXT PRIMARY KEY, -- Using TEXT for compatibility with SQLite; consider UUID type for PostgreSQL optimization
 	name TEXT NOT NULL UNIQUE,
-	openai_api_key TEXT NOT NULL,
+	openai_api_key TEXT NOT NULL, -- NOTE: Stored as plaintext. For production, consider encryption at rest or secret manager integration (see review comment #2580739426)
 	is_active BOOLEAN NOT NULL DEFAULT TRUE,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -17,7 +17,7 @@ CREATE INDEX IF NOT EXISTS idx_projects_name ON projects(name);
 
 -- Tokens table
 CREATE TABLE IF NOT EXISTS tokens (
-	token TEXT PRIMARY KEY,
+	token TEXT PRIMARY KEY, -- Using TEXT for compatibility with SQLite; consider VARCHAR with length constraints for PostgreSQL optimization
 	project_id TEXT NOT NULL,
 	expires_at TIMESTAMP,
 	is_active BOOLEAN NOT NULL DEFAULT TRUE,
