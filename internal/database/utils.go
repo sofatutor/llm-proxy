@@ -35,6 +35,13 @@ func (d *DB) PlaceholderList(n int) string {
 
 // RebindQuery converts a query from ? placeholders to the appropriate
 // placeholder style for the database driver.
+//
+// IMPORTANT: This function performs a simple character replacement and does NOT
+// handle ? characters inside SQL string literals (e.g., "WHERE name = 'what?'").
+// Since this codebase exclusively uses parameterized queries with ? as placeholders,
+// this limitation does not affect normal usage. If you need to use literal ? in
+// string values, use parameterized queries: "WHERE name = ?" with the value passed
+// as an argument.
 func (d *DB) RebindQuery(query string) string {
 	if d.driver != DriverPostgres {
 		return query
@@ -130,11 +137,23 @@ func (d *DB) MaintainDatabase(ctx context.Context) error {
 	return nil
 }
 
+// boolValue returns the appropriate boolean representation for the driver.
+// SQLite uses 1/0, PostgreSQL uses true/false.
+func (d *DB) boolValue(b bool) interface{} {
+	if d.driver == DriverPostgres {
+		return b
+	}
+	if b {
+		return 1
+	}
+	return 0
+}
+
 // GetStats returns database statistics.
 func (d *DB) GetStats(ctx context.Context) (map[string]interface{}, error) {
 	stats := make(map[string]interface{})
 
-	// Get database size (driver-specific)
+	// Get database size (driver-specific - these queries are fundamentally different)
 	var dbSize int64
 	if d.driver == DriverPostgres {
 		err := d.db.QueryRowContext(ctx, "SELECT pg_database_size(current_database())").Scan(&dbSize)
@@ -157,25 +176,21 @@ func (d *DB) GetStats(ctx context.Context) (map[string]interface{}, error) {
 	}
 	stats["project_count"] = projectCount
 
-	// Count active tokens (driver-agnostic using boolean comparison)
+	// Count active tokens using QueryRowContextRebound for placeholder rebinding
 	var activeTokens int
-	if d.driver == DriverPostgres {
-		err = d.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM tokens WHERE is_active = true AND (expires_at IS NULL OR expires_at > $1)", time.Now()).Scan(&activeTokens)
-	} else {
-		err = d.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM tokens WHERE is_active = 1 AND (expires_at IS NULL OR expires_at > ?)", time.Now()).Scan(&activeTokens)
-	}
+	err = d.QueryRowContextRebound(ctx,
+		"SELECT COUNT(*) FROM tokens WHERE is_active = ? AND (expires_at IS NULL OR expires_at > ?)",
+		d.boolValue(true), time.Now()).Scan(&activeTokens)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count active tokens: %w", err)
 	}
 	stats["active_token_count"] = activeTokens
 
-	// Count expired tokens
+	// Count expired tokens using QueryRowContextRebound for placeholder rebinding
 	var expiredTokens int
-	if d.driver == DriverPostgres {
-		err = d.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM tokens WHERE expires_at IS NOT NULL AND expires_at <= $1", time.Now()).Scan(&expiredTokens)
-	} else {
-		err = d.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM tokens WHERE expires_at IS NOT NULL AND expires_at <= ?", time.Now()).Scan(&expiredTokens)
-	}
+	err = d.QueryRowContextRebound(ctx,
+		"SELECT COUNT(*) FROM tokens WHERE expires_at IS NOT NULL AND expires_at <= ?",
+		time.Now()).Scan(&expiredTokens)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count expired tokens: %w", err)
 	}

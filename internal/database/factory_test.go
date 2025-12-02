@@ -142,6 +142,20 @@ func TestConfigFromEnv(t *testing.T) {
 				ConnMaxLifetime: time.Hour,
 			},
 		},
+		{
+			name: "invalid driver (defaults to sqlite)",
+			envVars: map[string]string{
+				"DB_DRIVER": "mysql",
+			},
+			expected: FullConfig{
+				Driver:          DriverSQLite, // default preserved for invalid driver
+				Path:            "data/llm-proxy.db",
+				DatabaseURL:     "",
+				MaxOpenConns:    10,
+				MaxIdleConns:    5,
+				ConnMaxLifetime: time.Hour,
+			},
+		},
 	}
 
 	for _, tt := range tests {

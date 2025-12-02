@@ -4,6 +4,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -56,11 +57,17 @@ func DefaultFullConfig() FullConfig {
 }
 
 // ConfigFromEnv creates a FullConfig from environment variables.
+// Invalid configuration values are logged as warnings and defaults are used.
 func ConfigFromEnv() FullConfig {
 	config := DefaultFullConfig()
 
 	if driver := os.Getenv("DB_DRIVER"); driver != "" {
-		config.Driver = DriverType(strings.ToLower(driver))
+		driverType := DriverType(strings.ToLower(driver))
+		if driverType != DriverSQLite && driverType != DriverPostgres {
+			log.Printf("Warning: unsupported DB_DRIVER '%s', defaulting to sqlite", driver)
+		} else {
+			config.Driver = driverType
+		}
 	}
 
 	if path := os.Getenv("DATABASE_PATH"); path != "" {
@@ -74,18 +81,24 @@ func ConfigFromEnv() FullConfig {
 	if poolSize := os.Getenv("DATABASE_POOL_SIZE"); poolSize != "" {
 		if size, err := parsePositiveInt(poolSize); err == nil {
 			config.MaxOpenConns = size
+		} else {
+			log.Printf("Warning: invalid DATABASE_POOL_SIZE '%s': %v, using default %d", poolSize, err, config.MaxOpenConns)
 		}
 	}
 
 	if idleConns := os.Getenv("DATABASE_MAX_IDLE_CONNS"); idleConns != "" {
 		if size, err := parsePositiveInt(idleConns); err == nil {
 			config.MaxIdleConns = size
+		} else {
+			log.Printf("Warning: invalid DATABASE_MAX_IDLE_CONNS '%s': %v, using default %d", idleConns, err, config.MaxIdleConns)
 		}
 	}
 
 	if lifetime := os.Getenv("DATABASE_CONN_MAX_LIFETIME"); lifetime != "" {
 		if duration, err := time.ParseDuration(lifetime); err == nil {
 			config.ConnMaxLifetime = duration
+		} else {
+			log.Printf("Warning: invalid DATABASE_CONN_MAX_LIFETIME '%s': %v, using default %v", lifetime, err, config.ConnMaxLifetime)
 		}
 	}
 
