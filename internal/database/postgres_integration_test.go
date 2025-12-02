@@ -23,6 +23,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/sofatutor/llm-proxy/internal/database/migrations"
+	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -123,14 +124,16 @@ func TestPostgresIntegration_ProjectCRUD(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Create project
-	project := Project{
-		ID:        "test-project-pg-" + time.Now().Format("20060102150405"),
-		Name:      "PostgreSQL Test Project",
-		APIKey:    "test-api-key-12345",
-		IsActive:  true,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+	now := time.Now().Truncate(time.Second)
+
+	// Create project using proxy.Project (what the interface expects)
+	project := proxy.Project{
+		ID:           "test-project-pg-" + time.Now().Format("20060102150405"),
+		Name:         "PostgreSQL Test Project",
+		OpenAIAPIKey: "test-api-key-12345",
+		IsActive:     true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 
 	err := db.CreateProject(ctx, project)
@@ -141,13 +144,13 @@ func TestPostgresIntegration_ProjectCRUD(t *testing.T) {
 	require.NoError(t, err, "Failed to get project by ID")
 	assert.Equal(t, project.ID, retrieved.ID)
 	assert.Equal(t, project.Name, retrieved.Name)
-	assert.Equal(t, project.APIKey, retrieved.APIKey)
+	assert.Equal(t, project.OpenAIAPIKey, retrieved.OpenAIAPIKey)
 	assert.True(t, retrieved.IsActive)
 
-	// Update project
-	err = db.UpdateProject(ctx, project.ID, map[string]interface{}{
-		"name": "Updated PostgreSQL Project",
-	})
+	// Update project (UpdateProject takes a full proxy.Project)
+	updatedProject := retrieved
+	updatedProject.Name = "Updated PostgreSQL Project"
+	err = db.UpdateProject(ctx, updatedProject)
 	require.NoError(t, err, "Failed to update project")
 
 	updated, err := db.GetProjectByID(ctx, project.ID)
@@ -159,13 +162,13 @@ func TestPostgresIntegration_ProjectCRUD(t *testing.T) {
 	require.NoError(t, err, "Failed to list projects")
 	assert.NotEmpty(t, projects)
 
-	// Delete project (deactivate)
+	// Delete project (this does a hard delete in current implementation)
 	err = db.DeleteProject(ctx, project.ID)
 	require.NoError(t, err, "Failed to delete project")
 
-	deleted, err := db.GetProjectByID(ctx, project.ID)
-	require.NoError(t, err, "Failed to get deleted project")
-	assert.False(t, deleted.IsActive)
+	// After deletion, project should not be found
+	_, err = db.GetProjectByID(ctx, project.ID)
+	assert.Error(t, err, "Expected error when getting deleted project")
 }
 
 // TestPostgresIntegration_TokenCRUD tests Token CRUD operations on PostgreSQL.
@@ -175,20 +178,21 @@ func TestPostgresIntegration_TokenCRUD(t *testing.T) {
 
 	ctx := context.Background()
 
+	now := time.Now().Truncate(time.Second)
+
 	// First create a project (required for token foreign key)
-	project := Project{
-		ID:        "token-test-project-" + time.Now().Format("20060102150405"),
-		Name:      "Token Test Project",
-		APIKey:    "test-api-key-tokens",
-		IsActive:  true,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+	project := proxy.Project{
+		ID:           "token-test-project-" + time.Now().Format("20060102150405"),
+		Name:         "Token Test Project",
+		OpenAIAPIKey: "test-api-key-tokens",
+		IsActive:     true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 	err := db.CreateProject(ctx, project)
 	require.NoError(t, err, "Failed to create project for token test")
 
 	// Create token
-	now := time.Now()
 	expiresAt := now.Add(24 * time.Hour)
 	token := Token{
 		Token:        "test-token-pg-" + time.Now().Format("20060102150405"),
@@ -220,21 +224,25 @@ func TestPostgresIntegration_TokenCRUD(t *testing.T) {
 	assert.Equal(t, 1, incremented.RequestCount)
 	assert.NotNil(t, incremented.LastUsedAt)
 
-	// Reset usage
-	err = db.ResetTokenUsage(ctx, token.Token)
-	require.NoError(t, err, "Failed to reset token usage")
+	// Update token to reset usage (no ResetTokenUsage method, use UpdateToken)
+	incremented.RequestCount = 0
+	err = db.UpdateToken(ctx, incremented)
+	require.NoError(t, err, "Failed to reset token usage via UpdateToken")
 
 	reset, err := db.GetTokenByID(ctx, token.Token)
 	require.NoError(t, err, "Failed to get reset token")
 	assert.Equal(t, 0, reset.RequestCount)
 
-	// List tokens for project
-	tokens, err := db.ListTokensForProject(ctx, project.ID)
+	// List tokens for project (use GetTokensByProjectID)
+	tokens, err := db.GetTokensByProjectID(ctx, project.ID)
 	require.NoError(t, err, "Failed to list tokens")
 	assert.NotEmpty(t, tokens)
 
-	// Revoke token
-	err = db.RevokeToken(ctx, token.Token)
+	// Revoke token via UpdateToken (set IsActive = false)
+	reset.IsActive = false
+	nowPtr := time.Now()
+	reset.DeactivatedAt = &nowPtr
+	err = db.UpdateToken(ctx, reset)
 	require.NoError(t, err, "Failed to revoke token")
 
 	revoked, err := db.GetTokenByID(ctx, token.Token)
@@ -249,23 +257,33 @@ func TestPostgresIntegration_AuditEvents(t *testing.T) {
 
 	ctx := context.Background()
 
+	projectID := "test-project"
+	requestID := "req-123"
+	correlationID := "corr-456"
+	clientIP := "192.168.1.1"
+	method := "POST"
+	path := "/v1/chat/completions"
+	userAgent := "test-agent/1.0"
+	tokenID := "token-123"
+	metadata := `{"key": "value"}`
+
 	// Create audit event
 	event := AuditEvent{
 		ID:            "audit-event-pg-" + time.Now().Format("20060102150405"),
 		Timestamp:     time.Now(),
 		Action:        "test_action",
 		Actor:         "test_actor",
-		ProjectID:     "test-project",
-		RequestID:     "req-123",
-		CorrelationID: "corr-456",
-		ClientIP:      "192.168.1.1",
-		Method:        "POST",
-		Path:          "/v1/chat/completions",
-		UserAgent:     "test-agent/1.0",
+		ProjectID:     &projectID,
+		RequestID:     &requestID,
+		CorrelationID: &correlationID,
+		ClientIP:      &clientIP,
+		Method:        &method,
+		Path:          &path,
+		UserAgent:     &userAgent,
 		Outcome:       "success",
-		Reason:        "",
-		TokenID:       "token-123",
-		Metadata:      `{"key": "value"}`,
+		Reason:        nil,
+		TokenID:       &tokenID,
+		Metadata:      &metadata,
 	}
 
 	err := db.CreateAuditEvent(ctx, event)
@@ -300,14 +318,16 @@ func TestPostgresIntegration_PlaceholderRebinding(t *testing.T) {
 
 	ctx := context.Background()
 
+	now := time.Now().Truncate(time.Second)
+
 	// Create a project using the rebinding helper
-	project := Project{
-		ID:        "rebind-test-" + time.Now().Format("20060102150405"),
-		Name:      "Rebind Test",
-		APIKey:    "rebind-api-key",
-		IsActive:  true,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+	project := proxy.Project{
+		ID:           "rebind-test-" + time.Now().Format("20060102150405"),
+		Name:         "Rebind Test",
+		OpenAIAPIKey: "rebind-api-key",
+		IsActive:     true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 
 	err := db.CreateProject(ctx, project)
@@ -326,20 +346,21 @@ func TestPostgresIntegration_ConcurrentOperations(t *testing.T) {
 
 	ctx := context.Background()
 
+	now := time.Now().Truncate(time.Second)
+
 	// Create a project for concurrent token operations
-	project := Project{
-		ID:        "concurrent-test-" + time.Now().Format("20060102150405"),
-		Name:      "Concurrent Test Project",
-		APIKey:    "concurrent-api-key",
-		IsActive:  true,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+	project := proxy.Project{
+		ID:           "concurrent-test-" + time.Now().Format("20060102150405"),
+		Name:         "Concurrent Test Project",
+		OpenAIAPIKey: "concurrent-api-key",
+		IsActive:     true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
 	}
 	err := db.CreateProject(ctx, project)
 	require.NoError(t, err)
 
 	// Create a token
-	now := time.Now()
 	token := Token{
 		Token:        "concurrent-token-" + time.Now().Format("20060102150405"),
 		ProjectID:    project.ID,
