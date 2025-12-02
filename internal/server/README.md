@@ -83,7 +83,7 @@ The server accepts configuration via `config.Config`:
 | Field | Description | Default |
 |-------|-------------|---------|
 | `ListenAddr` | Address to listen on | `:8080` |
-| `RequestTimeout` | Maximum request duration | `120s` |
+| `RequestTimeout` | Maximum request duration | `30s` |
 | `ManagementToken` | Token for management API auth | Required |
 | `EnableMetrics` | Enable metrics endpoint | `false` |
 | `MetricsPath` | Path for metrics endpoint | `/metrics` |

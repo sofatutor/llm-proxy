@@ -165,12 +165,11 @@ Migrations are managed using goose and stored in `migrations/sql/`:
 
 | Migration | Description |
 |-----------|-------------|
-| `001_create_projects.sql` | Create projects table |
-| `002_create_tokens.sql` | Create tokens table |
-| `003_create_audit_events.sql` | Create audit events table |
-| `004_add_cache_hit_count.sql` | Add cache hit tracking |
+| `00001_initial_schema.sql` | Creates projects, tokens, and audit_events tables |
+| `00002_add_deactivation_columns.sql` | Adds deactivation tracking |
+| `00003_add_cache_hit_count.sql` | Adds cache hit tracking |
 
-Migrations run automatically on `New()`. See `migrations/README.md` for manual commands.
+Migrations run automatically on `New()`. See `internal/database/migrations/README.md` for manual commands.
 
 ## Testing Guidance
 

@@ -36,7 +36,7 @@ graph TB
     M --> RL
     V --> TS
     CV --> V
-    CV --> |LRU Cache| CV
+    CV --> |FIFO Cache| CV
     TS --> DB
     RL --> Redis
 ```
@@ -221,7 +221,7 @@ See [Distributed Rate Limiting Documentation](/docs/distributed-rate-limiting.md
 |------|-------------|
 | `token.go` | Token generation and format validation |
 | `validate.go` | StandardValidator implementation |
-| `cache.go` | CachedValidator with LRU cache |
+| `cache.go` | CachedValidator with FIFO cache |
 | `manager.go` | Unified Manager interface |
 | `ratelimit.go` | In-memory rate limiter |
 | `redis_ratelimit.go` | Distributed Redis rate limiter |
