@@ -2,6 +2,9 @@ package token
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strconv"
@@ -34,6 +37,10 @@ type RedisRateLimitClient interface {
 type RedisRateLimiterConfig struct {
 	// KeyPrefix is the prefix for all Redis keys used by the rate limiter
 	KeyPrefix string
+	// KeyHashSecret is the HMAC secret for hashing token IDs in Redis keys.
+	// When set, token IDs are hashed using HMAC-SHA256 to prevent cleartext exposure.
+	// This is recommended for production deployments to enhance security.
+	KeyHashSecret []byte
 	// DefaultWindowDuration is the default sliding window duration for rate limiting
 	DefaultWindowDuration time.Duration
 	// DefaultMaxRequests is the default maximum requests per window
@@ -97,9 +104,23 @@ func NewRedisRateLimiter(client RedisRateLimitClient, config RedisRateLimiterCon
 	return limiter
 }
 
-// buildKey constructs the Redis key for a token's rate limit counter
+// buildKey constructs the Redis key for a token's rate limit counter.
+// If KeyHashSecret is configured, the token ID is hashed using HMAC-SHA256
+// to prevent cleartext exposure in Redis keys.
 func (r *RedisRateLimiter) buildKey(tokenID string, windowStart int64) string {
-	return fmt.Sprintf("%s%s:%d", r.config.KeyPrefix, tokenID, windowStart)
+	keyID := tokenID
+	if len(r.config.KeyHashSecret) > 0 {
+		keyID = hashTokenID(tokenID, r.config.KeyHashSecret)
+	}
+	return fmt.Sprintf("%s%s:%d", r.config.KeyPrefix, keyID, windowStart)
+}
+
+// hashTokenID generates a non-reversible identifier from a token ID using HMAC-SHA256.
+// Returns the first 16 hex characters of the HMAC for brevity while maintaining uniqueness.
+func hashTokenID(tokenID string, secret []byte) string {
+	h := hmac.New(sha256.New, secret)
+	h.Write([]byte(tokenID))
+	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
 // getWindowStart returns the start timestamp for the current window
