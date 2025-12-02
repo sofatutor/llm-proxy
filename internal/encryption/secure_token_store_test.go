@@ -3,6 +3,7 @@ package encryption
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -983,14 +984,14 @@ func TestSecureTokenStore_Concurrency(t *testing.T) {
 
 	// Pre-populate with some tokens
 	for i := 0; i < 10; i++ {
-		tok := hasher.CreateLookupKey("token-" + string(rune('0'+i)))
+		tok := hasher.CreateLookupKey(fmt.Sprintf("token-%d", i))
 		mock.tokens[tok] = token.TokenData{Token: tok, ProjectID: "proj-1"}
 	}
 
 	done := make(chan bool, 100)
 	for i := 0; i < 100; i++ {
 		go func(id int) {
-			tokenID := "token-" + string(rune('0'+id%10))
+			tokenID := fmt.Sprintf("token-%d", id%10)
 
 			// Mix of operations
 			_, _ = store.GetTokenByID(ctx, tokenID)
@@ -1015,7 +1016,7 @@ func TestSecureRevocationStore_Concurrency(t *testing.T) {
 	done := make(chan bool, 100)
 	for i := 0; i < 100; i++ {
 		go func(id int) {
-			tokenID := "token-" + string(rune('0'+id%10))
+			tokenID := fmt.Sprintf("token-%d", id%10)
 			_ = store.RevokeToken(ctx, tokenID)
 			done <- true
 		}(i)
@@ -1034,14 +1035,14 @@ func TestSecureRateLimitStore_Concurrency(t *testing.T) {
 
 	// Pre-populate
 	for i := 0; i < 10; i++ {
-		tok := hasher.CreateLookupKey("token-" + string(rune('0'+i)))
+		tok := hasher.CreateLookupKey(fmt.Sprintf("token-%d", i))
 		mock.tokens[tok] = token.TokenData{Token: tok}
 	}
 
 	done := make(chan bool, 100)
 	for i := 0; i < 100; i++ {
 		go func(id int) {
-			tokenID := "token-" + string(rune('0'+id%10))
+			tokenID := fmt.Sprintf("token-%d", id%10)
 			_ = store.IncrementTokenUsage(ctx, tokenID)
 			_ = store.ResetTokenUsage(ctx, tokenID)
 			done <- true

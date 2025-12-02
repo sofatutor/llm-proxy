@@ -52,11 +52,25 @@ func (s *SecureTokenStore) CreateToken(ctx context.Context, td token.TokenData) 
 // UpdateToken updates an existing token.
 // The token value is hashed before the operation.
 func (s *SecureTokenStore) UpdateToken(ctx context.Context, td token.TokenData) error {
-	// Hash the token value if it's not already a SHA-256 hex string (64 chars)
-	if len(td.Token) != 64 {
+	// Hash the token value if it's not already a SHA-256 hex string (64 hex chars)
+	// Validate both length and hex content to avoid skipping plaintext 64-char tokens
+	if len(td.Token) != 64 || !isHexString(td.Token) {
 		td.Token = s.hasher.CreateLookupKey(td.Token)
 	}
 	return s.store.UpdateToken(ctx, td)
+}
+
+// isHexString checks if a string contains only hexadecimal characters.
+func isHexString(s string) bool {
+	for _, c := range s {
+		isDigit := c >= '0' && c <= '9'
+		isLowerHex := c >= 'a' && c <= 'f'
+		isUpperHex := c >= 'A' && c <= 'F'
+		if !isDigit && !isLowerHex && !isUpperHex {
+			return false
+		}
+	}
+	return true
 }
 
 // ListTokens retrieves all tokens from the store.

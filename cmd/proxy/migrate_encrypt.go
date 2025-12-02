@@ -234,7 +234,8 @@ func hashTokens(ctx context.Context, db *database.DB, hasher *encryption.TokenHa
 
 	for _, t := range tokens {
 		// Skip if already hashed (SHA-256 produces 64 hex characters)
-		if len(t.token) == 64 {
+		// Validate both length and hex content to avoid skipping plaintext 64-char tokens
+		if len(t.token) == 64 && isHexString(t.token) {
 			skipped++
 			continue
 		}
@@ -291,8 +292,8 @@ func countTokenHashStatus(ctx context.Context, db *database.DB) (hashed, plainte
 			return 0, 0, err
 		}
 
-		// SHA-256 produces 64 hex characters
-		if len(token) == 64 {
+		// SHA-256 produces 64 hex characters - validate both length and hex content
+		if len(token) == 64 && isHexString(token) {
 			hashed++
 		} else {
 			plaintext++
@@ -300,4 +301,17 @@ func countTokenHashStatus(ctx context.Context, db *database.DB) (hashed, plainte
 	}
 
 	return hashed, plaintext, rows.Err()
+}
+
+// isHexString checks if a string contains only hexadecimal characters.
+func isHexString(s string) bool {
+	for _, c := range s {
+		isDigit := c >= '0' && c <= '9'
+		isLowerHex := c >= 'a' && c <= 'f'
+		isUpperHex := c >= 'A' && c <= 'F'
+		if !isDigit && !isLowerHex && !isUpperHex {
+			return false
+		}
+	}
+	return true
 }

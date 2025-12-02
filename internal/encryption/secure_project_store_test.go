@@ -3,6 +3,7 @@ package encryption
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -196,8 +197,8 @@ func TestSecureProjectStore_ListProjects(t *testing.T) {
 	apiKeys := []string{"key-1", "key-2", "key-3"}
 	for i, apiKey := range apiKeys {
 		project := proxy.Project{
-			ID:           "proj-" + string(rune('1'+i)),
-			Name:         "Project " + string(rune('1'+i)),
+			ID:           fmt.Sprintf("proj-%d", i+1),
+			Name:         fmt.Sprintf("Project %d", i+1),
 			OpenAIAPIKey: apiKey,
 			IsActive:     true,
 			CreatedAt:    time.Now(),

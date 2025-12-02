@@ -118,8 +118,8 @@ func (e *Encryptor) Decrypt(ciphertext string) (string, error) {
 		return "", fmt.Errorf("failed to decode ciphertext: %w", err)
 	}
 
-	// Validate minimum length (nonce + at least 1 byte of ciphertext + tag)
-	if len(data) < NonceSize+e.gcm.Overhead()+1 {
+	// Validate minimum length (nonce + tag; plaintext can be empty)
+	if len(data) < NonceSize+e.gcm.Overhead() {
 		return "", ErrInvalidCiphertext
 	}
 
