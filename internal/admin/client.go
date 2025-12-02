@@ -62,14 +62,15 @@ type Project struct {
 
 // Token represents a token from the Management API (sanitized)
 type Token struct {
-	TokenID      string     `json:"token_id"` // Added for Admin UI support
-	ProjectID    string     `json:"project_id"`
-	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
-	IsActive     bool       `json:"is_active"`
-	RequestCount int        `json:"request_count"`
-	MaxRequests  *int       `json:"max_requests,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	LastUsedAt   *time.Time `json:"last_used_at,omitempty"`
+	TokenID       string     `json:"token_id"` // Added for Admin UI support
+	ProjectID     string     `json:"project_id"`
+	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
+	IsActive      bool       `json:"is_active"`
+	RequestCount  int        `json:"request_count"`
+	MaxRequests   *int       `json:"max_requests,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	LastUsedAt    *time.Time `json:"last_used_at,omitempty"`
+	CacheHitCount int        `json:"cache_hit_count"`
 }
 
 // TokenCreateResponse represents the response when creating a token
