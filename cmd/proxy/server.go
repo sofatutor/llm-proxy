@@ -19,13 +19,15 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/sofatutor/llm-proxy/internal/database"
+	"github.com/sofatutor/llm-proxy/internal/encryption"
+	"github.com/sofatutor/llm-proxy/internal/eventtransformer"
 	"github.com/sofatutor/llm-proxy/internal/logging"
+	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/sofatutor/llm-proxy/internal/server"
+	"github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"golang.org/x/term"
-
-	"github.com/sofatutor/llm-proxy/internal/eventtransformer"
 )
 
 // For testing
@@ -326,8 +328,38 @@ func runServerForeground() {
 		}
 	}
 
-	tokenStore := database.NewDBTokenStoreAdapter(db)
-	projectStore := db
+	// Create base stores
+	baseTokenStore := database.NewDBTokenStoreAdapter(db)
+	baseProjectStore := proxy.ProjectStore(db)
+
+	// Wrap stores with encryption/hashing if ENCRYPTION_KEY is set
+	tokenStore := token.TokenStore(baseTokenStore)
+	projectStore := baseProjectStore
+
+	encryptionKey := os.Getenv("ENCRYPTION_KEY")
+	if encryptionKey != "" {
+		// Create encryptor for API keys
+		encryptor, err := encryption.NewEncryptorFromBase64Key(encryptionKey)
+		if err != nil {
+			zapLogger.Fatal("Failed to initialize encryptor - check ENCRYPTION_KEY format",
+				zap.Error(err),
+				zap.String("hint", "Generate a valid key with: openssl rand -base64 32"))
+		}
+
+		// Create hasher for tokens
+		hasher := encryption.NewTokenHasher()
+
+		// Wrap stores with secure wrappers
+		projectStore = encryption.NewSecureProjectStore(baseProjectStore, encryptor)
+		tokenStore = encryption.NewSecureTokenStore(baseTokenStore, hasher)
+
+		zapLogger.Info("Encryption enabled for sensitive data at rest",
+			zap.Bool("api_keys_encrypted", true),
+			zap.Bool("tokens_hashed", true))
+	} else {
+		zapLogger.Warn("ENCRYPTION_KEY not set - sensitive data will be stored in plaintext",
+			zap.String("hint", "Set ENCRYPTION_KEY for production use: openssl rand -base64 32"))
+	}
 
 	// Create server with database support for audit logging
 	s, err := server.NewWithDatabase(cfg, tokenStore, projectStore, db)

@@ -368,10 +368,58 @@ grep '"project_id":"proj-123"' /data/audit.log
 
 ### Data Protection
 
-- **API Key Storage**: API keys are stored in plaintext; consider:
-  - Using a secret manager for production deployments
-  - Implementing application-level encryption for sensitive columns
-  - Regular key rotation policies
+#### Encryption at Rest
+
+The LLM Proxy supports encryption of sensitive data at rest. When enabled:
+
+- **API Keys**: Encrypted using AES-256-GCM with random nonces
+- **Tokens**: Hashed using SHA-256 for lookup, with backward compatibility
+
+**Enabling Encryption:**
+
+```bash
+# Generate a 32-byte encryption key
+export ENCRYPTION_KEY=$(openssl rand -base64 32)
+
+# Start the server - encryption is enabled automatically
+llm-proxy server
+```
+
+**Migrating Existing Data:**
+
+```bash
+# Check current encryption status
+llm-proxy migrate encrypt-status
+
+# Encrypt existing plaintext data (idempotent - skips already encrypted data)
+llm-proxy migrate encrypt --db ./data/llm-proxy.db
+```
+
+**Important:**
+- Store the `ENCRYPTION_KEY` securely - loss of this key means data cannot be decrypted
+- Back up the key separately from the database
+- Use a secrets manager in production (AWS Secrets Manager, HashiCorp Vault, etc.)
+- The encryption is backward compatible - unencrypted data is read transparently
+
+#### API Key Storage
+
+With encryption enabled:
+- API keys are encrypted before storage using AES-256-GCM
+- Each encryption uses a unique random nonce
+- Encrypted values are prefixed with `enc:v1:` for identification
+- Decryption happens transparently when reading
+
+Without encryption (not recommended for production):
+- API keys are stored in plaintext
+- A warning is logged at server startup
+
+#### Token Storage
+
+With hashing enabled (automatic when `ENCRYPTION_KEY` is set):
+- Tokens are hashed using SHA-256 for database lookup
+- Original tokens are never stored in the database
+- Token validation uses the hash for lookup
+
 - **PII Handling**: Minimize storage of personally identifiable information
 - **Data Retention**: Implement automated data cleanup policies
 
