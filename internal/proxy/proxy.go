@@ -42,6 +42,7 @@ type TransparentProxy struct {
 	allowedMethodsHeader string // cached comma-separated allowed methods
 	obsMiddleware        *middleware.ObservabilityMiddleware
 	cache                httpCache
+	cacheStatsAggregator *CacheStatsAggregator
 }
 
 // ProxyMetrics tracks proxy usage statistics
@@ -87,6 +88,13 @@ func (p *TransparentProxy) Cache() httpCache {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.cache
+}
+
+// SetCacheStatsAggregator sets the cache stats aggregator for per-token cache hit tracking.
+func (p *TransparentProxy) SetCacheStatsAggregator(agg *CacheStatsAggregator) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.cacheStatsAggregator = agg
 }
 
 // isVaryCompatible reports whether a cached response with a given Vary header
@@ -728,6 +736,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 			return
 		}
 		ctx = context.WithValue(r.Context(), ctxKeyProjectID, projectID)
+		ctx = context.WithValue(ctx, ctxKeyTokenID, tokenStr)
 		r = r.WithContext(ctx)
 		apiKey, err := p.projectStore.GetAPIKeyForProject(r.Context(), projectID)
 		if err != nil {
@@ -869,7 +878,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 						w.Header().Set("Cache-Status", "llm-proxy; conditional-hit")
 						w.Header().Set("X-PROXY-CACHE", "conditional-hit")
 						w.Header().Set("X-PROXY-CACHE-KEY", key)
-						p.incrementCacheMetric(CacheMetricHit) // Conditional hit counts as cache hit
+						p.recordCacheHit(r) // Conditional hit counts as cache hit
 						w.WriteHeader(http.StatusNotModified)
 						return
 					}
@@ -882,7 +891,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 				w.Header().Set("Cache-Status", "llm-proxy; hit")
 				w.Header().Set("X-PROXY-CACHE", "hit")
 				w.Header().Set("X-PROXY-CACHE-KEY", key)
-				p.incrementCacheMetric(CacheMetricHit)
+				p.recordCacheHit(r)
 				w.WriteHeader(cr.statusCode)
 				if r.Method != http.MethodHead {
 					_, _ = w.Write(cr.body)
@@ -942,6 +951,17 @@ func (w *timingResponseWriter) Flush() {
 // ensure consistent metric semantics across all miss paths.
 func (p *TransparentProxy) recordCacheMiss() {
 	p.incrementCacheMetric(CacheMetricMiss)
+}
+
+// recordCacheHit records a cache hit for metrics and per-token tracking.
+func (p *TransparentProxy) recordCacheHit(r *http.Request) {
+	p.incrementCacheMetric(CacheMetricHit)
+	// Record per-token cache hit if aggregator is configured
+	if p.cacheStatsAggregator != nil {
+		if tokenID, ok := r.Context().Value(ctxKeyTokenID).(string); ok && tokenID != "" {
+			p.cacheStatsAggregator.RecordCacheHit(tokenID)
+		}
+	}
 }
 
 func setTimingHeaders(res *http.Response, ctx context.Context) {

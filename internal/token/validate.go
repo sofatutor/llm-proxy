@@ -56,6 +56,7 @@ type TokenData struct {
 	MaxRequests   *int       // Maximum number of requests allowed (nil for unlimited)
 	CreatedAt     time.Time  // When the token was created
 	LastUsedAt    *time.Time // When the token was last used (nil if never used)
+	CacheHitCount int        // Number of cache hits for this token
 }
 
 // IsValid returns true if the token is active, not expired, and not rate limited

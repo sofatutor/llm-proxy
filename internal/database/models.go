@@ -26,6 +26,7 @@ type Token struct {
 	MaxRequests   *int       `json:"max_requests,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 	LastUsedAt    *time.Time `json:"last_used_at,omitempty"`
+	CacheHitCount int        `json:"cache_hit_count"`
 }
 
 // AuditEvent represents an audit log entry in the database.

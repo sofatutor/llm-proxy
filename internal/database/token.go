@@ -48,7 +48,7 @@ func (d *DB) CreateToken(ctx context.Context, token Token) error {
 // GetTokenByID retrieves a token by ID.
 func (d *DB) GetTokenByID(ctx context.Context, tokenID string) (Token, error) {
 	query := `
-	SELECT token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at
+	SELECT token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at, cache_hit_count
 	FROM tokens
 	WHERE token = ?
 	`
@@ -67,6 +67,7 @@ func (d *DB) GetTokenByID(ctx context.Context, tokenID string) (Token, error) {
 		&maxRequests,
 		&token.CreatedAt,
 		&lastUsedAt,
+		&token.CacheHitCount,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -154,7 +155,7 @@ func (d *DB) DeleteToken(ctx context.Context, tokenID string) error {
 // ListTokens retrieves all tokens from the database.
 func (d *DB) ListTokens(ctx context.Context) ([]Token, error) {
 	query := `
-	SELECT token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at
+	SELECT token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at, cache_hit_count
 	FROM tokens
 	ORDER BY created_at DESC
 	`
@@ -165,7 +166,7 @@ func (d *DB) ListTokens(ctx context.Context) ([]Token, error) {
 // GetTokensByProjectID retrieves all tokens for a project.
 func (d *DB) GetTokensByProjectID(ctx context.Context, projectID string) ([]Token, error) {
 	query := `
-	SELECT token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at
+	SELECT token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at, cache_hit_count
 	FROM tokens
 	WHERE project_id = ?
 	ORDER BY created_at DESC
@@ -247,6 +248,7 @@ func (d *DB) queryTokens(ctx context.Context, query string, args ...interface{})
 			&maxRequests,
 			&token.CreatedAt,
 			&lastUsedAt,
+			&token.CacheHitCount,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan token: %w", err)
 		}
@@ -345,6 +347,7 @@ func ImportTokenData(td token.TokenData) Token {
 		MaxRequests:   td.MaxRequests,
 		CreatedAt:     td.CreatedAt,
 		LastUsedAt:    td.LastUsedAt,
+		CacheHitCount: td.CacheHitCount,
 	}
 }
 
@@ -359,6 +362,7 @@ func ExportTokenData(t Token) token.TokenData {
 		MaxRequests:   t.MaxRequests,
 		CreatedAt:     t.CreatedAt,
 		LastUsedAt:    t.LastUsedAt,
+		CacheHitCount: t.CacheHitCount,
 	}
 }
 
@@ -477,4 +481,56 @@ func (a *DBTokenStoreAdapter) RevokeExpiredTokens(ctx context.Context) (int, err
 		return 0, fmt.Errorf("failed to get rows affected: %w", err)
 	}
 	return int(rowsAffected), nil
+}
+
+// IncrementCacheHitCount increments the cache_hit_count for a single token.
+func (d *DB) IncrementCacheHitCount(ctx context.Context, tokenID string, delta int) error {
+	if delta <= 0 {
+		return nil
+	}
+	query := `UPDATE tokens SET cache_hit_count = cache_hit_count + ? WHERE token = ?`
+	_, err := d.ExecContextRebound(ctx, query, delta, tokenID)
+	if err != nil {
+		return fmt.Errorf("failed to increment cache hit count: %w", err)
+	}
+	return nil
+}
+
+// IncrementCacheHitCountBatch increments cache_hit_count for multiple tokens in batch.
+// The deltas map has token IDs as keys and increment values as values.
+func (d *DB) IncrementCacheHitCountBatch(ctx context.Context, deltas map[string]int) error {
+	if len(deltas) == 0 {
+		return nil
+	}
+	// Use a transaction for batch updates
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback() // No-op if already committed
+	}()
+
+	query := `UPDATE tokens SET cache_hit_count = cache_hit_count + ? WHERE token = ?`
+	stmt, err := tx.PrepareContext(ctx, d.RebindQuery(query))
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer func() {
+		_ = stmt.Close()
+	}()
+
+	for tokenID, delta := range deltas {
+		if delta <= 0 {
+			continue
+		}
+		if _, err := stmt.ExecContext(ctx, delta, tokenID); err != nil {
+			return fmt.Errorf("failed to increment cache hit count for token %s: %w", tokenID, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	return nil
 }

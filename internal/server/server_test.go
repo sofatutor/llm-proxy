@@ -1207,6 +1207,105 @@ func TestNew_UnknownEventBusBackend_ReturnsError(t *testing.T) {
 	}
 }
 
+func TestServer_Shutdown_WithoutAggregator(t *testing.T) {
+	cfg := &config.Config{
+		ListenAddr:      ":0",
+		RequestTimeout:  time.Second,
+		ManagementToken: "testtoken",
+		EventBusBackend: "in-memory",
+	}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	// Server has no aggregator set (cacheStatsAgg is nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Shutdown should complete without error
+	err = srv.Shutdown(ctx)
+	if err != nil {
+		t.Fatalf("expected no error during shutdown, got: %v", err)
+	}
+}
+
+func TestServer_Shutdown_WithAggregator(t *testing.T) {
+	cfg := &config.Config{
+		ListenAddr:           ":0",
+		RequestTimeout:       time.Second,
+		ManagementToken:      "testtoken",
+		EventBusBackend:      "in-memory",
+		CacheStatsBufferSize: 100,
+	}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	// Create a mock aggregator and set it
+	aggConfig := proxy.CacheStatsAggregatorConfig{
+		BufferSize:    10,
+		FlushInterval: 50 * time.Millisecond,
+		BatchSize:     5,
+	}
+	mockStore := &mockCacheStatsStore{}
+	agg := proxy.NewCacheStatsAggregator(aggConfig, mockStore, zap.NewNop())
+	agg.Start()
+	srv.cacheStatsAgg = agg
+
+	// Record some cache hits to ensure flush happens
+	agg.RecordCacheHit("test-token-1")
+	agg.RecordCacheHit("test-token-1")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Shutdown should complete without error and flush pending stats
+	err = srv.Shutdown(ctx)
+	if err != nil {
+		t.Fatalf("expected no error during shutdown, got: %v", err)
+	}
+}
+
+func TestServer_Shutdown_WithAggregatorError(t *testing.T) {
+	cfg := &config.Config{
+		ListenAddr:           ":0",
+		RequestTimeout:       time.Second,
+		ManagementToken:      "testtoken",
+		EventBusBackend:      "in-memory",
+		CacheStatsBufferSize: 100,
+	}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	// Create a mock aggregator that will error on Stop due to context timeout
+	aggConfig := proxy.CacheStatsAggregatorConfig{
+		BufferSize:    10,
+		FlushInterval: 10 * time.Second, // Long interval
+		BatchSize:     1000,
+	}
+	mockStore := &mockCacheStatsStore{}
+	agg := proxy.NewCacheStatsAggregator(aggConfig, mockStore, zap.NewNop())
+	agg.Start()
+	srv.cacheStatsAgg = agg
+
+	// Use an already-cancelled context to trigger timeout error
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	// Shutdown should log error but still complete
+	// Error will be from http.Server shutdown, not the aggregator
+	// The aggregator error is logged but not returned
+	_ = srv.Shutdown(ctx)
+}
+
+// mockCacheStatsStore implements proxy.CacheStatsStore for testing
+type mockCacheStatsStore struct {
+	calls []map[string]int
+}
+
+func (m *mockCacheStatsStore) IncrementCacheHitCountBatch(ctx context.Context, deltas map[string]int) error {
+	m.calls = append(m.calls, deltas)
+	return nil
+}
+
 // mockEventBus implements the eventbus.EventBus interface for testing
 type mockEventBus struct{}
 

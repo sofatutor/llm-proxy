@@ -162,6 +162,8 @@ const (
 	ctxKeyRequestID contextKey = "request_id"
 	// ctxKeyProjectID is the context key for the project ID
 	ctxKeyProjectID contextKey = "project_id"
+	// ctxKeyTokenID is the context key for the token ID (used for cache stats)
+	ctxKeyTokenID contextKey = "token_id"
 	// ctxKeyLogger is the context key for a request-scoped logger
 	ctxKeyLogger contextKey = "logger"
 	// ctxKeyOriginalPath stores the original request path before proxy rewriting
