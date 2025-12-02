@@ -118,7 +118,6 @@ func getMigrationsPath() (string, error) {
 	relPath := "internal/database/migrations/sql"
 	triedPaths = append(triedPaths, relPath)
 	if _, err := os.Stat(relPath); err == nil {
-		fmt.Printf("[migrations] Found migrations directory using relative path: %s\n", relPath)
 		return relPath, nil
 	}
 
@@ -131,7 +130,6 @@ func getMigrationsPath() (string, error) {
 		sourceRelPath := filepath.Join(sourceDir, "migrations", "sql")
 		triedPaths = append(triedPaths, sourceRelPath)
 		if _, err := os.Stat(sourceRelPath); err == nil {
-			fmt.Printf("[migrations] Found migrations directory using source-relative path: %s\n", sourceRelPath)
 			return sourceRelPath, nil
 		}
 	}
@@ -144,14 +142,12 @@ func getMigrationsPath() (string, error) {
 		execRelPath := filepath.Join(execDir, "internal/database/migrations/sql")
 		triedPaths = append(triedPaths, execRelPath)
 		if _, err := os.Stat(execRelPath); err == nil {
-			fmt.Printf("[migrations] Found migrations directory using executable-relative path: %s\n", execRelPath)
 			return execRelPath, nil
 		}
 		// Try relative to executable's parent (if executable is in bin/)
 		binRelPath := filepath.Join(filepath.Dir(execDir), "internal/database/migrations/sql")
 		triedPaths = append(triedPaths, binRelPath)
 		if _, err := os.Stat(binRelPath); err == nil {
-			fmt.Printf("[migrations] Found migrations directory using executable parent path: %s\n", binRelPath)
 			return binRelPath, nil
 		}
 	}
