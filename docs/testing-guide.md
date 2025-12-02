@@ -108,6 +108,57 @@ func TestTokenManager_Integration(t *testing.T) {
 }
 ```
 
+### 2a. PostgreSQL Integration Tests
+
+**Purpose**: Test database operations against a real PostgreSQL instance
+
+**Location**: `internal/database/*_integration_test.go` with build tags `//go:build postgres && integration`
+
+**Prerequisites**:
+- Docker and Docker Compose installed
+- PostgreSQL container running
+
+**Running PostgreSQL Tests**:
+```bash
+# Full integration test run (starts PostgreSQL, runs tests, stops)
+./scripts/run-postgres-integration.sh
+
+# Start PostgreSQL and keep running
+./scripts/run-postgres-integration.sh start
+
+# Run tests only (assumes PostgreSQL is running)
+./scripts/run-postgres-integration.sh test
+
+# Stop and clean up
+./scripts/run-postgres-integration.sh teardown
+```
+
+**Manual Test Run**:
+```bash
+# Start PostgreSQL with Docker Compose
+docker compose --profile postgres up -d postgres
+
+# Wait for PostgreSQL to be ready
+docker compose --profile postgres exec postgres pg_isready -U llmproxy -d llmproxy
+
+# Run tests with postgres and integration tags
+export TEST_POSTGRES_URL="postgres://llmproxy:secret@localhost:5432/llmproxy?sslmode=disable"
+go test -v -race -tags=postgres,integration ./internal/database/...
+
+# Clean up
+docker compose --profile postgres down -v
+```
+
+**Test Coverage**:
+PostgreSQL integration tests cover:
+- Migration application and rollback
+- Project CRUD operations
+- Token CRUD operations
+- Audit event storage and retrieval
+- Concurrent database operations
+- Connection pool behavior
+- Transaction rollback on failure
+
 ### 3. End-to-End (E2E) Tests
 
 **Purpose**: Test complete user flows and system behavior
