@@ -54,14 +54,15 @@ func (s *SecureTokenStore) CreateToken(ctx context.Context, td token.TokenData) 
 func (s *SecureTokenStore) UpdateToken(ctx context.Context, td token.TokenData) error {
 	// Hash the token value if it's not already a SHA-256 hex string (64 hex chars)
 	// Validate both length and hex content to avoid skipping plaintext 64-char tokens
-	if len(td.Token) != 64 || !isHexString(td.Token) {
+	if len(td.Token) != 64 || !IsHexString(td.Token) {
 		td.Token = s.hasher.CreateLookupKey(td.Token)
 	}
 	return s.store.UpdateToken(ctx, td)
 }
 
-// isHexString checks if a string contains only hexadecimal characters.
-func isHexString(s string) bool {
+// IsHexString checks if a string contains only hexadecimal characters.
+// Exported for use by migration tools and other packages.
+func IsHexString(s string) bool {
 	for _, c := range s {
 		isDigit := c >= '0' && c <= '9'
 		isLowerHex := c >= 'a' && c <= 'f'
