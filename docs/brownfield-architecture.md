@@ -62,14 +62,14 @@ This document captures the brownfield reality of the LLM Proxy project as it exi
 |----------|------------|---------|---------------------|
 | Language | Go | 1.23.9 | Must use 1.23+ for latest features |
 | Database (Dev) | SQLite | 3.x | Via `mattn/go-sqlite3`, default for MVP |
-| Database (Prod) | PostgreSQL | 13+ | **PLANNED, not yet implemented** |
+| Database (Prod) | PostgreSQL | 13+ | Planned, migration system ready |
 | Cache Backend | Redis | 7.x | Optional, in-memory fallback available |
 | HTTP Framework | Gin | 1.10.1 | Used ONLY for admin UI, not proxy |
 | Logging | Zap | 1.27.0 | Structured logging, app-level only |
 | Testing | Testify | 1.10.0 | Mock generation and assertions |
 
 **IMPORTANT CONSTRAINTS**:
-- SQLite is the ONLY production-ready database today (PostgreSQL support is planned but not implemented)
+- SQLite is the default database; PostgreSQL support planned (migration system ready via goose)
 - Redis is optional - system works without it (in-memory fallback)
 - Gin is isolated to admin UI - proxy uses standard `net/http`
 
@@ -218,9 +218,9 @@ llm-proxy/
 **Implementation**: `internal/database/` (19 files)
 
 **Actual State**:
-- **SQLite ONLY** - PostgreSQL support is planned but NOT implemented
-- Schema defined in both `scripts/schema.sql` **and** Go-based migrations in `internal/database/database.go`
-- No automated migration system - schema changes are applied manually via SQL and/or Go code migrations
+- **SQLite** is the default; PostgreSQL support planned
+- **Goose migration system** implemented - migrations in `migrations/` folder
+- Schema managed via SQL migrations (goose up/down)
 - Connection pooling: SQLite default (1 connection)
 
 **Critical Tables**:
@@ -231,9 +231,6 @@ llm-proxy/
 - `audit_events`: id, timestamp, action, actor, project_id, token_id, request_id, client_ip, result, details (JSON)
 
 **Known Issues & Workarounds**:
-- **No Migrations**: Schema changes require manual SQL updates
-  - **Workaround**: Document schema changes in PLAN.md, apply manually
-  - **Future**: Proper migration system (not implemented)
 - **SQLite Concurrency**: SQLite has limited write concurrency
   - **Limitation**: High-write workloads may hit bottlenecks
   - **Workaround**: PostgreSQL planned but not implemented
@@ -322,11 +319,11 @@ llm-proxy/
 
 ### Critical Technical Debt (Must Fix Before Production)
 
-#### 1. PostgreSQL Support Not Implemented
-- **Status**: Planned in PLAN.md, not implemented
+#### 1. PostgreSQL Support Not Yet Enabled
+- **Status**: Migration system ready (goose), PostgreSQL driver pending
 - **Impact**: SQLite has concurrency limitations for high-write workloads
-- **Workaround**: Use SQLite for MVP, plan migration path
-- **Effort**: 2-3 weeks (schema, migrations, testing)
+- **Workaround**: Use SQLite for MVP; PostgreSQL enablement is straightforward
+- **Effort**: 1 week (driver integration, testing)
 
 #### 2. Distributed Rate Limiting Not Implemented
 - **Status**: Mentioned in PLAN.md, not implemented
@@ -334,11 +331,10 @@ llm-proxy/
 - **Workaround**: Deploy single instance or use sticky sessions
 - **Effort**: 1-2 weeks (Redis-backed counters, testing)
 
-#### 3. No Database Migration System
-- **Status**: Schema changes require manual SQL
-- **Impact**: Error-prone, no rollback, hard to track changes
-- **Workaround**: Document schema changes in PLAN.md
-- **Effort**: 1 week (migration tool, initial migrations)
+#### 3. ~~No Database Migration System~~ ✅ RESOLVED
+- **Status**: Goose migration system implemented (epic-109)
+- **Location**: `migrations/` folder with SQL migrations
+- **Commands**: `llm-proxy migrate up/down/status`
 
 ### Important Technical Debt (Should Fix Soon)
 
@@ -733,16 +729,18 @@ go test -v -run TestTokenValidator_ValidateToken ./internal/token/
 - ✅ Docker deployment
 
 **In Progress**:
-- 🔄 PostgreSQL support (planned, not implemented)
+- 🔄 PostgreSQL support (migration system ready, driver pending)
 - 🔄 Documentation improvements (this document!)
 - 🔄 Production deployment guides (AWS ECS, Kubernetes)
 
 **Not Started**:
-- ❌ Database migration system
 - ❌ Distributed rate limiting
 - ❌ Cache invalidation API
 - ❌ Automatic HTTPS
 - ❌ Durable event queue
+
+**Completed** (Phase 6):
+- ✅ Database migration system (goose)
 
 ### Phase 7: Production & Post-Production (Planned)
 
@@ -896,5 +894,5 @@ llm-proxy admin --management-token $MANAGEMENT_TOKEN
 - Performance characteristics change significantly
 - New constraints or limitations are discovered
 
-**Last Updated**: November 11, 2025 by AI Documentation Agent
+**Last Updated**: December 2, 2025 (migration system update)
 

@@ -2,7 +2,7 @@
 
 **GitHub Issue**: [#109](https://github.com/sofatutor/llm-proxy/issues/109)  
 **Priority**: 🔴 **Critical** (Priority 1)  
-**Status**: In Progress  
+**Status**: ✅ Complete  
 **Created**: 2025-11-11
 
 ---
@@ -247,7 +247,7 @@ Gate: **PASS** → `docs/qa/gates/109.1.2-schema-migration-implementation.yml`
 
 ### Story 1.3: CLI Integration and Documentation
 **GitHub Issue**: [#145](https://github.com/sofatutor/llm-proxy/issues/145)  
-**Status**: Ready (unblocked - Story 1.2 complete)  
+**Status**: ✅ **COMPLETE**  
 **Estimated Effort**: 1-2 days
 
 **Description**: Integrate migration runner with CLI commands and create comprehensive documentation.
