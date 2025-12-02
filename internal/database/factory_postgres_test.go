@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestNewFromConfig_PostgresMissingURL_WithPostgresTag tests that when PostgreSQL
+// TestNewFromConfig_PostgresMissingURL tests that when PostgreSQL
 // support is compiled in but the DATABASE_URL is not provided, we get a proper error.
-func TestNewFromConfig_PostgresMissingURL_WithPostgresTag(t *testing.T) {
+func TestNewFromConfig_PostgresMissingURL(t *testing.T) {
 	config := FullConfig{
 		Driver:      DriverPostgres,
 		DatabaseURL: "",
@@ -22,9 +22,9 @@ func TestNewFromConfig_PostgresMissingURL_WithPostgresTag(t *testing.T) {
 	assert.Contains(t, err.Error(), "DATABASE_URL is required")
 }
 
-// TestNewFromConfig_PostgresInvalidURL_WithPostgresTag tests that when PostgreSQL
+// TestNewFromConfig_PostgresInvalidURL tests that when PostgreSQL
 // support is compiled in but the DATABASE_URL is invalid, we get a connection error.
-func TestNewFromConfig_PostgresInvalidURL_WithPostgresTag(t *testing.T) {
+func TestNewFromConfig_PostgresInvalidURL(t *testing.T) {
 	config := FullConfig{
 		Driver:      DriverPostgres,
 		DatabaseURL: "invalid-not-a-url",
