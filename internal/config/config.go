@@ -64,6 +64,13 @@ type Config struct {
 	GlobalRateLimit int // Maximum requests per minute globally
 	IPRateLimit     int // Maximum requests per minute per IP
 
+	// Distributed rate limiting
+	DistributedRateLimitEnabled  bool          // Enable Redis-backed distributed rate limiting
+	DistributedRateLimitPrefix   string        // Redis key prefix for rate limit counters
+	DistributedRateLimitWindow   time.Duration // Sliding window duration for rate limiting
+	DistributedRateLimitMax      int           // Maximum requests per window
+	DistributedRateLimitFallback bool          // Enable fallback to in-memory when Redis unavailable
+
 	// Monitoring
 	EnableMetrics bool   // Whether to enable a lightweight metrics endpoint (provider-agnostic)
 	MetricsPath   string // Path for metrics endpoint
@@ -154,6 +161,13 @@ func New() (*Config, error) {
 		// Rate limiting defaults
 		GlobalRateLimit: getEnvInt("GLOBAL_RATE_LIMIT", 100),
 		IPRateLimit:     getEnvInt("IP_RATE_LIMIT", 30),
+
+		// Distributed rate limiting defaults
+		DistributedRateLimitEnabled:  getEnvBool("DISTRIBUTED_RATE_LIMIT_ENABLED", false),
+		DistributedRateLimitPrefix:   getEnvString("DISTRIBUTED_RATE_LIMIT_PREFIX", "ratelimit:"),
+		DistributedRateLimitWindow:   getEnvDuration("DISTRIBUTED_RATE_LIMIT_WINDOW", time.Minute),
+		DistributedRateLimitMax:      getEnvInt("DISTRIBUTED_RATE_LIMIT_MAX", 60),
+		DistributedRateLimitFallback: getEnvBool("DISTRIBUTED_RATE_LIMIT_FALLBACK", true),
 
 		// Monitoring defaults
 		EnableMetrics: getEnvBool("ENABLE_METRICS", true),
@@ -311,6 +325,13 @@ func DefaultConfig() *Config {
 		// Rate limiting defaults
 		GlobalRateLimit: 100,
 		IPRateLimit:     30,
+
+		// Distributed rate limiting defaults
+		DistributedRateLimitEnabled:  false,
+		DistributedRateLimitPrefix:   "ratelimit:",
+		DistributedRateLimitWindow:   time.Minute,
+		DistributedRateLimitMax:      60,
+		DistributedRateLimitFallback: true,
 
 		// Monitoring defaults
 		EnableMetrics: true,
