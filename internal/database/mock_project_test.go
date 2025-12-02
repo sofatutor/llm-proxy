@@ -95,3 +95,30 @@ func TestMockProjectStore_GetAPIKeyForProject(t *testing.T) {
 	_, err = store.GetAPIKeyForProject(ctx, "notfound")
 	assert.Error(t, err)
 }
+
+func TestMockProjectStore_GetProjectActive(t *testing.T) {
+	store := NewMockProjectStore()
+	ctx := context.Background()
+
+	// Create an active project
+	err := store.CreateProject(ctx, proxy.Project{ID: "p1", Name: "Active Project", OpenAIAPIKey: "k1", IsActive: true})
+	assert.NoError(t, err)
+
+	// Create an inactive project
+	err = store.CreateProject(ctx, proxy.Project{ID: "p2", Name: "Inactive Project", OpenAIAPIKey: "k2", IsActive: false})
+	assert.NoError(t, err)
+
+	// Test GetProjectActive for active project
+	active, err := store.GetProjectActive(ctx, "p1")
+	assert.NoError(t, err)
+	assert.True(t, active)
+
+	// Test GetProjectActive for inactive project
+	active, err = store.GetProjectActive(ctx, "p2")
+	assert.NoError(t, err)
+	assert.False(t, active)
+
+	// Test GetProjectActive for non-existent project
+	_, err = store.GetProjectActive(ctx, "notfound")
+	assert.Error(t, err)
+}

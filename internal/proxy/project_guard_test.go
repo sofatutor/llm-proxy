@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"go.uber.org/zap"
 )
 
 // MockProjectActiveChecker is a mock for the ProjectActiveChecker interface
@@ -137,4 +138,70 @@ func TestProjectActiveGuardMiddleware_MissingProjectID(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
 	assert.False(t, handlerCalled)
 	assert.Contains(t, rr.Body.String(), "missing project ID")
+}
+
+func TestGetLoggerFromContext(t *testing.T) {
+	t.Run("logger present in context", func(t *testing.T) {
+		// Create a test logger
+		logger, _ := zap.NewDevelopment()
+		ctx := context.WithValue(context.Background(), ctxKeyLogger, logger)
+
+		// Should return the logger from context
+		result := getLoggerFromContext(ctx)
+		assert.NotNil(t, result)
+		assert.Equal(t, logger, result)
+	})
+
+	t.Run("no logger in context", func(t *testing.T) {
+		ctx := context.Background()
+
+		// Should return nil when no logger in context
+		result := getLoggerFromContext(ctx)
+		assert.Nil(t, result)
+	})
+
+	t.Run("wrong type in context", func(t *testing.T) {
+		// Put wrong type in context at logger key
+		ctx := context.WithValue(context.Background(), ctxKeyLogger, "not a logger")
+
+		// Should return nil when value is wrong type
+		result := getLoggerFromContext(ctx)
+		assert.Nil(t, result)
+	})
+}
+
+func TestWriteErrorResponse(t *testing.T) {
+	t.Run("successful write", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		errorResp := ErrorResponse{
+			Error: "Test error message",
+			Code:  "test_code",
+		}
+
+		writeErrorResponse(rr, http.StatusBadRequest, errorResp)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+		assert.Contains(t, rr.Body.String(), "Test error message")
+		assert.Contains(t, rr.Body.String(), "test_code")
+	})
+
+	t.Run("different status codes", func(t *testing.T) {
+		codes := []int{
+			http.StatusForbidden,
+			http.StatusInternalServerError,
+			http.StatusServiceUnavailable,
+		}
+
+		for _, code := range codes {
+			rr := httptest.NewRecorder()
+			errorResp := ErrorResponse{
+				Error: "Error message",
+				Code:  "error_code",
+			}
+
+			writeErrorResponse(rr, code, errorResp)
+			assert.Equal(t, code, rr.Code)
+		}
+	})
 }

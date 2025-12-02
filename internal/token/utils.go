@@ -191,7 +191,7 @@ type TokenInfo struct {
 }
 
 // GetTokenInfo creates a TokenInfo struct with token details
-func GetTokenInfo(token TokenData) (TokenInfo, error) {
+func GetTokenInfo(token TokenData) TokenInfo {
 	// Use the canonical creation time from the database
 	// Note: UUIDv7 embeds a timestamp, but the library does not expose it; CreatedAt is the source of truth
 	creationTime := token.CreatedAt
@@ -214,15 +214,12 @@ func GetTokenInfo(token TokenData) (TokenInfo, error) {
 		info.TimeRemaining = formatDuration(duration)
 	}
 
-	return info, nil
+	return info
 }
 
 // FormatTokenInfo formats token information as a human-readable string
 func FormatTokenInfo(token TokenData) string {
-	info, err := GetTokenInfo(token)
-	if err != nil {
-		return "Error retrieving token info"
-	}
+	info := GetTokenInfo(token)
 
 	var sb strings.Builder
 	sb.WriteString("Token: " + info.ObfuscatedToken + "\n")

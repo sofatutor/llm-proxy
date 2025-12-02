@@ -227,3 +227,26 @@ func TestMockTokenStore_CallEdgeCases(t *testing.T) {
 	// Call the edge cases test function to ensure it's covered
 	TestMockTokenStore_EdgeCases(t)
 }
+
+func TestTokenStoreAdapter_ErrorPaths(t *testing.T) {
+	t.Run("GetTokenByID generic error", func(t *testing.T) {
+		// Create an adapter with a mock store that returns a generic error
+		store := NewMockTokenStore()
+		adapter := NewTokenStoreAdapter(store)
+		ctx := context.Background()
+
+		// Non-existent token returns ErrTokenNotFound which maps to token.ErrTokenNotFound
+		_, err := adapter.GetTokenByID(ctx, "nonexistent")
+		assert.ErrorIs(t, err, token.ErrTokenNotFound)
+	})
+
+	t.Run("IncrementTokenUsage generic error", func(t *testing.T) {
+		store := NewMockTokenStore()
+		adapter := NewTokenStoreAdapter(store)
+		ctx := context.Background()
+
+		// Non-existent token returns ErrTokenNotFound which maps to token.ErrTokenNotFound
+		err := adapter.IncrementTokenUsage(ctx, "nonexistent")
+		assert.ErrorIs(t, err, token.ErrTokenNotFound)
+	})
+}

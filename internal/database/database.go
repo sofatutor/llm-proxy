@@ -9,9 +9,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
+	"github.com/sofatutor/llm-proxy/internal/database/migrations"
 )
 
 // DB represents the database connection.
@@ -72,10 +74,10 @@ func New(config Config) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Initialize database (create tables, indexes)
-	if err := initDatabase(db); err != nil {
+	// Run database migrations
+	if err := runMigrations(db); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("failed to initialize database: %w", err)
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	return &DB{db: db}, nil
@@ -103,125 +105,75 @@ func ensureDirExists(dir string) error {
 	return nil
 }
 
-// initDatabase initializes the database with the necessary schema.
-func initDatabase(db *sql.DB) error {
-	// Create tables and indexes if they don't exist
-	_, err := db.Exec(`
-	-- Projects table
-	CREATE TABLE IF NOT EXISTS projects (
-		id TEXT PRIMARY KEY,
-		name TEXT NOT NULL UNIQUE,
-		openai_api_key TEXT NOT NULL,
-		is_active BOOLEAN NOT NULL DEFAULT 1,
-		deactivated_at DATETIME,
-		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-	);
+// getMigrationsPath returns the path to the migrations directory.
+// It tries multiple strategies to locate the migrations:
+// 1. Relative path from current working directory (for development)
+// 2. Path relative to this source file (for tests)
+// 3. Relative path from executable location (for production)
+// Debug logging is included to help diagnose path resolution issues in production.
+func getMigrationsPath() (string, error) {
+	var triedPaths []string
 
-	-- Create index on project name
-	CREATE INDEX IF NOT EXISTS idx_projects_name ON projects(name);
-
-	-- Tokens table
-	CREATE TABLE IF NOT EXISTS tokens (
-		token TEXT PRIMARY KEY,
-		project_id TEXT NOT NULL,
-		expires_at DATETIME,
-		is_active BOOLEAN NOT NULL DEFAULT 1,
-		deactivated_at DATETIME,
-		request_count INTEGER NOT NULL DEFAULT 0,
-		max_requests INTEGER,
-		created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		last_used_at DATETIME,
-		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
-	);
-
-	-- Create indexes on tokens
-	CREATE INDEX IF NOT EXISTS idx_tokens_project_id ON tokens(project_id);
-	CREATE INDEX IF NOT EXISTS idx_tokens_expires_at ON tokens(expires_at);
-	CREATE INDEX IF NOT EXISTS idx_tokens_is_active ON tokens(is_active);
-
-	-- Audit events table for security logging and firewall rule derivation
-	CREATE TABLE IF NOT EXISTS audit_events (
-		id TEXT PRIMARY KEY,
-		timestamp DATETIME NOT NULL,
-		action TEXT NOT NULL,
-		actor TEXT NOT NULL,
-		project_id TEXT,
-		request_id TEXT,
-		correlation_id TEXT,
-		client_ip TEXT,
-		method TEXT,
-		path TEXT,
-		user_agent TEXT,
-		outcome TEXT NOT NULL CHECK (outcome IN ('success', 'failure')),
-		reason TEXT,
-		token_id TEXT,
-		metadata TEXT
-	);
-
-	-- Create indexes on audit events for performance and firewall rule queries
-	CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_events(timestamp);
-	CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_events(action);
-	CREATE INDEX IF NOT EXISTS idx_audit_project_id ON audit_events(project_id);
-	CREATE INDEX IF NOT EXISTS idx_audit_client_ip ON audit_events(client_ip);
-	CREATE INDEX IF NOT EXISTS idx_audit_request_id ON audit_events(request_id);
-	CREATE INDEX IF NOT EXISTS idx_audit_outcome ON audit_events(outcome);
-	CREATE INDEX IF NOT EXISTS idx_audit_ip_action ON audit_events(client_ip, action);
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create schema: %w", err)
+	// Try relative path from current working directory first (development)
+	relPath := "internal/database/migrations/sql"
+	triedPaths = append(triedPaths, relPath)
+	if _, err := os.Stat(relPath); err == nil {
+		return relPath, nil
 	}
 
-	// Apply schema migrations for existing databases
-	if err := applyMigrations(db); err != nil {
+	// Try path relative to this source file (for tests)
+	_, filename, _, ok := runtime.Caller(0)
+	if ok {
+		// Get directory of this file (database.go)
+		sourceDir := filepath.Dir(filename)
+		// migrations/sql is sibling to database package
+		sourceRelPath := filepath.Join(sourceDir, "migrations", "sql")
+		triedPaths = append(triedPaths, sourceRelPath)
+		if _, err := os.Stat(sourceRelPath); err == nil {
+			return sourceRelPath, nil
+		}
+	}
+
+	// Try to get path relative to executable
+	execPath, err := os.Executable()
+	if err == nil {
+		execDir := filepath.Dir(execPath)
+		// Try relative to executable directory
+		execRelPath := filepath.Join(execDir, "internal/database/migrations/sql")
+		triedPaths = append(triedPaths, execRelPath)
+		if _, err := os.Stat(execRelPath); err == nil {
+			return execRelPath, nil
+		}
+		// Try relative to executable's parent (if executable is in bin/)
+		binRelPath := filepath.Join(filepath.Dir(execDir), "internal/database/migrations/sql")
+		triedPaths = append(triedPaths, binRelPath)
+		if _, err := os.Stat(binRelPath); err == nil {
+			return binRelPath, nil
+		}
+	}
+
+	return "", fmt.Errorf("migrations directory not found: tried paths %v", triedPaths)
+}
+
+// runMigrations runs database migrations using the migration runner.
+func runMigrations(db *sql.DB) error {
+	migrationsPath, err := getMigrationsPath()
+	if err != nil {
+		return fmt.Errorf("failed to get migrations path: %w", err)
+	}
+
+	runner := migrations.NewMigrationRunner(db, migrationsPath)
+	if err := runner.Up(); err != nil {
 		return fmt.Errorf("failed to apply migrations: %w", err)
 	}
 
 	return nil
 }
 
-// applyMigrations applies database schema changes for existing databases
-func applyMigrations(db *sql.DB) error {
-	// Add is_active and deactivated_at columns to projects table if they don't exist
-	err := addColumnIfNotExists(db, "projects", "is_active", "BOOLEAN NOT NULL DEFAULT 1")
-	if err != nil {
-		return fmt.Errorf("failed to add is_active column to projects: %w", err)
-	}
-
-	err = addColumnIfNotExists(db, "projects", "deactivated_at", "DATETIME")
-	if err != nil {
-		return fmt.Errorf("failed to add deactivated_at column to projects: %w", err)
-	}
-
-	// Add deactivated_at column to tokens table if it doesn't exist
-	err = addColumnIfNotExists(db, "tokens", "deactivated_at", "DATETIME")
-	if err != nil {
-		return fmt.Errorf("failed to add deactivated_at column to tokens: %w", err)
-	}
-
-	return nil
-}
-
-// addColumnIfNotExists adds a column to a table if it doesn't already exist
-func addColumnIfNotExists(db *sql.DB, tableName, columnName, columnType string) error {
-	// Check if column exists
-	query := `SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`
-	var count int
-	err := db.QueryRow(query, tableName, columnName).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("failed to check if column exists: %w", err)
-	}
-
-	// Add column if it doesn't exist
-	if count == 0 {
-		alterQuery := fmt.Sprintf("ALTER TABLE \"%s\" ADD COLUMN \"%s\" %s", tableName, columnName, columnType)
-		_, err = db.Exec(alterQuery)
-		if err != nil {
-			return fmt.Errorf("failed to add column %s to table %s: %w", columnName, tableName, err)
-		}
-	}
-
-	return nil
+// initDatabase is deprecated. Use runMigrations instead.
+// Kept for backward compatibility with DBInitForTests.
+func initDatabase(db *sql.DB) error {
+	return runMigrations(db)
 }
 
 // DBInitForTests is a helper to ensure schema exists in tests. No-op if db is nil.

@@ -4,7 +4,6 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main ]
 
 jobs:
   test:
@@ -25,6 +24,33 @@ jobs:
       
       - name: Install dependencies
         run: go mod download
+      
+      - name: Validate migrations
+        if: matrix.test-type == 'unit'
+        run: |
+          echo "Validating migration files..."
+          # Check that migration files exist and are valid SQL
+          if [ ! -d "internal/database/migrations/sql" ]; then
+            echo "::error::Migrations directory not found"
+            exit 1
+          fi
+          
+          # Build the binary once (faster than go run)
+          echo "Building proxy binary..."
+          go build -o llm-proxy ./cmd/proxy
+          
+          # Test migrations can be applied to clean database
+          echo "Testing migration application..."
+          TEST_DB="test_migrations.db"
+          ./llm-proxy migrate up --db "$TEST_DB" || exit 1
+          
+          # Test migrations can be rolled back
+          echo "Testing migration rollback..."
+          ./llm-proxy migrate down --db "$TEST_DB" || exit 1
+          
+          # Clean up
+          rm -f "$TEST_DB" llm-proxy
+          echo "✅ Migrations validated successfully"
       
       - name: Run unit tests
         if: matrix.test-type == 'unit'
