@@ -278,27 +278,38 @@ flowchart LR
 
 ## CDK Stack Structure
 
+### Single Stack Architecture (Recommended)
+
+For simplicity, all resources are deployed in a **single stack**. This makes deployment straightforward (`cdk deploy`) and avoids cross-stack reference complexity.
+
 ```mermaid
 flowchart TD
-    VPC["VpcStack<br/>(or import existing)"]
-    Secrets["SecretsStack"]
-    Data["DataStack"]
-    ECS["EcsStack"]
-    ALB["AlbStack"]
-    Obs["ObservabilityStack"]
+    subgraph LlmProxyStack["LlmProxyStack (Single Stack)"]
+        VPC["VPC / Import Existing"]
+        Secrets["Secrets Manager + SSM"]
+        Aurora["Aurora PostgreSQL"]
+        Redis["ElastiCache Redis"]
+        ECS["ECS Fargate Services"]
+        ALB["ALB + ACM"]
+        CW["CloudWatch"]
+    end
     
-    VPC --> Data
-    VPC --> Secrets
-    Data --> ECS
-    Secrets --> ECS
+    VPC --> Aurora
+    VPC --> Redis
+    VPC --> ECS
     VPC --> ALB
+    Secrets --> ECS
+    Aurora --> ECS
+    Redis --> ECS
     ECS --> ALB
-    ECS --> Obs
-    
-    style VPC fill:#f9f,stroke:#333
-    style Data fill:#bbf,stroke:#333
-    style ECS fill:#fbb,stroke:#333
+    ECS --> CW
 ```
+
+**Benefits of Single Stack:**
+- ✅ One command deployment: `cdk deploy`
+- ✅ No cross-stack references to manage
+- ✅ Simpler rollback and updates
+- ✅ Easier to understand and maintain
 
 ### Directory Layout
 
@@ -307,13 +318,11 @@ infra/
 ├── bin/
 │   └── app.ts              # CDK app entry point
 ├── lib/
-│   ├── stacks/
-│   │   ├── vpc-stack.ts
-│   │   ├── secrets-stack.ts
-│   │   ├── data-stack.ts
-│   │   ├── ecs-stack.ts
-│   │   ├── alb-stack.ts
-│   │   └── observability-stack.ts
+│   ├── llm-proxy-stack.ts  # Single stack with all resources
+│   ├── constructs/
+│   │   ├── database.ts     # Aurora construct
+│   │   ├── cache.ts        # Redis construct
+│   │   └── service.ts      # ECS service construct
 │   └── config/
 │       └── types.ts        # Configuration props interface
 ├── cdk.json
@@ -382,25 +391,100 @@ pie title Monthly Cost Distribution
 
 ---
 
-## Deployment Flow
+## Deployment Strategy
+
+### Separation of Concerns
+
+| Deployment Type | Method | Trigger |
+|-----------------|--------|---------|
+| **Application** | GitHub Actions → ECR → ECS | On merge to `main` |
+| **Infrastructure** | `cdk deploy` (manual) | When architecture changes |
+
+### Application Deployment (Automated)
 
 ```mermaid
 sequenceDiagram
     participant Dev as Developer
     participant GH as GitHub Actions
     participant ECR as ECR
-    participant CDK as CDK Deploy
     participant ECS as ECS Service
     
     Dev->>GH: Push to main
     GH->>GH: Run tests
     GH->>ECR: Build & push Docker image
-    GH->>CDK: cdk diff
-    GH->>CDK: cdk deploy
-    CDK->>ECS: Update service
+    GH->>ECS: Force new deployment
     ECS->>ECS: Rolling deployment
     Note over ECS: Blue/green with<br/>circuit breaker rollback
 ```
+
+**GitHub Actions Workflow:**
+
+```yaml
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: eu-central-1
+      
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Build and push
+        run: |
+          docker build -t $ECR_REPO:${{ github.sha }} -t $ECR_REPO:latest .
+          docker push $ECR_REPO:${{ github.sha }}
+          docker push $ECR_REPO:latest
+      
+      - name: Deploy to ECS
+        run: |
+          aws ecs update-service \
+            --cluster llm-proxy \
+            --service proxy \
+            --force-new-deployment
+          
+          aws ecs update-service \
+            --cluster llm-proxy \
+            --service dispatcher \
+            --force-new-deployment
+```
+
+### Infrastructure Deployment (Manual)
+
+Infrastructure changes via CDK are done manually:
+
+```bash
+cd infra
+
+# Preview changes
+cdk diff
+
+# Deploy (when ready)
+cdk deploy
+```
+
+**When to run `cdk deploy`:**
+- Adding/removing AWS resources
+- Changing instance sizes, scaling policies
+- Updating security groups, IAM policies
+- Modifying VPC, subnets, routing
+
+**Why manual?**
+- Infrastructure changes are infrequent
+- Require review before applying
+- Avoid accidental changes to production
+- CDK can be destructive (e.g., database replacement)
 
 ---
 
