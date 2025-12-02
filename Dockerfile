@@ -26,7 +26,7 @@ RUN --mount=type=cache,target=/var/cache/apk apk add gcc musl-dev sqlite-dev
 ENV CGO_ENABLED=1
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    GOMODCACHE=/go/pkg/mod \
+    export GOMODCACHE=/go/pkg/mod && \
     if [ "$POSTGRES_SUPPORT" = "true" ]; then \
         echo "Building with PostgreSQL support..." && \
         go build -tags=postgres -ldflags "-w" -trimpath -o /llm-proxy ./cmd/proxy; \
