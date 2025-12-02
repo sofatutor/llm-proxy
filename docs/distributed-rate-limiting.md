@@ -141,7 +141,8 @@ err := limiter.CheckRedisHealth(ctx)
 
 Monitor these Redis keys to understand rate limiting behavior:
 
-- Count of rate limit keys: `KEYS ratelimit:*`
+- Count of rate limit keys: `SCAN 0 MATCH ratelimit:* COUNT 100`  
+  _(Use `SCAN` for production monitoring; `KEYS` is blocking and only safe for development/debugging.)_
 - Current count for a token: `GET ratelimit:{tokenID}:{windowStart}`
 
 ### Health Checks

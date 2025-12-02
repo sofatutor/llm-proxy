@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -22,7 +23,8 @@ type RedisRateLimitClient interface {
 	Set(ctx context.Context, key, value string) error
 	// Expire sets a TTL on a key
 	Expire(ctx context.Context, key string, expiration time.Duration) error
-	// SetNX sets a key only if it doesn't exist (for distributed locking)
+	// SetNX sets a key only if it doesn't exist.
+	// Included for interface compatibility with eventbus.RedisClient and potential future enhancements.
 	SetNX(ctx context.Context, key string, value string, expiration time.Duration) (bool, error)
 	// Del deletes a key
 	Del(ctx context.Context, key string) error
@@ -149,8 +151,7 @@ func (r *RedisRateLimiter) Allow(ctx context.Context, tokenID string) (bool, err
 	if count == 1 {
 		// Set TTL slightly longer than window to handle edge cases
 		ttl := windowDuration + time.Second
-		// Ignore expire errors - key will be orphaned but Redis will eventually clean it up
-		// In production, this should be logged
+		// Ignore expire errors for graceful degradation; orphaned keys will be cleaned up by Redis eventually.
 		_ = r.client.Expire(ctx, key, ttl)
 	}
 
@@ -215,13 +216,10 @@ func (r *RedisRateLimiter) GetRemainingRequests(ctx context.Context, tokenID str
 		return maxRequests, nil
 	}
 
-	// Parse count
-	var count int
-	if countStr != "" {
-		_, parseErr := fmt.Sscanf(countStr, "%d", &count)
-		if parseErr != nil {
-			count = 0
-		}
+	// Parse count using strconv.Atoi for idiomatic integer parsing
+	count, parseErr := strconv.Atoi(countStr)
+	if parseErr != nil {
+		count = 0
 	}
 
 	remaining := maxRequests - count

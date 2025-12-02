@@ -592,7 +592,7 @@ func TestConfig_DistributedRateLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
-	if config.DistributedRateLimitEnabled != true {
+	if !config.DistributedRateLimitEnabled {
 		t.Errorf("Expected DistributedRateLimitEnabled to be true, got %v", config.DistributedRateLimitEnabled)
 	}
 	if config.DistributedRateLimitPrefix != "myapp:ratelimit:" {
@@ -604,7 +604,7 @@ func TestConfig_DistributedRateLimit(t *testing.T) {
 	if config.DistributedRateLimitMax != 100 {
 		t.Errorf("Expected DistributedRateLimitMax to be 100, got %d", config.DistributedRateLimitMax)
 	}
-	if config.DistributedRateLimitFallback != false {
+	if config.DistributedRateLimitFallback {
 		t.Errorf("Expected DistributedRateLimitFallback to be false, got %v", config.DistributedRateLimitFallback)
 	}
 }
@@ -612,7 +612,7 @@ func TestConfig_DistributedRateLimit(t *testing.T) {
 func TestConfig_DistributedRateLimitDefaults(t *testing.T) {
 	// Test defaults for distributed rate limiting
 	config := DefaultConfig()
-	if config.DistributedRateLimitEnabled != false {
+	if config.DistributedRateLimitEnabled {
 		t.Errorf("Expected DistributedRateLimitEnabled to be false, got %v", config.DistributedRateLimitEnabled)
 	}
 	if config.DistributedRateLimitPrefix != "ratelimit:" {
@@ -624,7 +624,7 @@ func TestConfig_DistributedRateLimitDefaults(t *testing.T) {
 	if config.DistributedRateLimitMax != 60 {
 		t.Errorf("Expected DistributedRateLimitMax to be 60, got %d", config.DistributedRateLimitMax)
 	}
-	if config.DistributedRateLimitFallback != true {
+	if !config.DistributedRateLimitFallback {
 		t.Errorf("Expected DistributedRateLimitFallback to be true, got %v", config.DistributedRateLimitFallback)
 	}
 }

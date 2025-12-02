@@ -3,6 +3,7 @@ package token
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -49,7 +50,7 @@ func (m *mockRedisRateLimitClient) Get(ctx context.Context, key string) (string,
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if count, ok := m.counters[key]; ok {
-		return string(rune('0' + count)), nil
+		return strconv.FormatInt(count, 10), nil
 	}
 	return "", nil
 }
@@ -228,12 +229,13 @@ func TestRedisRateLimiter_GetRemainingRequests(t *testing.T) {
 		_, _ = limiter.Allow(ctx, tokenID)
 	}
 
-	// Check remaining (note: Get returns the counter value)
-	// The mock returns a single char, so we just verify no error
-	// In a real scenario with proper int parsing, this would be 7
-	_, err = limiter.GetRemainingRequests(ctx, tokenID)
+	// Check remaining - should be 7 after 3 requests used from 10
+	remaining, err = limiter.GetRemainingRequests(ctx, tokenID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if remaining != 7 {
+		t.Fatalf("expected 7 remaining after 3 requests, got %d", remaining)
 	}
 }
 
