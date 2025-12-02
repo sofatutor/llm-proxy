@@ -4,7 +4,21 @@ This directory contains comprehensive documentation for the LLM Proxy project. U
 
 ## Getting Started
 
-Start with the main [README](../README.md) for a quick overview, installation, and basic usage.
+Start with the main [README](../README.md) for a quick overview, then follow these guides:
+
+- **[Installation Guide](installation.md)** - Install via Docker, Docker Compose, or from source
+- **[Configuration Reference](configuration.md)** - All environment variables and config options
+- **[Admin UI Quickstart](admin/quickstart.md)** - Set up projects and tokens via web interface
+
+## User Guides
+
+- **[Token Management Guide](token-management.md)** - Complete token lifecycle: create, use, revoke, expire
+- **[Admin UI Guide](admin/index.md)** - Web interface for management
+  - [Project Management](admin/projects.md) - Create and manage projects
+  - [Token Management](admin/tokens.md) - Generate and manage tokens
+  - [Screenshots](admin/screens.md) - Visual tour of all screens
+- **[Troubleshooting & FAQ](troubleshooting.md)** - Common issues and solutions
+- **[Performance Tuning](performance.md)** - Optimize caching, connections, and scaling
 
 ## Architecture & Design
 
@@ -15,18 +29,23 @@ Start with the main [README](../README.md) for a quick overview, installation, a
 
 ## Configuration & Setup
 
+- **[Configuration Reference](configuration.md)** - Complete environment variable reference
 - **[API Configuration](api-configuration.md)** - Configure API providers, endpoints, and security policies
 - **[Security Best Practices](security.md)** - Production security, secrets management, and hardening
 - **[Docker Compose PostgreSQL Setup](docker-compose-postgres.md)** - Run llm-proxy with PostgreSQL using Docker Compose
 - **[Database Selection Guide](database-selection.md)** - Choose between SQLite and PostgreSQL
 - **[Database Migrations Guide](migrations.md)** - Version-controlled schema changes
-- **[PostgreSQL Troubleshooting](postgresql-troubleshooting.md)** - Common PostgreSQL issues and solutions
 
 ## Observability & Monitoring
 
 - **[Log Search & Filter Guide](logging.md)** - Structured log fields, jq queries, and observability backend examples
 - **[Instrumentation Guide](instrumentation.md)** - Event system, async middleware, and monitoring
 - **[Security Best Practices](security.md)** - Production security, secrets management, audit logging, and hardening
+
+## Troubleshooting
+
+- **[Troubleshooting & FAQ](troubleshooting.md)** - Common issues and solutions for all components
+- **[PostgreSQL Troubleshooting](postgresql-troubleshooting.md)** - PostgreSQL-specific issues and solutions
 
 ## API Reference
 
@@ -72,10 +91,14 @@ The [OpenAPI specification](../api/openapi.yaml) provides machine-readable API d
 | `DATABASE_PATH` | SQLite database path | `./data/llm-proxy.db` |
 | `DATABASE_URL` | PostgreSQL connection string | - |
 | `LOG_LEVEL` | Logging level | `info` |
+| `HTTP_CACHE_ENABLED` | Enable response caching | `true` |
+| `HTTP_CACHE_BACKEND` | Cache backend (`in-memory` or `redis`) | `in-memory` |
 | `AUDIT_ENABLED` | Enable audit logging | `true` |
 | `AUDIT_LOG_FILE` | Audit log file path | `./data/audit.log` |
 | `AUDIT_STORE_IN_DB` | Store audit events in DB | `true` |
 | `OBSERVABILITY_BUFFER_SIZE` | Event bus buffer | `1000` |
+
+See [Configuration Reference](configuration.md) for the complete list.
 
 ### Key Commands
 
@@ -105,6 +128,20 @@ GET /manage/projects
 # Proxy OpenAI request (requires withering token)
 POST /v1/chat/completions
 ```
+
+## Documentation Map
+
+| If you want to... | Read... |
+|-------------------|---------|
+| Install the proxy | [Installation Guide](installation.md) |
+| Configure settings | [Configuration Reference](configuration.md) |
+| Manage via web UI | [Admin UI Guide](admin/index.md) |
+| Work with tokens | [Token Management Guide](token-management.md) |
+| Troubleshoot issues | [Troubleshooting & FAQ](troubleshooting.md) |
+| Optimize performance | [Performance Tuning](performance.md) |
+| Secure deployment | [Security Best Practices](security.md) |
+| Use the CLI | [CLI Reference](cli-reference.md) |
+| Understand architecture | [Architecture Overview](architecture.md) |
 
 ## Support
 

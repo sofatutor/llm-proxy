@@ -353,12 +353,23 @@ This README provides a quick overview and getting started guide. For comprehensi
 
 ### 📚 **[Documentation Site](https://sofatutor.github.io/llm-proxy/)** | **[Source Index](docs/README.md)**
 
-**Key Documentation:**
+**Getting Started:**
+- **[Installation Guide](docs/installation.md)** - Docker, Docker Compose, and source installation
+- **[Configuration Reference](docs/configuration.md)** - All environment variables and settings
+- **[Admin UI Quickstart](docs/admin/quickstart.md)** - Web interface setup
+
+**User Guides:**
+- **[Token Management](docs/token-management.md)** - Complete token lifecycle guide
+- **[Admin UI Guide](docs/admin/index.md)** - Web interface documentation
+- **[Troubleshooting & FAQ](docs/troubleshooting.md)** - Common issues and solutions
+- **[Performance Tuning](docs/performance.md)** - Caching, scaling, and optimization
+
+**Reference:**
 - **[CLI Reference](docs/cli-reference.md)** - Complete command-line interface documentation
 - **[Architecture Guide](docs/architecture.md)** - System architecture and design
 - **[API Configuration](docs/api-configuration.md)** - Advanced API provider configuration
 - **[Security Best Practices](docs/security.md)** - Production security guidelines
-- **[Instrumentation Guide](docs/instrumentation.md)** - Event system and observability
+- **[Architecture Guide](docs/architecture.md)** - System architecture and design
 
 **For Developers:**
 - [OpenAPI Specification](api/openapi.yaml) - Machine-readable API definitions
