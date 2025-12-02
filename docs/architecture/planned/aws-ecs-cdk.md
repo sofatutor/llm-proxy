@@ -325,9 +325,46 @@ infra/
 │   │   └── service.ts      # ECS service construct
 │   └── config/
 │       └── types.ts        # Configuration props interface
+├── scripts/
+│   └── config.ts           # CLI for secrets & config management
 ├── cdk.json
 └── package.json
 ```
+
+---
+
+## Secrets & Configuration Management
+
+### Separation of Concerns
+
+| Store | Purpose | Examples |
+|-------|---------|----------|
+| **Secrets Manager** | Sensitive, rotatable values | `management-token`, `openai-api-key` |
+| **SSM Parameter Store** | Non-sensitive config | `log-level`, `rate-limit-rpm`, feature flags |
+
+### CLI Wrapper
+
+A thin CLI wrapper (`scripts/config.ts`) provides a unified interface for managing both secrets and configuration:
+
+```bash
+# Interactive setup wizard
+npm run setup
+
+# Secrets (Secrets Manager)
+npm run secret:set <name> <value>
+npm run secret:get <name>
+
+# Config (SSM Parameter Store)
+npm run config:set <name> <value>
+npm run config:get <name>
+npm run config:list
+```
+
+**Benefits:**
+- Secrets never in version control or CDK code
+- Unified interface for ops team
+- Works with OIDC credentials
+- SSM Parameter Store is free (vs Secrets Manager at $0.40/secret/month)
 
 ---
 
