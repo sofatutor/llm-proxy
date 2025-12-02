@@ -24,8 +24,8 @@ Audit logging functionality for security-sensitive events in the LLM proxy, with
 
 | Environment Variable | Description | Default |
 |---------------------|-------------|---------|
-| `AUDIT_LOG_PATH` | Path to audit log file | Required |
-| `AUDIT_DB_ENABLED` | Enable database audit storage | `false` |
+| `AUDIT_LOG_FILE` | Path to audit log file | `./data/audit.log` |
+| `AUDIT_STORE_IN_DB` | Enable database audit storage | `true` |
 
 ## Event Schema
 
@@ -162,7 +162,7 @@ sequenceDiagram
 
 1. **Token Obfuscation**: Always use `WithTokenID()` to ensure tokens are obfuscated
 2. **No Secrets in Details**: Never add raw secrets to the `Details` map
-3. **File Permissions**: Audit log files are created with `0644` permissions
+3. **File Permissions**: Audit log files are created with `0644` permissions; consider `0600` and dedicated user ownership for production
 4. **Sync on Write**: Each event triggers a file sync for durability
 
 ## Testing Guidance

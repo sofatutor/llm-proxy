@@ -85,7 +85,7 @@ The `Event` struct captures HTTP request/response data for observability:
 | Environment Variable | Description | Default |
 |---------------------|-------------|---------|
 | `OBSERVABILITY_BUFFER_SIZE` | Event buffer size for in-memory bus | `1000` |
-| `LLM_PROXY_EVENT_BUS` | Backend type: `memory` or `redis` | `memory` |
+| `LLM_PROXY_EVENT_BUS` | Backend type: `memory` or `redis` | `redis` |
 | `REDIS_URL` | Redis connection URL (when using Redis) | - |
 
 ## Integration Flow
