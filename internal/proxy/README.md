@@ -12,6 +12,63 @@ The `proxy` package implements a transparent HTTP reverse proxy for LLM APIs. It
 - Metadata extraction from responses
 - Observability event publishing
 
+## Architecture
+
+```mermaid
+graph LR
+    subgraph Client
+        C[Client Request]
+    end
+    
+    subgraph Proxy["TransparentProxy"]
+        V[Token Validation]
+        PG[Project Guard]
+        Cache[HTTP Cache]
+        FWD[Forward to Upstream]
+    end
+    
+    subgraph Upstream
+        API[LLM API]
+    end
+    
+    C --> V
+    V --> PG
+    PG --> Cache
+    Cache -->|Miss| FWD
+    Cache -->|Hit| C
+    FWD --> API
+    API --> Cache
+    Cache --> C
+```
+
+## Request Flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Proxy
+    participant TokenValidator
+    participant ProjectStore
+    participant Cache
+    participant Upstream
+
+    Client->>Proxy: HTTP Request
+    Proxy->>TokenValidator: Validate Token
+    TokenValidator-->>Proxy: Project ID
+    Proxy->>ProjectStore: Check Project Active
+    ProjectStore-->>Proxy: Active Status
+    Proxy->>Cache: Lookup
+    alt Cache Hit
+        Cache-->>Proxy: Cached Response
+        Proxy-->>Client: Response
+    else Cache Miss
+        Proxy->>Upstream: Forward Request
+        Upstream-->>Proxy: Response
+        Proxy->>Cache: Store
+        Proxy-->>Client: Response
+    end
+```
+
 ## Key Types & Interfaces
 
 | Type | Description |
@@ -23,119 +80,13 @@ The `proxy` package implements a transparent HTTP reverse proxy for LLM APIs. It
 | `ProjectStore` | Interface for project data access |
 | `AuditLogger` | Interface for audit event logging |
 
-### Core Interfaces
+### Constructor Functions
 
-```go
-// TokenValidator validates tokens and returns project IDs
-type TokenValidator interface {
-    ValidateToken(ctx context.Context, token string) (string, error)
-    ValidateTokenWithTracking(ctx context.Context, token string) (string, error)
-}
-
-// ProjectStore retrieves project information
-type ProjectStore interface {
-    GetAPIKeyForProject(ctx context.Context, projectID string) (string, error)
-    GetProjectActive(ctx context.Context, projectID string) (bool, error)
-    ListProjects(ctx context.Context) ([]Project, error)
-    CreateProject(ctx context.Context, project Project) error
-    GetProjectByID(ctx context.Context, projectID string) (Project, error)
-    UpdateProject(ctx context.Context, project Project) error
-    DeleteProject(ctx context.Context, projectID string) error
-}
-```
-
-### ProxyConfig Structure
-
-```go
-type ProxyConfig struct {
-    TargetBaseURL         string            // Upstream API base URL
-    AllowedEndpoints      []string          // Whitelisted endpoint paths
-    AllowedMethods        []string          // Whitelisted HTTP methods
-    RequestTimeout        time.Duration     // Max request duration
-    ResponseHeaderTimeout time.Duration     // Time to wait for headers
-    FlushInterval         time.Duration     // Streaming flush interval
-    MaxIdleConns          int               // Connection pool size
-    HTTPCacheEnabled      bool              // Enable response caching
-    RedisCacheURL         string            // Redis cache connection URL
-    EnforceProjectActive  bool              // Require active project status
-}
-```
-
-## Usage Examples
-
-### Basic Proxy Setup
-
-```go
-package main
-
-import (
-    "net/http"
-
-    "github.com/sofatutor/llm-proxy/internal/proxy"
-    "github.com/sofatutor/llm-proxy/internal/token"
-)
-
-func main() {
-    config := proxy.ProxyConfig{
-        TargetBaseURL: "https://api.openai.com",
-        AllowedEndpoints: []string{
-            "/v1/chat/completions",
-            "/v1/embeddings",
-            "/v1/models",
-        },
-        AllowedMethods:   []string{"GET", "POST"},
-        RequestTimeout:   120 * time.Second,
-        HTTPCacheEnabled: true,
-    }
-
-    // Create validator and store (use your implementations)
-    validator := token.NewValidator(tokenStore)
-    projectStore := database.NewProjectStore(db)
-
-    // Create proxy
-    p, err := proxy.NewTransparentProxy(config, validator, projectStore)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // Use as HTTP handler
-    http.Handle("/", p.Handler())
-    http.ListenAndServe(":8080", nil)
-}
-```
-
-### With Custom Logger
-
-```go
-import "go.uber.org/zap"
-
-logger, _ := zap.NewProduction()
-
-p, err := proxy.NewTransparentProxyWithLogger(
-    config,
-    validator,
-    projectStore,
-    logger,
-)
-```
-
-### With Observability
-
-```go
-import "github.com/sofatutor/llm-proxy/internal/middleware"
-
-obsCfg := middleware.ObservabilityConfig{
-    Enabled:  true,
-    EventBus: eventBus,
-}
-
-p, err := proxy.NewTransparentProxyWithObservability(
-    config,
-    validator,
-    projectStore,
-    obsCfg,
-)
-```
+| Function | Description |
+|----------|-------------|
+| `NewTransparentProxy` | Creates proxy with default logger |
+| `NewTransparentProxyWithLogger` | Creates proxy with custom logger |
+| `NewTransparentProxyWithObservability` | Creates proxy with event bus integration |
 
 ## Streaming Support (SSE)
 
@@ -146,62 +97,49 @@ The proxy fully supports Server-Sent Events for streaming responses:
 - Configurable flush interval for real-time streaming
 - Response capture for streaming with size limits
 
-```go
-// Streaming requests are automatically detected and handled
-// The proxy sets appropriate headers and flushes incrementally
-config := proxy.ProxyConfig{
-    FlushInterval: 100 * time.Millisecond, // Flush every 100ms
-}
-```
-
 ## HTTP Caching
 
-The proxy includes built-in HTTP caching with two backends:
-
-### In-Memory Cache (Default)
-
-```go
-config := proxy.ProxyConfig{
-    HTTPCacheEnabled: true,
-    // In-memory cache is used by default
-}
+```mermaid
+graph TB
+    subgraph Caching["Cache Layer"]
+        CK[Cache Key Generator]
+        IM[In-Memory Cache]
+        RC[Redis Cache]
+    end
+    
+    Request --> CK
+    CK --> |Key| IM
+    CK --> |Key| RC
+    
+    subgraph "Cache Key Components"
+        M[Method]
+        P[Path]
+        Q[Query Params]
+        B[Body Hash]
+        V[Vary Headers]
+    end
+    
+    M --> CK
+    P --> CK
+    Q --> CK
+    B --> CK
+    V --> CK
 ```
 
-### Redis Cache
+### Cache Backends
 
-```go
-config := proxy.ProxyConfig{
-    HTTPCacheEnabled:    true,
-    RedisCacheURL:       "redis://localhost:6379/0",
-    RedisCacheKeyPrefix: "llmproxy:cache:",
-}
-```
-
-### Cache Key Generation
-
-Cache keys incorporate:
-- Request method and path
-- Query parameters
-- Request body hash (for POST requests)
-- Vary header values from upstream responses
-
-```go
-// Generate cache key for a request
-key := proxy.CacheKeyFromRequest(req)
-
-// With Vary header support
-key := proxy.CacheKeyFromRequestWithVary(req, "Authorization, Accept")
-```
+| Backend | Use Case | Configuration |
+|---------|----------|---------------|
+| In-Memory | Single instance, development | Default when `HTTPCacheEnabled: true` |
+| Redis | Multi-instance, production | Set `RedisCacheURL` |
 
 ### Cache Metrics
 
-```go
-metrics := p.Metrics()
-fmt.Printf("Cache Hits: %d\n", metrics.CacheHits)
-fmt.Printf("Cache Misses: %d\n", metrics.CacheMisses)
-fmt.Printf("Cache Bypass: %d\n", metrics.CacheBypass)
-fmt.Printf("Cache Stores: %d\n", metrics.CacheStores)
-```
+The proxy exposes cache metrics via `Metrics()`:
+- `CacheHits` - Responses served from cache
+- `CacheMisses` - Responses fetched from upstream
+- `CacheBypass` - Requests that bypassed cache
+- `CacheStores` - Responses stored in cache
 
 ## Configuration
 
@@ -214,136 +152,24 @@ fmt.Printf("Cache Stores: %d\n", metrics.CacheStores)
 | `REDIS_CACHE_URL` | Redis URL for cache backend |
 | `REDIS_CACHE_KEY_PREFIX` | Key prefix for Redis cache |
 
-### API Configuration File
+### ProxyConfig Options
 
-The proxy supports YAML configuration for multiple API providers:
-
-```yaml
-default_api: openai
-apis:
-  openai:
-    base_url: https://api.openai.com
-    allowed_endpoints:
-      - /v1/chat/completions
-      - /v1/embeddings
-    allowed_methods:
-      - GET
-      - POST
-    timeouts:
-      request: 120s
-      response_header: 30s
-    connection:
-      max_idle_conns: 100
-      max_idle_conns_per_host: 20
-```
+| Field | Description | Default |
+|-------|-------------|---------|
+| `TargetBaseURL` | Upstream API base URL | Required |
+| `AllowedEndpoints` | Whitelisted endpoint paths | Required |
+| `AllowedMethods` | Whitelisted HTTP methods | Required |
+| `RequestTimeout` | Max request duration | `120s` |
+| `FlushInterval` | Streaming flush interval | `100ms` |
+| `HTTPCacheEnabled` | Enable response caching | `false` |
+| `EnforceProjectActive` | Require active project | `false` |
 
 ## Testing Guidance
 
-### Unit Testing with Mocks
-
-```go
-package proxy_test
-
-import (
-    "context"
-    "net/http"
-    "net/http/httptest"
-    "testing"
-
-    "github.com/sofatutor/llm-proxy/internal/proxy"
-)
-
-// MockValidator for testing
-type MockValidator struct {
-    projectID string
-    err       error
-}
-
-func (m *MockValidator) ValidateToken(ctx context.Context, token string) (string, error) {
-    return m.projectID, m.err
-}
-
-func (m *MockValidator) ValidateTokenWithTracking(ctx context.Context, token string) (string, error) {
-    return m.projectID, m.err
-}
-
-// MockProjectStore for testing
-type MockProjectStore struct {
-    apiKey   string
-    isActive bool
-}
-
-func (m *MockProjectStore) GetAPIKeyForProject(ctx context.Context, id string) (string, error) {
-    return m.apiKey, nil
-}
-
-func (m *MockProjectStore) GetProjectActive(ctx context.Context, id string) (bool, error) {
-    return m.isActive, nil
-}
-
-func TestProxyRequest(t *testing.T) {
-    // Create mock upstream server
-    upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("Content-Type", "application/json")
-        w.Write([]byte(`{"response": "ok"}`))
-    }))
-    defer upstream.Close()
-
-    config := proxy.ProxyConfig{
-        TargetBaseURL:    upstream.URL,
-        AllowedEndpoints: []string{"/v1/chat/completions"},
-        AllowedMethods:   []string{"POST"},
-    }
-
-    validator := &MockValidator{projectID: "test-project"}
-    store := &MockProjectStore{apiKey: "sk-test", isActive: true}
-
-    p, err := proxy.NewTransparentProxy(config, validator, store)
-    if err != nil {
-        t.Fatal(err)
-    }
-
-    req := httptest.NewRequest("POST", "/v1/chat/completions", nil)
-    req.Header.Set("Authorization", "Bearer sk-valid-token")
-    rec := httptest.NewRecorder()
-
-    p.Handler().ServeHTTP(rec, req)
-
-    if rec.Code != http.StatusOK {
-        t.Errorf("Expected 200, got %d", rec.Code)
-    }
-}
-```
-
-### Integration Testing
-
-```go
-func TestProxyIntegration(t *testing.T) {
-    // Setup test database and stores
-    db, _ := database.New(database.Config{Path: ":memory:"})
-    defer db.Close()
-
-    tokenStore := database.NewTokenStore(db)
-    projectStore := database.NewProjectStore(db)
-
-    // Create test project and token
-    project := database.Project{ID: "proj-1", Name: "Test", IsActive: true}
-    projectStore.CreateProject(context.Background(), project)
-
-    // Test proxy with real stores
-    config := proxy.ProxyConfig{
-        TargetBaseURL:        "https://api.openai.com",
-        AllowedEndpoints:     []string{"/v1/models"},
-        AllowedMethods:       []string{"GET"},
-        EnforceProjectActive: true,
-    }
-
-    validator := token.NewCachedValidator(token.NewValidator(tokenStore))
-    p, _ := proxy.NewTransparentProxy(config, validator, projectStore)
-
-    // Make test request...
-}
-```
+- Use `httptest.NewServer` to mock upstream APIs
+- Implement `TokenValidator` and `ProjectStore` interfaces for mocking
+- See `proxy_test.go` for comprehensive test patterns
+- Use in-memory cache for unit tests
 
 ## Troubleshooting
 
@@ -359,25 +185,12 @@ func TestProxyIntegration(t *testing.T) {
 
 ### Debug Headers
 
-The proxy adds debug headers to responses:
-
 | Header | Description |
 |--------|-------------|
 | `X-Request-ID` | Unique request identifier |
 | `X-Cache-Status` | Cache hit/miss/bypass status |
 | `X-Cache-Debug` | Additional cache debug info |
 | `X-Upstream-Response-Time` | Upstream response time in ms |
-
-### Logging
-
-Enable debug logging for troubleshooting:
-
-```go
-config := proxy.ProxyConfig{
-    LogLevel:  "debug",
-    LogFormat: "console", // or "json"
-}
-```
 
 ## Related Packages
 

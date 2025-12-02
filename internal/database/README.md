@@ -11,6 +11,73 @@ The `database` package provides data persistence for the LLM Proxy. It handles:
 - Support for SQLite (default) and PostgreSQL
 - Connection pooling and transaction management
 
+## Architecture
+
+```mermaid
+graph TB
+    subgraph Database["Database Package"]
+        DB[DB Struct]
+        F[Factory]
+        M[Migrations]
+    end
+    
+    subgraph Entities
+        P[Project]
+        T[Token]
+        A[AuditEvent]
+    end
+    
+    subgraph Drivers
+        SQLite[(SQLite)]
+        PG[(PostgreSQL)]
+    end
+    
+    F --> DB
+    DB --> P
+    DB --> T
+    DB --> A
+    DB --> SQLite
+    DB --> PG
+    M --> DB
+```
+
+## Data Model
+
+```mermaid
+erDiagram
+    PROJECT ||--o{ TOKEN : has
+    PROJECT {
+        string id PK
+        string name
+        string openai_api_key
+        bool is_active
+        timestamp deactivated_at
+        timestamp created_at
+        timestamp updated_at
+    }
+    TOKEN {
+        string token PK
+        string project_id FK
+        timestamp expires_at
+        bool is_active
+        timestamp deactivated_at
+        int request_count
+        int max_requests
+        timestamp created_at
+        timestamp last_used_at
+        int cache_hit_count
+    }
+    AUDIT_EVENT {
+        string id PK
+        timestamp timestamp
+        string action
+        string actor
+        string project_id FK
+        string outcome
+        string metadata
+    }
+```
+
 ## Key Types & Interfaces
 
 | Type | Description |
@@ -23,205 +90,24 @@ The `database` package provides data persistence for the LLM Proxy. It handles:
 | `AuditEvent` | Audit log entry model |
 | `DriverType` | Database driver enum (SQLite, Postgres) |
 
-### DB Methods
+### Constructor Functions
 
-The `DB` struct provides methods for all data operations:
+| Function | Description |
+|----------|-------------|
+| `New(config)` | Creates SQLite database connection |
+| `NewFromFullConfig(config)` | Creates database with driver selection |
+| `ConfigFromEnv()` | Loads configuration from environment |
 
-```go
-// Connection management
-func New(config Config) (*DB, error)
-func NewFromFullConfig(config FullConfig) (*DB, error)
-func (d *DB) Close() error
-func (d *DB) HealthCheck(ctx context.Context) error
-func (d *DB) Transaction(ctx context.Context, fn func(*sql.Tx) error) error
+### Operations
 
-// Token operations
-func (d *DB) CreateToken(ctx context.Context, token Token) error
-func (d *DB) GetTokenByID(ctx context.Context, tokenID string) (Token, error)
-func (d *DB) UpdateToken(ctx context.Context, token Token) error
-func (d *DB) DeleteToken(ctx context.Context, tokenID string) error
-func (d *DB) ListTokens(ctx context.Context) ([]Token, error)
-func (d *DB) GetTokensByProjectID(ctx context.Context, projectID string) ([]Token, error)
-func (d *DB) IncrementTokenUsage(ctx context.Context, tokenID string) error
+The `DB` struct provides CRUD operations for all entities:
 
-// Project operations
-func (d *DB) CreateProject(ctx context.Context, project Project) error
-func (d *DB) GetProjectByID(ctx context.Context, projectID string) (Project, error)
-func (d *DB) UpdateProject(ctx context.Context, project Project) error
-func (d *DB) DeleteProject(ctx context.Context, projectID string) error
-func (d *DB) ListProjects(ctx context.Context) ([]Project, error)
-func (d *DB) GetAPIKeyForProject(ctx context.Context, projectID string) (string, error)
-func (d *DB) GetProjectActive(ctx context.Context, projectID string) (bool, error)
-
-// Audit operations
-func (d *DB) CreateAuditEvent(ctx context.Context, event AuditEvent) error
-func (d *DB) GetAuditEventByID(ctx context.Context, id string) (AuditEvent, error)
-func (d *DB) ListAuditEvents(ctx context.Context, filter AuditFilter) ([]AuditEvent, error)
-```
-
-### Data Models
-
-```go
-type Project struct {
-    ID            string     `json:"id"`
-    Name          string     `json:"name"`
-    OpenAIAPIKey  string     `json:"-"` // Not exposed in JSON
-    IsActive      bool       `json:"is_active"`
-    DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
-    CreatedAt     time.Time  `json:"created_at"`
-    UpdatedAt     time.Time  `json:"updated_at"`
-}
-
-type Token struct {
-    Token         string     `json:"token"`
-    ProjectID     string     `json:"project_id"`
-    ExpiresAt     *time.Time `json:"expires_at,omitempty"`
-    IsActive      bool       `json:"is_active"`
-    DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
-    RequestCount  int        `json:"request_count"`
-    MaxRequests   *int       `json:"max_requests,omitempty"`
-    CreatedAt     time.Time  `json:"created_at"`
-    LastUsedAt    *time.Time `json:"last_used_at,omitempty"`
-    CacheHitCount int        `json:"cache_hit_count"`
-}
-```
-
-## Usage Examples
-
-### Basic SQLite Setup
-
-```go
-package main
-
-import (
-    "context"
-    "log"
-
-    "github.com/sofatutor/llm-proxy/internal/database"
-)
-
-func main() {
-    // Use default configuration
-    config := database.DefaultConfig()
-    // config.Path = "data/llm-proxy.db"
-
-    db, err := database.New(config)
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer db.Close()
-
-    // Health check
-    if err := db.HealthCheck(context.Background()); err != nil {
-        log.Fatal(err)
-    }
-
-    log.Println("Database connected successfully")
-}
-```
-
-### Custom Configuration
-
-```go
-config := database.Config{
-    Path:            "/var/data/llm-proxy.db",
-    MaxOpenConns:    20,
-    MaxIdleConns:    10,
-    ConnMaxLifetime: 2 * time.Hour,
-}
-
-db, err := database.New(config)
-```
-
-### Multi-Driver Configuration
-
-```go
-// Configuration from environment
-config := database.ConfigFromEnv()
-
-// Or explicit multi-driver config
-config := database.FullConfig{
-    Driver:          database.DriverPostgres,
-    DatabaseURL:     "postgres://user:pass@host:5432/llmproxy",
-    MaxOpenConns:    25,
-    MaxIdleConns:    10,
-    ConnMaxLifetime: time.Hour,
-}
-
-db, err := database.NewFromFullConfig(config)
-```
-
-### CRUD Operations
-
-```go
-ctx := context.Background()
-
-// Create project
-project := database.Project{
-    ID:           "proj-123",
-    Name:         "My Project",
-    OpenAIAPIKey: "sk-...",
-    IsActive:     true,
-    CreatedAt:    time.Now(),
-    UpdatedAt:    time.Now(),
-}
-err := db.CreateProject(ctx, project)
-
-// Read project
-proj, err := db.GetProjectByID(ctx, "proj-123")
-
-// Update project
-proj.Name = "Updated Name"
-proj.UpdatedAt = time.Now()
-err = db.UpdateProject(ctx, proj)
-
-// Delete project
-err = db.DeleteProject(ctx, "proj-123")
-
-// List all projects
-projects, err := db.ListProjects(ctx)
-```
-
-### Token Operations
-
-```go
-ctx := context.Background()
-
-// Create token
-token := database.Token{
-    Token:        "sk-abc123...",
-    ProjectID:    "proj-123",
-    IsActive:     true,
-    RequestCount: 0,
-    CreatedAt:    time.Now(),
-}
-err := db.CreateToken(ctx, token)
-
-// Increment usage
-err = db.IncrementTokenUsage(ctx, "sk-abc123...")
-
-// Get tokens by project
-tokens, err := db.GetTokensByProjectID(ctx, "proj-123")
-```
-
-### Transactions
-
-```go
-err := db.Transaction(ctx, func(tx *sql.Tx) error {
-    // Multiple operations in single transaction
-    _, err := tx.ExecContext(ctx, "UPDATE tokens SET is_active = ? WHERE project_id = ?", false, projectID)
-    if err != nil {
-        return err // Triggers rollback
-    }
-    
-    _, err = tx.ExecContext(ctx, "UPDATE projects SET is_active = ? WHERE id = ?", false, projectID)
-    if err != nil {
-        return err // Triggers rollback
-    }
-    
-    return nil // Commits on success
-})
-```
+| Category | Methods |
+|----------|---------|
+| Connection | `Close()`, `HealthCheck()`, `Transaction()` |
+| Projects | `CreateProject()`, `GetProjectByID()`, `UpdateProject()`, `DeleteProject()`, `ListProjects()` |
+| Tokens | `CreateToken()`, `GetTokenByID()`, `UpdateToken()`, `DeleteToken()`, `ListTokens()`, `IncrementTokenUsage()` |
+| Audit | `CreateAuditEvent()`, `GetAuditEventByID()`, `ListAuditEvents()` |
 
 ## Configuration
 
@@ -256,21 +142,26 @@ err := db.Transaction(ctx, func(tx *sql.Tx) error {
 
 ## Migration Workflow
 
-Migrations are managed using goose and stored in `migrations/sql/`:
-
-```bash
-# Run migrations (automatic on New())
-# Migrations run automatically when creating a new DB connection
-
-# Manual migration commands (if needed)
-goose -dir internal/database/migrations/sql sqlite3 ./data/llm-proxy.db up
-goose -dir internal/database/migrations/sql sqlite3 ./data/llm-proxy.db down
-goose -dir internal/database/migrations/sql sqlite3 ./data/llm-proxy.db status
+```mermaid
+graph LR
+    subgraph Migrations
+        S[Schema Files]
+        R[Runner]
+    end
+    
+    subgraph Process
+        U[Up]
+        D[Down]
+        ST[Status]
+    end
+    
+    S --> R
+    R --> U
+    R --> D
+    R --> ST
 ```
 
-### Migration Files
-
-Located in `internal/database/migrations/sql/`:
+Migrations are managed using goose and stored in `migrations/sql/`:
 
 | Migration | Description |
 |-----------|-------------|
@@ -279,84 +170,14 @@ Located in `internal/database/migrations/sql/`:
 | `003_create_audit_events.sql` | Create audit events table |
 | `004_add_cache_hit_count.sql` | Add cache hit tracking |
 
-See `migrations/README.md` for detailed migration documentation.
+Migrations run automatically on `New()`. See `migrations/README.md` for manual commands.
 
 ## Testing Guidance
 
-### In-Memory Database for Tests
-
-```go
-package database_test
-
-import (
-    "context"
-    "testing"
-
-    "github.com/sofatutor/llm-proxy/internal/database"
-)
-
-func TestProjectCRUD(t *testing.T) {
-    // Use in-memory SQLite for tests
-    db, err := database.New(database.Config{Path: ":memory:"})
-    if err != nil {
-        t.Fatal(err)
-    }
-    defer db.Close()
-
-    ctx := context.Background()
-
-    // Create
-    project := database.Project{
-        ID:        "test-1",
-        Name:      "Test Project",
-        IsActive:  true,
-        CreatedAt: time.Now(),
-        UpdatedAt: time.Now(),
-    }
-    err = db.CreateProject(ctx, project)
-    if err != nil {
-        t.Fatal(err)
-    }
-
-    // Read
-    got, err := db.GetProjectByID(ctx, "test-1")
-    if err != nil {
-        t.Fatal(err)
-    }
-    if got.Name != "Test Project" {
-        t.Errorf("Expected 'Test Project', got %q", got.Name)
-    }
-}
-```
-
-### Mock Stores
-
-For unit testing without database:
-
-```go
-// Use MockProjectStore from mock_project.go
-store := database.NewMockProjectStore()
-store.AddProject(project)
-
-// Use MockTokenStore from mock_token.go
-tokenStore := database.NewMockTokenStore()
-tokenStore.AddToken(token)
-```
-
-### Integration Testing
-
-```go
-func TestDatabaseIntegration(t *testing.T) {
-    // Create temp file for test database
-    tmpFile, _ := os.CreateTemp("", "test-*.db")
-    defer os.Remove(tmpFile.Name())
-
-    db, _ := database.New(database.Config{Path: tmpFile.Name()})
-    defer db.Close()
-
-    // Run integration tests...
-}
-```
+- Use in-memory SQLite (`Config{Path: ":memory:"}`) for unit tests
+- Use `MockProjectStore` and `MockTokenStore` for isolated testing
+- See `*_test.go` files for comprehensive test patterns
+- Set `MaxOpenConns = 1` for in-memory database tests
 
 ## Troubleshooting
 

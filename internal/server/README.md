@@ -11,6 +11,38 @@ The `server` package provides HTTP server lifecycle management for the LLM Proxy
 - Request logging and middleware composition
 - Integration with event bus, audit logging, and proxy components
 
+## Architecture
+
+```mermaid
+graph TB
+    subgraph Server["Server Package"]
+        S[Server]
+        H[Health Handlers]
+        M[Management API]
+        MW[Middleware]
+    end
+    
+    subgraph Dependencies
+        P[Proxy]
+        T[TokenStore]
+        PS[ProjectStore]
+        DB[Database]
+        EB[EventBus]
+        AL[AuditLogger]
+    end
+    
+    Client --> S
+    S --> H
+    S --> M
+    S --> MW
+    MW --> P
+    S --> T
+    S --> PS
+    S --> DB
+    S --> EB
+    S --> AL
+```
+
 ## Key Types & Interfaces
 
 | Type | Description |
@@ -19,23 +51,6 @@ The `server` package provides HTTP server lifecycle management for the LLM Proxy
 | `HealthResponse` | JSON response for health check endpoint |
 | `Metrics` | Runtime metrics including request/error counts and start time |
 
-### Server Struct
-
-```go
-type Server struct {
-    config       *config.Config
-    server       *http.Server
-    tokenStore   token.TokenStore
-    projectStore proxy.ProjectStore
-    logger       *zap.Logger
-    proxy        *proxy.TransparentProxy
-    metrics      Metrics
-    eventBus     eventbus.EventBus
-    auditLogger  *audit.Logger
-    db           *database.DB
-}
-```
-
 ### Constructor Functions
 
 | Function | Description |
@@ -43,87 +58,22 @@ type Server struct {
 | `New(cfg, tokenStore, projectStore)` | Creates server without database |
 | `NewWithDatabase(cfg, tokenStore, projectStore, db)` | Creates server with database for audit logging |
 
-## Usage Examples
+## Server Lifecycle
 
-### Basic Server Setup
-
-```go
-package main
-
-import (
-    "context"
-    "log"
-    "os"
-    "os/signal"
-    "syscall"
-    "time"
-
-    "github.com/sofatutor/llm-proxy/internal/config"
-    "github.com/sofatutor/llm-proxy/internal/database"
-    "github.com/sofatutor/llm-proxy/internal/server"
-)
-
-func main() {
-    // Load configuration
-    cfg := config.DefaultConfig()
-    cfg.ListenAddr = ":8080"
-    cfg.ManagementToken = "secret-token"
-
-    // Initialize database
-    db, err := database.New(database.DefaultConfig())
-    if err != nil {
-        log.Fatalf("Failed to initialize database: %v", err)
-    }
-    defer db.Close()
-
-    // Create token and project stores from database
-    tokenStore := database.NewTokenStore(db)
-    projectStore := database.NewProjectStore(db)
-
-    // Create server with database support
-    srv, err := server.NewWithDatabase(&cfg, tokenStore, projectStore, db)
-    if err != nil {
-        log.Fatalf("Failed to create server: %v", err)
-    }
-
-    // Start server in goroutine
-    go func() {
-        if err := srv.Start(); err != nil {
-            log.Printf("Server error: %v", err)
-        }
-    }()
-
-    // Wait for shutdown signal
-    quit := make(chan os.Signal, 1)
-    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-    <-quit
-
-    // Graceful shutdown with timeout
-    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-    defer cancel()
-
-    if err := srv.Shutdown(ctx); err != nil {
-        log.Printf("Shutdown error: %v", err)
-    }
-}
-```
-
-### Graceful Shutdown
-
-The server supports graceful shutdown that:
-1. Stops the cache stats aggregator and flushes pending stats
-2. Closes the audit logger to ensure all events are written
-3. Gracefully stops accepting new connections
-4. Waits for existing requests to complete
-
-```go
-// Shutdown with 30-second timeout
-ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-defer cancel()
-
-if err := srv.Shutdown(ctx); err != nil {
-    log.Printf("Forced shutdown: %v", err)
-}
+```mermaid
+stateDiagram-v2
+    [*] --> Created: New() / NewWithDatabase()
+    Created --> Starting: Start()
+    Starting --> Running: ListenAndServe
+    Running --> ShuttingDown: Shutdown()
+    ShuttingDown --> [*]: Cleanup Complete
+    
+    note right of ShuttingDown
+        1. Stop cache stats aggregator
+        2. Close audit logger
+        3. Stop accepting connections
+        4. Wait for in-flight requests
+    end note
 ```
 
 ## Configuration
@@ -179,102 +129,10 @@ All unmatched routes are handled by the transparent proxy, forwarding requests t
 
 ## Testing Guidance
 
-### Unit Testing with httptest
-
-```go
-package server_test
-
-import (
-    "net/http"
-    "net/http/httptest"
-    "testing"
-
-    "github.com/sofatutor/llm-proxy/internal/config"
-    "github.com/sofatutor/llm-proxy/internal/database"
-    "github.com/sofatutor/llm-proxy/internal/server"
-)
-
-func TestHealthEndpoint(t *testing.T) {
-    // Setup test database
-    db, _ := database.New(database.Config{Path: ":memory:"})
-    defer db.Close()
-
-    tokenStore := database.NewTokenStore(db)
-    projectStore := database.NewProjectStore(db)
-
-    cfg := config.DefaultConfig()
-    cfg.ManagementToken = "test-token"
-
-    srv, err := server.NewWithDatabase(&cfg, tokenStore, projectStore, db)
-    if err != nil {
-        t.Fatalf("Failed to create server: %v", err)
-    }
-
-    // Create test request
-    req := httptest.NewRequest(http.MethodGet, "/health", nil)
-    rec := httptest.NewRecorder()
-
-    // Get handler and execute
-    // Note: For direct handler testing, you may need to expose handlers
-    // or test via the full server using httptest.Server
-}
-```
-
-### Integration Testing
-
-```go
-func TestServerIntegration(t *testing.T) {
-    // Create in-memory database
-    db, _ := database.New(database.Config{Path: ":memory:"})
-    defer db.Close()
-
-    cfg := config.DefaultConfig()
-    cfg.ListenAddr = "127.0.0.1:0" // Random port
-    cfg.ManagementToken = "test-token"
-
-    srv, _ := server.NewWithDatabase(&cfg, 
-        database.NewTokenStore(db),
-        database.NewProjectStore(db),
-        db,
-    )
-
-    // Start server
-    go srv.Start()
-    defer srv.Shutdown(context.Background())
-
-    // Wait for server to be ready
-    time.Sleep(100 * time.Millisecond)
-
-    // Make test requests
-    resp, err := http.Get("http://" + cfg.ListenAddr + "/health")
-    if err != nil {
-        t.Fatalf("Request failed: %v", err)
-    }
-    defer resp.Body.Close()
-
-    if resp.StatusCode != http.StatusOK {
-        t.Errorf("Expected 200, got %d", resp.StatusCode)
-    }
-}
-```
-
-### Mocking Dependencies
-
-The server accepts interfaces for token and project stores, allowing easy mocking:
-
-```go
-type MockTokenStore struct {
-    tokens map[string]token.TokenData
-}
-
-func (m *MockTokenStore) GetTokenByID(ctx context.Context, id string) (token.TokenData, error) {
-    if t, ok := m.tokens[id]; ok {
-        return t, nil
-    }
-    return token.TokenData{}, token.ErrTokenNotFound
-}
-// ... implement other methods
-```
+- Use `httptest.NewServer` for integration tests
+- Use in-memory database (`database.Config{Path: ":memory:"}`) for unit tests
+- Mock `TokenStore` and `ProjectStore` interfaces for isolated testing
+- See existing tests in `server_test.go` for patterns
 
 ## Troubleshooting
 
