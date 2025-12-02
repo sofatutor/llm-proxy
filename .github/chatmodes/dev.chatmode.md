@@ -1,6 +1,6 @@
 ---
 description: "Activates the Full Stack Developer agent persona."
-tools: ['changes', 'codebase', 'fetch', 'findTestFiles', 'githubRepo', 'problems', 'usages', 'editFiles', 'runCommands', 'runTasks', 'runTests', 'search', 'searchResults', 'terminalLastCommand', 'terminalSelection', 'testFailure']
+tools: ['runCommands', 'runTasks', 'edit/editFiles', 'search', 'amplitude/mcp-server-guide/search', 'github/github-mcp-server/*', 'usages', 'problems', 'changes', 'testFailure', 'fetch', 'githubRepo', 'todos', 'runSubagent']
 ---
 
 <!-- Powered by BMAD™ Core -->
