@@ -267,17 +267,10 @@ func TestNewFromConfig_UnsupportedDriver(t *testing.T) {
 	assert.Contains(t, err.Error(), "unsupported database driver")
 }
 
-func TestNewFromConfig_PostgresMissingURL(t *testing.T) {
-	config := FullConfig{
-		Driver:      DriverPostgres,
-		DatabaseURL: "",
-	}
-
-	db, err := NewFromConfig(config)
-	assert.Error(t, err)
-	assert.Nil(t, db)
-	assert.Contains(t, err.Error(), "DATABASE_URL is required")
-}
+// TestNewFromConfig_PostgresMissingURL has been split into:
+// - factory_postgres_test.go: TestNewFromConfig_PostgresMissingURL_WithPostgresTag (//go:build postgres)
+// - factory_postgres_stub_test.go: TestNewFromConfig_PostgresNotCompiledIn (//go:build !postgres)
+// These tests verify appropriate error messages based on whether PostgreSQL support is compiled in.
 
 func TestDB_Driver(t *testing.T) {
 	config := FullConfig{
@@ -724,17 +717,8 @@ func TestDB_QueryContextRebound(t *testing.T) {
 	assert.Len(t, tokens, 3)
 }
 
-func TestNewFromConfig_PostgresInvalidURL(t *testing.T) {
-	config := FullConfig{
-		Driver:      DriverPostgres,
-		DatabaseURL: "invalid-not-a-url",
-	}
-
-	// This should fail when trying to ping the database
-	db, err := NewFromConfig(config)
-	assert.Error(t, err)
-	assert.Nil(t, db)
-}
+// TestNewFromConfig_PostgresInvalidURL has been moved to factory_postgres_test.go
+// with the postgres build tag, as it requires PostgreSQL support to be compiled in.
 
 func TestNewFromConfig_SQLiteInvalidPath(t *testing.T) {
 	config := FullConfig{
