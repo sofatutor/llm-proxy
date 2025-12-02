@@ -345,6 +345,39 @@ plugins.Registry["custom"] = func() dispatcher.BackendPlugin {
 }
 ```
 
+## Integration Patterns
+
+### With Proxy Server
+
+The dispatcher typically runs alongside the proxy server, sharing an event bus:
+
+```go
+// In server initialization
+bus := eventbus.NewInMemoryEventBus(bufferSize)
+
+// Pass bus to instrumentation middleware
+instrumentationHandler := middleware.NewInstrumentation(bus, logger)
+
+// Create dispatcher with same bus
+dispatcherSvc, _ := dispatcher.NewServiceWithBus(cfg, logger, bus)
+go dispatcherSvc.Run(ctx, false)
+```
+
+### Standalone Dispatcher
+
+For distributed setups, run the dispatcher as a separate process consuming from Redis:
+
+```go
+// Connect to shared Redis event bus
+redisClient := redis.NewClient(&redis.Options{Addr: redisURL})
+adapter := &eventbus.RedisGoClientAdapter{Client: redisClient}
+bus := eventbus.NewRedisEventBusLog(adapter, "llm-proxy:events", 24*time.Hour, 10000)
+
+// Create standalone dispatcher
+svc, _ := dispatcher.NewServiceWithBus(cfg, logger, bus)
+svc.Run(ctx, false)
+```
+
 ## Testing Guidance
 
 ### Unit Testing with Mock Plugin
