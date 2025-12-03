@@ -6,9 +6,10 @@ Asynchronous, non-blocking event bus for observability and instrumentation event
 
 - **Non-blocking Event Publishing**: Events published asynchronously to avoid blocking request handling
 - **Fan-out Broadcasting**: Multiple subscribers receive all published events
-- **Backend Flexibility**: In-memory (single process) or Redis (distributed) backends
+- **Backend Flexibility**: In-memory (single process), Redis List, or Redis Streams (distributed with consumer groups)
 - **Graceful Degradation**: Buffer overflow drops events rather than blocking
 - **Monotonic Event IDs**: Redis backend assigns sequential `LogID` values for ordering
+- **At-least-once Delivery**: Redis Streams backend with consumer groups and acknowledgment
 
 ## Architecture
 
@@ -19,7 +20,7 @@ flowchart TB
         P2[Proxy Instance 2]
     end
     
-    subgraph EventBus["Event Bus (In-Memory or Redis)"]
+    subgraph EventBus["Event Bus (In-Memory, Redis List, or Redis Streams)"]
         Buffer[Event Buffer]
     end
     
@@ -50,9 +51,9 @@ Best for single-process deployments and local development.
 
 **Key Functions**: `NewInMemoryEventBus(bufferSize)`, `Publish()`, `Subscribe()`, `Stop()`, `Stats()`
 
-### Redis EventBus
+### Redis EventBus (List-based)
 
-Best for distributed deployments where multiple processes share events.
+Best for distributed deployments where multiple processes share events with simple semantics.
 
 | Feature | Behavior |
 |---------|----------|
@@ -63,6 +64,48 @@ Best for distributed deployments where multiple processes share events.
 | Ordering | Monotonic `LogID` via Redis INCR |
 
 **Key Functions**: `NewRedisEventBusPublisher()`, `NewRedisEventBusLog()`, `ReadEvents()`, `EventCount()`
+
+### Redis Streams EventBus
+
+Best for distributed deployments requiring durable, guaranteed delivery with consumer groups.
+
+| Feature | Behavior |
+|---------|----------|
+| Delivery | At-least-once with acknowledgment |
+| Storage | Redis Streams with JSON serialization |
+| Consumer Groups | Multiple dispatcher instances share workload |
+| Acknowledgment | XACK after successful processing |
+| Pending Recovery | Claims stuck messages from crashed consumers |
+| Trimming | Automatic via MaxLen (approximate) |
+| Blocking Read | Configurable block timeout for efficiency |
+
+**Key Functions**: `NewRedisStreamsEventBus()`, `Publish()`, `Subscribe()`, `Stop()`, `Acknowledge()`, `StreamLength()`, `PendingCount()`
+
+#### Consumer Group Semantics
+
+Redis Streams implements the competing consumers pattern:
+
+1. **Publishing**: Events are added to stream via XADD
+2. **Consuming**: Dispatchers read via XREADGROUP with consumer groups
+3. **Acknowledgment**: Successfully processed messages are acknowledged with XACK
+4. **Recovery**: Pending messages from crashed consumers are claimed via XCLAIM
+
+```mermaid
+sequenceDiagram
+    participant Proxy
+    participant Stream as Redis Stream
+    participant D1 as Dispatcher 1
+    participant D2 as Dispatcher 2
+    
+    Proxy->>Stream: XADD event
+    D1->>Stream: XREADGROUP (blocks)
+    Stream->>D1: Event (assigned to D1)
+    D1->>D1: Process Event
+    D1->>Stream: XACK (acknowledge)
+    
+    Note over D2: D2 claims stuck messages<br/>if D1 crashes
+    D2->>Stream: XCLAIM pending msgs
+```
 
 ## Event Schema
 
@@ -82,11 +125,26 @@ The `Event` struct captures HTTP request/response data for observability:
 
 ## Configuration Options
 
+### General Options
+
 | Environment Variable | Description | Default |
 |---------------------|-------------|---------|
 | `OBSERVABILITY_BUFFER_SIZE` | Event buffer size for in-memory bus | `1000` |
-| `LLM_PROXY_EVENT_BUS` | Backend type: `memory` or `redis` | `redis` |
-| `REDIS_URL` | Redis connection URL (when using Redis) | - |
+| `LLM_PROXY_EVENT_BUS` | Backend type: `in-memory`, `redis`, or `redis-streams` | `redis` |
+| `REDIS_ADDR` | Redis server address | `localhost:6379` |
+| `REDIS_DB` | Redis database number | `0` |
+
+### Redis Streams Options
+
+| Environment Variable | Description | Default |
+|---------------------|-------------|---------|
+| `REDIS_STREAM_KEY` | Stream key name | `llm-proxy-events` |
+| `REDIS_CONSUMER_GROUP` | Consumer group name | `llm-proxy-dispatchers` |
+| `REDIS_CONSUMER_NAME` | Consumer name (auto-generated if empty) | `` |
+| `REDIS_STREAM_MAX_LEN` | Max stream length (0 = unlimited) | `10000` |
+| `REDIS_STREAM_BLOCK_TIME` | Block timeout for XREADGROUP | `5s` |
+| `REDIS_STREAM_CLAIM_TIME` | Min idle time before claiming pending messages | `30s` |
+| `REDIS_STREAM_BATCH_SIZE` | Batch size for reading messages | `100` |
 
 ## Integration Flow
 
@@ -114,7 +172,8 @@ sequenceDiagram
 
 - **Unit Tests**: Create a mock implementing `EventBus` interface to capture published events
 - **Integration Tests**: Use `NewInMemoryEventBus` with small buffer size to test overflow behavior
-- **Existing Tests**: See `eventbus_test.go` for comprehensive examples
+- **Redis Streams Tests**: Use miniredis for integration testing with Redis Streams
+- **Existing Tests**: See `eventbus_test.go` and `redis_streams_test.go` for comprehensive examples
 
 ## Related Documentation
 
@@ -125,4 +184,5 @@ sequenceDiagram
 
 | File | Description |
 |------|-------------|
-| `eventbus.go` | Core interfaces, Event struct, and implementations |
+| `eventbus.go` | Core interfaces, Event struct, In-Memory and Redis List implementations |
+| `redis_streams.go` | Redis Streams implementation with consumer groups |
