@@ -48,8 +48,7 @@
                         <thead>
                             <tr>
                                 <th>Project</th>
-                                <th>Cache Stats</th>
-                                <th>Requests</th>
+                                <th>Requests & Cache</th>
                                 <th>Status</th>
                                 <th>Expires</th>
                                 <th>Created</th>
@@ -68,33 +67,10 @@
                                     {{ end }}
                                 </td>
                                 <td>
-                                    {{/* Cache Stats: CACHED | UPSTREAM / LIMIT */}}
-                                    <span class="badge bg-success" title="Responses served from cache" data-bs-toggle="tooltip">
-                                        <i class="bi bi-hdd"></i> {{ .CacheHitCount }}
+                                    {{/* Requests: COUNT / MAX | Cache: CACHED | UPSTREAM */}}
+                                    <span class="badge bg-secondary" title="Total requests made" data-bs-toggle="tooltip">
+                                        {{ .RequestCount }}
                                     </span>
-                                    <span class="text-muted">|</span>
-                                    <span class="badge bg-primary" title="Responses fetched from upstream (RequestCount - CacheHitCount)" data-bs-toggle="tooltip">
-                                        <i class="bi bi-cloud-arrow-up"></i> {{ safeSub .RequestCount .CacheHitCount }}
-                                    </span>
-                                    <span class="text-muted">/</span>
-                                    {{ if .MaxRequests }}
-                                        {{ if gt .MaxRequests 0 }}
-                                            <span class="badge bg-warning text-dark" title="Remaining requests until rate limit" data-bs-toggle="tooltip">
-                                                <i class="bi bi-speedometer2"></i> {{ safeSub .MaxRequests .RequestCount }}
-                                            </span>
-                                        {{ else }}
-                                            <span class="badge bg-secondary" title="Unlimited requests" data-bs-toggle="tooltip">
-                                                <i class="bi bi-infinity"></i> ∞
-                                            </span>
-                                        {{ end }}
-                                    {{ else }}
-                                        <span class="badge bg-secondary" title="Unlimited requests" data-bs-toggle="tooltip">
-                                            <i class="bi bi-infinity"></i> ∞
-                                        </span>
-                                    {{ end }}
-                                </td>
-                                <td>
-                                    <span class="badge bg-secondary">{{ .RequestCount }}</span>
                                     {{ if .MaxRequests }}
                                         {{ if gt .MaxRequests 0 }}
                                             / {{ .MaxRequests }}
@@ -104,6 +80,14 @@
                                     {{ else }}
                                         / ∞
                                     {{ end }}
+                                    <span class="text-muted">|</span>
+                                    <span class="badge bg-success" title="Responses served from cache" data-bs-toggle="tooltip">
+                                        <i class="bi bi-hdd"></i> {{ .CacheHitCount }}
+                                    </span>
+                                    <span class="text-muted">|</span>
+                                    <span class="badge bg-primary" title="Responses fetched from upstream" data-bs-toggle="tooltip">
+                                        <i class="bi bi-cloud-arrow-up"></i> {{ safeSub .RequestCount .CacheHitCount }}
+                                    </span>
                                 </td>
                                 <td>
                                     {{ if .IsActive }}
