@@ -134,6 +134,48 @@ func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectSto
 		adapter := &eventbus.RedisGoClientAdapter{Client: client}
 		bus = eventbus.NewRedisEventBusPublisher(adapter, "llm-proxy-events")
 		logger.Info("Using Redis event bus", zap.String("addr", cfg.RedisAddr), zap.Int("db", cfg.RedisDB))
+	case "redis-streams":
+		client := redis.NewClient(&redis.Options{
+			Addr: cfg.RedisAddr,
+			DB:   cfg.RedisDB,
+		})
+		// Redis diagnostics
+		logger.Info("Connecting to Redis for Streams", zap.String("addr", cfg.RedisAddr), zap.Int("db", cfg.RedisDB))
+		pong, err := client.Ping(context.Background()).Result()
+		if err != nil {
+			logger.Fatal("Failed to ping Redis",
+				zap.String("addr", cfg.RedisAddr),
+				zap.Int("db", cfg.RedisDB),
+				zap.Error(err))
+		}
+		logger.Info("Successfully pinged Redis",
+			zap.String("addr", cfg.RedisAddr),
+			zap.Int("db", cfg.RedisDB),
+			zap.String("response", pong))
+
+		// Generate consumer name if not provided
+		consumerName := cfg.RedisConsumerName
+		if consumerName == "" {
+			consumerName = fmt.Sprintf("proxy-%s", uuid.New().String()[:8])
+		}
+
+		streamsConfig := eventbus.RedisStreamsConfig{
+			StreamKey:        cfg.RedisStreamKey,
+			ConsumerGroup:    cfg.RedisConsumerGroup,
+			ConsumerName:     consumerName,
+			MaxLen:           cfg.RedisStreamMaxLen,
+			BlockTimeout:     cfg.RedisStreamBlockTime,
+			ClaimMinIdleTime: cfg.RedisStreamClaimTime,
+			BatchSize:        cfg.RedisStreamBatchSize,
+		}
+		adapter := &eventbus.RedisStreamsClientAdapter{Client: client}
+		bus = eventbus.NewRedisStreamsEventBus(adapter, streamsConfig)
+		logger.Info("Using Redis Streams event bus",
+			zap.String("addr", cfg.RedisAddr),
+			zap.Int("db", cfg.RedisDB),
+			zap.String("stream", cfg.RedisStreamKey),
+			zap.String("consumer_group", cfg.RedisConsumerGroup),
+			zap.String("consumer_name", consumerName))
 	case "in-memory":
 		logger.Info("Using in-memory event bus", zap.String("mode", "single-process"))
 		bus = eventbus.NewInMemoryEventBus(cfg.ObservabilityBufferSize)

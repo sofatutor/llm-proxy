@@ -85,9 +85,18 @@ type Config struct {
 	ActiveCacheMax       int           // Maximum entries in project active status cache (e.g., 10000)
 
 	// Event bus configuration
-	EventBusBackend string // Backend for event bus: "redis" or "in-memory"
+	EventBusBackend string // Backend for event bus: "redis", "redis-streams", or "in-memory"
 	RedisAddr       string // Redis server address (e.g., "localhost:6379")
 	RedisDB         int    // Redis database number (default: 0)
+
+	// Redis Streams configuration (when EventBusBackend = "redis-streams")
+	RedisStreamKey       string        // Redis stream key name (default: "llm-proxy-events")
+	RedisConsumerGroup   string        // Consumer group name (default: "llm-proxy-dispatchers")
+	RedisConsumerName    string        // Consumer name within the group (should be unique per instance)
+	RedisStreamMaxLen    int64         // Max stream length (0 = unlimited, default: 10000)
+	RedisStreamBlockTime time.Duration // Block timeout for reading (default: 5s)
+	RedisStreamClaimTime time.Duration // Min idle time before claiming pending msgs (default: 30s)
+	RedisStreamBatchSize int64         // Batch size for reading messages (default: 100)
 
 	// Cache stats aggregation
 	CacheStatsBufferSize int // Buffer size for async cache stats aggregation (default: 1000)
@@ -190,6 +199,15 @@ func New() (*Config, error) {
 		EventBusBackend: getEnvString("LLM_PROXY_EVENT_BUS", "redis"),
 		RedisAddr:       getEnvString("REDIS_ADDR", "localhost:6379"),
 		RedisDB:         getEnvInt("REDIS_DB", 0),
+
+		// Redis Streams configuration
+		RedisStreamKey:       getEnvString("REDIS_STREAM_KEY", "llm-proxy-events"),
+		RedisConsumerGroup:   getEnvString("REDIS_CONSUMER_GROUP", "llm-proxy-dispatchers"),
+		RedisConsumerName:    getEnvString("REDIS_CONSUMER_NAME", ""),
+		RedisStreamMaxLen:    getEnvInt64("REDIS_STREAM_MAX_LEN", 10000),
+		RedisStreamBlockTime: getEnvDuration("REDIS_STREAM_BLOCK_TIME", 5*time.Second),
+		RedisStreamClaimTime: getEnvDuration("REDIS_STREAM_CLAIM_TIME", 30*time.Second),
+		RedisStreamBatchSize: getEnvInt64("REDIS_STREAM_BATCH_SIZE", 100),
 
 		// Cache stats aggregation
 		CacheStatsBufferSize: getEnvInt("CACHE_STATS_BUFFER_SIZE", 1000),
@@ -358,6 +376,15 @@ func DefaultConfig() *Config {
 		EventBusBackend: "redis",
 		RedisAddr:       "localhost:6379",
 		RedisDB:         0,
+
+		// Redis Streams configuration
+		RedisStreamKey:       "llm-proxy-events",
+		RedisConsumerGroup:   "llm-proxy-dispatchers",
+		RedisConsumerName:    "",
+		RedisStreamMaxLen:    10000,
+		RedisStreamBlockTime: 5 * time.Second,
+		RedisStreamClaimTime: 30 * time.Second,
+		RedisStreamBatchSize: 100,
 
 		// Cache stats aggregation
 		CacheStatsBufferSize: 1000,

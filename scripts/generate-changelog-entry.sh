@@ -127,6 +127,7 @@ Rules for generating entries:
 5. For multi-feature PRs: create separate entries for distinct capabilities (e.g., new automation + enhanced documentation)
 6. IMPORTANT: Include ALL existing entries in your response (unchanged, unless same PR number)
 7. Order entries by category: Added, Changed, Fixed, Reverted
+8. Within each category, order entries by PR number DESCENDING (highest/newest first)
 
 Example output for a PR with automation + docs, plus one existing entry:
 {
@@ -160,7 +161,7 @@ ${EXISTING_SECTION}
 fi
 
 read -r -d '' USER_PROMPT << USERPROMPT || true
-Generate changelog entries for this PR and merge with existing entries:
+Generate changelog entries for this PR and merge with existing entries. Respond with valid JSON only.
 
 **PR Title:** ${PR_TITLE}
 **PR Number:** #${PR_NUMBER}
@@ -175,23 +176,24 @@ ${PR_FILES_TRUNCATED}
 ${EXISTING_CONTEXT}
 USERPROMPT
 
-# Build JSON payload using jq for proper escaping
+# Build JSON payload using jq for proper escaping (using /v1/responses API)
 JSON_PAYLOAD=$(jq -n \
   --arg system "$SYSTEM_PROMPT" \
   --arg user "$USER_PROMPT" \
   '{
     model: "gpt-5.1-codex-mini",
-    messages: [
-      {role: "system", content: $system},
-      {role: "user", content: $user}
-    ],
-    temperature: 0.1,
-    max_tokens: 2000,
-    response_format: {type: "json_object"}
+    instructions: $system,
+    input: $user,
+    max_output_tokens: 2000,
+    text: {
+      format: {
+        type: "json_object"
+      }
+    }
   }')
 
-# Call OpenAI API
-RESPONSE=$(curl -s -X POST "https://api.openai.com/v1/chat/completions" \
+# Call OpenAI Responses API
+RESPONSE=$(curl -s -X POST "https://api.openai.com/v1/responses" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${OPENAI_API_KEY}" \
   -d "$JSON_PAYLOAD")
@@ -203,8 +205,9 @@ if echo "$RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
   exit 1
 fi
 
-# Extract the generated JSON response
-CONTENT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content')
+# Extract the generated JSON response from the responses API format
+# The output array may contain reasoning first, then the message - find the message type
+CONTENT=$(echo "$RESPONSE" | jq -r '.output[] | select(.type == "message") | .content[0].text // empty')
 
 if [[ -z "$CONTENT" || "$CONTENT" == "null" ]]; then
   echo "Error: Failed to generate changelog entry" >&2

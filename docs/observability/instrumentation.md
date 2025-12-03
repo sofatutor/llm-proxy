@@ -80,8 +80,9 @@ llm-proxy dispatcher --backend file --file ./data/events.jsonl
 - Event delivery is fully async, non-blocking, batched, and resilient to failures.
 
 ## Event Bus Backends
-- **In-Memory** (default): Fast, simple, for local/dev use.
-- **Redis**: For distributed event delivery and multi-process fan-out.
+- **In-Memory** (`in-memory`): Fast, simple, for local/dev use. Single process only.
+- **Redis List** (`redis`): For distributed event delivery and multi-process fan-out. At-most-once delivery.
+- **Redis Streams** (`redis-streams`): For production with consumer groups, acknowledgment, and at-least-once delivery. See [Redis Streams Backend](#redis-streams-backend-recommended-for-production).
 - **Custom**: Implement the `EventBus` interface for other backends (Kafka, HTTP, etc.).
 
 ## Event Schema Example
@@ -367,6 +368,88 @@ LLM_PROXY_EVENT_BUS=redis llm-proxy dispatcher ...
 ```
 
 This enables full async event delivery and observability pipeline testing across processes.
+
+## Redis Streams Backend (Recommended for Production)
+
+For production deployments requiring **guaranteed delivery** and **at-least-once semantics**, use the Redis Streams backend. It provides:
+
+- **Consumer Groups**: Multiple dispatcher instances can share the workload
+- **Acknowledgment**: Messages are only removed after successful processing
+- **Crash Recovery**: Pending messages from crashed consumers are automatically claimed
+- **Durable Storage**: Messages persist until acknowledged, surviving restarts
+
+### Enabling Redis Streams
+
+Set the event bus backend to `redis-streams`:
+
+```bash
+LLM_PROXY_EVENT_BUS=redis-streams llm-proxy server ...
+```
+
+### Configuration Options
+
+| Environment Variable | Description | Default |
+|---------------------|-------------|---------|
+| `LLM_PROXY_EVENT_BUS` | Set to `redis-streams` to enable | `redis` |
+| `REDIS_ADDR` | Redis server address | `localhost:6379` |
+| `REDIS_DB` | Redis database number | `0` |
+| `REDIS_STREAM_KEY` | Stream key name | `llm-proxy-events` |
+| `REDIS_CONSUMER_GROUP` | Consumer group name | `llm-proxy-dispatchers` |
+| `REDIS_CONSUMER_NAME` | Consumer name (unique per instance) | Auto-generated |
+| `REDIS_STREAM_MAX_LEN` | Max stream length (0 = unlimited) | `10000` |
+| `REDIS_STREAM_BLOCK_TIME` | Block timeout for reading | `5s` |
+| `REDIS_STREAM_CLAIM_TIME` | Min idle time before claiming pending messages | `30s` |
+| `REDIS_STREAM_BATCH_SIZE` | Batch size for reading messages | `100` |
+
+### Example Configuration
+
+```bash
+# Full Redis Streams configuration
+export LLM_PROXY_EVENT_BUS=redis-streams
+export REDIS_ADDR=redis.example.com:6379
+export REDIS_DB=0
+export REDIS_STREAM_KEY=llm-proxy-events
+export REDIS_CONSUMER_GROUP=dispatchers
+export REDIS_CONSUMER_NAME=dispatcher-1  # Set unique name per instance
+export REDIS_STREAM_MAX_LEN=50000
+export REDIS_STREAM_BLOCK_TIME=5s
+export REDIS_STREAM_CLAIM_TIME=30s
+export REDIS_STREAM_BATCH_SIZE=100
+
+llm-proxy server
+```
+
+### How It Works
+
+1. **Publishing**: Events are added to the stream via `XADD` with automatic ID generation
+2. **Consumer Groups**: Dispatchers join a consumer group and read via `XREADGROUP`
+3. **Acknowledgment**: After successful processing, messages are acknowledged via `XACK`
+4. **Recovery**: If a consumer crashes, its pending messages are claimed by other consumers after `REDIS_STREAM_CLAIM_TIME`
+
+### Multiple Dispatcher Instances
+
+Redis Streams supports running multiple dispatcher instances that share the workload:
+
+```bash
+# Instance 1
+REDIS_CONSUMER_NAME=dispatcher-1 llm-proxy dispatcher --service lunary
+
+# Instance 2 (on another host or container)
+REDIS_CONSUMER_NAME=dispatcher-2 llm-proxy dispatcher --service lunary
+```
+
+Each message is delivered to exactly one consumer in the group. If a consumer fails, its pending messages are automatically reassigned.
+
+### When to Use Redis Streams vs Redis List
+
+| Feature | Redis List (`redis`) | Redis Streams (`redis-streams`) |
+|---------|---------------------|--------------------------------|
+| Delivery guarantee | At-most-once | At-least-once |
+| Consumer groups | No | Yes |
+| Multiple dispatchers | No (all see same events) | Yes (events distributed) |
+| Crash recovery | No | Yes (pending message claiming) |
+| Acknowledgment | No | Yes |
+| Recommended for | Development, simple setups | Production, high reliability |
 
 ## Production Reliability Warning: Event Retention & Loss
 
