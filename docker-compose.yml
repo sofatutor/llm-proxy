@@ -37,6 +37,10 @@ x-llm-proxy-postgres: &llm-proxy-postgres
     - REDIS_ADDR=redis:6379
     - DB_DRIVER=postgres
     - DATABASE_URL=postgres://llmproxy:${POSTGRES_PASSWORD:-secret}@postgres:5432/llmproxy?sslmode=disable
+    - HTTP_CACHE_ENABLED=${HTTP_CACHE_ENABLED:-false}
+    - HTTP_CACHE_BACKEND=${HTTP_CACHE_BACKEND:-in-memory}
+    - HTTP_CACHE_DEFAULT_TTL=${HTTP_CACHE_DEFAULT_TTL:-300}
+    - CACHE_STATS_BUFFER_SIZE=${CACHE_STATS_BUFFER_SIZE:-1000}
 
 services:
   # PostgreSQL database service (for postgres profile)
