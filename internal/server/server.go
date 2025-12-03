@@ -321,9 +321,19 @@ func (s *Server) initializeAPIRoutes() error {
 	}
 	backend := strings.ToLower(os.Getenv("HTTP_CACHE_BACKEND"))
 	if backend == "redis" {
+		// Use REDIS_CACHE_URL if explicitly set, otherwise construct from REDIS_ADDR
 		url := os.Getenv("REDIS_CACHE_URL")
 		if url == "" {
-			url = "redis://localhost:6379/0"
+			// Construct URL from unified REDIS_ADDR config (same as event bus)
+			addr := os.Getenv("REDIS_ADDR")
+			if addr == "" {
+				addr = "localhost:6379"
+			}
+			db := os.Getenv("REDIS_DB")
+			if db == "" {
+				db = "0"
+			}
+			url = fmt.Sprintf("redis://%s/%s", addr, db)
 		}
 		proxyConfig.RedisCacheURL = url
 		if kp := os.Getenv("REDIS_CACHE_KEY_PREFIX"); kp != "" {
@@ -1156,14 +1166,15 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		sanitizedTokens := make([]TokenListResponse, len(tokens))
 		for i, token := range tokens {
 			sanitizedTokens[i] = TokenListResponse{
-				TokenID:      token.Token,
-				ProjectID:    token.ProjectID,
-				ExpiresAt:    token.ExpiresAt,
-				IsActive:     token.IsActive,
-				RequestCount: token.RequestCount,
-				MaxRequests:  token.MaxRequests,
-				CreatedAt:    token.CreatedAt,
-				LastUsedAt:   token.LastUsedAt,
+				TokenID:       token.Token,
+				ProjectID:     token.ProjectID,
+				ExpiresAt:     token.ExpiresAt,
+				IsActive:      token.IsActive,
+				RequestCount:  token.RequestCount,
+				MaxRequests:   token.MaxRequests,
+				CreatedAt:     token.CreatedAt,
+				LastUsedAt:    token.LastUsedAt,
+				CacheHitCount: token.CacheHitCount,
 			}
 		}
 
