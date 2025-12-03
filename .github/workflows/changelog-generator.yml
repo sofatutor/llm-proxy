@@ -1,0 +1,37 @@
+name: Generate Changelog Entry
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  generate-changelog:
+    name: Generate Changelog Entry
+    # Only run when PR is approved
+    if: github.event.review.state == 'approved'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      
+      - name: Generate Changelog Entry and Update CHANGELOG.md
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          chmod +x scripts/generate-changelog-entry.sh
+          scripts/generate-changelog-entry.sh
+      
+      - name: Commit and Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git diff --staged --quiet || git commit -m "docs: update CHANGELOG.md"
+          git push
