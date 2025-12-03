@@ -205,7 +205,8 @@ if echo "$RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
 fi
 
 # Extract the generated JSON response from the responses API format
-CONTENT=$(echo "$RESPONSE" | jq -r '.output[0].content[0].text // .output_text // empty')
+# The output array may contain reasoning first, then the message - find the message type
+CONTENT=$(echo "$RESPONSE" | jq -r '.output[] | select(.type == "message") | .content[0].text // empty')
 
 if [[ -z "$CONTENT" || "$CONTENT" == "null" ]]; then
   echo "Error: Failed to generate changelog entry" >&2
