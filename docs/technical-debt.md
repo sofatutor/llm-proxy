@@ -1,6 +1,6 @@
 # LLM Proxy - Technical Debt Register
 
-**Last Updated**: November 11, 2025  
+**Last Updated**: December 3, 2025  
 **Purpose**: Consolidated technical debt tracking for the LLM Proxy project
 
 > **Note**: This document consolidates technical debt from WIP.md, PLAN.md, code comments, and review feedback into a single source of truth.
@@ -15,129 +15,13 @@ This register tracks all known technical debt, workarounds, and future improveme
 
 ## Priority 1: Critical (Must Fix Before Production)
 
-### 1. PostgreSQL Support Not Implemented
-
-**Status**: 🔴 Planned but not implemented  
-**Impact**: HIGH - SQLite has concurrency limitations for high-write workloads  
-**Location**: `internal/database/`  
-**GitHub Issue**: [#57](https://github.com/sofatutor/llm-proxy/issues/57) (existing, now with sub-issues #138-#140)
-
-**Description**:
-- PLAN.md mentions PostgreSQL support for production deployments
-- Only SQLite is currently implemented and tested
-- SQLite write lock limits throughput to ~500 writes/sec
-- High-concurrency deployments will hit bottlenecks
-
-**Workaround**:
-- Use SQLite for MVP and low-traffic deployments
-- Plan migration path to PostgreSQL before scaling
-
-**Effort Estimate**: 2-3 weeks
-- Implement PostgreSQL adapter
-- Create migration system
-- Update tests for both databases
-- Document migration procedure
-
-**References**:
-- PLAN.md lines 119-122
-- `docs/architecture.md` lines 359-362
-
----
-
-### 2. No Database Migration System
-
-**Status**: 🔴 Critical gap  
-**Impact**: HIGH - Schema changes are error-prone and hard to track  
-**Location**: `scripts/schema.sql`  
-**GitHub Issue**: [#109](https://github.com/sofatutor/llm-proxy/issues/109)
-
-**Description**:
-- Schema is defined in `scripts/schema.sql` and applied manually
-- No migration tracking or rollback capability
-- Schema changes require manual SQL updates
-- Risk of schema drift between environments
-
-**Workaround**:
-- Document all schema changes in PLAN.md
-- Apply changes manually via SQL scripts
-- Test schema changes in dev before production
-
-**Effort Estimate**: 1 week
-- Choose migration tool (golang-migrate, goose, or custom)
-- Create initial migration from current schema
-- Implement migration runner in setup command
-- Document migration workflow
-
-**References**:
-- Brownfield architecture doc: "No Migrations" section
-- WIP.md line 395
-
----
-
-### 3. Distributed Rate Limiting ✅ IMPLEMENTED
-
-**Status**: 🟢 Implemented  
-**Impact**: MEDIUM-HIGH - Rate limiting is now global across all instances  
-**Location**: `internal/token/redis_ratelimit.go`  
-**GitHub Issue**: [#110](https://github.com/sofatutor/llm-proxy/issues/110)
-
-**Implementation Details**:
-- Redis-backed rate limit counters using atomic INCR operations
-- Sliding window algorithm for accurate rate limiting
-- Graceful fallback to in-memory when Redis is unavailable
-- Per-token configurable rate limits
-- Configuration via environment variables
-
-**Configuration**:
-```bash
-DISTRIBUTED_RATE_LIMIT_ENABLED=true    # Enable Redis-backed rate limiting
-DISTRIBUTED_RATE_LIMIT_PREFIX=ratelimit:  # Redis key prefix
-DISTRIBUTED_RATE_LIMIT_WINDOW=1m       # Window duration
-DISTRIBUTED_RATE_LIMIT_MAX=60          # Max requests per window
-DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
-```
-
-**Files**:
-- `internal/token/redis_ratelimit.go` - Main implementation
-- `internal/token/redis_adapter.go` - Redis client adapter
-- `internal/config/config.go` - Configuration options
+> ✅ **All Priority 1 items have been resolved!** See [Resolved Technical Debt](#resolved-technical-debt) section.
 
 ---
 
 ## Priority 2: Important (Should Fix Soon)
 
-### 4. Cache Invalidation Not Implemented
-
-**Status**: 🟡 Planned but not implemented  
-**Impact**: MEDIUM - Can't purge cache on demand  
-**Location**: `internal/proxy/cache.go`  
-**GitHub Issue**: [#111](https://github.com/sofatutor/llm-proxy/issues/111)
-
-**Description**:
-- Only time-based expiration (TTL) is implemented
-- No manual cache invalidation or purge capability
-- Can't clear cache after data updates or configuration changes
-- Stale data may be served until TTL expires
-
-**Workaround**:
-- Set short TTLs for frequently changing data
-- Wait for TTL expiration
-- Restart service to clear cache (drastic)
-
-**Effort Estimate**: 3-5 days
-- Implement purge endpoint (`POST /manage/cache/purge`)
-- Add CLI command (`llm-proxy manage cache purge`)
-- Support purge by key, prefix, or pattern
-- Add audit logging for purge operations
-- Update tests and documentation
-
-**References**:
-- PLAN.md line 349
-- `docs/caching-strategy.md` lines 87-94
-
----
-
-### 5. Event Loss Risk on Redis Event Bus
+### 1. Event Loss Risk on Redis Event Bus
 
 **Status**: 🟡 Documented warning, no mitigation  
 **Impact**: MEDIUM - Events can be lost if dispatcher lags  
@@ -169,69 +53,37 @@ DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
 
 ---
 
-### 6. Admin UI on Separate Port
+### 2. No Built-in HTTPS (Non-Issue for AWS Deployment)
 
-**Status**: 🟡 Design decision, but confusing  
-**Impact**: MEDIUM - Complicates deployment and firewall config  
-**Location**: `cmd/proxy/admin.go`, `internal/admin/`  
-**GitHub Issue**: [#113](https://github.com/sofatutor/llm-proxy/issues/113)
-
-**Description**:
-- Admin UI runs on :8081, proxy runs on :8080
-- Requires two ports open in firewall
-- Complicates reverse proxy configuration
-- Users often forget to open :8081
-
-**Workaround**:
-- Document clearly in README and deployment guides
-- Use reverse proxy to unify under single domain
-- Example: `/admin/*` → :8081, `/*` → :8080
-
-**Effort Estimate**: 1 week
-- Refactor to single HTTP server with route prefixes
-- Move admin routes to `/admin/*` on main server
-- Update tests for unified server
-- Ensure backward compatibility or document breaking change
-
-**References**:
-- Brownfield architecture: "Admin UI on Separate Port" section
-- WIP.md lines 67-75
-
----
-
-### 7. No Automatic HTTPS
-
-**Status**: 🟡 Requires external reverse proxy  
-**Impact**: MEDIUM - Extra deployment step, potential misconfiguration  
+**Status**: 🟢 Resolved via AWS infrastructure  
+**Impact**: LOW - AWS ALB handles TLS termination  
 **Location**: `internal/server/server.go`  
 **GitHub Issue**: [#114](https://github.com/sofatutor/llm-proxy/issues/114)
 
 **Description**:
-- Server only supports HTTP
-- HTTPS requires external reverse proxy (nginx, Caddy, Traefik)
-- No built-in Let's Encrypt integration
-- Potential for misconfiguration or forgotten HTTPS setup
+- Server only supports HTTP natively
+- **With AWS deployment**: ALB handles TLS termination with ACM certificates
+- **For non-AWS**: Reverse proxy (nginx, Caddy, Traefik) recommended
 
-**Workaround**:
+**AWS Solution** (Recommended):
+- ALB with ACM certificate handles HTTPS
+- Auto-renewal of certificates
+- No application changes needed
+- See [#174](https://github.com/sofatutor/llm-proxy/issues/174) for AWS ECS architecture
+
+**Non-AWS Workaround**:
+- Use reverse proxy (Caddy recommended for automatic HTTPS)
 - Document reverse proxy setup in deployment guides
-- Provide example nginx/Caddy configurations
-- Recommend Caddy for automatic HTTPS
-
-**Effort Estimate**: 1 week
-- Add TLS configuration options
-- Implement Let's Encrypt ACME integration (optional)
-- Support both HTTP and HTTPS modes
-- Update tests and documentation
 
 **References**:
-- PLAN.md line 322
-- `docs/security.md` lines 73-79
+- AWS Architecture: `docs/architecture/planned/aws-ecs-cdk.md`
+- Epic: [#174](https://github.com/sofatutor/llm-proxy/issues/174)
 
 ---
 
 ## Priority 3: Minor (Nice to Have)
 
-### 8. Package READMEs Are Minimal
+### 3. Package READMEs Are Minimal
 
 **Status**: 🟢 Low priority, quality of life  
 **Impact**: LOW - Hard to understand package purpose quickly  
@@ -262,7 +114,7 @@ DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
 
 ---
 
-### 9. Token Timestamp Not Extracted from UUIDv7
+### 4. Token Timestamp Not Extracted from UUIDv7
 
 **Status**: 🟢 Low priority, optimization opportunity  
 **Impact**: LOW - Could use for debugging and cache keys  
@@ -291,7 +143,7 @@ DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
 
 ---
 
-### 10. Vary Header Parsing Is Conservative
+### 5. Vary Header Parsing Is Conservative
 
 **Status**: 🟢 Low priority, optimization opportunity  
 **Impact**: LOW - Lower cache hit rate, higher memory usage  
@@ -322,7 +174,35 @@ DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
 
 ## Priority 4: Deferred (Future Considerations)
 
-### 11. No Request/Response Transformation Pipeline
+### 6. Admin UI on Separate Port (Non-Issue for AWS Deployment)
+
+**Status**: 🟢 Resolved via AWS infrastructure  
+**Impact**: LOW - AWS ALB handles path-based routing  
+**Location**: `cmd/proxy/admin.go`, `internal/admin/`  
+**GitHub Issue**: [#113](https://github.com/sofatutor/llm-proxy/issues/113) (closed)
+
+**Description**:
+- Admin UI runs on :8081, proxy runs on :8080
+- **With AWS deployment**: ALB path-based routing unifies to single HTTPS endpoint
+- **For non-AWS**: Reverse proxy configuration recommended
+
+**AWS Solution** (Recommended):
+- ALB routes `/admin/*` to :8081, `/v1/*` and `/manage/*` to :8080
+- Users see single HTTPS endpoint
+- No firewall complexity
+- See [#174](https://github.com/sofatutor/llm-proxy/issues/174) for AWS ECS architecture
+
+**Non-AWS Workaround**:
+- Use reverse proxy to unify under single domain
+- Example: nginx/Caddy with path-based routing
+
+**References**:
+- AWS Architecture: `docs/architecture/planned/aws-ecs-cdk.md`
+- Epic: [#174](https://github.com/sofatutor/llm-proxy/issues/174)
+
+---
+
+### 7. No Request/Response Transformation Pipeline
 
 **Status**: 🔵 Future feature  
 **Impact**: LOW - Currently not needed  
@@ -351,7 +231,7 @@ DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
 
 ---
 
-### 12. No Multi-Provider Load Balancing
+### 8. No Multi-Provider Load Balancing
 
 **Status**: 🔵 Future feature  
 **Impact**: LOW - Currently not needed  
@@ -379,7 +259,7 @@ DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
 
 ---
 
-### 13. No Real-Time Metrics Dashboard
+### 9. No Real-Time Metrics Dashboard
 
 **Status**: 🔵 Future feature  
 **Impact**: LOW - Currently not needed  
@@ -409,6 +289,86 @@ DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
 ---
 
 ## Resolved Technical Debt
+
+### ✅ PostgreSQL Support (Completed December 2, 2025)
+
+**Status**: ✅ Fixed  
+**GitHub Issue**: [#57](https://github.com/sofatutor/llm-proxy/issues/57) (closed)
+
+**Description**:
+- PostgreSQL is now fully supported as an alternative to SQLite
+- Configuration via `DB_DRIVER=postgres` and `DATABASE_URL`
+- Full migration support for both databases
+- Docker Compose configuration included
+
+**Implementation**:
+- `internal/database/factory_postgres.go` - PostgreSQL driver
+- `internal/database/migrations/sql/postgres/` - PostgreSQL migrations
+- `docker-compose.yml` - PostgreSQL service configuration
+
+---
+
+### ✅ Database Migration System (Completed December 2, 2025)
+
+**Status**: ✅ Fixed  
+**GitHub Issue**: [#109](https://github.com/sofatutor/llm-proxy/issues/109) (closed)
+
+**Description**:
+- Full migration system implemented using goose
+- Migration tracking and rollback capability
+- Support for both SQLite and PostgreSQL
+
+**Implementation**:
+- `internal/database/migrations/` - Migration runner and SQL files
+- Automatic migrations on server startup
+- CLI integration for migration management
+
+---
+
+### ✅ Distributed Rate Limiting (Completed December 2, 2025)
+
+**Status**: ✅ Fixed  
+**GitHub Issue**: [#110](https://github.com/sofatutor/llm-proxy/issues/110) (closed)
+
+**Implementation Details**:
+- Redis-backed rate limit counters using atomic INCR operations
+- Sliding window algorithm for accurate rate limiting
+- Graceful fallback to in-memory when Redis is unavailable
+- Per-token configurable rate limits
+- Configuration via environment variables
+
+**Configuration**:
+```bash
+DISTRIBUTED_RATE_LIMIT_ENABLED=true    # Enable Redis-backed rate limiting
+DISTRIBUTED_RATE_LIMIT_PREFIX=ratelimit:  # Redis key prefix
+DISTRIBUTED_RATE_LIMIT_WINDOW=1m       # Window duration
+DISTRIBUTED_RATE_LIMIT_MAX=60          # Max requests per window
+DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
+```
+
+**Files**:
+- `internal/token/redis_ratelimit.go` - Main implementation
+- `internal/token/redis_adapter.go` - Redis client adapter
+- `internal/config/config.go` - Configuration options
+
+---
+
+### ✅ Cache Invalidation API (Completed December 2, 2025)
+
+**Status**: ✅ Fixed  
+**GitHub Issue**: [#111](https://github.com/sofatutor/llm-proxy/issues/111) (closed)
+
+**Description**:
+- Manual cache invalidation and purge capability implemented
+- Support for purging by key, prefix, or all entries
+
+**Implementation**:
+- `internal/proxy/cache.go` - Cache invalidation methods
+- `internal/proxy/cache_redis.go` - Redis cache invalidation
+- Management API endpoint for cache purge
+- CLI command for cache operations
+
+---
 
 ### ✅ Cache Eviction Optimization (Completed)
 
@@ -515,26 +475,25 @@ DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
 
 ### By Priority
 
-- **Priority 1 (Critical)**: 3 items
-- **Priority 2 (Important)**: 4 items
+- **Priority 1 (Critical)**: 0 items ✅ All resolved!
+- **Priority 2 (Important)**: 1 item (Event Loss Risk)
 - **Priority 3 (Minor)**: 3 items
-- **Priority 4 (Deferred)**: 3 items
-- **Resolved**: 3 items
+- **Priority 4 (Deferred)**: 2 items (plus 2 non-issues via AWS)
+- **Resolved**: 7 items
+- **Non-Issues (AWS handles)**: 2 items (HTTPS, Multi-port)
 
 ### By Effort
 
-- **< 1 week**: 5 items
-- **1-2 weeks**: 5 items
-- **2-3 weeks**: 3 items
-- **> 3 weeks**: 3 items
+- **< 1 week**: 2 items
+- **1-2 weeks**: 3 items
+- **2-3 weeks**: 2 items
 
-### Total Estimated Effort
+### Total Estimated Effort (Remaining)
 
-- **Priority 1**: ~4-5 weeks
-- **Priority 2**: ~4-5 weeks
-- **Priority 3**: ~2-3 weeks
-- **Priority 4**: ~5-8 weeks
-- **Total**: ~15-21 weeks
+- **Priority 2**: ~1-2 weeks
+- **Priority 3**: ~1-2 weeks
+- **Priority 4**: ~5-8 weeks (if implemented)
+- **Total Active**: ~2-4 weeks
 
 ---
 
@@ -554,7 +513,7 @@ DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
 - Priorities shift based on business needs
 - Effort estimates are refined based on experience
 
-**Last Updated**: November 11, 2025 by AI Documentation Agent
+**Last Updated**: December 3, 2025
 
 ---
 
@@ -562,19 +521,24 @@ DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
 
 All technical debt items have been tracked as GitHub issues:
 
-### Priority 1 (Critical)
-- [#57](https://github.com/sofatutor/llm-proxy/issues/57) - PostgreSQL Support (existing, now with sub-issues #138-#140)
-  - Depends on #109 (must complete migration system first)
-- [#109](https://github.com/sofatutor/llm-proxy/issues/109) - Database Migration System (blocks #57)
-- [#110](https://github.com/sofatutor/llm-proxy/issues/110) - Distributed Rate Limiting
+### Active Issues
 
-### Priority 2 (Important)
-- [#111](https://github.com/sofatutor/llm-proxy/issues/111) - Cache Invalidation API
+#### Priority 2 (Important)
 - [#112](https://github.com/sofatutor/llm-proxy/issues/112) - Durable Event Queue with Guaranteed Delivery
-- [#113](https://github.com/sofatutor/llm-proxy/issues/113) - Unified HTTP Server (Single Port)
-- [#114](https://github.com/sofatutor/llm-proxy/issues/114) - Built-in HTTPS Support
 
-### Priority 3-4 (Minor/Deferred)
+#### Priority 3-4 (Minor/Deferred)
 - [#115](https://github.com/sofatutor/llm-proxy/issues/115) - Comprehensive Package Documentation
 - [#116](https://github.com/sofatutor/llm-proxy/issues/116) - Optimizations and Future Enhancements (collection)
 
+### Non-Issues (Resolved by AWS Infrastructure)
+- [#114](https://github.com/sofatutor/llm-proxy/issues/114) - HTTPS Support → ALB + ACM handles TLS
+- [#113](https://github.com/sofatutor/llm-proxy/issues/113) - Unified HTTP Server → ALB path-based routing
+
+See [#174](https://github.com/sofatutor/llm-proxy/issues/174) (AWS ECS Epic) for the infrastructure approach.
+
+### Resolved Issues
+
+- [#57](https://github.com/sofatutor/llm-proxy/issues/57) - PostgreSQL Support ✅
+- [#109](https://github.com/sofatutor/llm-proxy/issues/109) - Database Migration System ✅
+- [#110](https://github.com/sofatutor/llm-proxy/issues/110) - Distributed Rate Limiting ✅
+- [#111](https://github.com/sofatutor/llm-proxy/issues/111) - Cache Invalidation API ✅
