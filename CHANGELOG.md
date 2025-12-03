@@ -11,11 +11,13 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 ### Added
 
 - **Automated Changelog Generation** ([#184](https://github.com/sofatutor/llm-proxy/pull/184)): GitHub Actions workflow that generates changelog entries on PR approval using OpenAI API.
+- **Redis Streams EventBus** ([#185](https://github.com/sofatutor/llm-proxy/pull/185)): Adds a Redis Streams backend with consumer groups, durable delivery guarantees, automatic recovery, and configuration for stream trimming, batching, and consumer timeouts to power the event bus.
 
 ### Changed
 
 - **Enhanced CHANGELOG.md** ([#184](https://github.com/sofatutor/llm-proxy/pull/184)): Transformed 79 PR entries from basic titles to detailed entries with descriptions.
 - **December 2025 Documentation Cleanup** ([#183](https://github.com/sofatutor/llm-proxy/pull/183)): Major documentation reorganization reducing ~30 top-level items to 8 collapsible sections (Getting Started, Architecture, Admin UI, Guides, Database, Observability, Deployment, Development). Updated technical debt docs marking PostgreSQL, migrations, distributed rate limiting, and cache invalidation as resolved. Bumped brownfield architecture to v2.0 with AWS ECS production deployment section. Added Jekyll front matter to all pages.
+- **Redis Streams Documentation** ([#185](https://github.com/sofatutor/llm-proxy/pull/185)): Expanded instrumentation docs with Redis Streams configuration guidance, environment variable defaults, usage examples, and comparison notes to aid observability and deployment.
 
 ## December 02, 2025
 
