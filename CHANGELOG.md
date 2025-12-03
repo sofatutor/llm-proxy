@@ -10,14 +10,21 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Added
 
+- **Unified Redis Configuration** ([#187](https://github.com/sofatutor/llm-proxy/pull/187)): Builds REDIS_CACHE_URL from REDIS_ADDR/REDIS_DB when the explicit cache URL is missing so the HTTP cache and event bus share a single Redis configuration while keeping backward compatibility.
+- **Cache Stats in Admin UI** ([#187](https://github.com/sofatutor/llm-proxy/pull/187)): Adds cache_hit_count to the token API response and shows request, cache hit, and upstream request badges in the Admin UI token list so operators can monitor cache effectiveness at a glance.
 - **Redis Streams EventBus** ([#185](https://github.com/sofatutor/llm-proxy/pull/185)): Implements a Redis Streams backend with consumer groups to deliver durable, distributed events with at-least-once semantics, automatic recovery, and stream trimming, configurable through new environment variables for batching, timeouts, and stream limits.
 - **Automated Changelog Generation** ([#184](https://github.com/sofatutor/llm-proxy/pull/184)): GitHub Actions workflow that generates changelog entries on PR approval using OpenAI API.
 
 ### Changed
 
+- **Documented Redis Config** ([#187](https://github.com/sofatutor/llm-proxy/pull/187)): Updated Docker compose and twelve documentation files to refer to the unified REDIS_ADDR configuration so deployments and guides stay aligned with the new Redis setup.
 - **Redis Streams Documentation** ([#185](https://github.com/sofatutor/llm-proxy/pull/185)): Expanded the instrumentation docs with comprehensive Redis Streams configuration guidance, covering environment variable defaults, usage examples, and deployment comparisons to simplify observability.
 - **Enhanced CHANGELOG.md** ([#184](https://github.com/sofatutor/llm-proxy/pull/184)): Transformed 79 PR entries from basic titles to detailed entries with descriptions.
 - **December 2025 Documentation Cleanup** ([#183](https://github.com/sofatutor/llm-proxy/pull/183)): Major documentation reorganization reducing ~30 top-level items to 8 collapsible sections (Getting Started, Architecture, Admin UI, Guides, Database, Observability, Deployment, Development). Updated technical debt docs marking PostgreSQL, migrations, distributed rate limiting, and cache invalidation as resolved. Bumped brownfield architecture to v2.0 with AWS ECS production deployment section. Added Jekyll front matter to all pages.
+
+### Fixed
+
+- **Lint os.Unsetenv** ([#187](https://github.com/sofatutor/llm-proxy/pull/187)): Handles os.Unsetenv return values in config tests to satisfy errcheck.
 
 ## December 02, 2025
 

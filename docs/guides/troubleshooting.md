@@ -254,11 +254,11 @@ psql "$DATABASE_URL" -c "SELECT * FROM pg_locks WHERE locktype = 'advisory';"
    redis-cli ping  # Should return PONG
    ```
 
-2. **Check connection URL**
+2. **Check connection settings**
    ```bash
-   # Verify REDIS_CACHE_URL format
-   # Correct: redis://hostname:6379/0
-   # Wrong: redis:6379 or hostname:6379
+   # Verify REDIS_ADDR format
+   # Correct: hostname:6379 or localhost:6379
+   # Optional: Set REDIS_DB for database selection (default: 0)
    ```
 
 3. **Network issues in Docker**
@@ -267,7 +267,7 @@ psql "$DATABASE_URL" -c "SELECT * FROM pg_locks WHERE locktype = 'advisory';"
    docker network inspect bridge
    
    # Use container name as hostname
-   REDIS_CACHE_URL=redis://redis:6379/0
+   REDIS_ADDR=redis:6379
    ```
 
 ### High Cache Miss Rate

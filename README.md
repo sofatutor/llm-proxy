@@ -50,7 +50,7 @@ docker run -d \
   -e MANAGEMENT_TOKEN=your-secure-management-token \
   -e HTTP_CACHE_ENABLED=true \
   -e HTTP_CACHE_BACKEND=redis \
-  -e REDIS_CACHE_URL=redis://redis:6379/0 \
+  -e REDIS_ADDR=redis:6379 \
   --link redis \
   ghcr.io/sofatutor/llm-proxy:latest
 ```
@@ -99,7 +99,9 @@ See [PostgreSQL Setup Guide](docs/docker-compose-postgres.md) for detailed Postg
 ### Caching Configuration
 - `HTTP_CACHE_ENABLED`: Enable HTTP response caching (default `true`)
 - `HTTP_CACHE_BACKEND`: Cache backend (`redis` or `in-memory`, default `in-memory`)
-- `REDIS_CACHE_URL`: Redis connection URL (default `redis://localhost:6379/0` when backend=redis)
+- `REDIS_ADDR`: Redis server address, shared with event bus (default `localhost:6379`)
+- `REDIS_DB`: Redis database number (default `0`)
+- `REDIS_CACHE_URL`: Optional override for Redis cache URL (constructed from `REDIS_ADDR` and `REDIS_DB` if not set)
 - `REDIS_CACHE_KEY_PREFIX`: Cache key prefix (default `llmproxy:cache:`)
 - `HTTP_CACHE_MAX_OBJECT_BYTES`: Maximum cached object size in bytes (default 1048576)
 - `HTTP_CACHE_DEFAULT_TTL`: Default TTL in seconds when upstream doesn't specify (default 300)

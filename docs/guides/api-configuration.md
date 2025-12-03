@@ -138,7 +138,9 @@ The proxy supports HTTP response caching with the following environment variable
 
 - `HTTP_CACHE_ENABLED`: Enable or disable HTTP response caching (default: `true`)
 - `HTTP_CACHE_BACKEND`: Cache backend to use, either `redis` or `in-memory` (default: `in-memory`)
-- `REDIS_CACHE_URL`: Redis connection URL for cache storage (default: `redis://localhost:6379/0` when backend is `redis`)
+- `REDIS_ADDR`: Redis server address, shared with event bus (default: `localhost:6379`)
+- `REDIS_DB`: Redis database number (default: `0`)
+- `REDIS_CACHE_URL`: Optional override for Redis cache URL (constructed from `REDIS_ADDR` + `REDIS_DB` if not set)
 - `REDIS_CACHE_KEY_PREFIX`: Prefix for Redis cache keys (default: `llmproxy:cache:`)
 - `HTTP_CACHE_MAX_OBJECT_BYTES`: Maximum size in bytes for cached objects (default: `1048576` - 1MB)
 - `HTTP_CACHE_DEFAULT_TTL`: Default TTL in seconds when upstream response doesn't specify caching directives (default: `300` - 5 minutes)

@@ -254,7 +254,8 @@ Enable caching with environment variables:
 ```bash
 HTTP_CACHE_ENABLED=true
 HTTP_CACHE_BACKEND=redis
-REDIS_CACHE_URL=redis://localhost:6379/0
+REDIS_ADDR=localhost:6379
+REDIS_DB=0
 REDIS_CACHE_KEY_PREFIX=llmproxy:cache:
 HTTP_CACHE_MAX_OBJECT_BYTES=1048576
 HTTP_CACHE_DEFAULT_TTL=300
