@@ -175,23 +175,25 @@ ${PR_FILES_TRUNCATED}
 ${EXISTING_CONTEXT}
 USERPROMPT
 
-# Build JSON payload using jq for proper escaping
+# Build JSON payload using jq for proper escaping (using /v1/responses API)
 JSON_PAYLOAD=$(jq -n \
   --arg system "$SYSTEM_PROMPT" \
   --arg user "$USER_PROMPT" \
   '{
     model: "gpt-5.1-codex-mini",
-    messages: [
-      {role: "system", content: $system},
-      {role: "user", content: $user}
-    ],
+    instructions: $system,
+    input: $user,
     temperature: 0.1,
-    max_tokens: 2000,
-    response_format: {type: "json_object"}
+    max_output_tokens: 2000,
+    text: {
+      format: {
+        type: "json_object"
+      }
+    }
   }')
 
-# Call OpenAI API
-RESPONSE=$(curl -s -X POST "https://api.openai.com/v1/chat/completions" \
+# Call OpenAI Responses API
+RESPONSE=$(curl -s -X POST "https://api.openai.com/v1/responses" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${OPENAI_API_KEY}" \
   -d "$JSON_PAYLOAD")
@@ -203,8 +205,8 @@ if echo "$RESPONSE" | jq -e '.error' > /dev/null 2>&1; then
   exit 1
 fi
 
-# Extract the generated JSON response
-CONTENT=$(echo "$RESPONSE" | jq -r '.choices[0].message.content')
+# Extract the generated JSON response from the responses API format
+CONTENT=$(echo "$RESPONSE" | jq -r '.output[0].content[0].text // .output_text // empty')
 
 if [[ -z "$CONTENT" || "$CONTENT" == "null" ]]; then
   echo "Error: Failed to generate changelog entry" >&2
