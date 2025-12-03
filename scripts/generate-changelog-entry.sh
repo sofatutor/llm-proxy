@@ -160,7 +160,7 @@ ${EXISTING_SECTION}
 fi
 
 read -r -d '' USER_PROMPT << USERPROMPT || true
-Generate changelog entries for this PR and merge with existing entries:
+Generate changelog entries for this PR and merge with existing entries. Respond with valid JSON only.
 
 **PR Title:** ${PR_TITLE}
 **PR Number:** #${PR_NUMBER}
