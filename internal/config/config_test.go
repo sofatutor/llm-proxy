@@ -667,14 +667,14 @@ func TestConfig_RedisStreamsDefaults(t *testing.T) {
 func TestConfig_RedisStreamsFromEnv(t *testing.T) {
 	// Clean up environment after test
 	defer func() {
-		os.Unsetenv("MANAGEMENT_TOKEN")
-		os.Unsetenv("REDIS_STREAM_KEY")
-		os.Unsetenv("REDIS_CONSUMER_GROUP")
-		os.Unsetenv("REDIS_CONSUMER_NAME")
-		os.Unsetenv("REDIS_STREAM_MAX_LEN")
-		os.Unsetenv("REDIS_STREAM_BLOCK_TIME")
-		os.Unsetenv("REDIS_STREAM_CLAIM_TIME")
-		os.Unsetenv("REDIS_STREAM_BATCH_SIZE")
+		_ = os.Unsetenv("MANAGEMENT_TOKEN")
+		_ = os.Unsetenv("REDIS_STREAM_KEY")
+		_ = os.Unsetenv("REDIS_CONSUMER_GROUP")
+		_ = os.Unsetenv("REDIS_CONSUMER_NAME")
+		_ = os.Unsetenv("REDIS_STREAM_MAX_LEN")
+		_ = os.Unsetenv("REDIS_STREAM_BLOCK_TIME")
+		_ = os.Unsetenv("REDIS_STREAM_CLAIM_TIME")
+		_ = os.Unsetenv("REDIS_STREAM_BATCH_SIZE")
 	}()
 
 	if err := os.Setenv("MANAGEMENT_TOKEN", "test-token"); err != nil {
