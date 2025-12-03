@@ -149,7 +149,8 @@ The proxy exposes cache metrics via `Metrics()`:
 |----------|-------------|
 | `HTTP_CACHE_ENABLED` | Enable HTTP cache (`true`/`false`) |
 | `HTTP_CACHE_BACKEND` | Cache backend (`redis` or in-memory) |
-| `REDIS_CACHE_URL` | Redis URL for cache backend |
+| `REDIS_ADDR` | Redis server address (shared with event bus) |
+| `REDIS_DB` | Redis database number |
 | `REDIS_CACHE_KEY_PREFIX` | Key prefix for Redis cache |
 
 ### ProxyConfig Options

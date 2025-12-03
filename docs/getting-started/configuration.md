@@ -79,7 +79,9 @@ HTTP response caching improves performance by storing and reusing responses.
 |----------|------|---------|-------------|
 | `HTTP_CACHE_ENABLED` | bool | `true` | Enable HTTP response caching |
 | `HTTP_CACHE_BACKEND` | string | `in-memory` | Cache backend (`redis` or `in-memory`) |
-| `REDIS_CACHE_URL` | string | `redis://localhost:6379/0` | Redis connection URL |
+| `REDIS_ADDR` | string | `localhost:6379` | Redis server address (shared with event bus) |
+| `REDIS_DB` | int | `0` | Redis database number |
+| `REDIS_CACHE_URL` | string | (auto) | Optional override; constructed from `REDIS_ADDR` + `REDIS_DB` if not set |
 | `REDIS_CACHE_KEY_PREFIX` | string | `llmproxy:cache:` | Prefix for Redis cache keys |
 | `HTTP_CACHE_MAX_OBJECT_BYTES` | int | `1048576` | Maximum cached object size (1MB) |
 | `HTTP_CACHE_DEFAULT_TTL` | int | `300` | Default TTL in seconds (5 minutes) |
@@ -322,11 +324,11 @@ AUDIT_STORE_IN_DB=true
 # Caching (Redis)
 HTTP_CACHE_ENABLED=true
 HTTP_CACHE_BACKEND=redis
-REDIS_CACHE_URL=redis://redis:6379/0
 
-# Event Bus (Redis for distributed)
+# Redis (shared by cache and event bus)
 LLM_PROXY_EVENT_BUS=redis
 REDIS_ADDR=redis:6379
+REDIS_DB=0
 OBSERVABILITY_BUFFER_SIZE=2000
 
 # Security

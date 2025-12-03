@@ -186,7 +186,9 @@ Cache behavior is controlled through environment variables:
 
 - `HTTP_CACHE_ENABLED`: Enable/disable caching (default: `true`)
 - `HTTP_CACHE_BACKEND`: Backend selection (`redis`|`in-memory`, default: `in-memory`)
-- `REDIS_CACHE_URL`: Redis connection URL for cache storage
+- `REDIS_ADDR`: Redis server address, shared with event bus (default: `localhost:6379`)
+- `REDIS_DB`: Redis database number (default: `0`)
+- `REDIS_CACHE_URL`: Optional override for Redis cache URL (constructed from `REDIS_ADDR` + `REDIS_DB` if not set)
 - `REDIS_CACHE_KEY_PREFIX`: Key prefix for Redis keys (default: `llmproxy:cache:`)
 - `HTTP_CACHE_MAX_OBJECT_BYTES`: Maximum cached object size (default: 1048576)
 - `HTTP_CACHE_DEFAULT_TTL`: Default TTL when upstream doesn't specify (default: 300)

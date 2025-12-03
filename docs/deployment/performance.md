@@ -67,8 +67,9 @@ HTTP_CACHE_MAX_OBJECT_BYTES=5242880  # 5MB
 ### Redis Cache Configuration
 
 ```bash
-# Redis connection
-REDIS_CACHE_URL=redis://localhost:6379/0
+# Redis connection (shared with event bus)
+REDIS_ADDR=localhost:6379
+REDIS_DB=0
 
 # Key prefix (useful for multi-tenant Redis)
 REDIS_CACHE_KEY_PREFIX=llmproxy:cache:
@@ -282,14 +283,12 @@ DB_DRIVER=postgres
 DATABASE_URL=postgres://user:pass@postgres:5432/llmproxy?sslmode=require
 DATABASE_POOL_SIZE=20  # Per instance
 
-# Cache - all instances share
+# Cache and Event bus - all instances share same Redis
 HTTP_CACHE_ENABLED=true
 HTTP_CACHE_BACKEND=redis
-REDIS_CACHE_URL=redis://redis:6379/0
-
-# Event bus - all instances share
 LLM_PROXY_EVENT_BUS=redis
 REDIS_ADDR=redis:6379
+REDIS_DB=0
 
 # Rate limiting - distributed
 DISTRIBUTED_RATE_LIMIT_ENABLED=true

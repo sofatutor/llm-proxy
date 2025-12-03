@@ -79,7 +79,7 @@ docker run -d \
   -e MANAGEMENT_TOKEN=your-secure-management-token \
   -e HTTP_CACHE_ENABLED=true \
   -e HTTP_CACHE_BACKEND=redis \
-  -e REDIS_CACHE_URL=redis://redis:6379/0 \
+  -e REDIS_ADDR=redis:6379 \
   --link redis \
   ghcr.io/sofatutor/llm-proxy:latest
 ```
@@ -152,9 +152,9 @@ services:
       - LOG_LEVEL=info
       - HTTP_CACHE_ENABLED=true
       - HTTP_CACHE_BACKEND=redis
-      - REDIS_CACHE_URL=redis://redis:6379/0
       - LLM_PROXY_EVENT_BUS=redis
       - REDIS_ADDR=redis:6379
+      - REDIS_DB=0
     depends_on:
       redis:
         condition: service_started

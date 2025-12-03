@@ -99,7 +99,8 @@ The server accepts configuration via `config.Config`:
 | `LISTEN_ADDR` | Server listen address |
 | `HTTP_CACHE_ENABLED` | Enable HTTP cache (`true`/`false`) |
 | `HTTP_CACHE_BACKEND` | Cache backend (`redis` or in-memory) |
-| `REDIS_CACHE_URL` | Redis URL for cache |
+| `REDIS_ADDR` | Redis server address (shared with event bus) |
+| `REDIS_DB` | Redis database number |
 
 ## API Routes
 

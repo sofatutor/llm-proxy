@@ -520,8 +520,8 @@ cdk deploy
 |-----------------|------------|
 | `MANAGEMENT_TOKEN` | Secrets Manager |
 | `DATABASE_URL` | Secrets Manager (Aurora) |
-| `REDIS_CACHE_URL` | SSM Parameter (ElastiCache endpoint) |
-| `REDIS_EVENT_URL` | SSM Parameter (ElastiCache endpoint) |
+| `REDIS_ADDR` | SSM Parameter (ElastiCache endpoint) |
+| `REDIS_DB` | SSM Parameter (default: 0) |
 | `LOG_LEVEL` | SSM Parameter |
 
 ### Required Code Changes
