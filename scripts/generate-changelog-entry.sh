@@ -180,7 +180,7 @@ JSON_PAYLOAD=$(jq -n \
   --arg system "$SYSTEM_PROMPT" \
   --arg user "$USER_PROMPT" \
   '{
-    model: "gpt-4o-mini",
+    model: "gpt-5.1-codex-mini",
     messages: [
       {role: "system", content: $system},
       {role: "user", content: $user}
