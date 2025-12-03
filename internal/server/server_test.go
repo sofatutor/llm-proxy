@@ -1316,3 +1316,108 @@ func (m *mockEventBus) Subscribe() <-chan eventbus.Event {
 	return ch
 }
 func (m *mockEventBus) Stop() {}
+
+func TestInitializeAPIRoutes_RedisCacheURLConstruction(t *testing.T) {
+	// Save and restore environment
+	origCacheURL := os.Getenv("REDIS_CACHE_URL")
+	origAddr := os.Getenv("REDIS_ADDR")
+	origDB := os.Getenv("REDIS_DB")
+	origBackend := os.Getenv("HTTP_CACHE_BACKEND")
+	origEnabled := os.Getenv("HTTP_CACHE_ENABLED")
+	defer func() {
+		_ = os.Setenv("REDIS_CACHE_URL", origCacheURL)
+		_ = os.Setenv("REDIS_ADDR", origAddr)
+		_ = os.Setenv("REDIS_DB", origDB)
+		_ = os.Setenv("HTTP_CACHE_BACKEND", origBackend)
+		_ = os.Setenv("HTTP_CACHE_ENABLED", origEnabled)
+	}()
+
+	tests := []struct {
+		name        string
+		cacheURL    string
+		redisAddr   string
+		redisDB     string
+		backend     string
+		cacheEnable string
+	}{
+		{
+			name:        "explicit REDIS_CACHE_URL takes precedence",
+			cacheURL:    "redis://custom:6380/5",
+			redisAddr:   "ignored:6379",
+			redisDB:     "9",
+			backend:     "redis",
+			cacheEnable: "true",
+		},
+		{
+			name:        "construct from REDIS_ADDR and REDIS_DB",
+			cacheURL:    "",
+			redisAddr:   "myredis:6380",
+			redisDB:     "3",
+			backend:     "redis",
+			cacheEnable: "true",
+		},
+		{
+			name:        "use defaults when REDIS_ADDR not set",
+			cacheURL:    "",
+			redisAddr:   "",
+			redisDB:     "",
+			backend:     "redis",
+			cacheEnable: "true",
+		},
+		{
+			name:        "REDIS_ADDR set but REDIS_DB empty uses default 0",
+			cacheURL:    "",
+			redisAddr:   "otherredis:6379",
+			redisDB:     "",
+			backend:     "redis",
+			cacheEnable: "true",
+		},
+		{
+			name:        "cache disabled skips redis setup",
+			cacheURL:    "",
+			redisAddr:   "",
+			redisDB:     "",
+			backend:     "in-memory",
+			cacheEnable: "false",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Clear and set env vars
+			_ = os.Unsetenv("REDIS_CACHE_URL")
+			_ = os.Unsetenv("REDIS_ADDR")
+			_ = os.Unsetenv("REDIS_DB")
+			_ = os.Unsetenv("HTTP_CACHE_BACKEND")
+			_ = os.Unsetenv("HTTP_CACHE_ENABLED")
+
+			if tc.cacheURL != "" {
+				_ = os.Setenv("REDIS_CACHE_URL", tc.cacheURL)
+			}
+			if tc.redisAddr != "" {
+				_ = os.Setenv("REDIS_ADDR", tc.redisAddr)
+			}
+			if tc.redisDB != "" {
+				_ = os.Setenv("REDIS_DB", tc.redisDB)
+			}
+			if tc.backend != "" {
+				_ = os.Setenv("HTTP_CACHE_BACKEND", tc.backend)
+			}
+			if tc.cacheEnable != "" {
+				_ = os.Setenv("HTTP_CACHE_ENABLED", tc.cacheEnable)
+			}
+
+			cfg := &config.Config{
+				ListenAddr:      ":0",
+				RequestTimeout:  time.Second,
+				EventBusBackend: "in-memory",
+			}
+			srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+			require.NoError(t, err)
+
+			// initializeAPIRoutes should not error regardless of config
+			err = srv.initializeAPIRoutes()
+			require.NoError(t, err)
+		})
+	}
+}
