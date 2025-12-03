@@ -58,8 +58,8 @@ fi
 # Defaults
 CHANGELOG_PATH="${CHANGELOG_PATH:-CHANGELOG.md}"
 
-# Get today's date in the changelog format
-TODAY=$(date +"%B %d, %Y")
+# Get today's date in the changelog format (force English locale for consistency)
+TODAY=$(LC_ALL=C date +"%B %d, %Y")
 
 # Fetch PR metadata using gh CLI
 if [[ -n "$PR_NUMBER" ]]; then
@@ -73,6 +73,10 @@ fi
 
 PR_TITLE=$(echo "$PR_JSON" | jq -r '.title')
 PR_BODY=$(echo "$PR_JSON" | jq -r '.body // "No description provided."')
+# Handle null/empty PR body explicitly
+if [[ "$PR_BODY" == "null" || -z "$PR_BODY" ]]; then
+  PR_BODY="No description provided."
+fi
 PR_ADDITIONS=$(echo "$PR_JSON" | jq -r '.additions')
 PR_DELETIONS=$(echo "$PR_JSON" | jq -r '.deletions')
 PR_URL=$(echo "$PR_JSON" | jq -r '.url')
@@ -181,7 +185,7 @@ JSON_PAYLOAD=$(jq -n \
       {role: "system", content: $system},
       {role: "user", content: $user}
     ],
-    temperature: 0.3,
+    temperature: 0.1,
     max_tokens: 2000,
     response_format: {type: "json_object"}
   }')
@@ -210,7 +214,7 @@ fi
 # Parse entries from JSON response
 if ! echo "$CONTENT" | jq -e '.entries' > /dev/null 2>&1; then
   echo "Error: Invalid JSON response - missing entries array" >&2
-  echo "Response: $CONTENT" >&2
+  echo "Response (truncated): ${CONTENT:0:200}..." >&2
   exit 1
 fi
 
