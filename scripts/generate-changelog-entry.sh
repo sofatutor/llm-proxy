@@ -127,6 +127,7 @@ Rules for generating entries:
 5. For multi-feature PRs: create separate entries for distinct capabilities (e.g., new automation + enhanced documentation)
 6. IMPORTANT: Include ALL existing entries in your response (unchanged, unless same PR number)
 7. Order entries by category: Added, Changed, Fixed, Reverted
+8. Within each category, order entries by PR number DESCENDING (highest/newest first)
 
 Example output for a PR with automation + docs, plus one existing entry:
 {
