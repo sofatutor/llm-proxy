@@ -446,14 +446,16 @@ func TestHandleTokens(t *testing.T) {
 
 	testTokens := []token.TokenData{
 		{
-			Token:     "token-1",
-			ProjectID: "project-1",
-			IsActive:  true,
+			Token:         "token-1",
+			ProjectID:     "project-1",
+			IsActive:      true,
+			CacheHitCount: 42,
 		},
 		{
-			Token:     "token-2",
-			ProjectID: "project-2",
-			IsActive:  true,
+			Token:         "token-2",
+			ProjectID:     "project-2",
+			IsActive:      true,
+			CacheHitCount: 100,
 		},
 	}
 
@@ -537,6 +539,10 @@ func TestHandleTokens(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, response, 2)
 
+		// Verify cache_hit_count is returned in the response
+		assert.Equal(t, 42, response[0].CacheHitCount, "cache_hit_count should be returned for token-1")
+		assert.Equal(t, 100, response[1].CacheHitCount, "cache_hit_count should be returned for token-2")
+
 		// Explicitly assert that no raw token field is present
 		var generic []map[string]interface{}
 		err = json.NewDecoder(bytes.NewReader(raw)).Decode(&generic)
@@ -544,6 +550,10 @@ func TestHandleTokens(t *testing.T) {
 		for _, item := range generic {
 			if _, exists := item["token"]; exists {
 				t.Fatalf("response item unexpectedly contains raw token field: %v", item)
+			}
+			// Also verify cache_hit_count is present in raw JSON
+			if _, exists := item["cache_hit_count"]; !exists {
+				t.Fatalf("response item missing cache_hit_count field: %v", item)
 			}
 		}
 	})
