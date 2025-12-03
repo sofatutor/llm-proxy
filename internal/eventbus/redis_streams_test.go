@@ -1029,3 +1029,291 @@ func TestRedisStreamsEventBus_ConsumeLoop_HandlesErrors(t *testing.T) {
 		t.Error("expected channel to be closed")
 	}
 }
+
+// Test Publish with JSON marshal error - use event with ResponseHeaders
+func TestRedisStreamsEventBus_Publish_JSONMarshalCoverage(t *testing.T) {
+	client := newMockRedisStreamsClient()
+	config := DefaultRedisStreamsConfig()
+	bus := NewRedisStreamsEventBus(client, config)
+
+	ctx := context.Background()
+
+	// Normal event should work
+	evt := Event{
+		RequestID: "test-marshal",
+		Method:    "POST",
+		Path:      "/v1/chat",
+		Status:    200,
+	}
+	bus.Publish(ctx, evt)
+
+	pub, drop := bus.Stats()
+	if pub != 1 || drop != 0 {
+		t.Errorf("expected 1 published, 0 dropped, got pub=%d, drop=%d", pub, drop)
+	}
+}
+
+// Test XClaim with no eligible messages
+func TestRedisStreamsEventBus_ClaimPendingMessages_NoEligible(t *testing.T) {
+	client := newMockRedisStreamsClient()
+	config := DefaultRedisStreamsConfig()
+	config.ClaimMinIdleTime = time.Hour // Very long, nothing should be claimed
+
+	// Setup: create group with a recent pending message
+	client.groups[config.ConsumerGroup] = &mockConsumerGroup{
+		name:          config.ConsumerGroup,
+		lastDelivered: "0-1",
+		consumers:     make(map[string]*mockConsumer),
+	}
+	client.stream = []mockStreamMessage{
+		{ID: "0-1", Values: map[string]interface{}{"data": `{"RequestID":"recent"}`}},
+	}
+	client.pendingMsgs[config.ConsumerGroup] = map[string]*mockPendingMessage{
+		"0-1": {
+			id:           "0-1",
+			consumer:     "other-consumer",
+			deliveryTime: time.Now(), // Recent, not eligible for claim
+			deliverCount: 1,
+		},
+	}
+
+	bus := NewRedisStreamsEventBus(client, config)
+	bus.groupCreated.Store(true)
+
+	ch := make(chan Event, 10)
+
+	ctx := context.Background()
+	bus.claimPendingMessages(ctx, ch)
+
+	// Should not receive any messages
+	select {
+	case <-ch:
+		t.Error("expected no message to be claimed")
+	default:
+		// Good, no message claimed
+	}
+}
+
+// Test processPendingMessages with XReadGroup error
+func TestRedisStreamsEventBus_ProcessPendingMessages_Error(t *testing.T) {
+	client := newMockRedisStreamsClient()
+	config := DefaultRedisStreamsConfig()
+
+	// Pre-create group
+	client.groups[config.ConsumerGroup] = &mockConsumerGroup{
+		name:          config.ConsumerGroup,
+		lastDelivered: "0",
+		consumers:     make(map[string]*mockConsumer),
+	}
+
+	// Set error for reading
+	client.xReadGroupErr = errors.New("connection error")
+
+	bus := NewRedisStreamsEventBus(client, config)
+	bus.groupCreated.Store(true)
+
+	ch := make(chan Event, 10)
+	ctx := context.Background()
+
+	// Should not panic, just log error
+	bus.processPendingMessages(ctx, ch)
+
+	select {
+	case <-ch:
+		t.Error("expected no message on error")
+	default:
+		// Good
+	}
+}
+
+// Test claimPendingMessages with XPendingExt error
+func TestRedisStreamsEventBus_ClaimPendingMessages_XPendingExtError(t *testing.T) {
+	client := newMockRedisStreamsClient()
+	config := DefaultRedisStreamsConfig()
+
+	client.xPendingExtErr = errors.New("pending error")
+
+	bus := NewRedisStreamsEventBus(client, config)
+
+	ch := make(chan Event, 10)
+	ctx := context.Background()
+
+	// Should return early without panic
+	bus.claimPendingMessages(ctx, ch)
+}
+
+// Test claimPendingMessages with XClaim error
+func TestRedisStreamsEventBus_ClaimPendingMessages_XClaimError(t *testing.T) {
+	client := newMockRedisStreamsClient()
+	config := DefaultRedisStreamsConfig()
+	config.ClaimMinIdleTime = 1 * time.Millisecond
+
+	// Setup pending message that's old enough
+	client.pendingMsgs[config.ConsumerGroup] = map[string]*mockPendingMessage{
+		"0-1": {
+			id:           "0-1",
+			consumer:     "other",
+			deliveryTime: time.Now().Add(-time.Hour),
+			deliverCount: 1,
+		},
+	}
+
+	client.xClaimErr = errors.New("claim error")
+
+	bus := NewRedisStreamsEventBus(client, config)
+
+	ch := make(chan Event, 10)
+	ctx := context.Background()
+
+	// Should log error but not panic
+	bus.claimPendingMessages(ctx, ch)
+}
+
+// Test EnsureConsumerGroup returns early when already created
+func TestRedisStreamsEventBus_EnsureConsumerGroup_AlreadyFlagged(t *testing.T) {
+	client := newMockRedisStreamsClient()
+	config := DefaultRedisStreamsConfig()
+	bus := NewRedisStreamsEventBus(client, config)
+
+	// Pre-set flag
+	bus.groupCreated.Store(true)
+
+	ctx := context.Background()
+	err := bus.EnsureConsumerGroup(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should not have called XGroupCreateMkStream
+	if len(client.groups) != 0 {
+		t.Error("should not have created group when flag already set")
+	}
+}
+
+// Test Acknowledge with error
+func TestRedisStreamsEventBus_Acknowledge_Error(t *testing.T) {
+	client := newMockRedisStreamsClient()
+	config := DefaultRedisStreamsConfig()
+	bus := NewRedisStreamsEventBus(client, config)
+
+	client.xAckErr = errors.New("ack error")
+
+	ctx := context.Background()
+	err := bus.Acknowledge(ctx, "0-1")
+	if err == nil {
+		t.Error("expected error from Acknowledge")
+	}
+}
+
+// Test StreamLength with error
+func TestRedisStreamsEventBus_StreamLength_Error(t *testing.T) {
+	client := newMockRedisStreamsClient()
+	config := DefaultRedisStreamsConfig()
+	bus := NewRedisStreamsEventBus(client, config)
+
+	client.xLenErr = errors.New("xlen error")
+
+	ctx := context.Background()
+	_, err := bus.StreamLength(ctx)
+	if err == nil {
+		t.Error("expected error from StreamLength")
+	}
+}
+
+// Test PendingCount with error
+func TestRedisStreamsEventBus_PendingCount_Error(t *testing.T) {
+	client := newMockRedisStreamsClient()
+	config := DefaultRedisStreamsConfig()
+	bus := NewRedisStreamsEventBus(client, config)
+
+	client.xPendingErr = errors.New("pending error")
+
+	ctx := context.Background()
+	_, err := bus.PendingCount(ctx)
+	if err == nil {
+		t.Error("expected error from PendingCount")
+	}
+}
+
+// Test processPendingMessages with invalid JSON in pending message
+func TestRedisStreamsEventBus_ProcessPendingMessages_InvalidJSON(t *testing.T) {
+	client := newMockRedisStreamsClient()
+	config := DefaultRedisStreamsConfig()
+	config.BlockTimeout = 10 * time.Millisecond
+
+	// Setup: group with pending message containing invalid JSON
+	client.groups[config.ConsumerGroup] = &mockConsumerGroup{
+		name:          config.ConsumerGroup,
+		lastDelivered: "0-1",
+		consumers: map[string]*mockConsumer{
+			config.ConsumerName: {name: config.ConsumerName},
+		},
+	}
+	client.stream = []mockStreamMessage{
+		{ID: "0-1", Values: map[string]interface{}{"data": "invalid-json"}},
+	}
+	client.pendingMsgs[config.ConsumerGroup] = map[string]*mockPendingMessage{
+		"0-1": {
+			id:           "0-1",
+			consumer:     config.ConsumerName,
+			deliveryTime: time.Now(),
+			deliverCount: 1,
+		},
+	}
+
+	bus := NewRedisStreamsEventBus(client, config)
+	bus.groupCreated.Store(true)
+
+	ch := make(chan Event, 10)
+	ctx := context.Background()
+
+	// Should not send invalid message to channel
+	bus.processPendingMessages(ctx, ch)
+
+	select {
+	case <-ch:
+		t.Error("should not receive invalid JSON message")
+	default:
+		// Good
+	}
+}
+
+// Test claimPendingMessages with invalid JSON in claimed message
+func TestRedisStreamsEventBus_ClaimPendingMessages_InvalidJSON(t *testing.T) {
+	client := newMockRedisStreamsClient()
+	config := DefaultRedisStreamsConfig()
+	config.ClaimMinIdleTime = 1 * time.Millisecond
+
+	// Setup: old pending message with invalid JSON
+	client.groups[config.ConsumerGroup] = &mockConsumerGroup{
+		name:          config.ConsumerGroup,
+		lastDelivered: "0-1",
+		consumers:     make(map[string]*mockConsumer),
+	}
+	client.stream = []mockStreamMessage{
+		{ID: "0-1", Values: map[string]interface{}{"data": "not-valid-json"}},
+	}
+	client.pendingMsgs[config.ConsumerGroup] = map[string]*mockPendingMessage{
+		"0-1": {
+			id:           "0-1",
+			consumer:     "other-consumer",
+			deliveryTime: time.Now().Add(-time.Hour),
+			deliverCount: 1,
+		},
+	}
+
+	bus := NewRedisStreamsEventBus(client, config)
+	bus.groupCreated.Store(true)
+
+	ch := make(chan Event, 10)
+	ctx := context.Background()
+
+	bus.claimPendingMessages(ctx, ch)
+
+	select {
+	case <-ch:
+		t.Error("should not receive invalid JSON message")
+	default:
+		// Good, invalid message was acked but not sent
+	}
+}

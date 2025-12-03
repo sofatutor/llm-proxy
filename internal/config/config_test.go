@@ -637,3 +637,95 @@ func TestConfig_DistributedRateLimitDefaults(t *testing.T) {
 		t.Errorf("Expected DistributedRateLimitFallback to be true, got %v", config.DistributedRateLimitFallback)
 	}
 }
+
+func TestConfig_RedisStreamsDefaults(t *testing.T) {
+	config := DefaultConfig()
+
+	if config.RedisStreamKey != "llm-proxy-events" {
+		t.Errorf("Expected RedisStreamKey to be 'llm-proxy-events', got %s", config.RedisStreamKey)
+	}
+	if config.RedisConsumerGroup != "llm-proxy-dispatchers" {
+		t.Errorf("Expected RedisConsumerGroup to be 'llm-proxy-dispatchers', got %s", config.RedisConsumerGroup)
+	}
+	if config.RedisConsumerName != "" {
+		t.Errorf("Expected RedisConsumerName to be empty, got %s", config.RedisConsumerName)
+	}
+	if config.RedisStreamMaxLen != 10000 {
+		t.Errorf("Expected RedisStreamMaxLen to be 10000, got %d", config.RedisStreamMaxLen)
+	}
+	if config.RedisStreamBlockTime != 5*time.Second {
+		t.Errorf("Expected RedisStreamBlockTime to be 5s, got %v", config.RedisStreamBlockTime)
+	}
+	if config.RedisStreamClaimTime != 30*time.Second {
+		t.Errorf("Expected RedisStreamClaimTime to be 30s, got %v", config.RedisStreamClaimTime)
+	}
+	if config.RedisStreamBatchSize != 100 {
+		t.Errorf("Expected RedisStreamBatchSize to be 100, got %d", config.RedisStreamBatchSize)
+	}
+}
+
+func TestConfig_RedisStreamsFromEnv(t *testing.T) {
+	// Clean up environment after test
+	defer func() {
+		os.Unsetenv("MANAGEMENT_TOKEN")
+		os.Unsetenv("REDIS_STREAM_KEY")
+		os.Unsetenv("REDIS_CONSUMER_GROUP")
+		os.Unsetenv("REDIS_CONSUMER_NAME")
+		os.Unsetenv("REDIS_STREAM_MAX_LEN")
+		os.Unsetenv("REDIS_STREAM_BLOCK_TIME")
+		os.Unsetenv("REDIS_STREAM_CLAIM_TIME")
+		os.Unsetenv("REDIS_STREAM_BATCH_SIZE")
+	}()
+
+	if err := os.Setenv("MANAGEMENT_TOKEN", "test-token"); err != nil {
+		t.Fatalf("Failed to set MANAGEMENT_TOKEN: %v", err)
+	}
+	if err := os.Setenv("REDIS_STREAM_KEY", "custom-events"); err != nil {
+		t.Fatalf("Failed to set REDIS_STREAM_KEY: %v", err)
+	}
+	if err := os.Setenv("REDIS_CONSUMER_GROUP", "custom-group"); err != nil {
+		t.Fatalf("Failed to set REDIS_CONSUMER_GROUP: %v", err)
+	}
+	if err := os.Setenv("REDIS_CONSUMER_NAME", "custom-consumer"); err != nil {
+		t.Fatalf("Failed to set REDIS_CONSUMER_NAME: %v", err)
+	}
+	if err := os.Setenv("REDIS_STREAM_MAX_LEN", "50000"); err != nil {
+		t.Fatalf("Failed to set REDIS_STREAM_MAX_LEN: %v", err)
+	}
+	if err := os.Setenv("REDIS_STREAM_BLOCK_TIME", "10s"); err != nil {
+		t.Fatalf("Failed to set REDIS_STREAM_BLOCK_TIME: %v", err)
+	}
+	if err := os.Setenv("REDIS_STREAM_CLAIM_TIME", "1m"); err != nil {
+		t.Fatalf("Failed to set REDIS_STREAM_CLAIM_TIME: %v", err)
+	}
+	if err := os.Setenv("REDIS_STREAM_BATCH_SIZE", "200"); err != nil {
+		t.Fatalf("Failed to set REDIS_STREAM_BATCH_SIZE: %v", err)
+	}
+
+	config, err := New()
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if config.RedisStreamKey != "custom-events" {
+		t.Errorf("Expected RedisStreamKey to be 'custom-events', got %s", config.RedisStreamKey)
+	}
+	if config.RedisConsumerGroup != "custom-group" {
+		t.Errorf("Expected RedisConsumerGroup to be 'custom-group', got %s", config.RedisConsumerGroup)
+	}
+	if config.RedisConsumerName != "custom-consumer" {
+		t.Errorf("Expected RedisConsumerName to be 'custom-consumer', got %s", config.RedisConsumerName)
+	}
+	if config.RedisStreamMaxLen != 50000 {
+		t.Errorf("Expected RedisStreamMaxLen to be 50000, got %d", config.RedisStreamMaxLen)
+	}
+	if config.RedisStreamBlockTime != 10*time.Second {
+		t.Errorf("Expected RedisStreamBlockTime to be 10s, got %v", config.RedisStreamBlockTime)
+	}
+	if config.RedisStreamClaimTime != time.Minute {
+		t.Errorf("Expected RedisStreamClaimTime to be 1m, got %v", config.RedisStreamClaimTime)
+	}
+	if config.RedisStreamBatchSize != 200 {
+		t.Errorf("Expected RedisStreamBatchSize to be 200, got %d", config.RedisStreamBatchSize)
+	}
+}
