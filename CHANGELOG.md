@@ -10,12 +10,19 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Added
 
-- **Automated Changelog Generation** ([#184](https://github.com/sofatutor/llm-proxy/pull/184)): GitHub Actions workflow that generates changelog entries on PR approval using OpenAI API.
+- **Redis Streams EventBus** ([#185](https://github.com/sofatutor/llm-proxy/pull/185)): Implemented a Redis Streams backend for the event bus, enabling durable, distributed event delivery with consumer groups.
 
 ### Changed
 
+- **Redis Streams Configuration** ([#185](https://github.com/sofatutor/llm-proxy/pull/185)): Added comprehensive configuration options for Redis Streams, including environment variables for stream management.
+- **Server Integration for Redis** ([#185](https://github.com/sofatutor/llm-proxy/pull/185)): Integrated Redis Streams into the server's event bus backend, allowing for automatic consumer name generation.
+- **Updated Documentation for Redis Streams** ([#185](https://github.com/sofatutor/llm-proxy/pull/185)): Enhanced documentation with a new section on Redis Streams configuration, including usage examples and a comparison table.
 - **Enhanced CHANGELOG.md** ([#184](https://github.com/sofatutor/llm-proxy/pull/184)): Transformed 79 PR entries from basic titles to detailed entries with descriptions.
 - **December 2025 Documentation Cleanup** ([#183](https://github.com/sofatutor/llm-proxy/pull/183)): Major documentation reorganization reducing ~30 top-level items to 8 collapsible sections (Getting Started, Architecture, Admin UI, Guides, Database, Observability, Deployment, Development). Updated technical debt docs marking PostgreSQL, migrations, distributed rate limiting, and cache invalidation as resolved. Bumped brownfield architecture to v2.0 with AWS ECS production deployment section. Added Jekyll front matter to all pages.
+
+### Fixed
+
+- **Fix for Event Delivery Guarantees** ([#185](https://github.com/sofatutor/llm-proxy/pull/185)): Ensured at-least-once delivery semantics by implementing message acknowledgment and recovery for crashed consumers.
 
 ## December 02, 2025
 
