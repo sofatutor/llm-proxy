@@ -29,7 +29,7 @@
                     <div class="row mb-3">
                         <div class="col-sm-4"><strong>Token ID</strong></div>
                         <div class="col-sm-8">
-                            <code>{{ obfuscateToken .tokenID }}</code>
+                            <code>{{ .tokenID }}</code>
                             <button class="btn btn-sm btn-outline-secondary ms-2" 
                                     onclick="copyToClipboard('{{ .tokenID }}')" 
                                     title="Copy token ID to clipboard">
@@ -143,14 +143,14 @@
                         {{ else if .token.IsActive }}
                         <!-- Token is active - show revoke button -->
                         <button type="button" class="btn btn-outline-danger" 
-                                onclick="revokeToken('{{ .tokenID }}', '{{ obfuscateToken .tokenID }}')">
+                                onclick="revokeToken('{{ .tokenID }}', '{{ .tokenID }}')">
                             <i class="bi bi-x-circle"></i>
                             Revoke Token
                         </button>
                         {{ else }}
                         <!-- Token is inactive but not expired - show reactivate button -->
                         <button type="button" class="btn btn-outline-success" 
-                                onclick="reactivateToken('{{ .tokenID }}', '{{ obfuscateToken .tokenID }}')">
+                                onclick="reactivateToken('{{ .tokenID }}', '{{ .tokenID }}')">
                             <i class="bi bi-arrow-clockwise"></i>
                             Reactivate Token
                         </button>
@@ -158,14 +158,14 @@
                     {{ else if .token.IsActive }}
                         <!-- No expiry set and active -->
                         <button type="button" class="btn btn-outline-danger" 
-                                onclick="revokeToken('{{ .tokenID }}', '{{ obfuscateToken .tokenID }}')">
+                                onclick="revokeToken('{{ .tokenID }}', '{{ .tokenID }}')">
                             <i class="bi bi-x-circle"></i>
                             Revoke Token
                         </button>
                     {{ else }}
                         <!-- No expiry set and inactive -->
                         <button type="button" class="btn btn-outline-success" 
-                                onclick="reactivateToken('{{ .tokenID }}', '{{ obfuscateToken .tokenID }}')">
+                                onclick="reactivateToken('{{ .tokenID }}', '{{ .tokenID }}')">
                             <i class="bi bi-arrow-clockwise"></i>
                             Reactivate Token
                         </button>
