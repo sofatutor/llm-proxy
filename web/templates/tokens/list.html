@@ -152,23 +152,23 @@
                                                 </button>
                                             {{ else if .IsActive }}
                                                 <button type="button" class="btn btn-outline-danger" title="Revoke Token" 
-                                                        onclick="revokeToken('{{ .TokenID }}', '{{ obfuscateToken .TokenID }}')">
+                                                        onclick="revokeToken('{{ .TokenID }}', '{{ .TokenID }}')">
                                                     <i class="bi bi-x-circle"></i>
                                                 </button>
                                             {{ else }}
                                                 <button type="button" class="btn btn-outline-success" title="Reactivate Token" 
-                                                        onclick="reactivateToken('{{ .TokenID }}', '{{ obfuscateToken .TokenID }}')">
+                                                        onclick="reactivateToken('{{ .TokenID }}', '{{ .TokenID }}')">
                                                     <i class="bi bi-arrow-clockwise"></i>
                                                 </button>
                                             {{ end }}
                                         {{ else if .IsActive }}
                                             <button type="button" class="btn btn-outline-danger" title="Revoke Token" 
-                                                    onclick="revokeToken('{{ .TokenID }}', '{{ obfuscateToken .TokenID }}')">
+                                                    onclick="revokeToken('{{ .TokenID }}', '{{ .TokenID }}')">
                                                 <i class="bi bi-x-circle"></i>
                                             </button>
                                         {{ else }}
                                             <button type="button" class="btn btn-outline-success" title="Reactivate Token" 
-                                                    onclick="reactivateToken('{{ .TokenID }}', '{{ obfuscateToken .TokenID }}')">
+                                                    onclick="reactivateToken('{{ .TokenID }}', '{{ .TokenID }}')">
                                                 <i class="bi bi-arrow-clockwise"></i>
                                             </button>
                                         {{ end }}

@@ -49,16 +49,15 @@
 
                     <div class="mb-3">
                         <label for="openai_api_key" class="form-label">
-                            OpenAI API Key <span class="text-danger">*</span>
+                            OpenAI API Key <span class="text-muted">(optional)</span>
                         </label>
                         <div class="input-group">
                             <input type="password" 
                                    class="form-control" 
                                    id="openai_api_key" 
                                    name="openai_api_key" 
-                                   required 
-                                   placeholder="sk-..."
-                                   value="{{ .project.OpenAIAPIKey }}">
+                                   placeholder="sk-... (leave empty to keep existing)"
+                                   value="">
                             <button class="btn btn-outline-secondary" 
                                     type="button" 
                                     onclick="togglePassword('openai_api_key')">
@@ -66,7 +65,8 @@
                             </button>
                         </div>
                         <div class="form-text">
-                            Update your OpenAI API key for this project.
+                            <i class="bi bi-shield-lock"></i>
+                            Leave empty to keep the existing API key. Only enter a new key if you want to update it.
                             <a href="https://platform.openai.com/api-keys" target="_blank" class="text-decoration-none">
                                 Get your API key here <i class="bi bi-box-arrow-up-right"></i>
                             </a>
