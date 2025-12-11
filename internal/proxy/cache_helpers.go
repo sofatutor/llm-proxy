@@ -250,8 +250,9 @@ func atoiSafe(s string) int {
 }
 
 func cloneHeadersForCache(h http.Header) http.Header {
-	// Drop hop-by-hop headers
+	// Drop hop-by-hop headers and request-specific timing headers
 	drop := map[string]struct{}{
+		// Hop-by-hop headers (RFC 2616)
 		"Connection":          {},
 		"Keep-Alive":          {},
 		"Proxy-Authenticate":  {},
@@ -260,6 +261,15 @@ func cloneHeadersForCache(h http.Header) http.Header {
 		"Trailers":            {},
 		"Transfer-Encoding":   {},
 		"Upgrade":             {},
+		// Request-specific timing headers (not cacheable)
+		"X-Upstream-Request-Start":  {},
+		"X-Upstream-Request-Stop":   {},
+		"X-Proxy-Received-At":       {},
+		"X-Proxy-Final-Response-At": {},
+		"X-Proxy-First-Response-At": {},
+		"Date":                      {},
+		// Cookies are user-specific, not cacheable for shared cache
+		"Set-Cookie": {},
 	}
 	out := http.Header{}
 	for k, vals := range h {
