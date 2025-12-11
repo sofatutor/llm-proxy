@@ -875,6 +875,11 @@ func (p *TransparentProxy) Handler() http.Handler {
 								w.Header().Add(hk, v)
 							}
 						}
+						// Set fresh timing headers for conditional cache hit
+						nowCond := time.Now()
+						w.Header().Set("X-Proxy-Received-At", nowCond.Format(time.RFC3339Nano))
+						w.Header().Set("X-Proxy-Final-Response-At", nowCond.Format(time.RFC3339Nano))
+						w.Header().Set("Date", nowCond.UTC().Format(http.TimeFormat))
 						w.Header().Set("Cache-Status", "llm-proxy; conditional-hit")
 						w.Header().Set("X-PROXY-CACHE", "conditional-hit")
 						w.Header().Set("X-PROXY-CACHE-KEY", key)
@@ -888,6 +893,11 @@ func (p *TransparentProxy) Handler() http.Handler {
 						w.Header().Add(hk, v)
 					}
 				}
+				// Set fresh timing headers for cache hit (for accurate latency measurement)
+				now := time.Now()
+				w.Header().Set("X-Proxy-Received-At", now.Format(time.RFC3339Nano))
+				w.Header().Set("X-Proxy-Final-Response-At", now.Format(time.RFC3339Nano))
+				w.Header().Set("Date", now.UTC().Format(http.TimeFormat))
 				w.Header().Set("Cache-Status", "llm-proxy; hit")
 				w.Header().Set("X-PROXY-CACHE", "hit")
 				w.Header().Set("X-PROXY-CACHE-KEY", key)
