@@ -604,6 +604,18 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"name and openai_api_key are required"}`, http.StatusBadRequest)
 		return
 	}
+
+	// Reject obfuscated keys to prevent data corruption
+	if strings.Contains(req.OpenAIAPIKey, "...") || strings.Contains(req.OpenAIAPIKey, "****") {
+		s.logger.Error("attempted to create project with obfuscated API key", zap.String("request_id", requestID))
+
+		// Audit: project creation failure - obfuscated key
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionProjectCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
+			WithDetail("validation_error", "cannot save obfuscated API key"))
+
+		http.Error(w, `{"error":"cannot save obfuscated API key - please provide the full API key"}`, http.StatusBadRequest)
+		return
+	}
 	id := uuid.NewString()
 	now := time.Now().UTC()
 	project := proxy.Project{
@@ -741,6 +753,18 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		updatedFields = append(updatedFields, "name")
 	}
 	if req.OpenAIAPIKey != nil && *req.OpenAIAPIKey != "" {
+		// Reject obfuscated keys to prevent data corruption
+		if strings.Contains(*req.OpenAIAPIKey, "...") || strings.Contains(*req.OpenAIAPIKey, "****") {
+			s.logger.Error("attempted to save obfuscated API key", zap.String("project_id", id))
+
+			// Audit: project update failure - obfuscated key
+			_ = s.auditLogger.Log(s.auditEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultFailure, r, requestID).
+				WithProjectID(id).
+				WithDetail("validation_error", "cannot save obfuscated API key"))
+
+			http.Error(w, `{"error":"cannot save obfuscated API key - please provide the full API key"}`, http.StatusBadRequest)
+			return
+		}
 		project.OpenAIAPIKey = *req.OpenAIAPIKey
 		updatedFields = append(updatedFields, "openai_api_key")
 	}

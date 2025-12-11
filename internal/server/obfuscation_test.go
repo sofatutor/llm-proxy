@@ -274,4 +274,63 @@ func TestObfuscation_ProjectResponses(t *testing.T) {
 			return p.OpenAIAPIKey == newAPIKey
 		}))
 	})
+
+	t.Run("PATCH_Project_RejectsObfuscatedKey", func(t *testing.T) {
+		// Create a fresh mock for this test
+		freshProjectStore := &MockProjectStoreExtended{Mock: &mock.Mock{}}
+		freshServer, err := New(cfg, tokenStore, freshProjectStore)
+		require.NoError(t, err)
+
+		existingProject := proxy.Project{
+			ID:           "project-3",
+			Name:         "Test Project",
+			OpenAIAPIKey: fullAPIKey,
+			IsActive:     true,
+			CreatedAt:    time.Now(),
+			UpdatedAt:    time.Now(),
+		}
+
+		freshProjectStore.On("GetProjectByID", mock.Anything, "project-3").Return(existingProject, nil).Once()
+
+		// Try to update with obfuscated key
+		reqBody := map[string]interface{}{
+			"openai_api_key": "sk-proj-...xyz", // Obfuscated format
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("PATCH", "/manage/projects/project-3", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		freshServer.handleUpdateProject(w, req)
+
+		// Should reject with 400 Bad Request
+		assert.Equal(t, 400, w.Code)
+		assert.Contains(t, w.Body.String(), "cannot save obfuscated API key")
+
+		// Verify UpdateProject was NOT called
+		freshProjectStore.AssertNotCalled(t, "UpdateProject", mock.Anything, mock.Anything)
+	})
+
+	t.Run("POST_Project_RejectsObfuscatedKey", func(t *testing.T) {
+		// Try to create project with obfuscated key
+		reqBody := map[string]interface{}{
+			"name":           "New Project",
+			"openai_api_key": "sk-proj-****xyz", // Obfuscated format
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("POST", "/manage/projects", bytes.NewReader(body))
+		req.Header.Set("Authorization", "Bearer test_management_token")
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		server.handleCreateProject(w, req)
+
+		// Should reject with 400 Bad Request
+		assert.Equal(t, 400, w.Code)
+		assert.Contains(t, w.Body.String(), "cannot save obfuscated API key")
+
+		// Verify CreateProject was NOT called
+		projectStore.AssertNotCalled(t, "CreateProject", mock.Anything, mock.Anything)
+	})
 }
