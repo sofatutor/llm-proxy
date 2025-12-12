@@ -17,6 +17,12 @@ x-llm-proxy-base: &llm-proxy-base
     - PORT=${PORT:-8080}
     - LLM_PROXY_EVENT_BUS=redis
     - REDIS_ADDR=redis:6379
+    - DB_DRIVER=postgres
+    - DATABASE_URL=postgres://llmproxy:${POSTGRES_PASSWORD:-secret}@postgres:5432/llmproxy?sslmode=disable
+    - HTTP_CACHE_ENABLED=${HTTP_CACHE_ENABLED:-false}
+    - HTTP_CACHE_BACKEND=${HTTP_CACHE_BACKEND:-in-memory}
+    - HTTP_CACHE_DEFAULT_TTL=${HTTP_CACHE_DEFAULT_TTL:-300}
+    - CACHE_STATS_BUFFER_SIZE=${CACHE_STATS_BUFFER_SIZE:-1000}
   volumes:
     - ./tmp/llm-proxy-data:/app/data
     - ./tmp/llm-proxy-logs:/app/logs
@@ -24,30 +30,11 @@ x-llm-proxy-base: &llm-proxy-base
     - .env:/app/.env
     - ./config/api_providers.yaml:/app/config/api_providers.yaml
 
-# PostgreSQL-specific base configuration for the postgres profile
-x-llm-proxy-postgres: &llm-proxy-postgres
-  <<: *llm-proxy-base
-  environment:
-    - OPENAI_API_KEY=${OPENAI_API_KEY}
-    - MANAGEMENT_TOKEN=${MANAGEMENT_TOKEN}
-    - LOG_LEVEL=${LOG_LEVEL:-info}
-    - ENABLE_METRICS=true
-    - PORT=${PORT:-8080}
-    - LLM_PROXY_EVENT_BUS=redis
-    - REDIS_ADDR=redis:6379
-    - DB_DRIVER=postgres
-    - DATABASE_URL=postgres://llmproxy:${POSTGRES_PASSWORD:-secret}@postgres:5432/llmproxy?sslmode=disable
-    - HTTP_CACHE_ENABLED=${HTTP_CACHE_ENABLED:-false}
-    - HTTP_CACHE_BACKEND=${HTTP_CACHE_BACKEND:-in-memory}
-    - HTTP_CACHE_DEFAULT_TTL=${HTTP_CACHE_DEFAULT_TTL:-300}
-    - CACHE_STATS_BUFFER_SIZE=${CACHE_STATS_BUFFER_SIZE:-1000}
-
 services:
-  # PostgreSQL database service (for postgres profile)
+  # PostgreSQL database service
   postgres:
     image: postgres:15
     container_name: llm-proxy-postgres
-    profiles: ["postgres"]
     environment:
       POSTGRES_USER: llmproxy
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
@@ -64,28 +51,7 @@ services:
       - "5432:5432"  # Development only - remove or restrict for production
     restart: unless-stopped
 
-  # LLM Proxy with PostgreSQL backend (for postgres profile)
-  llm-proxy-postgres:
-    <<: *llm-proxy-postgres
-    container_name: llm-proxy-pg
-    profiles: ["postgres"]
-    build:
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8082:8080"
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-    command: ["server"]
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-
+  # LLM Proxy service (uses PostgreSQL)
   llm-proxy:
     <<: *llm-proxy-base
     container_name: llm-proxy
@@ -101,7 +67,10 @@ services:
       retries: 3
     command: ["server"]
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
 
   logger:
     <<: *llm-proxy-base
@@ -144,11 +113,5 @@ services:
     command: ["redis-server", "--loglevel", "debug"]
 
 volumes:
-  llm-proxy-data:
-    name: llm-proxy-data
-  llm-proxy-logs:
-    name: llm-proxy-logs
-  llm-proxy-config:
-    name: llm-proxy-config
   postgres_data:
     name: llm-proxy-postgres-data
