@@ -59,11 +59,11 @@ func TestObfuscation_TokenResponses(t *testing.T) {
 		require.Len(t, response, 1)
 
 		// Token should be obfuscated (sk-1234****mnop format)
-		assert.NotEqual(t, fullToken, response[0].TokenID, "Token should be obfuscated")
-		assert.Contains(t, response[0].TokenID, "sk-", "Obfuscated token should contain prefix")
-		assert.Contains(t, response[0].TokenID, "****", "Obfuscated token should contain asterisks")
-		assert.True(t, strings.HasPrefix(response[0].TokenID, "sk-1234"), "Should show first 4 chars after prefix")
-		assert.True(t, strings.HasSuffix(response[0].TokenID, "mnop"), "Should show last 4 chars")
+		assert.NotEqual(t, fullToken, response[0].Token, "Token should be obfuscated")
+		assert.Contains(t, response[0].Token, "sk-", "Obfuscated token should contain prefix")
+		assert.Contains(t, response[0].Token, "****", "Obfuscated token should contain asterisks")
+		assert.True(t, strings.HasPrefix(response[0].Token, "sk-1234"), "Should show first 4 chars after prefix")
+		assert.True(t, strings.HasSuffix(response[0].Token, "mnop"), "Should show last 4 chars")
 	})
 
 	t.Run("GET_TokenByID_ReturnsObfuscatedToken", func(t *testing.T) {
@@ -89,9 +89,9 @@ func TestObfuscation_TokenResponses(t *testing.T) {
 		require.NoError(t, err)
 
 		// Token should be obfuscated
-		assert.NotEqual(t, fullToken, response.TokenID, "Token should be obfuscated")
-		assert.Contains(t, response.TokenID, "sk-", "Obfuscated token should contain prefix")
-		assert.Contains(t, response.TokenID, "****", "Obfuscated token should contain asterisks")
+		assert.NotEqual(t, fullToken, response.Token, "Token should be obfuscated")
+		assert.Contains(t, response.Token, "sk-", "Obfuscated token should contain prefix")
+		assert.Contains(t, response.Token, "****", "Obfuscated token should contain asterisks")
 	})
 
 	t.Run("POST_TokenCreate_ReturnsFullToken", func(t *testing.T) {

@@ -353,14 +353,14 @@ func (m *mockAPIClient) GetToken(ctx context.Context, tokenID string) (*Token, e
 	if m.DashboardErr != nil {
 		return nil, m.DashboardErr
 	}
-	return &Token{TokenID: tokenID, ProjectID: "1", IsActive: true}, nil
+	return &Token{ID: tokenID, ProjectID: "1", IsActive: true}, nil
 }
 
 func (m *mockAPIClient) UpdateToken(ctx context.Context, tokenID string, isActive *bool, maxRequests *int) (*Token, error) {
 	if m.DashboardErr != nil {
 		return nil, m.DashboardErr
 	}
-	token := &Token{TokenID: tokenID, ProjectID: "1", IsActive: true}
+	token := &Token{ID: tokenID, ProjectID: "1", IsActive: true}
 	if isActive != nil {
 		token.IsActive = *isActive
 	}

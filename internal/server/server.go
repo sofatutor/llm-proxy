@@ -1113,7 +1113,8 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"cannot create tokens for inactive projects","code":"project_inactive"}`, http.StatusForbidden)
 			return
 		}
-		// Generate token
+		// Generate token ID (UUID) and token string
+		tokenID := uuid.New().String()
 		tokenStr, expiresAt, _, err := token.NewTokenGenerator().GenerateWithOptions(duration, nil)
 		if err != nil {
 			s.logger.Error("failed to generate token", zap.Error(err), zap.String("request_id", requestID))
@@ -1129,6 +1130,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		}
 		now := time.Now().UTC()
 		dbToken := token.TokenData{
+			ID:           tokenID,
 			Token:        tokenStr,
 			ProjectID:    req.ProjectID,
 			ExpiresAt:    expiresAt,
@@ -1213,11 +1215,12 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		// Create sanitized response with obfuscated token values
+		// Create sanitized response with token IDs and obfuscated token strings
 		sanitizedTokens := make([]TokenListResponse, len(tokens))
 		for i, t := range tokens {
 			sanitizedTokens[i] = TokenListResponse{
-				TokenID:       token.ObfuscateToken(t.Token),
+				ID:            t.ID,
+				Token:         token.ObfuscateToken(t.Token),
 				ProjectID:     t.ProjectID,
 				ExpiresAt:     t.ExpiresAt,
 				IsActive:      t.IsActive,
@@ -1290,9 +1293,10 @@ func (s *Server) handleGetToken(w http.ResponseWriter, r *http.Request, tokenID 
 		WithHTTPMethod(r.Method).
 		WithEndpoint(r.URL.Path))
 
-	// Create sanitized response with obfuscated token value
+	// Create sanitized response with ID and obfuscated token string
 	response := TokenListResponse{
-		TokenID:      token.ObfuscateToken(tokenID),
+		ID:           tokenData.ID,
+		Token:        token.ObfuscateToken(tokenData.Token),
 		ProjectID:    tokenData.ProjectID,
 		ExpiresAt:    tokenData.ExpiresAt,
 		IsActive:     tokenData.IsActive,
@@ -1406,9 +1410,10 @@ func (s *Server) handleUpdateToken(w http.ResponseWriter, r *http.Request, token
 	}
 	_ = s.auditLogger.Log(auditEvent)
 
-	// Return updated token (sanitized)
+	// Return updated token (sanitized with ID and obfuscated token)
 	response := TokenListResponse{
-		TokenID:      tokenID,
+		ID:           tokenData.ID,
+		Token:        token.ObfuscateToken(tokenData.Token),
 		ProjectID:    tokenData.ProjectID,
 		ExpiresAt:    tokenData.ExpiresAt,
 		IsActive:     tokenData.IsActive,

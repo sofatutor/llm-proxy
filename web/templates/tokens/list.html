@@ -142,7 +142,7 @@
                                         <a href="/projects/{{ .ProjectID }}" class="btn btn-outline-primary" title="View Project">
                                             <i class="bi bi-folder"></i>
                                         </a>
-                                        <a href="/tokens/{{ .TokenID }}/edit" class="btn btn-outline-warning" title="Edit Token">
+                                        <a href="/tokens/{{ .ID }}/edit" class="btn btn-outline-warning" title="Edit Token">
                                             <i class="bi bi-pencil"></i>
                                         </a>
                                         {{ if .ExpiresAt }}
@@ -152,23 +152,23 @@
                                                 </button>
                                             {{ else if .IsActive }}
                                                 <button type="button" class="btn btn-outline-danger" title="Revoke Token" 
-                                                        onclick="revokeToken('{{ .TokenID }}', '{{ .TokenID }}')">
+                                                        onclick="revokeToken('{{ .ID }}', '{{ .Token }}')">
                                                     <i class="bi bi-x-circle"></i>
                                                 </button>
                                             {{ else }}
                                                 <button type="button" class="btn btn-outline-success" title="Reactivate Token" 
-                                                        onclick="reactivateToken('{{ .TokenID }}', '{{ .TokenID }}')">
+                                                        onclick="reactivateToken('{{ .ID }}', '{{ .Token }}')">
                                                     <i class="bi bi-arrow-clockwise"></i>
                                                 </button>
                                             {{ end }}
                                         {{ else if .IsActive }}
                                             <button type="button" class="btn btn-outline-danger" title="Revoke Token" 
-                                                    onclick="revokeToken('{{ .TokenID }}', '{{ .TokenID }}')">
+                                                    onclick="revokeToken('{{ .ID }}', '{{ .Token }}')">
                                                 <i class="bi bi-x-circle"></i>
                                             </button>
                                         {{ else }}
                                             <button type="button" class="btn btn-outline-success" title="Reactivate Token" 
-                                                    onclick="reactivateToken('{{ .TokenID }}', '{{ .TokenID }}')">
+                                                    onclick="reactivateToken('{{ .ID }}', '{{ .Token }}')">
                                                 <i class="bi bi-arrow-clockwise"></i>
                                             </button>
                                         {{ end }}

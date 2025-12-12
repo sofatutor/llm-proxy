@@ -22,7 +22,7 @@ func TestAPIClient_TokenMethods(t *testing.T) {
 			http.Error(w, "method", http.StatusMethodNotAllowed)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(Token{TokenID: "tok-1", ProjectID: "p1", IsActive: true})
+		_ = json.NewEncoder(w).Encode(Token{ID: "tok-1", ProjectID: "p1", IsActive: true})
 	})
 
 	// PATCH /manage/tokens/:id
@@ -31,7 +31,7 @@ func TestAPIClient_TokenMethods(t *testing.T) {
 			http.Error(w, "method", http.StatusMethodNotAllowed)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(Token{TokenID: "tok-2", ProjectID: "p1", IsActive: false})
+		_ = json.NewEncoder(w).Encode(Token{ID: "tok-2", ProjectID: "p1", IsActive: false})
 	})
 
 	// DELETE /manage/tokens/:id
@@ -62,7 +62,7 @@ func TestAPIClient_TokenMethods(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetToken error: %v", err)
 	}
-	if tok == nil || tok.TokenID != "tok-1" || tok.ProjectID != "p1" {
+	if tok == nil || tok.ID != "tok-1" || tok.ProjectID != "p1" {
 		t.Fatalf("GetToken unexpected: %+v", tok)
 	}
 
@@ -71,7 +71,7 @@ func TestAPIClient_TokenMethods(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpdateToken error: %v", err)
 	}
-	if updated == nil || updated.TokenID != "tok-2" || updated.IsActive != false {
+	if updated == nil || updated.ID != "tok-2" || updated.IsActive != false {
 		t.Fatalf("UpdateToken unexpected: %+v", updated)
 	}
 
@@ -129,7 +129,7 @@ func TestAPIClient_UpdateToken_SendsBothFields(t *testing.T) {
 		if _, ok := body["max_requests"]; !ok {
 			t.Fatalf("missing max_requests in payload: %#v", body)
 		}
-		_ = json.NewEncoder(w).Encode(Token{TokenID: "tok-99", ProjectID: "p1", IsActive: true})
+		_ = json.NewEncoder(w).Encode(Token{ID: "tok-99", ProjectID: "p1", IsActive: true})
 	}))
 	defer srv.Close()
 

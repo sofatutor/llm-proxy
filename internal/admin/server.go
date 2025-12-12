@@ -460,7 +460,7 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 
 	var req struct {
 		Name         string `form:"name" binding:"required"`
-		OpenAIAPIKey string `form:"openai_api_key" binding:"required"`
+		OpenAIAPIKey string `form:"openai_api_key"` // Optional - empty means keep existing
 		IsActive     *bool  `form:"is_active"`
 	}
 
@@ -753,7 +753,6 @@ func (s *Server) handleTokensShow(c *gin.Context) {
 		"active":      "tokens",
 		"token":       token,
 		"project":     project,
-		"tokenID":     tokenID,
 		"now":         time.Now(),
 		"currentTime": time.Now(),
 	})
