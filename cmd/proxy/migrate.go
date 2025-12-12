@@ -3,11 +3,9 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/sofatutor/llm-proxy/internal/config"
+	"github.com/sofatutor/llm-proxy/internal/database"
 	"github.com/sofatutor/llm-proxy/internal/database/migrations"
 	"github.com/spf13/cobra"
 )
@@ -120,21 +118,17 @@ func runMigrateStatus(cmd *cobra.Command, args []string) error {
 
 // getMigrationResources opens a database connection and gets the migrations path
 func getMigrationResources() (*sql.DB, string, error) {
-	// Get database path from flag or environment
-	dbPath := databasePath
-	if dbPath == "" {
-		dbPath = config.EnvOrDefault("DATABASE_PATH", "data/llm-proxy.db")
-	}
+	// Use database factory to respect DB_DRIVER and DATABASE_URL environment variables
+	dbConfig := database.ConfigFromEnv()
 
-	// Ensure database directory exists
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
-		return nil, "", fmt.Errorf("failed to create database directory: %w", err)
-	}
-
-	// Open database connection (without running migrations automatically)
-	db, err := sql.Open("sqlite3", dbPath+"?_journal=WAL&_foreign_keys=on")
+	dbClient, err := database.NewFromConfig(dbConfig)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to open database: %w", err)
+		return nil, "", fmt.Errorf("failed to create database: %w", err)
+	}
+
+	db := dbClient.DB()
+	if db == nil {
+		return nil, "", fmt.Errorf("database connection is nil")
 	}
 
 	// Test connection
@@ -143,40 +137,12 @@ func getMigrationResources() (*sql.DB, string, error) {
 		return nil, "", fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Get migrations path using the same logic as database package
-	migrationsPath, err := getMigrationsPathForCLI()
+	// Get migrations path using the database package's dialect-aware lookup
+	migrationsPath, err := database.MigrationsPathForDriver(dbConfig.Driver)
 	if err != nil {
 		_ = db.Close()
 		return nil, "", fmt.Errorf("failed to find migrations directory: %w", err)
 	}
 
 	return db, migrationsPath, nil
-}
-
-// getMigrationsPathForCLI returns the path to the migrations directory.
-// This is a simplified version of database.getMigrationsPath() for CLI use.
-func getMigrationsPathForCLI() (string, error) {
-	// Try relative path from current working directory first (development)
-	relPath := "internal/database/migrations/sql"
-	if _, err := os.Stat(relPath); err == nil {
-		return relPath, nil
-	}
-
-	// Try path relative to executable
-	execPath, err := os.Executable()
-	if err == nil {
-		execDir := filepath.Dir(execPath)
-		// Try relative to executable directory
-		execRelPath := filepath.Join(execDir, "internal/database/migrations/sql")
-		if _, err := os.Stat(execRelPath); err == nil {
-			return execRelPath, nil
-		}
-		// Try relative to executable's parent (if executable is in bin/)
-		binRelPath := filepath.Join(filepath.Dir(execDir), "internal/database/migrations/sql")
-		if _, err := os.Stat(binRelPath); err == nil {
-			return binRelPath, nil
-		}
-	}
-
-	return "", fmt.Errorf("migrations directory not found. Tried: %s", relPath)
 }

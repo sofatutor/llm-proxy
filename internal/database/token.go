@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/sofatutor/llm-proxy/internal/token"
 )
 
@@ -19,15 +20,22 @@ var (
 )
 
 // CreateToken creates a new token in the database.
+// If token.ID is empty, a UUID will be generated automatically.
 func (d *DB) CreateToken(ctx context.Context, token Token) error {
+	// Auto-generate ID if not provided
+	if token.ID == "" {
+		token.ID = uuid.New().String()
+	}
+
 	query := `
-	INSERT INTO tokens (token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO tokens (id, token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := d.ExecContextRebound(
 		ctx,
 		query,
+		token.ID,
 		token.Token,
 		token.ProjectID,
 		token.ExpiresAt,
@@ -45,10 +53,62 @@ func (d *DB) CreateToken(ctx context.Context, token Token) error {
 	return nil
 }
 
-// GetTokenByID retrieves a token by ID.
-func (d *DB) GetTokenByID(ctx context.Context, tokenID string) (Token, error) {
+// GetTokenByID retrieves a token by its UUID.
+// For backward compatibility, if no token is found by UUID, it falls back
+// to searching by token string.
+func (d *DB) GetTokenByID(ctx context.Context, id string) (Token, error) {
 	query := `
-	SELECT token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at, cache_hit_count
+	SELECT id, token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at, cache_hit_count
+	FROM tokens
+	WHERE id = ?
+	`
+
+	var token Token
+	var expiresAt, lastUsedAt, deactivatedAt sql.NullTime
+	var maxRequests sql.NullInt32
+
+	err := d.QueryRowContextRebound(ctx, query, id).Scan(
+		&token.ID,
+		&token.Token,
+		&token.ProjectID,
+		&expiresAt,
+		&token.IsActive,
+		&deactivatedAt,
+		&token.RequestCount,
+		&maxRequests,
+		&token.CreatedAt,
+		&lastUsedAt,
+		&token.CacheHitCount,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// Backward compatibility: try token string lookup
+			return d.GetTokenByToken(ctx, id)
+		}
+		return Token{}, fmt.Errorf("failed to get token: %w", err)
+	}
+
+	if expiresAt.Valid {
+		token.ExpiresAt = &expiresAt.Time
+	}
+	if lastUsedAt.Valid {
+		token.LastUsedAt = &lastUsedAt.Time
+	}
+	if deactivatedAt.Valid {
+		token.DeactivatedAt = &deactivatedAt.Time
+	}
+	if maxRequests.Valid {
+		maxReq := int(maxRequests.Int32)
+		token.MaxRequests = &maxReq
+	}
+
+	return token, nil
+}
+
+// GetTokenByToken retrieves a token by its token string (for authentication).
+func (d *DB) GetTokenByToken(ctx context.Context, tokenString string) (Token, error) {
+	query := `
+	SELECT id, token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at, cache_hit_count
 	FROM tokens
 	WHERE token = ?
 	`
@@ -57,7 +117,8 @@ func (d *DB) GetTokenByID(ctx context.Context, tokenID string) (Token, error) {
 	var expiresAt, lastUsedAt, deactivatedAt sql.NullTime
 	var maxRequests sql.NullInt32
 
-	err := d.QueryRowContextRebound(ctx, query, tokenID).Scan(
+	err := d.QueryRowContextRebound(ctx, query, tokenString).Scan(
+		&token.ID,
 		&token.Token,
 		&token.ProjectID,
 		&expiresAt,
@@ -94,12 +155,26 @@ func (d *DB) GetTokenByID(ctx context.Context, tokenID string) (Token, error) {
 }
 
 // UpdateToken updates a token in the database.
+// It looks up the token by ID (UUID). If ID is empty, it falls back to looking up by token string
+// for backward compatibility.
 func (d *DB) UpdateToken(ctx context.Context, token Token) error {
-	query := `
+	// Determine which field to use for lookup
+	lookupField := "id"
+	lookupValue := token.ID
+	if token.ID == "" {
+		lookupField = "token"
+		lookupValue = token.Token
+	}
+
+	if lookupValue == "" {
+		return fmt.Errorf("token ID or token string required for update")
+	}
+
+	query := fmt.Sprintf(`
 	UPDATE tokens
 	SET project_id = ?, expires_at = ?, is_active = ?, request_count = ?, max_requests = ?, last_used_at = ?
-	WHERE token = ?
-	`
+	WHERE %s = ?
+	`, lookupField)
 
 	result, err := d.ExecContextRebound(
 		ctx,
@@ -110,7 +185,7 @@ func (d *DB) UpdateToken(ctx context.Context, token Token) error {
 		token.RequestCount,
 		token.MaxRequests,
 		token.LastUsedAt,
-		token.Token,
+		lookupValue,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update token: %w", err)
@@ -155,7 +230,7 @@ func (d *DB) DeleteToken(ctx context.Context, tokenID string) error {
 // ListTokens retrieves all tokens from the database.
 func (d *DB) ListTokens(ctx context.Context) ([]Token, error) {
 	query := `
-	SELECT token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at, cache_hit_count
+	SELECT id, token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at, cache_hit_count
 	FROM tokens
 	ORDER BY created_at DESC
 	`
@@ -166,7 +241,7 @@ func (d *DB) ListTokens(ctx context.Context) ([]Token, error) {
 // GetTokensByProjectID retrieves all tokens for a project.
 func (d *DB) GetTokensByProjectID(ctx context.Context, projectID string) ([]Token, error) {
 	query := `
-	SELECT token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at, cache_hit_count
+	SELECT id, token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at, cache_hit_count
 	FROM tokens
 	WHERE project_id = ?
 	ORDER BY created_at DESC
@@ -239,6 +314,7 @@ func (d *DB) queryTokens(ctx context.Context, query string, args ...interface{})
 		var maxRequests sql.NullInt32
 
 		if err := rows.Scan(
+			&token.ID,
 			&token.Token,
 			&token.ProjectID,
 			&expiresAt,
@@ -286,8 +362,19 @@ func NewDBTokenStoreAdapter(db *DB) *DBTokenStoreAdapter {
 	return &DBTokenStoreAdapter{db: db}
 }
 
-func (a *DBTokenStoreAdapter) GetTokenByID(ctx context.Context, tokenID string) (token.TokenData, error) {
-	dbToken, err := a.db.GetTokenByID(ctx, tokenID)
+func (a *DBTokenStoreAdapter) GetTokenByID(ctx context.Context, id string) (token.TokenData, error) {
+	dbToken, err := a.db.GetTokenByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrTokenNotFound) {
+			return token.TokenData{}, token.ErrTokenNotFound
+		}
+		return token.TokenData{}, err
+	}
+	return ExportTokenData(dbToken), nil
+}
+
+func (a *DBTokenStoreAdapter) GetTokenByToken(ctx context.Context, tokenString string) (token.TokenData, error) {
+	dbToken, err := a.db.GetTokenByToken(ctx, tokenString)
 	if err != nil {
 		if errors.Is(err, ErrTokenNotFound) {
 			return token.TokenData{}, token.ErrTokenNotFound
@@ -338,6 +425,7 @@ func (a *DBTokenStoreAdapter) GetTokensByProjectID(ctx context.Context, projectI
 // ImportTokenData and ExportTokenData helpers
 func ImportTokenData(td token.TokenData) Token {
 	return Token{
+		ID:            td.ID,
 		Token:         td.Token,
 		ProjectID:     td.ProjectID,
 		ExpiresAt:     td.ExpiresAt,
@@ -353,6 +441,7 @@ func ImportTokenData(td token.TokenData) Token {
 
 func ExportTokenData(t Token) token.TokenData {
 	return token.TokenData{
+		ID:            t.ID,
 		Token:         t.Token,
 		ProjectID:     t.ProjectID,
 		ExpiresAt:     t.ExpiresAt,

@@ -245,14 +245,14 @@ func TestTransaction_CommitError(t *testing.T) {
 	}
 }
 
-func TestInitDatabase_Error(t *testing.T) {
+func TestInitSQLiteSchema_Error(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
 	// Close DB to force error
 	_ = db.Close()
-	err := initDatabase(db.db)
+	err := initSQLiteSchema(db.db)
 	if err == nil {
-		t.Error("expected error for closed DB in initDatabase")
+		t.Error("expected error for closed DB in initSQLiteSchema")
 	}
 }
 
@@ -333,113 +333,8 @@ func TestTransaction_NilDBVariants(t *testing.T) {
 	}
 }
 
-func TestMigrations_AddColumn(t *testing.T) {
-	// Create a temporary database file
-	dbFile, err := os.CreateTemp("", "llm-proxy-migration-test-*.db")
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	dbPath := dbFile.Name()
-	_ = dbFile.Close()
-	defer func() { _ = os.Remove(dbPath) }()
-
-	// Open raw database connection
-	rawDB, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		t.Fatalf("Failed to open database: %v", err)
-	}
-	defer func() { _ = rawDB.Close() }()
-
-	// Create basic schema without the new columns (simulating old database)
-	// Note: This simulates a database created before migrations existed.
-	// Migration 00001 will add is_active to both tables, and 00002 will add deactivated_at.
-	basicSchema := `
-		CREATE TABLE IF NOT EXISTS projects (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL,
-			openai_api_key TEXT NOT NULL,
-			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-		);
-		
-		CREATE TABLE IF NOT EXISTS tokens (
-			token TEXT PRIMARY KEY,
-			project_id TEXT NOT NULL,
-			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			expires_at DATETIME,
-			max_requests INTEGER,
-			request_count INTEGER DEFAULT 0,
-			FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
-		);
-	`
-	_, err = rawDB.Exec(basicSchema)
-	if err != nil {
-		t.Fatalf("Failed to create basic schema: %v", err)
-	}
-
-	// Check columns don't exist yet
-	var count int
-	err = rawDB.QueryRow("SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'deactivated_at'").Scan(&count)
-	if err != nil {
-		t.Fatalf("Failed to check column existence: %v", err)
-	}
-	if count != 0 {
-		t.Error("deactivated_at column should not exist yet")
-	}
-
-	// Close raw DB and open with our DB wrapper to trigger migrations
-	_ = rawDB.Close()
-
-	db, err := New(Config{
-		Path:            dbPath,
-		MaxOpenConns:    5,
-		MaxIdleConns:    2,
-		ConnMaxLifetime: time.Minute,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create database: %v", err)
-	}
-	defer func() { _ = db.Close() }()
-
-	// Check that migrations added the columns
-	// Migration 00001 adds is_active to both tables
-	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'is_active'").Scan(&count)
-	if err != nil {
-		t.Fatalf("Failed to check is_active column existence: %v", err)
-	}
-	if count != 1 {
-		t.Error("is_active column should exist in projects table after migration")
-	}
-
-	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tokens') WHERE name = 'is_active'").Scan(&count)
-	if err != nil {
-		t.Fatalf("Failed to check is_active column existence in tokens: %v", err)
-	}
-	if count != 1 {
-		t.Error("is_active column should exist in tokens table after migration")
-	}
-
-	// Migration 00002 adds deactivated_at to both tables
-	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'deactivated_at'").Scan(&count)
-	if err != nil {
-		t.Fatalf("Failed to check deactivated_at column existence: %v", err)
-	}
-	if count != 1 {
-		t.Error("deactivated_at column should exist in projects table after migration")
-	}
-
-	// Check deactivated_at column was added to tokens
-	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tokens') WHERE name = 'deactivated_at'").Scan(&count)
-	if err != nil {
-		t.Fatalf("Failed to check tokens deactivated_at column existence: %v", err)
-	}
-	if count != 1 {
-		t.Error("deactivated_at column should exist in tokens table after migration")
-	}
-}
-
-func TestMigrations_NewDatabase(t *testing.T) {
-	// Test that a new database gets all migrations applied
+func TestSQLiteSchema_NewDatabase(t *testing.T) {
+	// Test that a new database gets the full schema from schema.sql
 	db, cleanup := testDB(t)
 	defer cleanup()
 
@@ -453,7 +348,7 @@ func TestMigrations_NewDatabase(t *testing.T) {
 		t.Errorf("Expected 3 tables, got %d", count)
 	}
 
-	// Verify migration columns exist
+	// Verify all required columns exist in projects
 	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('projects') WHERE name = 'is_active'").Scan(&count)
 	if err != nil {
 		t.Fatalf("Failed to check is_active column: %v", err)
@@ -470,6 +365,15 @@ func TestMigrations_NewDatabase(t *testing.T) {
 		t.Error("deactivated_at column should exist in projects table")
 	}
 
+	// Verify all required columns exist in tokens
+	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tokens') WHERE name = 'id'").Scan(&count)
+	if err != nil {
+		t.Fatalf("Failed to check id column: %v", err)
+	}
+	if count != 1 {
+		t.Error("id column should exist in tokens table")
+	}
+
 	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tokens') WHERE name = 'deactivated_at'").Scan(&count)
 	if err != nil {
 		t.Fatalf("Failed to check tokens deactivated_at column: %v", err)
@@ -477,111 +381,95 @@ func TestMigrations_NewDatabase(t *testing.T) {
 	if count != 1 {
 		t.Error("deactivated_at column should exist in tokens table")
 	}
+
+	err = db.db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('tokens') WHERE name = 'cache_hit_count'").Scan(&count)
+	if err != nil {
+		t.Fatalf("Failed to check cache_hit_count column: %v", err)
+	}
+	if count != 1 {
+		t.Error("cache_hit_count column should exist in tokens table")
+	}
 }
 
-func TestMigrations_VersionTracking(t *testing.T) {
-	// Test that migration version is tracked
+func TestSQLiteSchema_Idempotent(t *testing.T) {
+	// Test that running schema initialization multiple times is safe
+	// SQLite uses IF NOT EXISTS so re-running should be a no-op
 	db, cleanup := testDB(t)
 	defer cleanup()
 
-	// Check that goose_db_version table exists and has entries
-	var version int64
-	err := db.db.QueryRow("SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1").Scan(&version)
+	// Check initial state - tables exist
+	var count int
+	err := db.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('projects', 'tokens', 'audit_events')").Scan(&count)
 	if err != nil {
-		t.Fatalf("Failed to get migration version: %v", err)
+		t.Fatalf("Failed to check tables: %v", err)
+	}
+	if count != 3 {
+		t.Errorf("Expected 3 tables, got %d", count)
 	}
 
-	// Should be at least version 2 (initial schema + deactivation columns)
-	if version < 2 {
-		t.Errorf("Expected migration version >= 2, got %d", version)
+	// Re-run schema initialization (should be no-op)
+	if err := initSQLiteSchema(db.db); err != nil {
+		t.Fatalf("Failed to re-run schema initialization: %v", err)
+	}
+
+	// Tables should still exist with same count
+	err = db.db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('projects', 'tokens', 'audit_events')").Scan(&count)
+	if err != nil {
+		t.Fatalf("Failed to check tables after re-init: %v", err)
+	}
+	if count != 3 {
+		t.Errorf("Expected 3 tables after re-init, got %d", count)
 	}
 }
 
-func TestMigrations_Idempotent(t *testing.T) {
-	// Test that running migrations multiple times is safe
-	db, cleanup := testDB(t)
-	defer cleanup()
-
-	// Get initial version
-	var initialVersion int64
-	err := db.db.QueryRow("SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1").Scan(&initialVersion)
-	if err != nil {
-		t.Fatalf("Failed to get initial version: %v", err)
-	}
-
-	// Run migrations again (should be no-op)
-	if err := DBInitForTests(db); err != nil {
-		t.Fatalf("Failed to run migrations again: %v", err)
-	}
-
-	// Version should be the same
-	var finalVersion int64
-	err = db.db.QueryRow("SELECT version_id FROM goose_db_version ORDER BY id DESC LIMIT 1").Scan(&finalVersion)
-	if err != nil {
-		t.Fatalf("Failed to get final version: %v", err)
-	}
-
-	if initialVersion != finalVersion {
-		t.Errorf("Migration version changed from %d to %d on second run", initialVersion, finalVersion)
-	}
-}
-
-func TestGetMigrationsPath_Success(t *testing.T) {
-	// Test that getMigrationsPath can find migrations from various paths
+func TestGetSchemaPath_Success(t *testing.T) {
+	// Test that getSchemaPath can find schema.sql from various paths
 	// This test verifies the function works when run from the project root
-	path, err := getMigrationsPath()
+	path, err := getSchemaPath()
 	if err != nil {
-		t.Logf("getMigrationsPath error (may be expected in some test environments): %v", err)
+		t.Logf("getSchemaPath error (may be expected in some test environments): %v", err)
 		// Not a fatal error - depends on working directory
 		return
 	}
 
-	// Verify the path exists and contains SQL files
-	entries, err := os.ReadDir(path)
+	// Verify the path exists and is a SQL file
+	info, err := os.Stat(path)
 	if err != nil {
-		t.Fatalf("Failed to read migrations directory: %v", err)
+		t.Fatalf("Failed to stat schema file: %v", err)
 	}
 
-	// Check for at least one .sql file
-	hasSQLFile := false
-	for _, entry := range entries {
-		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".sql" {
-			hasSQLFile = true
-			break
-		}
+	if info.IsDir() {
+		t.Error("Schema path should point to a file, not a directory")
 	}
 
-	if !hasSQLFile {
-		t.Error("Migrations directory should contain at least one .sql file")
+	if filepath.Base(path) != "schema.sql" {
+		t.Errorf("Schema path should end with schema.sql, got %s", filepath.Base(path))
 	}
 }
 
-func TestGetMigrationsPath_NotFound(t *testing.T) {
-	// The getMigrationsPath function uses runtime.Caller to find the source file location,
-	// so it will always find migrations from the source path.
-	// This test verifies the function handles missing directories gracefully.
-	// We can't easily test the "not found" path without modifying the source,
-	// but we verify the function returns a valid path in normal conditions.
-	path, err := getMigrationsPath()
+func TestGetSchemaPath_FindsSchemaFromSource(t *testing.T) {
+	// The getSchemaPath function uses runtime.Caller to find the source file location,
+	// so it should always find schema.sql from the scripts/ directory.
+	path, err := getSchemaPath()
 	if err != nil {
 		// If we get an error, that's acceptable in some test environments
-		t.Logf("getMigrationsPath returned error (may be expected): %v", err)
+		t.Logf("getSchemaPath returned error (may be expected): %v", err)
 		return
 	}
 
 	// Verify the returned path is valid
 	if path == "" {
-		t.Error("getMigrationsPath returned empty path")
+		t.Error("getSchemaPath returned empty path")
 	}
 }
 
-func TestRunMigrations_Error(t *testing.T) {
-	// Test runMigrations with a closed database
+func TestInitSQLiteSchema_ClosedDB(t *testing.T) {
+	// Test initSQLiteSchema with a closed database
 	db, cleanup := testDB(t)
 	cleanup() // Close database immediately
 
-	err := runMigrations(db.db)
+	err := initSQLiteSchema(db.db)
 	if err == nil {
-		t.Error("Expected error when running migrations on closed database")
+		t.Error("Expected error when initializing schema on closed database")
 	}
 }
