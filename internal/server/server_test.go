@@ -315,6 +315,9 @@ type mockTokenStore struct{}
 func (m *mockTokenStore) GetTokenByID(ctx context.Context, tokenID string) (token.TokenData, error) {
 	return token.TokenData{}, errors.New("not implemented")
 }
+func (m *mockTokenStore) GetTokenByToken(ctx context.Context, tokenString string) (token.TokenData, error) {
+	return token.TokenData{}, errors.New("not implemented")
+}
 func (m *mockTokenStore) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	return errors.New("not implemented")
 }

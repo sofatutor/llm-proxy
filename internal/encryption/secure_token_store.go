@@ -26,18 +26,23 @@ func NewSecureTokenStore(store token.TokenStore, hasher TokenHasherInterface) *S
 	}
 }
 
-// GetTokenByID retrieves a token by its ID (the original plaintext token).
-// The token is hashed before lookup, and the returned TokenData will
-// have the hashed token value (not the original).
-func (s *SecureTokenStore) GetTokenByID(ctx context.Context, tokenID string) (token.TokenData, error) {
-	hashedToken := s.hasher.CreateLookupKey(tokenID)
-	return s.store.GetTokenByID(ctx, hashedToken)
+// GetTokenByID retrieves a token by its UUID.
+func (s *SecureTokenStore) GetTokenByID(ctx context.Context, id string) (token.TokenData, error) {
+	return s.store.GetTokenByID(ctx, id)
 }
 
-// IncrementTokenUsage increments the usage count for a token.
+// GetTokenByToken retrieves a token by its token string (for authentication).
+// The token is hashed before lookup, and the returned TokenData will
+// have the hashed token value (not the original).
+func (s *SecureTokenStore) GetTokenByToken(ctx context.Context, tokenString string) (token.TokenData, error) {
+	hashedToken := s.hasher.CreateLookupKey(tokenString)
+	return s.store.GetTokenByToken(ctx, hashedToken)
+}
+
+// IncrementTokenUsage increments the usage count for a token by token string.
 // The token is hashed before the operation.
-func (s *SecureTokenStore) IncrementTokenUsage(ctx context.Context, tokenID string) error {
-	hashedToken := s.hasher.CreateLookupKey(tokenID)
+func (s *SecureTokenStore) IncrementTokenUsage(ctx context.Context, tokenString string) error {
+	hashedToken := s.hasher.CreateLookupKey(tokenString)
 	return s.store.IncrementTokenUsage(ctx, hashedToken)
 }
 

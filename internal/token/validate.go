@@ -26,11 +26,14 @@ type TokenValidator interface {
 
 // TokenStore defines the interface for token storage and retrieval
 type TokenStore interface {
-	// GetTokenByID retrieves a token by its ID
-	GetTokenByID(ctx context.Context, tokenID string) (TokenData, error)
+	// GetTokenByID retrieves a token by its UUID (for management operations)
+	GetTokenByID(ctx context.Context, id string) (TokenData, error)
 
-	// IncrementTokenUsage increments the usage count for a token
-	IncrementTokenUsage(ctx context.Context, tokenID string) error
+	// GetTokenByToken retrieves a token by its token string (for authentication)
+	GetTokenByToken(ctx context.Context, tokenString string) (TokenData, error)
+
+	// IncrementTokenUsage increments the usage count for a token by its token string
+	IncrementTokenUsage(ctx context.Context, tokenString string) error
 
 	// CreateToken creates a new token in the store
 	CreateToken(ctx context.Context, token TokenData) error
@@ -47,7 +50,8 @@ type TokenStore interface {
 
 // TokenData represents the data associated with a token
 type TokenData struct {
-	Token         string     // The token ID
+	ID            string     // The token ID (UUID) - used for management operations
+	Token         string     // The token string (sk-...) - used for authentication
 	ProjectID     string     // The associated project ID
 	ExpiresAt     *time.Time // When the token expires (nil for no expiration)
 	IsActive      bool       // Whether the token is active
@@ -90,14 +94,14 @@ func NewValidator(store TokenStore) *StandardValidator {
 }
 
 // ValidateToken validates a token without incrementing usage
-func (v *StandardValidator) ValidateToken(ctx context.Context, tokenID string) (string, error) {
+func (v *StandardValidator) ValidateToken(ctx context.Context, tokenString string) (string, error) {
 	// First validate the token format
-	if err := ValidateTokenFormat(tokenID); err != nil {
+	if err := ValidateTokenFormat(tokenString); err != nil {
 		return "", fmt.Errorf("invalid token format: %w", err)
 	}
 
-	// Retrieve the token from the store
-	tokenData, err := v.store.GetTokenByID(ctx, tokenID)
+	// Retrieve the token from the store by token string
+	tokenData, err := v.store.GetTokenByToken(ctx, tokenString)
 	if err != nil {
 		if errors.Is(err, ErrTokenNotFound) {
 			return "", ErrTokenNotFound
@@ -125,15 +129,15 @@ func (v *StandardValidator) ValidateToken(ctx context.Context, tokenID string) (
 }
 
 // ValidateTokenWithTracking validates a token and increments its usage count
-func (v *StandardValidator) ValidateTokenWithTracking(ctx context.Context, tokenID string) (string, error) {
+func (v *StandardValidator) ValidateTokenWithTracking(ctx context.Context, tokenString string) (string, error) {
 	// Validate the token first
-	projectID, err := v.ValidateToken(ctx, tokenID)
+	projectID, err := v.ValidateToken(ctx, tokenString)
 	if err != nil {
 		return "", err
 	}
 
-	// Increment the token usage
-	if err := v.store.IncrementTokenUsage(ctx, tokenID); err != nil {
+	// Increment the token usage by token string
+	if err := v.store.IncrementTokenUsage(ctx, tokenString); err != nil {
 		return "", fmt.Errorf("failed to track token usage: %w", err)
 	}
 
