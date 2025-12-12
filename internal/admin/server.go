@@ -11,9 +11,9 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
+	"strconv"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -814,6 +814,15 @@ func (s *Server) templateFuncs() template.FuncMap {
 				return 0
 			}
 			return a - b
+		},
+		"formatMaxRequests": func(max *int) string {
+			if max == nil {
+				return "∞"
+			}
+			if *max <= 0 {
+				return "∞"
+			}
+			return strconv.Itoa(*max)
 		},
 		"inc": func(a int) int {
 			return a + 1

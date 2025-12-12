@@ -1763,6 +1763,17 @@ func TestServer_templateFuncs(t *testing.T) {
 	if !funcs["not"].(func(bool) bool)(false) {
 		t.Error("not(false) = false, want true")
 	}
+	if got := funcs["formatMaxRequests"].(func(*int) string)(nil); got != "∞" {
+		t.Errorf("formatMaxRequests(nil) = %q, want ∞", got)
+	}
+	max := 100
+	if got := funcs["formatMaxRequests"].(func(*int) string)(&max); got != "100" {
+		t.Errorf("formatMaxRequests(100) = %q, want 100", got)
+	}
+	zero := 0
+	if got := funcs["formatMaxRequests"].(func(*int) string)(&zero); got != "∞" {
+		t.Errorf("formatMaxRequests(0) = %q, want ∞", got)
+	}
 	if got := funcs["obfuscateAPIKey"].(func(string) string)("sk-1234567890abcdef"); !strings.HasPrefix(got, "sk-1234") {
 		t.Errorf("obfuscateAPIKey() = %q, want prefix sk-1234", got)
 	}

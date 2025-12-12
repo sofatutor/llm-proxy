@@ -71,15 +71,7 @@
                                     <span class="badge bg-secondary" title="Total requests made" data-bs-toggle="tooltip">
                                         {{ .RequestCount }}
                                     </span>
-                                    {{ if .MaxRequests }}
-                                        {{ if gt .MaxRequests 0 }}
-                                            / {{ .MaxRequests }}
-                                        {{ else }}
-                                            / ∞
-                                        {{ end }}
-                                    {{ else }}
-                                        / ∞
-                                    {{ end }}
+                                    / {{ formatMaxRequests .MaxRequests }}
                                     <span class="text-muted">|</span>
                                     <span class="badge bg-success" title="Responses served from cache" data-bs-toggle="tooltip">
                                         <i class="bi bi-hdd"></i> {{ .CacheHitCount }}
