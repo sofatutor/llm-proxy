@@ -1036,6 +1036,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ProjectID       string `json:"project_id"`
 			DurationMinutes int    `json:"duration_minutes"`
+			MaxRequests     *int   `json:"max_requests"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			s.logger.Error("invalid token create request body", zap.Error(err), zap.String("request_id", requestID))
@@ -1085,6 +1086,19 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"project_id is required"}`, http.StatusBadRequest)
 			return
 		}
+		if req.MaxRequests != nil && *req.MaxRequests <= 0 {
+			s.logger.Error("max_requests must be positive", zap.Int("max_requests", *req.MaxRequests), zap.String("request_id", requestID))
+
+			// Audit: token creation failure - invalid max_requests
+			_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
+				WithProjectID(req.ProjectID).
+				WithDetail("validation_error", "max_requests must be positive").
+				WithDetail("requested_max_requests", *req.MaxRequests))
+
+			http.Error(w, `{"error":"max_requests must be positive"}`, http.StatusBadRequest)
+			return
+		}
+
 		// Check project exists and is active
 		project, err := s.projectStore.GetProjectByID(ctx, req.ProjectID)
 		if err != nil {
@@ -1115,7 +1129,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		}
 		// Generate token ID (UUID) and token string
 		tokenID := uuid.New().String()
-		tokenStr, expiresAt, _, err := token.NewTokenGenerator().GenerateWithOptions(duration, nil)
+		tokenStr, expiresAt, _, err := token.NewTokenGenerator().GenerateWithOptions(duration, req.MaxRequests)
 		if err != nil {
 			s.logger.Error("failed to generate token", zap.Error(err), zap.String("request_id", requestID))
 
@@ -1136,6 +1150,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			ExpiresAt:    expiresAt,
 			IsActive:     true,
 			RequestCount: 0,
+			MaxRequests:  req.MaxRequests,
 			CreatedAt:    now,
 		}
 		if err := s.tokenStore.CreateToken(ctx, dbToken); err != nil {
@@ -1158,14 +1173,18 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		)
 
 		// Audit: token creation success
-		_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultSuccess, r, requestID).
+		auditEvent := s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultSuccess, r, requestID).
 			WithProjectID(req.ProjectID).
 			WithRequestID(requestID).
 			WithHTTPMethod(r.Method).
 			WithEndpoint(r.URL.Path).
 			WithTokenID(tokenStr).
 			WithDetail("duration_minutes", req.DurationMinutes).
-			WithDetail("expires_at", expiresAt.Format(time.RFC3339)))
+			WithDetail("expires_at", expiresAt.Format(time.RFC3339))
+		if req.MaxRequests != nil {
+			auditEvent.WithDetail("max_requests", *req.MaxRequests)
+		}
+		_ = s.auditLogger.Log(auditEvent)
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]interface{}{

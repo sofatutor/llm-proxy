@@ -11,9 +11,9 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -48,7 +48,7 @@ type APIClientInterface interface {
 	GetDashboardData(ctx context.Context) (*DashboardData, error)
 	GetProjects(ctx context.Context, page, pageSize int) ([]Project, *Pagination, error)
 	GetTokens(ctx context.Context, projectID string, page, pageSize int) ([]Token, *Pagination, error)
-	CreateToken(ctx context.Context, projectID string, durationMinutes int) (*TokenCreateResponse, error)
+	CreateToken(ctx context.Context, projectID string, durationMinutes int, maxRequests *int) (*TokenCreateResponse, error)
 	GetProject(ctx context.Context, projectID string) (*Project, error)
 	UpdateProject(ctx context.Context, projectID string, name string, openAIAPIKey string, isActive *bool) (*Project, error)
 	DeleteProject(ctx context.Context, projectID string) error
@@ -647,6 +647,7 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 	var req struct {
 		ProjectID       string `form:"project_id" binding:"required"`
 		DurationMinutes int    `form:"duration_minutes" binding:"required,min=1,max=525600"`
+		MaxRequests     *int   `form:"max_requests" binding:"omitempty,min=1"`
 	}
 
 	if err := c.ShouldBind(&req); err != nil {
@@ -662,10 +663,13 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 		}
 		projects, _, _ := apiClient.GetProjects(projCtx, 1, 100)
 		c.HTML(http.StatusBadRequest, "tokens/new.html", gin.H{
-			"title":    "Generate Token",
-			"active":   "tokens",
-			"projects": projects,
-			"error":    "Please fill in all required fields correctly",
+			"title":            "Generate Token",
+			"active":           "tokens",
+			"projects":         projects,
+			"project_id":       c.PostForm("project_id"),
+			"duration_minutes": c.PostForm("duration_minutes"),
+			"max_requests":     c.PostForm("max_requests"),
+			"error":            "Please fill in all required fields correctly",
 		})
 		return
 	}
@@ -679,7 +683,7 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 	if ref := c.Request.Referer(); ref != "" {
 		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
 	}
-	token, err := apiClient.CreateToken(ctx, req.ProjectID, req.DurationMinutes)
+	token, err := apiClient.CreateToken(ctx, req.ProjectID, req.DurationMinutes, req.MaxRequests)
 	if err != nil {
 		// forward context as well for consistency in audit logs
 		projCtx := ctx

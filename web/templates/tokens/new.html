@@ -78,6 +78,16 @@
                         </div>
                     </div>
 
+                    <div class="mb-3">
+                        <label for="max_requests" class="form-label">
+                            Request limit
+                        </label>
+                        <input type="number" class="form-control" id="max_requests" name="max_requests" min="1" placeholder="Unlimited" value="{{ if .max_requests }}{{ .max_requests }}{{ end }}">
+                        <div class="form-text">
+                            Optional: set a total request cap for this token. Leave blank for unlimited usage.
+                        </div>
+                    </div>
+
                     <div class="alert alert-warning">
                         <i class="bi bi-exclamation-triangle"></i>
                         <strong>Important:</strong>

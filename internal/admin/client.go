@@ -62,8 +62,8 @@ type Project struct {
 
 // Token represents a token from the Management API (sanitized)
 type Token struct {
-	ID            string     `json:"id"`       // Token UUID (for API operations)
-	Token         string     `json:"token"`    // Obfuscated token string (for display)
+	ID            string     `json:"id"`    // Token UUID (for API operations)
+	Token         string     `json:"token"` // Obfuscated token string (for display)
 	ProjectID     string     `json:"project_id"`
 	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
 	IsActive      bool       `json:"is_active"`
@@ -330,10 +330,14 @@ func (c *APIClient) GetTokens(ctx context.Context, projectID string, page, pageS
 }
 
 // CreateToken creates a new token for a project with a given duration in minutes
-func (c *APIClient) CreateToken(ctx context.Context, projectID string, durationMinutes int) (*TokenCreateResponse, error) {
+func (c *APIClient) CreateToken(ctx context.Context, projectID string, durationMinutes int, maxRequests *int) (*TokenCreateResponse, error) {
 	payload := map[string]interface{}{
 		"project_id":       projectID,
 		"duration_minutes": durationMinutes,
+	}
+
+	if maxRequests != nil {
+		payload["max_requests"] = *maxRequests
 	}
 	// Use newRequest and doRequest for consistent error handling
 	req, err := c.newRequest(ctx, "POST", "/manage/tokens", payload)
