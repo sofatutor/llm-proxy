@@ -76,17 +76,17 @@ func TestAtoiSafe(t *testing.T) {
 
 func TestCloneHeadersForCache(t *testing.T) {
 	h := http.Header{
-		"Content-Type":               {"application/json"},
-		"X-Custom":                   {"value1", "value2"},
-		"Connection":                 {"keep-alive"}, // hop-by-hop, should be dropped
-		"Transfer-Encoding":          {"chunked"},    // hop-by-hop, should be dropped
-		"X-Upstream-Request-Start":   {"123456789"},  // timing, should be dropped
-		"X-Upstream-Request-Stop":    {"987654321"},  // timing, should be dropped
-		"X-Proxy-Received-At":        {"2025-12-11T20:00:00Z"}, // timing, should be dropped
-		"X-Proxy-Final-Response-At":  {"2025-12-11T20:00:01Z"}, // timing, should be dropped
-		"X-Proxy-First-Response-At":  {"2025-12-11T20:00:00Z"}, // timing, should be dropped
-		"Date":                       {"Wed, 11 Dec 2025 20:00:00 GMT"}, // should be dropped
-		"Set-Cookie":                 {"session=abc123"}, // user-specific, should be dropped
+		"Content-Type":              {"application/json"},
+		"X-Custom":                  {"value1", "value2"},
+		"Connection":                {"keep-alive"},                    // hop-by-hop, should be dropped
+		"Transfer-Encoding":         {"chunked"},                       // hop-by-hop, should be dropped
+		"X-Upstream-Request-Start":  {"123456789"},                     // timing, should be dropped
+		"X-Upstream-Request-Stop":   {"987654321"},                     // timing, should be dropped
+		"X-Proxy-Received-At":       {"2025-12-11T20:00:00Z"},          // timing, should be dropped
+		"X-Proxy-Final-Response-At": {"2025-12-11T20:00:01Z"},          // timing, should be dropped
+		"X-Proxy-First-Response-At": {"2025-12-11T20:00:00Z"},          // timing, should be dropped
+		"Date":                      {"Wed, 11 Dec 2025 20:00:00 GMT"}, // should be dropped
+		"Set-Cookie":                {"session=abc123"},                // user-specific, should be dropped
 	}
 	cloned := cloneHeadersForCache(h)
 
