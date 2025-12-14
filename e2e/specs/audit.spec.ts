@@ -19,7 +19,8 @@ test.describe('Audit Interface', () => {
     
     // Create test data to generate audit events
     projectId = await seed.createProject('Audit Test Project', 'sk-audit-test-key');
-    tokenId = await seed.createToken(projectId, 30);
+    const token = await seed.createToken(projectId, 30);
+    tokenId = token.id;
   });
 
   test.afterEach(async () => {
@@ -214,8 +215,8 @@ test.describe('Audit Interface', () => {
   test('should maintain search state during pagination', async ({ page }) => {
     // Generate multiple audit events
     for (let i = 0; i < 3; i++) {
-      const tempTokenId = await seed.createToken(projectId, 30);
-      await seed.revokeToken(tempTokenId);
+      const tempToken = await seed.createToken(projectId, 30);
+      await seed.revokeToken(tempToken.id);
     }
     
     await page.goto('/audit');

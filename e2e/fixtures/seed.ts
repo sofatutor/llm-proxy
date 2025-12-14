@@ -8,6 +8,7 @@ export class SeedFixture {
   private readonly managementToken: string;
   private readonly createdProjects: string[] = [];
   private readonly createdTokens: string[] = [];
+  private readonly createdTokenIDs: string[] = [];
 
   constructor(baseUrl: string, managementToken: string) {
     // Require explicit Management API base URL; do not fall back silently
@@ -53,7 +54,7 @@ export class SeedFixture {
   /**
    * Create a test token for a project
    */
-  async createToken(projectId: string, durationMinutes: number = 60): Promise<string> {
+  async createToken(projectId: string, durationMinutes: number = 60): Promise<{ id: string; token: string }> {
     const response = await fetch(`${this.baseUrl}/manage/tokens`, {
       method: 'POST',
       headers: {
@@ -71,8 +72,21 @@ export class SeedFixture {
     }
 
     const tokenResponse = await response.json();
-    this.createdTokens.push(tokenResponse.token);
-    return tokenResponse.token;
+    const tokenValue = tokenResponse.token as string | undefined;
+    const tokenID = tokenResponse.id as string | undefined;
+
+    if (!tokenValue) {
+      throw new Error('Token creation response missing token value');
+    }
+
+    if (!tokenID) {
+      throw new Error('Token creation response missing token ID');
+    }
+
+    this.createdTokens.push(tokenValue);
+    this.createdTokenIDs.push(tokenID);
+
+    return { id: tokenID, token: tokenValue };
   }
 
   /**
@@ -164,7 +178,7 @@ export class SeedFixture {
    */
   async cleanup(): Promise<void> {
     // Revoke all created tokens first
-    for (const tokenId of this.createdTokens) {
+    for (const tokenId of this.createdTokenIDs) {
       try {
         await this.revokeToken(tokenId);
       } catch (error) {
@@ -177,6 +191,7 @@ export class SeedFixture {
 
     this.createdProjects.length = 0;
     this.createdTokens.length = 0;
+    this.createdTokenIDs.length = 0;
   }
 
   /**
@@ -191,5 +206,12 @@ export class SeedFixture {
    */
   getCreatedTokens(): string[] {
     return [...this.createdTokens];
+  }
+
+  /**
+   * Get all created token IDs (UUID primary keys)
+   */
+  getCreatedTokenIDs(): string[] {
+    return [...this.createdTokenIDs];
   }
 }

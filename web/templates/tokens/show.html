@@ -29,12 +29,18 @@
                     <div class="row mb-3">
                         <div class="col-sm-4"><strong>Token ID</strong></div>
                         <div class="col-sm-8">
-                            <code>{{ obfuscateToken .tokenID }}</code>
+                            <code>{{ .token.ID }}</code>
                             <button class="btn btn-sm btn-outline-secondary ms-2" 
-                                    onclick="copyToClipboard('{{ .tokenID }}')" 
+                                    onclick="copyToClipboard('{{ .token.ID }}')" 
                                     title="Copy token ID to clipboard">
                                 <i class="bi bi-clipboard"></i>
                             </button>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4"><strong>Token (obfuscated)</strong></div>
+                        <div class="col-sm-8">
+                            <code>{{ .token.Token }}</code>
                         </div>
                     </div>
                     <div class="row mb-3">
@@ -129,7 +135,7 @@
                     <h5 class="card-title mb-0">Actions</h5>
                 </div>
                 <div class="card-body d-grid gap-2">
-                    <a href="/tokens/{{ .tokenID }}/edit" class="btn btn-outline-warning">
+                    <a href="/tokens/{{ .token.ID }}/edit" class="btn btn-outline-warning">
                         <i class="bi bi-pencil"></i>
                         Edit Token
                     </a>
@@ -143,14 +149,14 @@
                         {{ else if .token.IsActive }}
                         <!-- Token is active - show revoke button -->
                         <button type="button" class="btn btn-outline-danger" 
-                                onclick="revokeToken('{{ .tokenID }}', '{{ obfuscateToken .tokenID }}')">
+                                onclick="revokeToken('{{ .token.ID }}', '{{ .token.Token }}')">
                             <i class="bi bi-x-circle"></i>
                             Revoke Token
                         </button>
                         {{ else }}
                         <!-- Token is inactive but not expired - show reactivate button -->
                         <button type="button" class="btn btn-outline-success" 
-                                onclick="reactivateToken('{{ .tokenID }}', '{{ obfuscateToken .tokenID }}')">
+                                onclick="reactivateToken('{{ .token.ID }}', '{{ .token.Token }}')">
                             <i class="bi bi-arrow-clockwise"></i>
                             Reactivate Token
                         </button>
@@ -158,14 +164,14 @@
                     {{ else if .token.IsActive }}
                         <!-- No expiry set and active -->
                         <button type="button" class="btn btn-outline-danger" 
-                                onclick="revokeToken('{{ .tokenID }}', '{{ obfuscateToken .tokenID }}')">
+                                onclick="revokeToken('{{ .token.ID }}', '{{ .token.Token }}')">
                             <i class="bi bi-x-circle"></i>
                             Revoke Token
                         </button>
                     {{ else }}
                         <!-- No expiry set and inactive -->
                         <button type="button" class="btn btn-outline-success" 
-                                onclick="reactivateToken('{{ .tokenID }}', '{{ obfuscateToken .tokenID }}')">
+                                onclick="reactivateToken('{{ .token.ID }}', '{{ .token.Token }}')">
                             <i class="bi bi-arrow-clockwise"></i>
                             Reactivate Token
                         </button>

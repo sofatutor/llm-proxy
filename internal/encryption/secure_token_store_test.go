@@ -48,6 +48,20 @@ func (m *mockTokenStore) GetTokenByID(ctx context.Context, tokenID string) (toke
 	return td, nil
 }
 
+// GetTokenByToken retrieves a token by its token string (for authentication)
+func (m *mockTokenStore) GetTokenByToken(ctx context.Context, tokenString string) (token.TokenData, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.getByIDError != nil {
+		return token.TokenData{}, m.getByIDError
+	}
+	td, ok := m.tokens[tokenString]
+	if !ok {
+		return token.TokenData{}, errors.New("token not found")
+	}
+	return td, nil
+}
+
 func (m *mockTokenStore) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -337,8 +351,8 @@ func TestSecureTokenStore_CreateAndGetToken(t *testing.T) {
 		t.Errorf("hashed token should be 64 chars, got %d", len(createdToken.Token))
 	}
 
-	// Get token using original plaintext token
-	retrieved, err := store.GetTokenByID(ctx, originalToken)
+	// Get token using original plaintext token (uses GetTokenByToken for auth lookup)
+	retrieved, err := store.GetTokenByToken(ctx, originalToken)
 	if err != nil {
 		t.Fatalf("get failed: %v", err)
 	}

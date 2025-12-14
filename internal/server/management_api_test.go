@@ -32,6 +32,11 @@ func (m *MockTokenStoreExtended) GetTokenByID(ctx context.Context, tokenID strin
 	return args.Get(0).(token.TokenData), args.Error(1)
 }
 
+func (m *MockTokenStoreExtended) GetTokenByToken(ctx context.Context, tokenString string) (token.TokenData, error) {
+	args := m.Called(ctx, tokenString)
+	return args.Get(0).(token.TokenData), args.Error(1)
+}
+
 func (m *MockTokenStoreExtended) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	args := m.Called(ctx, tokenID)
 	return args.Error(0)
@@ -444,15 +449,16 @@ func TestHandleTokens(t *testing.T) {
 		IsActive: true,
 	}
 
+	// Use realistic sk- prefixed tokens that will be properly obfuscated
 	testTokens := []token.TokenData{
 		{
-			Token:         "token-1",
+			Token:         "sk-test1234567890abcdefghijklmnop",
 			ProjectID:     "project-1",
 			IsActive:      true,
 			CacheHitCount: 42,
 		},
 		{
-			Token:         "token-2",
+			Token:         "sk-test0987654321zyxwvutsrqponml",
 			ProjectID:     "project-2",
 			IsActive:      true,
 			CacheHitCount: 100,
@@ -485,6 +491,7 @@ func TestHandleTokens(t *testing.T) {
 		var response map[string]interface{}
 		err := json.NewDecoder(w.Body).Decode(&response)
 		require.NoError(t, err)
+		assert.Contains(t, response, "id")
 		assert.Contains(t, response, "token")
 		assert.Contains(t, response, "expires_at")
 	})
@@ -540,16 +547,26 @@ func TestHandleTokens(t *testing.T) {
 		assert.Len(t, response, 2)
 
 		// Verify cache_hit_count is returned in the response
-		assert.Equal(t, 42, response[0].CacheHitCount, "cache_hit_count should be returned for token-1")
-		assert.Equal(t, 100, response[1].CacheHitCount, "cache_hit_count should be returned for token-2")
+		assert.Equal(t, 42, response[0].CacheHitCount, "cache_hit_count should be returned for first token")
+		assert.Equal(t, 100, response[1].CacheHitCount, "cache_hit_count should be returned for second token")
 
-		// Explicitly assert that no raw token field is present
+		// Verify token field is present but obfuscated (not raw token value)
 		var generic []map[string]interface{}
 		err = json.NewDecoder(bytes.NewReader(raw)).Decode(&generic)
 		require.NoError(t, err)
 		for _, item := range generic {
-			if _, exists := item["token"]; exists {
-				t.Fatalf("response item unexpectedly contains raw token field: %v", item)
+			// Verify token field exists (obfuscated token for display)
+			tokenVal, exists := item["token"]
+			if !exists {
+				t.Fatalf("response item missing token field: %v", item)
+			}
+			// Verify token is obfuscated (contains asterisks)
+			tokenStr, ok := tokenVal.(string)
+			if !ok {
+				t.Fatalf("token field is not a string: %v", tokenVal)
+			}
+			if !strings.Contains(tokenStr, "*") {
+				t.Fatalf("token should be obfuscated but got: %s", tokenStr)
 			}
 			// Also verify cache_hit_count is present in raw JSON
 			if _, exists := item["cache_hit_count"]; !exists {
@@ -577,13 +594,23 @@ func TestHandleTokens(t *testing.T) {
 		assert.Len(t, response, 1)
 		assert.Equal(t, "project-1", response[0].ProjectID)
 
-		// Explicitly assert that no raw token field is present
+		// Verify token field is present but obfuscated (not raw token value)
 		var generic []map[string]interface{}
 		err = json.NewDecoder(bytes.NewReader(raw)).Decode(&generic)
 		require.NoError(t, err)
 		for _, item := range generic {
-			if _, exists := item["token"]; exists {
-				t.Fatalf("response item unexpectedly contains raw token field: %v", item)
+			// Verify token field exists (obfuscated token for display)
+			tokenVal, exists := item["token"]
+			if !exists {
+				t.Fatalf("response item missing token field: %v", item)
+			}
+			// Verify token is obfuscated (contains asterisks)
+			tokenStr, ok := tokenVal.(string)
+			if !ok {
+				t.Fatalf("token field is not a string: %v", tokenVal)
+			}
+			if !strings.Contains(tokenStr, "*") {
+				t.Fatalf("token should be obfuscated but got: %s", tokenStr)
 			}
 		}
 	})
@@ -922,7 +949,7 @@ func TestHandleTokenByID(t *testing.T) {
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
-		// Test both structured response and raw JSON to ensure no token field
+		// Test both structured response and raw JSON to ensure token is obfuscated
 		raw := w.Body.Bytes()
 
 		var response TokenListResponse
@@ -933,12 +960,20 @@ func TestHandleTokenByID(t *testing.T) {
 		assert.Equal(t, testToken.MaxRequests, response.MaxRequests)
 		assert.Equal(t, testToken.RequestCount, response.RequestCount)
 
-		// Security check: ensure no raw token field is present
+		// Security check: ensure token field is present but obfuscated
 		var generic map[string]interface{}
 		err = json.NewDecoder(bytes.NewReader(raw)).Decode(&generic)
 		require.NoError(t, err)
-		if _, exists := generic["token"]; exists {
-			t.Fatalf("GET /manage/tokens/{id} response unexpectedly contains raw token field: %v", generic)
+		tokenVal, exists := generic["token"]
+		if !exists {
+			t.Fatalf("GET /manage/tokens/{id} response missing token field: %v", generic)
+		}
+		tokenStr, ok := tokenVal.(string)
+		if !ok {
+			t.Fatalf("token field is not a string: %v", tokenVal)
+		}
+		if !strings.Contains(tokenStr, "*") {
+			t.Fatalf("token should be obfuscated but got: %s", tokenStr)
 		}
 	})
 
@@ -1366,9 +1401,13 @@ func TestHandleTokenByID_SecurityValidation(t *testing.T) {
 		err := json.NewDecoder(bytes.NewReader(raw)).Decode(&responseMap)
 		require.NoError(t, err)
 
-		// Ensure no raw token field exists
-		_, hasToken := responseMap["token"]
-		assert.False(t, hasToken, "Response must not contain raw token field")
+		// Ensure token field exists but is obfuscated (not raw)
+		tokenVal, hasToken := responseMap["token"]
+		assert.True(t, hasToken, "Response must contain obfuscated token field")
+		tokenStr, ok := tokenVal.(string)
+		assert.True(t, ok, "Token field must be a string")
+		assert.Contains(t, tokenStr, "*", "Token must be obfuscated (contain asterisks)")
+		assert.NotEqual(t, "sk-test123456789", tokenStr, "Token must not be raw value")
 
 		// Ensure expected fields are present
 		assert.Contains(t, responseMap, "project_id")

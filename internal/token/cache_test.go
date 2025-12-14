@@ -533,6 +533,15 @@ func (m *StrictMockTokenStore) GetTokenByID(ctx context.Context, tokenID string)
 	return td, nil
 }
 
+// GetTokenByToken retrieves a token by its token string (for authentication)
+func (m *StrictMockTokenStore) GetTokenByToken(ctx context.Context, tokenString string) (TokenData, error) {
+	td, ok := m.data[tokenString]
+	if !ok {
+		return TokenData{}, ErrTokenNotFound
+	}
+	return td, nil
+}
+
 // Implement other methods as no-ops for compatibility
 func (m *StrictMockTokenStore) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	return nil

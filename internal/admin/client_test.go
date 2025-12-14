@@ -22,7 +22,7 @@ func TestAPIClient_TokenMethods(t *testing.T) {
 			http.Error(w, "method", http.StatusMethodNotAllowed)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(Token{TokenID: "tok-1", ProjectID: "p1", IsActive: true})
+		_ = json.NewEncoder(w).Encode(Token{ID: "tok-1", ProjectID: "p1", IsActive: true})
 	})
 
 	// PATCH /manage/tokens/:id
@@ -31,7 +31,7 @@ func TestAPIClient_TokenMethods(t *testing.T) {
 			http.Error(w, "method", http.StatusMethodNotAllowed)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(Token{TokenID: "tok-2", ProjectID: "p1", IsActive: false})
+		_ = json.NewEncoder(w).Encode(Token{ID: "tok-2", ProjectID: "p1", IsActive: false})
 	})
 
 	// DELETE /manage/tokens/:id
@@ -62,7 +62,7 @@ func TestAPIClient_TokenMethods(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetToken error: %v", err)
 	}
-	if tok == nil || tok.TokenID != "tok-1" || tok.ProjectID != "p1" {
+	if tok == nil || tok.ID != "tok-1" || tok.ProjectID != "p1" {
 		t.Fatalf("GetToken unexpected: %+v", tok)
 	}
 
@@ -71,7 +71,7 @@ func TestAPIClient_TokenMethods(t *testing.T) {
 	if err != nil {
 		t.Fatalf("UpdateToken error: %v", err)
 	}
-	if updated == nil || updated.TokenID != "tok-2" || updated.IsActive != false {
+	if updated == nil || updated.ID != "tok-2" || updated.IsActive != false {
 		t.Fatalf("UpdateToken unexpected: %+v", updated)
 	}
 
@@ -129,7 +129,7 @@ func TestAPIClient_UpdateToken_SendsBothFields(t *testing.T) {
 		if _, ok := body["max_requests"]; !ok {
 			t.Fatalf("missing max_requests in payload: %#v", body)
 		}
-		_ = json.NewEncoder(w).Encode(Token{TokenID: "tok-99", ProjectID: "p1", IsActive: true})
+		_ = json.NewEncoder(w).Encode(Token{ID: "tok-99", ProjectID: "p1", IsActive: true})
 	}))
 	defer srv.Close()
 
@@ -553,38 +553,81 @@ func TestAPIClient_GetTokens(t *testing.T) {
 }
 
 func TestAPIClient_CreateToken(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" || r.URL.Path != "/manage/tokens" {
-			http.Error(w, "invalid request", http.StatusBadRequest)
-			return
-		}
+	intPtr := func(v int) *int { return &v }
 
-		var req map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
-			return
-		}
-
-		response := TokenCreateResponse{
-			Token:     "tok-abcd1234",
-			ExpiresAt: time.Now().Add(time.Duration(req["duration_minutes"].(float64)) * time.Minute),
-		}
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			t.Errorf("failed to encode token create response: %v", err)
-		}
-	}))
-	defer server.Close()
-
-	client := NewAPIClient(server.URL, "test-token")
-	ctx := context.Background()
-
-	token, err := client.CreateToken(ctx, "project-1", 24)
-	if err != nil {
-		t.Fatalf("CreateToken failed: %v", err)
+	tests := []struct {
+		name          string
+		maxRequests   *int
+		expectMaxKey  bool
+		expectedValue int
+	}{
+		{name: "without max", maxRequests: nil, expectMaxKey: false},
+		{name: "with max", maxRequests: intPtr(42), expectMaxKey: true, expectedValue: 42},
 	}
 
-	if token.Token != "tok-abcd1234" {
-		t.Errorf("Token = %q, want %q", token.Token, "tok-abcd1234")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != "POST" || r.URL.Path != "/manage/tokens" {
+					http.Error(w, "invalid request", http.StatusBadRequest)
+					return
+				}
+
+				var req map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					http.Error(w, "invalid JSON", http.StatusBadRequest)
+					return
+				}
+
+				if tt.expectMaxKey {
+					val, ok := req["max_requests"].(float64)
+					if !ok {
+						t.Fatalf("missing max_requests in payload: %#v", req)
+					}
+					if int(val) != tt.expectedValue {
+						t.Fatalf("max_requests = %v, want %d", val, tt.expectedValue)
+					}
+				} else if _, ok := req["max_requests"]; ok {
+					t.Fatalf("did not expect max_requests in payload: %#v", req)
+				}
+
+				response := TokenCreateResponse{
+					Token:     "tok-abcd1234",
+					ExpiresAt: time.Now().Add(time.Duration(req["duration_minutes"].(float64)) * time.Minute),
+				}
+				if tt.maxRequests != nil {
+					response.MaxRequests = tt.maxRequests
+				}
+				if err := json.NewEncoder(w).Encode(response); err != nil {
+					t.Errorf("failed to encode token create response: %v", err)
+				}
+			}))
+			defer server.Close()
+
+			client := NewAPIClient(server.URL, "test-token")
+			ctx := context.Background()
+
+			token, err := client.CreateToken(ctx, "project-1", 24, tt.maxRequests)
+			if err != nil {
+				t.Fatalf("CreateToken failed: %v", err)
+			}
+
+			if token.Token != "tok-abcd1234" {
+				t.Errorf("Token = %q, want %q", token.Token, "tok-abcd1234")
+			}
+			if tt.maxRequests == nil {
+				if token.MaxRequests != nil {
+					t.Fatalf("MaxRequests = %v, want nil", *token.MaxRequests)
+				}
+			} else {
+				if token.MaxRequests == nil {
+					t.Fatalf("MaxRequests = nil, want %d", *tt.maxRequests)
+				}
+				if *token.MaxRequests != *tt.maxRequests {
+					t.Fatalf("MaxRequests = %d, want %d", *token.MaxRequests, *tt.maxRequests)
+				}
+			}
+		})
 	}
 }
 
@@ -966,7 +1009,7 @@ func TestAPIClient_GetTokens_Errors(t *testing.T) {
 func TestAPIClient_CreateToken_Errors(t *testing.T) {
 	client := NewAPIClient("http://invalid-host", "token")
 	ctx := context.Background()
-	_, err := client.CreateToken(ctx, "id", 1)
+	_, err := client.CreateToken(ctx, "id", 1, nil)
 	if err == nil {
 		t.Error("expected network error, got nil")
 	}
@@ -977,7 +1020,7 @@ func TestAPIClient_CreateToken_Errors(t *testing.T) {
 	}))
 	defer server.Close()
 	client2 := NewAPIClient(server.URL, "token")
-	_, err = client2.CreateToken(ctx, "id", 1)
+	_, err = client2.CreateToken(ctx, "id", 1, nil)
 	if err == nil || !strings.Contains(err.Error(), "fail") {
 		t.Errorf("expected API error, got %v", err)
 	}
@@ -990,7 +1033,7 @@ func TestAPIClient_CreateToken_Errors(t *testing.T) {
 	}))
 	defer server2.Close()
 	client3 := NewAPIClient(server2.URL, "token")
-	_, err = client3.CreateToken(ctx, "id", 1)
+	_, err = client3.CreateToken(ctx, "id", 1, nil)
 	if err == nil || !strings.Contains(err.Error(), "decode") {
 		t.Errorf("expected decode error, got %v", err)
 	}

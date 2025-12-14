@@ -10,6 +10,7 @@ test.describe('Tokens Management', () => {
   let seed: SeedFixture;
   let projectId: string;
   let tokenId: string;
+  let tokenValue: string;
 
   test.beforeEach(async ({ page }) => {
     auth = new AuthFixture(page);
@@ -18,7 +19,9 @@ test.describe('Tokens Management', () => {
     await auth.login(MANAGEMENT_TOKEN);
     
     projectId = await seed.createProject('Token Test Project', 'sk-test-key');
-    tokenId = await seed.createToken(projectId, 120);
+    const token = await seed.createToken(projectId, 120);
+    tokenId = token.id;
+    tokenValue = token.token;
   });
 
   test.afterEach(async () => {
@@ -33,7 +36,7 @@ test.describe('Tokens Management', () => {
     
     // Should not contain raw token values
     const pageContent = await page.textContent('body');
-    expect(pageContent).not.toContain(tokenId);
+    expect(pageContent).not.toContain(tokenValue);
     
     // Should show at least one status badge in the first row
     await expect(page.locator('table tbody tr').first().locator('.badge').first()).toBeVisible();

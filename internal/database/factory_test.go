@@ -6,8 +6,11 @@ package database
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"testing"
 	"time"
 
@@ -313,15 +316,85 @@ func TestDB_HealthCheck_NilDB(t *testing.T) {
 }
 
 func TestGetMigrationsPathForDialect(t *testing.T) {
-	// Test that we can find migrations for sqlite3
-	path, err := getMigrationsPathForDialect("sqlite3")
-	assert.NoError(t, err)
-	assert.NotEmpty(t, path)
+	// Test that SQLite returns an error (SQLite uses schema.sql, NOT migrations)
+	_, err := getMigrationsPathForDialect("sqlite3")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "does not use migrations")
 
 	// Test that we can find migrations for postgres
-	path, err = getMigrationsPathForDialect("postgres")
+	path, err := getMigrationsPathForDialect("postgres")
 	assert.NoError(t, err)
 	assert.NotEmpty(t, path)
+}
+
+func TestRunMigrationsForDriver_SQLiteError(t *testing.T) {
+	// Test that SQLite returns an error (SQLite uses schema.sql, NOT migrations)
+	err := runMigrationsForDriver(nil, "sqlite3")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "does not use migrations")
+
+	err = runMigrationsForDriver(nil, "sqlite")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "does not use migrations")
+}
+
+func TestRunMigrationsForDriver_UnknownDialect(t *testing.T) {
+	err := runMigrationsForDriver(nil, "oracle")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "database connection is nil")
+}
+
+func TestRunMigrationsForDriver_PostgresNilDB(t *testing.T) {
+	migrationsPath, err := getMigrationsPathForDialect("postgres")
+	require.NoError(t, err)
+	require.NotEmpty(t, migrationsPath)
+
+	err = runMigrationsForDriver(nil, "postgres")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "database connection is nil")
+}
+
+func TestPostgresMigrations(t *testing.T) {
+	t.Helper()
+
+	repoRoot := repoRootFromTestFile(t)
+	postgresDir := filepath.Join(repoRoot, "internal", "database", "migrations", "sql", "postgres")
+
+	postgres := collectMigrationFiles(t, postgresDir)
+
+	// Verify we have PostgreSQL migrations
+	assert.NotEmpty(t, postgres, "expected PostgreSQL migrations to exist")
+}
+
+func collectMigrationFiles(t *testing.T, dir string) map[string]struct{} {
+	t.Helper()
+
+	entries, err := os.ReadDir(dir)
+	require.NoErrorf(t, err, "failed to read migrations directory %s", dir)
+
+	files := make(map[string]struct{})
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if migrationFilePattern.MatchString(name) {
+			files[name] = struct{}{}
+		}
+	}
+
+	return files
+}
+
+var migrationFilePattern = regexp.MustCompile(`^\d+_.+\.sql$`)
+
+func repoRootFromTestFile(t *testing.T) string {
+	t.Helper()
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("unable to determine caller path for migration test")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(filename), "..", ".."))
 }
 
 func TestDB_RebindQuery(t *testing.T) {
@@ -541,10 +614,12 @@ func TestSQLiteRegressionAfterPostgresSupport(t *testing.T) {
 	assert.Equal(t, "Test Project", project.Name)
 	assert.True(t, project.IsActive)
 
-	// Test creating a token
-	tokenID := "test-token-abc123"
+	// Test creating a token - note: ID is now a UUID separate from the token string
+	tokenUUID := "550e8400-e29b-41d4-a716-446655440000"
+	tokenString := "test-token-abc123"
 	err = db.CreateToken(ctx, Token{
-		Token:        tokenID,
+		ID:           tokenUUID,
+		Token:        tokenString,
 		ProjectID:    projectID,
 		IsActive:     true,
 		RequestCount: 0,
@@ -552,19 +627,19 @@ func TestSQLiteRegressionAfterPostgresSupport(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Test retrieving the token
-	token, err := db.GetTokenByID(ctx, tokenID)
+	// Test retrieving the token by ID (UUID)
+	token, err := db.GetTokenByID(ctx, tokenUUID)
 	require.NoError(t, err)
-	assert.Equal(t, tokenID, token.Token)
+	assert.Equal(t, tokenString, token.Token)
 	assert.Equal(t, projectID, token.ProjectID)
 	assert.True(t, token.IsActive)
 
-	// Test increment usage
-	err = db.IncrementTokenUsage(ctx, tokenID)
+	// Test increment usage (by token string)
+	err = db.IncrementTokenUsage(ctx, tokenString)
 	require.NoError(t, err)
 
 	// Verify increment
-	token, err = db.GetTokenByID(ctx, tokenID)
+	token, err = db.GetTokenByID(ctx, tokenUUID)
 	require.NoError(t, err)
 	assert.Equal(t, 1, token.RequestCount)
 
@@ -600,9 +675,11 @@ func TestDB_ExecContextRebound(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tokenID := "rebound-test-token"
+	tokenUUID := "650e8400-e29b-41d4-a716-446655440001"
+	tokenString := "rebound-test-token"
 	err = db.CreateToken(ctx, Token{
-		Token:        tokenID,
+		ID:           tokenUUID,
+		Token:        tokenString,
 		ProjectID:    projectID,
 		IsActive:     true,
 		RequestCount: 0,
@@ -611,14 +688,14 @@ func TestDB_ExecContextRebound(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test ExecContextRebound
-	result, err := db.ExecContextRebound(ctx, "UPDATE tokens SET request_count = ? WHERE token = ?", 5, tokenID)
+	result, err := db.ExecContextRebound(ctx, "UPDATE tokens SET request_count = ? WHERE token = ?", 5, tokenString)
 	require.NoError(t, err)
 	rows, err := result.RowsAffected()
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), rows)
 
-	// Verify the update
-	token, err := db.GetTokenByID(ctx, tokenID)
+	// Verify the update by token UUID
+	token, err := db.GetTokenByID(ctx, tokenUUID)
 	require.NoError(t, err)
 	assert.Equal(t, 5, token.RequestCount)
 }
@@ -647,9 +724,11 @@ func TestDB_QueryRowContextRebound(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tokenID := "query-test-token"
+	tokenUUID := "850e8400-e29b-41d4-a716-446655440002"
+	tokenString := "query-test-token"
 	err = db.CreateToken(ctx, Token{
-		Token:        tokenID,
+		ID:           tokenUUID,
+		Token:        tokenString,
 		ProjectID:    projectID,
 		IsActive:     true,
 		RequestCount: 42,
@@ -659,7 +738,7 @@ func TestDB_QueryRowContextRebound(t *testing.T) {
 
 	// Test QueryRowContextRebound
 	var count int
-	row := db.QueryRowContextRebound(ctx, "SELECT request_count FROM tokens WHERE token = ?", tokenID)
+	row := db.QueryRowContextRebound(ctx, "SELECT request_count FROM tokens WHERE token = ?", tokenString)
 	err = row.Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 42, count)
@@ -689,9 +768,10 @@ func TestDB_QueryContextRebound(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Create multiple tokens
+	// Create multiple tokens - note: ID is now a UUID separate from token string
 	for i := 0; i < 3; i++ {
 		err = db.CreateToken(ctx, Token{
+			ID:           fmt.Sprintf("750e8400-e29b-41d4-a716-44665544000%d", i),
 			Token:        "multi-token-" + string(rune('a'+i)),
 			ProjectID:    projectID,
 			IsActive:     true,

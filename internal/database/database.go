@@ -13,7 +13,6 @@ import (
 	"time"
 
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
-	"github.com/sofatutor/llm-proxy/internal/database/migrations"
 )
 
 // DB represents the database connection.
@@ -75,10 +74,10 @@ func New(config Config) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// Run database migrations
-	if err := runMigrations(db); err != nil {
+	// Initialize SQLite schema (not migrations - SQLite uses schema.sql directly)
+	if err := initSQLiteSchema(db); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
+		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
 	return &DB{db: db, driver: DriverSQLite}, nil
@@ -106,75 +105,62 @@ func ensureDirExists(dir string) error {
 	return nil
 }
 
-// getMigrationsPath returns the path to the migrations directory.
-// It tries multiple strategies to locate the migrations:
-// 1. Relative path from current working directory (for development)
-// 2. Path relative to this source file (for tests)
-// 3. Relative path from executable location (for production)
-// Debug logging is included to help diagnose path resolution issues in production.
-func getMigrationsPath() (string, error) {
-	var triedPaths []string
-
-	// Try relative path from current working directory first (development)
-	relPath := "internal/database/migrations/sql"
-	triedPaths = append(triedPaths, relPath)
-	if _, err := os.Stat(relPath); err == nil {
-		return relPath, nil
+// getSchemaPath returns the path to the SQLite schema file.
+// SQLite uses a single schema file instead of migrations.
+func getSchemaPath() (string, error) {
+	// Strategy 1: Relative path from current working directory (development)
+	cwdPath := filepath.Join("scripts", "schema.sql")
+	if _, err := os.Stat(cwdPath); err == nil {
+		return cwdPath, nil
 	}
 
-	// Try path relative to this source file (for tests)
-	_, filename, _, ok := runtime.Caller(0)
+	// Strategy 2: Path relative to this source file (for tests)
+	_, thisFile, _, ok := runtime.Caller(0)
 	if ok {
-		// Get directory of this file (database.go)
-		sourceDir := filepath.Dir(filename)
-		// migrations/sql is sibling to database package
-		sourceRelPath := filepath.Join(sourceDir, "migrations", "sql")
-		triedPaths = append(triedPaths, sourceRelPath)
-		if _, err := os.Stat(sourceRelPath); err == nil {
-			return sourceRelPath, nil
+		repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(thisFile)))
+		srcPath := filepath.Join(repoRoot, "scripts", "schema.sql")
+		if _, err := os.Stat(srcPath); err == nil {
+			return srcPath, nil
 		}
 	}
 
-	// Try to get path relative to executable
+	// Strategy 3: Relative path from executable location (production)
 	execPath, err := os.Executable()
 	if err == nil {
 		execDir := filepath.Dir(execPath)
-		// Try relative to executable directory
-		execRelPath := filepath.Join(execDir, "internal/database/migrations/sql")
-		triedPaths = append(triedPaths, execRelPath)
-		if _, err := os.Stat(execRelPath); err == nil {
-			return execRelPath, nil
+		execSchemaPath := filepath.Join(execDir, "scripts", "schema.sql")
+		if _, err := os.Stat(execSchemaPath); err == nil {
+			return execSchemaPath, nil
 		}
-		// Try relative to executable's parent (if executable is in bin/)
-		binRelPath := filepath.Join(filepath.Dir(execDir), "internal/database/migrations/sql")
-		triedPaths = append(triedPaths, binRelPath)
-		if _, err := os.Stat(binRelPath); err == nil {
-			return binRelPath, nil
+		// Also try parent directory (for bin/ structure)
+		parentSchemaPath := filepath.Join(filepath.Dir(execDir), "scripts", "schema.sql")
+		if _, err := os.Stat(parentSchemaPath); err == nil {
+			return parentSchemaPath, nil
 		}
 	}
 
-	return "", fmt.Errorf("migrations directory not found: tried paths %v", triedPaths)
+	return "", fmt.Errorf("schema.sql not found in any expected location")
 }
 
-// runMigrations runs database migrations using the migration runner.
-func runMigrations(db *sql.DB) error {
-	migrationsPath, err := getMigrationsPath()
+// initSQLiteSchema initializes the SQLite database from schema.sql.
+// SQLite does NOT use migrations - only the current schema file.
+func initSQLiteSchema(db *sql.DB) error {
+	schemaPath, err := getSchemaPath()
 	if err != nil {
-		return fmt.Errorf("failed to get migrations path: %w", err)
+		return fmt.Errorf("failed to get schema path: %w", err)
 	}
 
-	runner := migrations.NewMigrationRunner(db, migrationsPath)
-	if err := runner.Up(); err != nil {
-		return fmt.Errorf("failed to apply migrations: %w", err)
+	schemaSQL, err := os.ReadFile(schemaPath)
+	if err != nil {
+		return fmt.Errorf("failed to read schema file: %w", err)
+	}
+
+	_, err = db.Exec(string(schemaSQL))
+	if err != nil {
+		return fmt.Errorf("failed to execute schema: %w", err)
 	}
 
 	return nil
-}
-
-// initDatabase is deprecated. Use runMigrations instead.
-// Kept for backward compatibility with DBInitForTests.
-func initDatabase(db *sql.DB) error {
-	return runMigrations(db)
 }
 
 // DBInitForTests is a helper to ensure schema exists in tests. No-op if db is nil.
@@ -182,7 +168,7 @@ func DBInitForTests(d *DB) error {
 	if d == nil || d.db == nil {
 		return nil
 	}
-	return initDatabase(d.db)
+	return initSQLiteSchema(d.db)
 }
 
 // Transaction executes the given function within a transaction.

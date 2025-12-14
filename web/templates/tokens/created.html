@@ -48,7 +48,7 @@
                 </div>
 
                 <div class="row">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <div class="mb-3">
                             <label class="form-label fw-bold">Expires:</label>
                             <div class="text-muted">
@@ -59,7 +59,7 @@
                             </small>
                         </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <div class="mb-3">
                             <label class="form-label fw-bold">Status:</label>
                             <div>
@@ -67,6 +67,14 @@
                                     <i class="bi bi-check-circle"></i>
                                     Active
                                 </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Request limit:</label>
+                            <div class="text-muted">
+                                {{ formatMaxRequests .token.MaxRequests }}
                             </div>
                         </div>
                     </div>
