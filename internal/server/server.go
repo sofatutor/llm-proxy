@@ -593,7 +593,12 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Name == "" || req.OpenAIAPIKey == "" {
-		s.logger.Error("missing required fields", zap.String("name", req.Name), zap.String("openai_api_key", req.OpenAIAPIKey), zap.String("request_id", requestID))
+		s.logger.Error(
+			"missing required fields",
+			zap.String("name", req.Name),
+			zap.Bool("api_key_provided", req.OpenAIAPIKey != ""),
+			zap.String("request_id", requestID),
+		)
 
 		// Audit: project creation failure - missing fields
 		_ = s.auditLogger.Log(s.auditEvent(audit.ActionProjectCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
