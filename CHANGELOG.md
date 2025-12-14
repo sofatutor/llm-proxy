@@ -19,6 +19,10 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 - **Aligned DB bootstrap/migrations** ([#189](https://github.com/sofatutor/llm-proxy/pull/189)): SQLite now treats scripts/schema.sql as the authoritative schema, PostgreSQL adds a goose migration for the token UUID column, and migration/CLI wiring was updated so bootstrap flows stay consistent with the new token model.
 - **Hardened dev/CI workflows** ([#189](https://github.com/sofatutor/llm-proxy/pull/189)): Docker images bundle scripts/schema.sql, a postgres-test compose profile/service on port 55432 supports isolated integration runs, the redundant migration validation step was removed from the unit-tests job, and docs now clarify migration and bootstrap guidance for contributors.
 
+### Fixed
+
+- **Refresh cache timing headers** ([#190](https://github.com/sofatutor/llm-proxy/pull/190)): Cache entries now strip upstream timing and Date headers plus Set-Cookie before storage, and cache hits reset proxy timing headers so benchmarks reflect fresh timestamps and no stale upstream latency is reported.
+
 ## December 03, 2025
 
 ### Added
