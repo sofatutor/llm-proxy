@@ -176,7 +176,7 @@ sequenceDiagram
 
 - [Logging Package](../logging/README.md) - Application logging (separate from audit)
 - [Database Package](../database/README.md) - Database storage for audit events
-- [Instrumentation Guide](../../docs/instrumentation.md) - Complete observability documentation
+- [Instrumentation Guide](../../docs/observability/instrumentation.md) - Complete observability documentation
 
 ## Files
 

@@ -162,7 +162,7 @@ flowchart TB
 ## Related Documentation
 
 - [EventBus Package](../eventbus/README.md) - Event publishing and subscription
-- [Instrumentation Guide](../../docs/instrumentation.md) - Complete observability documentation
+- [Instrumentation Guide](../../docs/observability/instrumentation.md) - Complete observability documentation
 
 ## Files
 

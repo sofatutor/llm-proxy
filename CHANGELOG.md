@@ -15,6 +15,7 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Changed
 
+- **Documented package READMEs** ([#194](https://github.com/sofatutor/llm-proxy/pull/194)): Completed README coverage for all internal packages by adding comprehensive admin and config documentation, standardizing sections across the ten packages, and fixing docs links so every reference and configuration guide stays consistent and discoverable.
 - **Redis Streams CLI defaults** ([#193](https://github.com/sofatutor/llm-proxy/pull/193)): Proxy CLI now uses the redis-streams bus by default, auto-generates unique dispatcher consumers, ensures the consumer group exists, exposes new stream tuning knobs, and adds exponential backoff with permanent-error bypass to prevent stalled delivery during Redis or Helicone issues.
 - **Obfuscate secrets** ([#189](https://github.com/sofatutor/llm-proxy/pull/189)): Management API GETs and Admin UI templates now return pre-obfuscated token and project values, keep token secrets show-once, and only update API keys when a new value is supplied so secrets cannot be redisplayed, while token creation/display flows still surface max_requests alongside the protected values.
 - **UUID-based token identifiers** ([#189](https://github.com/sofatutor/llm-proxy/pull/189)): Tokens now use stable UUID IDs for management operations and database relations while keeping the secret value separate, backed by updated lookups and secure token store hashing so identifiers never leak secrets.
