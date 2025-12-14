@@ -25,7 +25,9 @@ func TestServiceHealthCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
 	}
-	defer service.Stop()
+	defer func() {
+		_ = service.Stop()
+	}()
 
 	ctx := context.Background()
 
@@ -54,7 +56,9 @@ func TestServiceDetailedStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
 	}
-	defer service.Stop()
+	defer func() {
+		_ = service.Stop()
+	}()
 
 	// Get initial detailed stats
 	stats := service.DetailedStats()
@@ -137,7 +141,7 @@ func TestServiceExponentialBackoff(t *testing.T) {
 
 	// Wait for retries to complete
 	time.Sleep(2 * time.Second)
-	service.Stop()
+	_ = service.Stop()
 
 	// Should have tried at least 3 times
 	if retryCount < 3 {
@@ -203,7 +207,7 @@ func TestServicePermanentError(t *testing.T) {
 
 	// Wait for processing
 	time.Sleep(500 * time.Millisecond)
-	service.Stop()
+	_ = service.Stop()
 
 	// Should only try once (no retries for permanent errors)
 	if retryCount != 1 {
@@ -257,7 +261,7 @@ func TestServiceMetricsTracking(t *testing.T) {
 
 	// Wait for processing and metrics updates
 	time.Sleep(1 * time.Second)
-	service.Stop()
+	_ = service.Stop()
 
 	// Check stats
 	processed, _, sent := service.Stats()
