@@ -87,9 +87,7 @@
                         <div class="col-sm-4"><strong>Expires</strong></div>
                         <div class="col-sm-8">
                             {{ if .token.ExpiresAt }}
-                                {{ .token.ExpiresAt.Format "Monday, January 2, 2006 at 3:04 PM" }}
-                                <br>
-                                <small class="text-muted">{{ .token.ExpiresAt.Format "2006-01-02 15:04:05 MST" }}</small>
+                                <span data-local-time="true" data-ts="{{ formatRFC3339UTC .token.ExpiresAt }}" data-format="long" title="{{ formatRFC3339UTC .token.ExpiresAt }}">{{ (.token.ExpiresAt.UTC).Format "Monday, January 2, 2006 at 3:04 PM UTC" }}</span>
                             {{ else }}
                                 <span class="text-muted">Never expires</span>
                             {{ end }}
@@ -111,18 +109,14 @@
                     <div class="row mb-3">
                         <div class="col-sm-4"><strong>Created</strong></div>
                         <div class="col-sm-8">
-                            {{ .token.CreatedAt.Format "Monday, January 2, 2006 at 3:04 PM" }}
-                            <br>
-                            <small class="text-muted">{{ .token.CreatedAt.Format "2006-01-02 15:04:05 MST" }}</small>
+                            <span data-local-time="true" data-ts="{{ formatRFC3339UTC .token.CreatedAt }}" data-format="long" title="{{ formatRFC3339UTC .token.CreatedAt }}">{{ (.token.CreatedAt.UTC).Format "Monday, January 2, 2006 at 3:04 PM UTC" }}</span>
                         </div>
                     </div>
                     {{ if .token.LastUsedAt }}
                     <div class="row mb-3">
                         <div class="col-sm-4"><strong>Last Used</strong></div>
                         <div class="col-sm-8">
-                            {{ .token.LastUsedAt.Format "Monday, January 2, 2006 at 3:04 PM" }}
-                            <br>
-                            <small class="text-muted">{{ .token.LastUsedAt.Format "2006-01-02 15:04:05 MST" }}</small>
+                            <span data-local-time="true" data-ts="{{ formatRFC3339UTC .token.LastUsedAt }}" data-format="long" title="{{ formatRFC3339UTC .token.LastUsedAt }}">{{ (.token.LastUsedAt.UTC).Format "Monday, January 2, 2006 at 3:04 PM UTC" }}</span>
                         </div>
                     </div>
                     {{ end }}

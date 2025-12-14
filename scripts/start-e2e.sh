@@ -8,6 +8,7 @@ set -e
 MGMT_PORT=${MGMT_PORT:-8098}
 ADMIN_PORT=${ADMIN_PORT:-8099}
 MANAGEMENT_TOKEN=${MANAGEMENT_TOKEN:-e2e-management-token}
+LOG_LEVEL=${LOG_LEVEL:-info}
 
 echo "Starting E2E test servers on ports $MGMT_PORT and $ADMIN_PORT..."
 echo "Management token: $MANAGEMENT_TOKEN"
@@ -40,7 +41,7 @@ export ADMIN_BASE_URL="http://localhost:$ADMIN_PORT"
 echo "Starting LLM Proxy management API server on port $MGMT_PORT..."
 DB_PATH="./tmp/e2e-db-$$.sqlite"
 export DATABASE_PATH="$DB_PATH"
-LOG_LEVEL="info" MANAGEMENT_TOKEN="$MANAGEMENT_TOKEN" LLM_PROXY_EVENT_BUS="in-memory" ./bin/llm-proxy server --addr ":$MGMT_PORT" &
+LOG_LEVEL="$LOG_LEVEL" MANAGEMENT_TOKEN="$MANAGEMENT_TOKEN" LLM_PROXY_EVENT_BUS="in-memory" ./bin/llm-proxy server --addr ":$MGMT_PORT" &
 MGMT_PID=$!
 
 sleep 3

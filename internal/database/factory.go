@@ -138,7 +138,9 @@ func newSQLiteDB(config FullConfig) (*DB, error) {
 	}
 
 	// Open connection
-	db, err := sql.Open("sqlite3", config.Path+"?_journal=WAL&_foreign_keys=on")
+	// NOTE: We persist and interpret timestamps in UTC to avoid timezone drift.
+	// SQLite stores timestamps without timezone info; `_loc=UTC` forces parsing as UTC.
+	db, err := sql.Open("sqlite3", config.Path+"?_journal=WAL&_foreign_keys=on&_loc=UTC")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open SQLite database: %w", err)
 	}

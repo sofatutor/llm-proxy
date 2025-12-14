@@ -215,6 +215,23 @@ func TestParsePositiveInt(t *testing.T) {
 	}
 }
 
+func TestMigrationsPathForDriver(t *testing.T) {
+	t.Run("sqlite_returns_error", func(t *testing.T) {
+		path, err := MigrationsPathForDriver(DriverSQLite)
+		require.Error(t, err)
+		assert.Empty(t, path)
+	})
+
+	t.Run("postgres_returns_postgres_migrations_dir", func(t *testing.T) {
+		path, err := MigrationsPathForDriver(DriverPostgres)
+		require.NoError(t, err)
+		require.NotEmpty(t, path)
+		assert.Equal(t, "postgres", filepath.Base(path))
+		assert.Equal(t, "sql", filepath.Base(filepath.Dir(path)))
+		assert.Equal(t, "migrations", filepath.Base(filepath.Dir(filepath.Dir(path))))
+	})
+}
+
 func TestNewFromConfig_SQLite(t *testing.T) {
 	tmpDir := t.TempDir()
 	dbPath := filepath.Join(tmpDir, "test.db")

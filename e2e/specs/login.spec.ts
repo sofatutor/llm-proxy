@@ -24,6 +24,15 @@ test.describe('Admin UI Login', () => {
     // Should redirect to dashboard
     await expect(page).toHaveURL('/dashboard');
     await expect(page.locator('h1')).toContainText('Dashboard');
+
+    // Admin assets should be cache-busted via ?v=...
+    const adminCSS = page.locator('link[rel="stylesheet"][href^="/static/css/admin.css?v="]');
+    await expect(adminCSS).toHaveCount(1);
+    await expect(adminCSS).toHaveAttribute('href', /\/static\/css\/admin\.css\?v=\d+$/);
+
+    const adminJS = page.locator('script[src^="/static/js/admin.js?v="]');
+    await expect(adminJS).toHaveCount(1);
+    await expect(adminJS).toHaveAttribute('src', /\/static\/js\/admin\.js\?v=\d+$/);
     
     // Should see navigation menu
     await expect(page.locator('nav')).toBeVisible();

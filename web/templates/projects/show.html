@@ -91,9 +91,7 @@
                         <strong>Created:</strong>
                     </div>
                     <div class="col-sm-9">
-                        {{ .project.CreatedAt.Format "Monday, January 2, 2006 at 3:04 PM" }}
-                        <br>
-                        <small class="text-muted">{{ .project.CreatedAt.Format "2006-01-02 15:04:05 MST" }}</small>
+                        <span data-local-time="true" data-ts="{{ formatRFC3339UTC .project.CreatedAt }}" data-format="long" title="{{ formatRFC3339UTC .project.CreatedAt }}">{{ (.project.CreatedAt.UTC).Format "Monday, January 2, 2006 at 3:04 PM UTC" }}</span>
                     </div>
                 </div>
                 <hr>
@@ -125,9 +123,7 @@
                         <strong>Last Updated:</strong>
                     </div>
                     <div class="col-sm-9">
-                        {{ .project.UpdatedAt.Format "Monday, January 2, 2006 at 3:04 PM" }}
-                        <br>
-                        <small class="text-muted">{{ .project.UpdatedAt.Format "2006-01-02 15:04:05 MST" }}</small>
+                        <span data-local-time="true" data-ts="{{ formatRFC3339UTC .project.UpdatedAt }}" data-format="long" title="{{ formatRFC3339UTC .project.UpdatedAt }}">{{ (.project.UpdatedAt.UTC).Format "Monday, January 2, 2006 at 3:04 PM UTC" }}</span>
                     </div>
                 </div>
             </div>

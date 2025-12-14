@@ -8,13 +8,16 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ## December 14, 2025
 
+### Added
+
+- **Localize admin timestamps** ([#192](https://github.com/sofatutor/llm-proxy/pull/192)): Admin UI timestamps now emit RFC3339 UTC metadata consumed by new client-side localization so viewers see times in their local timezone while UTC-only fields remain explicit, backed by template helper tests and browser/Playwright coverage.
+
 ### Changed
 
 - **Obfuscate secrets** ([#189](https://github.com/sofatutor/llm-proxy/pull/189)): Management API GETs and Admin UI templates now return pre-obfuscated token and project values, keep token secrets show-once, and only update API keys when a new value is supplied so secrets cannot be redisplayed, while token creation/display flows still surface max_requests alongside the protected values.
 - **UUID-based token identifiers** ([#189](https://github.com/sofatutor/llm-proxy/pull/189)): Tokens now use stable UUID IDs for management operations and database relations while keeping the secret value separate, backed by updated lookups and secure token store hashing so identifiers never leak secrets.
 - **Aligned DB bootstrap/migrations** ([#189](https://github.com/sofatutor/llm-proxy/pull/189)): SQLite now treats scripts/schema.sql as the authoritative schema, PostgreSQL adds a goose migration for the token UUID column, and migration/CLI wiring was updated so bootstrap flows stay consistent with the new token model.
 - **Hardened dev/CI workflows** ([#189](https://github.com/sofatutor/llm-proxy/pull/189)): Docker images bundle scripts/schema.sql, a postgres-test compose profile/service on port 55432 supports isolated integration runs, the redundant migration validation step was removed from the unit-tests job, and docs now clarify migration and bootstrap guidance for contributors.
-
 
 ## December 03, 2025
 

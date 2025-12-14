@@ -6,11 +6,137 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 )
+
+func TestSQLite_TimestampsRoundTripAsUTC(t *testing.T) {
+	// Ensure this test is deterministic across environments by forcing a non-UTC local timezone.
+	originalLocal := time.Local
+	time.Local = time.FixedZone("TestLocal", 2*60*60)
+	t.Cleanup(func() { time.Local = originalLocal })
+
+	fixedUTC := time.Date(2025, 12, 14, 13, 38, 0, 0, time.UTC).Truncate(time.Second)
+
+	type openCase struct {
+		name string
+		open func(t *testing.T) (*DB, func())
+	}
+
+	cases := []openCase{
+		{
+			name: "New",
+			open: func(t *testing.T) (*DB, func()) {
+				db, err := New(Config{Path: ":memory:"})
+				if err != nil {
+					t.Fatalf("New DB error: %v", err)
+				}
+				return db, func() { _ = db.Close() }
+			},
+		},
+		{
+			name: "NewFromConfig",
+			open: func(t *testing.T) (*DB, func()) {
+				db, err := NewFromConfig(FullConfig{Driver: DriverSQLite, Path: ":memory:"})
+				if err != nil {
+					t.Fatalf("NewFromConfig error: %v", err)
+				}
+				return db, func() { _ = db.Close() }
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanup := tc.open(t)
+			defer cleanup()
+
+			ctx := context.Background()
+			project := proxy.Project{
+				ID:           "test-project-utc-roundtrip",
+				Name:         "Test Project",
+				OpenAIAPIKey: "test-api-key",
+				CreatedAt:    fixedUTC,
+				UpdatedAt:    fixedUTC,
+			}
+
+			if err := db.CreateProject(ctx, project); err != nil {
+				t.Fatalf("CreateProject failed: %v", err)
+			}
+
+			retrieved, err := db.GetProjectByID(ctx, project.ID)
+			if err != nil {
+				t.Fatalf("GetProjectByID failed: %v", err)
+			}
+
+			if !retrieved.CreatedAt.Equal(fixedUTC) {
+				t.Fatalf("CreatedAt drift: got %s, want %s", retrieved.CreatedAt.Format(time.RFC3339), fixedUTC.Format(time.RFC3339))
+			}
+			if !retrieved.UpdatedAt.Equal(fixedUTC) {
+				t.Fatalf("UpdatedAt drift: got %s, want %s", retrieved.UpdatedAt.Format(time.RFC3339), fixedUTC.Format(time.RFC3339))
+			}
+		})
+	}
+}
+
+func TestSQLite_TokenLastUsedAt_NotShiftedByLocalTimezone(t *testing.T) {
+	// Ensure this test is deterministic across environments by forcing a non-UTC local timezone.
+	originalLocal := time.Local
+	time.Local = time.FixedZone("TestLocal", 2*60*60)
+	t.Cleanup(func() { time.Local = originalLocal })
+
+	db, err := New(Config{Path: ":memory:"})
+	if err != nil {
+		t.Fatalf("New DB error: %v", err)
+	}
+	defer func() { _ = db.Close() }()
+	if err := DBInitForTests(db); err != nil {
+		t.Fatalf("DBInitForTests error: %v", err)
+	}
+
+	ctx := context.Background()
+	fixedUTC := time.Date(2025, 12, 14, 13, 38, 0, 0, time.UTC).Truncate(time.Second)
+	project := proxy.Project{
+		ID:           "test-project-token-last-used-at",
+		Name:         "Test Project",
+		OpenAIAPIKey: "test-api-key",
+		CreatedAt:    fixedUTC,
+		UpdatedAt:    fixedUTC,
+	}
+	if err := db.CreateProject(ctx, project); err != nil {
+		t.Fatalf("CreateProject failed: %v", err)
+	}
+
+	const tokenString = "test-token-last-used-at"
+	if err := db.CreateToken(ctx, Token{Token: tokenString, ProjectID: project.ID, IsActive: true, CreatedAt: fixedUTC}); err != nil {
+		t.Fatalf("CreateToken failed: %v", err)
+	}
+
+	if err := db.IncrementTokenUsage(ctx, tokenString); err != nil {
+		t.Fatalf("IncrementTokenUsage failed: %v", err)
+	}
+
+	retrieved, err := db.GetTokenByToken(ctx, tokenString)
+	if err != nil {
+		t.Fatalf("GetTokenByToken failed: %v", err)
+	}
+	if retrieved.LastUsedAt == nil {
+		t.Fatalf("LastUsedAt is nil")
+	}
+
+	// If SQLite parsing or storage is timezone-shifted, this will typically drift by hours.
+	nowUTC := time.Now().UTC()
+	drift := retrieved.LastUsedAt.Sub(nowUTC)
+	if drift < 0 {
+		drift = -drift
+	}
+	if drift > 10*time.Second {
+		t.Fatalf("LastUsedAt drift too large: got %s, now %s (drift %s)", retrieved.LastUsedAt.Format(time.RFC3339), nowUTC.Format(time.RFC3339), drift)
+	}
+}
 
 func TestMaintainAndStatsOnInMemoryDB(t *testing.T) {
 	db, err := New(Config{Path: ":memory:"})
@@ -460,6 +586,73 @@ func TestGetSchemaPath_FindsSchemaFromSource(t *testing.T) {
 	// Verify the returned path is valid
 	if path == "" {
 		t.Error("getSchemaPath returned empty path")
+	}
+}
+
+func TestGetSchemaPath_PrefersCWDWhenPresent(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd error: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWD) })
+
+	scriptsDir := filepath.Join(tmpDir, "scripts")
+	if err := os.MkdirAll(scriptsDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll error: %v", err)
+	}
+
+	absoluteSchemaPath := filepath.Join(scriptsDir, "schema.sql")
+	if err := os.WriteFile(absoluteSchemaPath, []byte("-- test schema\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Chdir error: %v", err)
+	}
+
+	path, err := getSchemaPath()
+	if err != nil {
+		t.Fatalf("getSchemaPath error: %v", err)
+	}
+
+	// For the cwd strategy, getSchemaPath intentionally returns a relative path.
+	expectedRelative := filepath.Join("scripts", "schema.sql")
+	if path != expectedRelative {
+		t.Fatalf("schema path mismatch: got %q want %q", path, expectedRelative)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected schema path to exist: %v", err)
+	}
+}
+
+func TestGetSchemaPath_FallsBackToSourcePathWhenCWDMissing(t *testing.T) {
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd error: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWD) })
+
+	// Force strategy 1 (cwd scripts/schema.sql) to fail.
+	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Chdir error: %v", err)
+	}
+
+	// Compute the expected repo-root path similarly to getSchemaPath.
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatalf("runtime.Caller failed")
+	}
+	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(thisFile)))
+	expected := filepath.Join(repoRoot, "scripts", "schema.sql")
+
+	path, err := getSchemaPath()
+	if err != nil {
+		t.Fatalf("getSchemaPath error: %v", err)
+	}
+	if path != expected {
+		t.Fatalf("schema path mismatch: got %q want %q", path, expected)
 	}
 }
 
