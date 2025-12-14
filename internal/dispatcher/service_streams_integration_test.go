@@ -3,6 +3,7 @@ package dispatcher
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -208,11 +209,11 @@ func TestServiceLagMonitoring(t *testing.T) {
 	}
 
 	// Create a slow plugin to create lag
-	processedCount := 0
+	var processedCount atomic.Int64
 	plugin := &mockPlugin{}
 	plugin.OnSend = func(batch []EventPayload) error {
 		time.Sleep(100 * time.Millisecond) // Slow processing
-		processedCount += len(batch)
+		processedCount.Add(int64(len(batch)))
 		return nil
 	}
 
@@ -258,7 +259,7 @@ func TestServiceLagMonitoring(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	_ = service.Stop()
 
-	if processedCount == 0 {
+	if processedCount.Load() == 0 {
 		t.Error("Expected slow plugin to process at least one event")
 	}
 
