@@ -180,11 +180,17 @@ func (s *Service) runForeground(ctx context.Context) error {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	// Start event processing goroutine
-	s.wg.Add(1)
-	// Signal that Add(1) has completed before any potential Stop() Wait
+	// Start background goroutines.
+	// Add to the WaitGroup before closing startedCh to avoid racing Wait() with Add().
+	s.wg.Add(2)
 	close(s.startedCh)
 	go s.processEvents(ctx)
+	go func() {
+		defer s.wg.Done()
+		metricsTicker := time.NewTicker(metricsUpdateInterval)
+		defer metricsTicker.Stop()
+		s.trackMetrics(ctx, metricsTicker.C)
+	}()
 
 	// Wait for shutdown signal
 	select {
@@ -234,11 +240,6 @@ func (s *Service) EventBus() eventbus.EventBus {
 // processEvents handles the main event processing loop
 func (s *Service) processEvents(ctx context.Context) {
 	defer s.wg.Done()
-
-	// Start metrics tracking
-	metricsTicker := time.NewTicker(metricsUpdateInterval)
-	defer metricsTicker.Stop()
-	go s.trackMetrics(ctx, metricsTicker.C)
 
 	sub := s.eventBus.Subscribe()
 	batch := make([]EventPayload, 0, s.config.BatchSize)
@@ -505,7 +506,9 @@ func (s *Service) sendBatchWithResult(ctx context.Context, batch []EventPayload)
 	return fmt.Errorf("unreachable")
 }
 
-// trackMetrics periodically updates metrics like processing rate and lag
+// trackMetrics periodically updates metrics like processing rate and Redis Streams lag.
+//
+// It exits when the service is stopped (s.stopCh) or ctx is canceled.
 func (s *Service) trackMetrics(ctx context.Context, ticker <-chan time.Time) {
 	lastProcessed := int64(0)
 	lastTime := time.Now()
@@ -574,18 +577,30 @@ func (s *Service) DetailedStats() map[string]interface{} {
 	}
 }
 
-// HealthStatus represents the health status of the dispatcher
+// HealthStatus represents the health status of the dispatcher.
 type HealthStatus struct {
-	Healthy         bool      `json:"healthy"`
-	Status          string    `json:"status"`
-	EventsProcessed int64     `json:"events_processed"`
-	EventsDropped   int64     `json:"events_dropped"`
-	EventsSent      int64     `json:"events_sent"`
-	ProcessingRate  float64   `json:"processing_rate"`
-	LagCount        int64     `json:"lag_count"`
-	StreamLength    int64     `json:"stream_length"`
+	// Healthy indicates whether the dispatcher is currently healthy.
+	Healthy bool `json:"healthy"`
+	// Status is a human-readable string describing the current health status.
+	Status string `json:"status"`
+	// EventsProcessed is the total number of events processed by the dispatcher.
+	EventsProcessed int64 `json:"events_processed"`
+	// EventsDropped is the total number of events that were dropped and not processed.
+	EventsDropped int64 `json:"events_dropped"`
+	// EventsSent is the total number of events successfully sent to the backend.
+	EventsSent int64 `json:"events_sent"`
+	// ProcessingRate is the average number of events processed per second.
+	ProcessingRate float64 `json:"processing_rate"`
+	// LagCount is the number of pending messages in the event bus that have not yet been processed.
+	// For Redis Streams, this is the pending entries count (XPENDING).
+	LagCount int64 `json:"lag_count"`
+	// StreamLength is the total number of messages currently in the Redis Stream.
+	// For Redis Streams, this is the stream length (XLEN).
+	StreamLength int64 `json:"stream_length"`
+	// LastProcessedAt is the timestamp of the last successfully processed event.
 	LastProcessedAt time.Time `json:"last_processed_at"`
-	Message         string    `json:"message,omitempty"`
+	// Message provides additional information about the health status, if any.
+	Message string `json:"message,omitempty"`
 }
 
 // Health returns the health status of the dispatcher

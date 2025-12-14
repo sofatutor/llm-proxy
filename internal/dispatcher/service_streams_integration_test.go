@@ -254,16 +254,13 @@ func TestServiceLagMonitoring(t *testing.T) {
 	// Wait a bit for metrics to update
 	time.Sleep(500 * time.Millisecond)
 
-	// Check lag metrics
-	stats := service.DetailedStats()
-	streamLength := stats["stream_length"].(int64)
-
-	// Stream length check is informational - with fast processing in tests, it may be 0
-	_ = streamLength
-
 	// Wait for processing to complete
 	time.Sleep(2 * time.Second)
 	_ = service.Stop()
+
+	if processedCount == 0 {
+		t.Error("Expected slow plugin to process at least one event")
+	}
 
 	// Eventually all should be processed
 	finalProcessed, _, _ := service.Stats()

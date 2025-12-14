@@ -220,22 +220,22 @@ func TestServiceExponentialBackoff(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	_ = service.Stop()
 
-	// Should have tried at least 3 times
-	if retryCount < 3 {
-		t.Errorf("Expected at least 3 retry attempts, got %d", retryCount)
+	// Should have tried exactly 3 times (fail twice, then succeed).
+	if retryCount != 3 {
+		t.Errorf("Expected 3 retry attempts, got %d", retryCount)
+	}
+	if len(retryTimes) != 3 {
+		t.Fatalf("Expected 3 retry timestamps, got %d", len(retryTimes))
 	}
 
-	// Check that backoff times increase exponentially
-	if len(retryTimes) >= 3 {
-		const minBackoffMultiplier = 1.5 // Allow some margin for scheduling delays
-		firstBackoff := retryTimes[1].Sub(retryTimes[0])
-		secondBackoff := retryTimes[2].Sub(retryTimes[1])
+	// Check that backoff times increase exponentially.
+	const minBackoffMultiplier = 1.5 // Allow some margin for scheduling delays
+	firstBackoff := retryTimes[1].Sub(retryTimes[0])
+	secondBackoff := retryTimes[2].Sub(retryTimes[1])
 
-		// Second backoff should be roughly 2x the first (exponential)
-		// Allow some margin for scheduling delays
-		if secondBackoff < time.Duration(float64(firstBackoff)*minBackoffMultiplier) {
-			t.Errorf("Expected exponential backoff, got first=%v, second=%v", firstBackoff, secondBackoff)
-		}
+	// Second backoff should be roughly 2x the first (exponential), allowing margin.
+	if secondBackoff < time.Duration(float64(firstBackoff)*minBackoffMultiplier) {
+		t.Errorf("Expected exponential backoff, got first=%v, second=%v", firstBackoff, secondBackoff)
 	}
 }
 

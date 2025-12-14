@@ -351,7 +351,10 @@ func runDispatcher(cmd *cobra.Command, args []string) {
 		}
 		redisDB := 0
 		if dbStr := os.Getenv("REDIS_DB"); dbStr != "" {
-			if dbVal, err := strconv.Atoi(dbStr); err == nil {
+			dbVal, err := strconv.Atoi(dbStr)
+			if err != nil {
+				logger.Warn("Invalid REDIS_DB value; using default DB 0", zap.String("REDIS_DB", dbStr), zap.Error(err))
+			} else {
 				redisDB = dbVal
 			}
 		}
@@ -379,22 +382,34 @@ func runDispatcher(cmd *cobra.Command, args []string) {
 			config.ConsumerName = fmt.Sprintf("dispatcher-%s-%s-%d", dispatcherService, hostname, os.Getpid())
 		}
 		if maxLenStr := os.Getenv("REDIS_STREAM_MAX_LEN"); maxLenStr != "" {
-			if maxLen, err := strconv.ParseInt(maxLenStr, 10, 64); err == nil {
+			maxLen, err := strconv.ParseInt(maxLenStr, 10, 64)
+			if err != nil {
+				logger.Warn("Invalid REDIS_STREAM_MAX_LEN value; using default", zap.String("REDIS_STREAM_MAX_LEN", maxLenStr), zap.Error(err), zap.Int64("default", config.MaxLen))
+			} else {
 				config.MaxLen = maxLen
 			}
 		}
 		if blockTimeStr := os.Getenv("REDIS_STREAM_BLOCK_TIME"); blockTimeStr != "" {
-			if blockTime, err := time.ParseDuration(blockTimeStr); err == nil {
+			blockTime, err := time.ParseDuration(blockTimeStr)
+			if err != nil {
+				logger.Warn("Invalid REDIS_STREAM_BLOCK_TIME value; using default", zap.String("REDIS_STREAM_BLOCK_TIME", blockTimeStr), zap.Error(err), zap.Duration("default", config.BlockTimeout))
+			} else {
 				config.BlockTimeout = blockTime
 			}
 		}
 		if claimTimeStr := os.Getenv("REDIS_STREAM_CLAIM_TIME"); claimTimeStr != "" {
-			if claimTime, err := time.ParseDuration(claimTimeStr); err == nil {
+			claimTime, err := time.ParseDuration(claimTimeStr)
+			if err != nil {
+				logger.Warn("Invalid REDIS_STREAM_CLAIM_TIME value; using default", zap.String("REDIS_STREAM_CLAIM_TIME", claimTimeStr), zap.Error(err), zap.Duration("default", config.ClaimMinIdleTime))
+			} else {
 				config.ClaimMinIdleTime = claimTime
 			}
 		}
 		if batchSizeStr := os.Getenv("REDIS_STREAM_BATCH_SIZE"); batchSizeStr != "" {
-			if batchSize, err := strconv.ParseInt(batchSizeStr, 10, 64); err == nil {
+			batchSize, err := strconv.ParseInt(batchSizeStr, 10, 64)
+			if err != nil {
+				logger.Warn("Invalid REDIS_STREAM_BATCH_SIZE value; using default", zap.String("REDIS_STREAM_BATCH_SIZE", batchSizeStr), zap.Error(err), zap.Int64("default", config.BatchSize))
+			} else {
 				config.BatchSize = batchSize
 			}
 		}
@@ -422,7 +437,10 @@ func runDispatcher(cmd *cobra.Command, args []string) {
 		}
 		redisDB := 0
 		if dbStr := os.Getenv("REDIS_DB"); dbStr != "" {
-			if dbVal, err := strconv.Atoi(dbStr); err == nil {
+			dbVal, err := strconv.Atoi(dbStr)
+			if err != nil {
+				logger.Warn("Invalid REDIS_DB value; using default DB 0", zap.String("REDIS_DB", dbStr), zap.Error(err))
+			} else {
 				redisDB = dbVal
 			}
 		}
