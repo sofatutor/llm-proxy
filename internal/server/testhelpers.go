@@ -4,8 +4,8 @@ import "time"
 
 // TokenListResponse matches the sanitized token response schema (shared for tests and production)
 type TokenListResponse struct {
-	ID            string     `json:"id"`       // Token UUID (for API operations)
-	Token         string     `json:"token"`    // Obfuscated token string (for display only)
+	ID            string     `json:"id"`    // Token UUID (for API operations)
+	Token         string     `json:"token"` // Obfuscated token string (for display only)
 	ProjectID     string     `json:"project_id"`
 	ExpiresAt     *time.Time `json:"expires_at"`
 	IsActive      bool       `json:"is_active"`
