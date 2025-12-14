@@ -244,12 +244,16 @@ web/templates/
 
 | Function | Description |
 |----------|-------------|
-| `formatTime` | Format time.Time for display |
-| `formatTimeUTC` | Format time in UTC |
-| `obfuscateToken` | Obfuscate token for display |
-| `obfuscateAPIKey` | Obfuscate API key for display |
-| `statusBadge` | Generate status badge HTML |
-| `toJSON` | Convert data to JSON |
+| `stringOr` | Return a string value or a fallback for `*string`/`string` |
+| `add`, `sub`, `inc`, `dec` | Basic arithmetic helpers |
+| `safeSub` | Subtract with floor at 0 |
+| `formatMaxRequests` | Format a max-requests value (`∞` when nil/<=0) |
+| `seq`, `pageRange` | Generate integer ranges for loops/pagination |
+| `obfuscateToken` | Obfuscate tokens for display (UI-oriented) |
+| `obfuscateAPIKey` | Obfuscate API keys for display |
+| `formatRFC3339UTC`, `formatRFC3339UTCPtr` | Format timestamps as RFC3339Nano UTC strings |
+
+See `server.go` for the full list of available template functions.
 
 ## Usage Examples
 
@@ -306,13 +310,15 @@ fmt.Printf("Tokens: %d\n", dashboard.TotalTokens)
 // Obfuscate token for display
 token := "sk-AYB2gH5xQZ1234567890ab"
 obfuscated := admin.ObfuscateToken(token)
-// Output: "sk-AYB2...90ab"
+// Output: "sk-AYB2g...90ab"
 
 // Obfuscate API key
 apiKey := "sk-proj-1234567890abcdefghijklmnopqrstuvwxyz"
 obfuscated := admin.ObfuscateAPIKey(apiKey)
 // Output: "sk-proj-...wxyz"
 ```
+
+Note: HTML templates use the `obfuscateToken` and `obfuscateAPIKey` template helpers. The token helper is UI-oriented and may use a different obfuscation strategy than `admin.ObfuscateToken`.
 
 ## Troubleshooting
 

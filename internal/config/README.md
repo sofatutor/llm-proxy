@@ -450,8 +450,12 @@ func TestWithCustomConfig(t *testing.T) {
         t.Fatal(err)
     }
     
-    assert.Equal(t, ":9999", cfg.ListenAddr)
-    assert.Equal(t, "debug", cfg.LogLevel)
+    if cfg.ListenAddr != ":9999" {
+        t.Errorf("expected ListenAddr to be :9999, got %q", cfg.ListenAddr)
+    }
+    if cfg.LogLevel != "debug" {
+        t.Errorf("expected LogLevel to be debug, got %q", cfg.LogLevel)
+    }
 }
 ```
 
