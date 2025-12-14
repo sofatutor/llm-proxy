@@ -85,7 +85,7 @@ type Config struct {
 	ActiveCacheMax       int           // Maximum entries in project active status cache (e.g., 10000)
 
 	// Event bus configuration
-	EventBusBackend string // Backend for event bus: "redis", "redis-streams", or "in-memory"
+	EventBusBackend string // Backend for event bus: "redis-streams" or "in-memory"
 	RedisAddr       string // Redis server address (e.g., "localhost:6379")
 	RedisDB         int    // Redis database number (default: 0)
 
@@ -196,7 +196,7 @@ func New() (*Config, error) {
 		ActiveCacheMax:       getEnvInt("LLM_PROXY_ACTIVE_CACHE_MAX", 10000),
 
 		// Event bus configuration
-		EventBusBackend: getEnvString("LLM_PROXY_EVENT_BUS", "redis"),
+		EventBusBackend: getEnvString("LLM_PROXY_EVENT_BUS", "redis-streams"),
 		RedisAddr:       getEnvString("REDIS_ADDR", "localhost:6379"),
 		RedisDB:         getEnvInt("REDIS_DB", 0),
 
@@ -373,7 +373,7 @@ func DefaultConfig() *Config {
 		ActiveCacheMax:       10000,
 
 		// Event bus configuration
-		EventBusBackend: "redis",
+		EventBusBackend: "redis-streams",
 		RedisAddr:       "localhost:6379",
 		RedisDB:         0,
 

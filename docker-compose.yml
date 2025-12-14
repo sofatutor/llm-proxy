@@ -15,8 +15,10 @@ x-llm-proxy-base: &llm-proxy-base
     - LOG_LEVEL=${LOG_LEVEL:-info}
     - ENABLE_METRICS=true
     - PORT=${PORT:-8080}
-    - LLM_PROXY_EVENT_BUS=redis
+    - LLM_PROXY_EVENT_BUS=redis-streams
     - REDIS_ADDR=redis:6379
+    - REDIS_STREAM_KEY=llm-proxy-events
+    - REDIS_CONSUMER_GROUP=llm-proxy-dispatchers
     - DB_DRIVER=postgres
     - DATABASE_URL=postgres://llmproxy:${POSTGRES_PASSWORD:-secret}@postgres:5432/llmproxy?sslmode=disable
     - HTTP_CACHE_ENABLED=${HTTP_CACHE_ENABLED:-false}

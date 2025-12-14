@@ -109,32 +109,6 @@ func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectSto
 
 	var bus eventbus.EventBus
 	switch cfg.EventBusBackend {
-	case "redis":
-		client := redis.NewClient(&redis.Options{
-			Addr: cfg.RedisAddr,
-			DB:   cfg.RedisDB,
-		})
-		// Redis diagnostics
-		logger.Info("Connecting to Redis", zap.String("addr", cfg.RedisAddr), zap.Int("db", cfg.RedisDB))
-		pong, err := client.Ping(context.Background()).Result()
-		if err != nil {
-			logger.Fatal("Failed to ping Redis",
-				zap.String("addr", cfg.RedisAddr),
-				zap.Int("db", cfg.RedisDB),
-				zap.Error(err))
-		}
-		logger.Info("Successfully pinged Redis",
-			zap.String("addr", cfg.RedisAddr),
-			zap.Int("db", cfg.RedisDB),
-			zap.String("response", pong))
-		err = client.Set(context.Background(), "llm-proxy-debug", "hello", 0).Err()
-		if err != nil {
-			logger.Fatal("Failed to set test key in Redis", zap.Error(err))
-		}
-		logger.Debug("Successfully set test key in Redis", zap.String("key", "llm-proxy-debug"))
-		adapter := &eventbus.RedisGoClientAdapter{Client: client}
-		bus = eventbus.NewRedisEventBusPublisher(adapter, "llm-proxy-events")
-		logger.Info("Using Redis event bus", zap.String("addr", cfg.RedisAddr), zap.Int("db", cfg.RedisDB))
 	case "redis-streams":
 		client := redis.NewClient(&redis.Options{
 			Addr: cfg.RedisAddr,

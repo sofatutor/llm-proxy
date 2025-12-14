@@ -430,28 +430,7 @@ func runDispatcher(cmd *cobra.Command, args []string) {
 			zap.String("consumer_group", config.ConsumerGroup),
 			zap.String("consumer_name", config.ConsumerName))
 
-	case "redis":
-		redisAddr := os.Getenv("REDIS_ADDR")
-		if redisAddr == "" {
-			redisAddr = "localhost:6379"
-		}
-		redisDB := 0
-		if dbStr := os.Getenv("REDIS_DB"); dbStr != "" {
-			dbVal, err := strconv.Atoi(dbStr)
-			if err != nil {
-				logger.Warn("Invalid REDIS_DB value; using default DB 0", zap.String("REDIS_DB", dbStr), zap.Error(err))
-			} else {
-				redisDB = dbVal
-			}
-		}
-		client := redis.NewClient(&redis.Options{
-			Addr: redisAddr,
-			DB:   redisDB,
-		})
-		adapter := &eventbus.RedisGoClientAdapter{Client: client}
-		eventBus = eventbus.NewRedisEventBusLog(adapter, "llm-proxy-events", 24*time.Hour, 100000)
-		logger.Info("Using Redis LIST event bus (legacy)", zap.String("addr", redisAddr), zap.Int("db", redisDB))
-	case "memory":
+	case "in-memory", "memory":
 		if dispatcherService != "file" {
 			logger.Fatal("In-memory event bus only works for single-process file logging. Use Redis for multi-process/event dispatching.")
 		}
