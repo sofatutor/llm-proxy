@@ -63,16 +63,16 @@ function formatDateTime(date, includeSeconds) {
 }
 
 function formatLongDate(date) {
-    const options = { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
+    const options = {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
         day: 'numeric',
-        hour: 'numeric',
+        hour: '2-digit',
         minute: '2-digit',
-        hour12: true
+        hour12: false
     };
-    return date.toLocaleString('en-US', options).replace(',', ' at');
+    return new Intl.DateTimeFormat(undefined, options).format(date);
 }
 
 function formatDateOnly(date) {
@@ -173,6 +173,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const pad = n => n.toString().padStart(2, '0');
         const formatted = `${serverTime.getFullYear()}-${pad(serverTime.getMonth()+1)}-${pad(serverTime.getDate())} ${pad(serverTime.getHours())}:${pad(serverTime.getMinutes())}:${pad(serverTime.getSeconds())}`;
         serverTimeSpan.textContent = formatted;
+        // Keep tooltip ISO timestamp in UTC (with zone)
+        const iso = serverTime.toISOString();
+        serverTimeSpan.title = iso;
+        serverTimeSpan.setAttribute('data-ts', iso);
     }
     if (backendStatus) {
         updateBackendStatus();

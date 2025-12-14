@@ -48,7 +48,7 @@
                             {{ range .events }}
                             <tr>
                                 <td>
-                                    <small class="text-muted"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .Timestamp }}" data-format="ymd_hms">{{ .Timestamp.Format "2006-01-02 15:04:05" }}</span></small>
+                                    <small class="text-muted"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .Timestamp }}" data-format="ymd_hms" title="{{ formatRFC3339UTC .Timestamp }}">{{ .Timestamp.Format "2006-01-02 15:04:05" }}</span></small>
                                 </td>
                                 <td>
                                     <span class="badge bg-secondary">{{ .Action }}</span>

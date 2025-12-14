@@ -71,6 +71,8 @@ type Server struct {
 	apiClient *APIClient
 	logger    *zap.Logger
 
+	assetVersion string
+
 	// For testability: allow injection of token validation logic
 	ValidateTokenWithAPI func(context.Context, string) bool
 
@@ -136,11 +138,12 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	}
 
 	s := &Server{
-		config:      cfg,
-		engine:      engine,
-		apiClient:   apiClient,
-		logger:      logger,
-		auditLogger: auditLogger,
+		config:       cfg,
+		engine:       engine,
+		apiClient:    apiClient,
+		logger:       logger,
+		assetVersion: strconv.FormatInt(time.Now().Unix(), 10),
+		auditLogger:  auditLogger,
 		server: &http.Server{
 			Addr:         cfg.AdminUI.ListenAddr,
 			Handler:      engine,
@@ -647,7 +650,7 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 	var req struct {
 		ProjectID       string `form:"project_id" binding:"required"`
 		DurationMinutes int    `form:"duration_minutes" binding:"required,min=1,max=525600"`
-		MaxRequests     *int   `form:"max_requests" binding:"omitempty,min=1"`
+		MaxRequests     string `form:"max_requests"`
 	}
 
 	if err := c.ShouldBind(&req); err != nil {
@@ -683,7 +686,44 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 	if ref := c.Request.Referer(); ref != "" {
 		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
 	}
-	token, err := apiClient.CreateToken(ctx, req.ProjectID, req.DurationMinutes, req.MaxRequests)
+	var maxRequests *int
+	if strings.TrimSpace(req.MaxRequests) != "" {
+		parsedMaxRequests, err := strconv.Atoi(strings.TrimSpace(req.MaxRequests))
+		if err != nil {
+			projCtx := ctx
+			projects, _, _ := apiClient.GetProjects(projCtx, 1, 100)
+			c.HTML(http.StatusBadRequest, "tokens/new.html", gin.H{
+				"title":            "Generate Token",
+				"active":           "tokens",
+				"projects":         projects,
+				"project_id":       req.ProjectID,
+				"duration_minutes": req.DurationMinutes,
+				"max_requests":     req.MaxRequests,
+				"error":            "Please fill in all required fields correctly",
+			})
+			return
+		}
+		if parsedMaxRequests < 0 {
+			projCtx := ctx
+			projects, _, _ := apiClient.GetProjects(projCtx, 1, 100)
+			c.HTML(http.StatusBadRequest, "tokens/new.html", gin.H{
+				"title":            "Generate Token",
+				"active":           "tokens",
+				"projects":         projects,
+				"project_id":       req.ProjectID,
+				"duration_minutes": req.DurationMinutes,
+				"max_requests":     req.MaxRequests,
+				"error":            "Please fill in all required fields correctly",
+			})
+			return
+		}
+		// 0 means unlimited; omit from payload.
+		if parsedMaxRequests > 0 {
+			maxRequests = &parsedMaxRequests
+		}
+	}
+
+	token, err := apiClient.CreateToken(ctx, req.ProjectID, req.DurationMinutes, maxRequests)
 	if err != nil {
 		// forward context as well for consistency in audit logs
 		projCtx := ctx
@@ -846,6 +886,9 @@ func (s *Server) templateFuncs() template.FuncMap {
 		},
 		"now": func() time.Time {
 			return time.Now()
+		},
+		"assetVersion": func() string {
+			return s.assetVersion
 		},
 		"eq": func(a, b any) bool {
 			return a == b
@@ -1341,8 +1384,8 @@ func (s *Server) handleTokensUpdate(c *gin.Context) {
 	}
 
 	var req struct {
-		IsActive    *bool `form:"is_active"`
-		MaxRequests *int  `form:"max_requests"`
+		IsActive    *bool  `form:"is_active"`
+		MaxRequests string `form:"max_requests"`
 	}
 
 	if err := c.ShouldBind(&req); err != nil {
@@ -1363,7 +1406,33 @@ func (s *Server) handleTokensUpdate(c *gin.Context) {
 		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
 	}
 
-	_, err := apiClient.UpdateToken(ctx, tokenID, req.IsActive, req.MaxRequests)
+	var maxRequests *int
+	maxRequestsStr := strings.TrimSpace(req.MaxRequests)
+	if maxRequestsStr == "" {
+		// Empty input means "unset" (unlimited). We send 0 and let the management API
+		// normalize it to nil.
+		zero := 0
+		maxRequests = &zero
+	} else {
+		parsedMaxRequests, err := strconv.Atoi(maxRequestsStr)
+		if err != nil {
+			c.HTML(http.StatusBadRequest, "error.html", gin.H{
+				"error":   "Invalid form data",
+				"details": err.Error(),
+			})
+			return
+		}
+		if parsedMaxRequests < 0 {
+			c.HTML(http.StatusBadRequest, "error.html", gin.H{
+				"error":   "Invalid form data",
+				"details": "max_requests must be >= 0",
+			})
+			return
+		}
+		maxRequests = &parsedMaxRequests
+	}
+
+	_, err := apiClient.UpdateToken(ctx, tokenID, req.IsActive, maxRequests)
 	if err != nil {
 		if strings.Contains(err.Error(), "404") {
 			c.HTML(http.StatusNotFound, "error.html", gin.H{

@@ -278,6 +278,7 @@ type mockAPIClient struct {
 	DashboardData         *DashboardData
 	DashboardErr          error
 	LastCreateMaxRequests *int
+	LastUpdateMaxRequests *int
 }
 
 func (m *mockAPIClient) GetDashboardData(ctx context.Context) (*DashboardData, error) {
@@ -362,6 +363,7 @@ func (m *mockAPIClient) UpdateToken(ctx context.Context, tokenID string, isActiv
 	if m.DashboardErr != nil {
 		return nil, m.DashboardErr
 	}
+	m.LastUpdateMaxRequests = maxRequests
 	token := &Token{ID: tokenID, ProjectID: "1", IsActive: true}
 	if isActive != nil {
 		token.IsActive = *isActive
@@ -694,6 +696,40 @@ func TestServer_HandleTokensCreate(t *testing.T) {
 
 	if client.LastCreateMaxRequests == nil || *client.LastCreateMaxRequests != 25 {
 		t.Fatalf("expected max_requests to be forwarded, got %v", client.LastCreateMaxRequests)
+	}
+}
+
+func TestServer_HandleTokensCreate_AllowsBlankMaxRequests(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tokensFile := filepath.Join(testTemplateDir(), "tokens", "new.html")
+	_ = os.WriteFile(tokensFile, []byte("<html><body>tokens new</body></html>"), 0644)
+	defer func() {
+		if err := os.Remove(tokensFile); err != nil {
+			t.Errorf("failed to remove %s: %v", tokensFile, err)
+		}
+	}()
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens", "*.html"))
+
+	client := &mockAPIClient{}
+	s.engine.POST("/tokens", func(c *gin.Context) {
+		c.Set("apiClient", client)
+		s.handleTokensCreate(c)
+	})
+
+	form := strings.NewReader("project_id=1&duration_minutes=1440&max_requests=")
+	req, _ := http.NewRequest("POST", "/tokens", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if client.LastCreateMaxRequests != nil {
+		t.Fatalf("expected max_requests to be omitted (nil), got %v", client.LastCreateMaxRequests)
 	}
 }
 
@@ -1419,6 +1455,38 @@ func TestServer_HandleTokensUpdate_BadRequest(t *testing.T) {
 	s.engine.ServeHTTP(w, r)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleTokensUpdate_AllowsEmptyMaxRequests_Unlimited(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	errTpl := filepath.Join(testTemplateDir(), "error.html")
+	if err := os.WriteFile(errTpl, []byte("<html><body>error</body></html>"), 0644); err != nil {
+		t.Fatalf("write error.html: %v", err)
+	}
+	defer func() { _ = os.Remove(errTpl) }()
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "*.html"))
+
+	client := &mockAPIClient{}
+	s.engine.PUT("/tokens/:token", func(c *gin.Context) {
+		c.Set("apiClient", client)
+		s.handleTokensUpdate(c)
+	})
+
+	form := strings.NewReader("max_requests=")
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("PUT", "/tokens/tok-1", form)
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	s.engine.ServeHTTP(w, r)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", w.Code)
+	}
+	if client.LastUpdateMaxRequests == nil || *client.LastUpdateMaxRequests != 0 {
+		t.Fatalf("expected max_requests=0 sentinel for unlimited, got %v", client.LastUpdateMaxRequests)
 	}
 }
 

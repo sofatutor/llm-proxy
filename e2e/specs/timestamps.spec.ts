@@ -32,8 +32,8 @@ test.describe('Timestamp Localization', () => {
     // Verify that timestamps have the localization attributes
     const timestampElements = await page.locator('[data-local-time="true"][data-ts]').all();
     
-    // Should have at least 3 timestamp elements (expires, created, and their small variants)
-    expect(timestampElements.length).toBeGreaterThanOrEqual(3);
+    // Should have at least 2 timestamp elements (expires + created)
+    expect(timestampElements.length).toBeGreaterThanOrEqual(2);
     
     // Verify each has a valid RFC3339 timestamp
     for (const el of timestampElements) {
@@ -59,6 +59,24 @@ test.describe('Timestamp Localization', () => {
     const firstTimestamp = timestampElements[0];
     const formatAttr = await firstTimestamp.getAttribute('data-format');
     expect(['ymd_hm', 'ymd_hms', 'ymd_hms_tz', 'long', 'date_only']).toContain(formatAttr);
+
+    // Tables should keep the UTC ISO timestamp in the title attribute
+    const dataTs = await firstTimestamp.getAttribute('data-ts');
+    const title = await firstTimestamp.getAttribute('title');
+    expect(title).toBeTruthy();
+    expect(title).toBe(dataTs);
+  });
+
+  test('should keep UTC ISO timestamp as title on project list table', async ({ page }) => {
+    await page.goto('/projects');
+
+    const firstTimestamp = await page.locator('[data-local-time="true"][data-ts]').first();
+    await expect(firstTimestamp).toBeVisible();
+
+    const dataTs = await firstTimestamp.getAttribute('data-ts');
+    const title = await firstTimestamp.getAttribute('title');
+    expect(title).toBeTruthy();
+    expect(title).toBe(dataTs);
   });
 
   test('should render timestamps with data-local-time attributes on project show page', async ({ page }) => {
@@ -67,7 +85,7 @@ test.describe('Timestamp Localization', () => {
     // Verify that timestamps have the localization attributes
     const timestampElements = await page.locator('[data-local-time="true"][data-ts]').all();
     
-    // Should have at least 2 timestamp elements (created and updated with their variants)
+    // Should have at least 2 timestamp elements (created and updated)
     expect(timestampElements.length).toBeGreaterThanOrEqual(2);
   });
 
@@ -105,13 +123,13 @@ test.describe('Timestamp Localization', () => {
     await page.goto(`/tokens/${tokenId}`);
     await page.waitForLoadState('networkidle');
     
-    // Find a timestamp with ymd_hms_tz format (includes timezone)
-    const detailTimestamp = await page.locator('[data-format="ymd_hms_tz"]').first();
-    const text = await detailTimestamp.textContent();
-    
-    // Should match YYYY-MM-DD HH:mm:ss TZ pattern (e.g., "2024-12-14 12:34:56 EST")
-    // The timezone abbreviation is at least 2-4 characters
-    expect(text).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} [A-Z]{2,4}$/);
+    // Find a timestamp with long format and ensure we render 24h time (no AM/PM)
+    const longTimestamp = await page.locator('[data-format="long"]').first();
+    const text = await longTimestamp.textContent();
+
+    expect(text).toBeTruthy();
+    expect(text).not.toMatch(/\bAM\b|\bPM\b/i);
+    expect(text).toMatch(/\b\d{2}:\d{2}\b/);
   });
 
   test('should maintain preserved UTC timestamps in edit form', async ({ page }) => {
