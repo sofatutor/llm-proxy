@@ -63,16 +63,33 @@ function formatDateTime(date, includeSeconds) {
 }
 
 function formatLongDate(date) {
+    // Use a fixed locale to keep the admin UI stable across browser languages.
+    const locale = 'en-US';
     const options = {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
         day: 'numeric',
-        hour: '2-digit',
+        hour: 'numeric',
         minute: '2-digit',
-        hour12: false
+        hour12: true
     };
-    return new Intl.DateTimeFormat(undefined, options).format(date);
+
+    // Intl doesn't let us inject the literal " at " via options, so build it from parts.
+    const parts = new Intl.DateTimeFormat(locale, options).formatToParts(date);
+    const byType = {};
+    parts.forEach(function(p) {
+        if (!byType[p.type]) {
+            byType[p.type] = p.value;
+        }
+    });
+
+    if (!byType.weekday || !byType.month || !byType.day || !byType.year || !byType.hour || !byType.minute) {
+        return new Intl.DateTimeFormat(locale, options).format(date);
+    }
+
+    const dayPeriod = byType.dayPeriod ? ` ${byType.dayPeriod}` : '';
+    return `${byType.weekday}, ${byType.month} ${byType.day}, ${byType.year} at ${byType.hour}:${byType.minute}${dayPeriod}`;
 }
 
 function formatDateOnly(date) {
@@ -158,7 +175,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 if (backend.timestamp && serverTimeSpan) {
                     serverTime = new Date(backend.timestamp);
-                    updateServerTimeDisplay();
+                    updateServerTimeDisplay(true);
                 }
             })
             .catch(() => {
@@ -167,16 +184,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 backendStatus.innerHTML = '<i class="bi bi-x-circle"></i> Backend: Offline';
             });
     }
-    function updateServerTimeDisplay() {
+    function updateServerTimeDisplay(updateAttributes) {
         if (!serverTimeSpan || !serverTime) return;
         // Format as YYYY-MM-DD HH:mm:ss
         const pad = n => n.toString().padStart(2, '0');
         const formatted = `${serverTime.getFullYear()}-${pad(serverTime.getMonth()+1)}-${pad(serverTime.getDate())} ${pad(serverTime.getHours())}:${pad(serverTime.getMinutes())}:${pad(serverTime.getSeconds())}`;
         serverTimeSpan.textContent = formatted;
-        // Keep tooltip ISO timestamp in UTC (with zone)
-        const iso = serverTime.toISOString();
-        serverTimeSpan.title = iso;
-        serverTimeSpan.setAttribute('data-ts', iso);
+
+        if (updateAttributes) {
+            // Keep canonical UTC ISO timestamp in both attributes.
+            const iso = serverTime.toISOString();
+            serverTimeSpan.title = iso;
+            serverTimeSpan.setAttribute('data-ts', iso);
+        }
     }
     if (backendStatus) {
         updateBackendStatus();
@@ -186,7 +206,7 @@ document.addEventListener('DOMContentLoaded', function() {
         setInterval(() => {
             if (serverTime) {
                 serverTime.setSeconds(serverTime.getSeconds() + 1);
-                updateServerTimeDisplay();
+                updateServerTimeDisplay(false);
             }
         }, 1000);
     }

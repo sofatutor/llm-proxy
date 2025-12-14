@@ -140,13 +140,14 @@ test.describe('Timestamp Localization', () => {
     await page.goto(`/tokens/${tokenId}`);
     await page.waitForLoadState('networkidle');
     
-    // Find a timestamp with long format and ensure we render 24h time (no AM/PM)
+    // Find a timestamp with long format and ensure it matches our human-friendly style.
     const longTimestamp = await page.locator('[data-format="long"]').first();
     const text = await longTimestamp.textContent();
 
     expect(text).toBeTruthy();
-    expect(text).not.toMatch(/\bAM\b|\bPM\b/i);
-    expect(text).toMatch(/\b\d{2}:\d{2}\b/);
+    expect(text).toContain(' at ');
+    expect(text).toMatch(/\b\d{1,2}:\d{2}\b/);
+    expect(text).toMatch(/\bAM\b|\bPM\b/i);
   });
 
   test('should maintain preserved UTC timestamps in edit form', async ({ page }) => {
@@ -200,7 +201,7 @@ test.describe('Timestamp Localization - Timezone Variations', () => {
     const pacificDataTs = await pacificTimestampEl.getAttribute('data-ts');
     const pacificTitle = await pacificTimestampEl.getAttribute('title');
     const pacificText = await pacificTimestampEl.textContent();
-    const pacificDisplayedHm = pacificText?.match(/\b\d{2}:\d{2}\b/)?.[0];
+    const pacificDisplayedHm = pacificText?.match(/\b\d{1,2}:\d{2}\b/)?.[0];
     
     // Test in Tokyo timezone  
     const tokyoContext = await browser.newContext({
@@ -215,7 +216,7 @@ test.describe('Timestamp Localization - Timezone Variations', () => {
     const tokyoDataTs = await tokyoTimestampEl.getAttribute('data-ts');
     const tokyoTitle = await tokyoTimestampEl.getAttribute('title');
     const tokyoText = await tokyoTimestampEl.textContent();
-    const tokyoDisplayedHm = tokyoText?.match(/\b\d{2}:\d{2}\b/)?.[0];
+    const tokyoDisplayedHm = tokyoText?.match(/\b\d{1,2}:\d{2}\b/)?.[0];
     
     // The times should be different (Pacific is typically 17 hours behind Tokyo)
     expect(pacificDataTs).toBeTruthy();
@@ -264,10 +265,15 @@ test.describe('Timestamp Localization - Timezone Variations', () => {
       expect(title).toBe(dataTs);
     }
     
-    // Since we're in UTC timezone, the displayed HH:MM should match the UTC HH:MM in the ISO timestamp.
-    const isoHm = dataTs?.substring(11, 16); // HH:MM
-    expect(isoHm).toMatch(/^\d{2}:\d{2}$/);
-    expect(displayedText).toContain(isoHm);
+    // Since we're in UTC timezone, the displayed time should match the UTC time (in 12h format).
+    const utcDate = new Date(dataTs as string);
+    const utcMinutes = utcDate.getUTCMinutes().toString().padStart(2, '0');
+    const utcHour24 = utcDate.getUTCHours();
+    const utcAmPm = utcHour24 >= 12 ? 'PM' : 'AM';
+    let utcHour12 = utcHour24 % 12;
+    if (utcHour12 === 0) utcHour12 = 12;
+    const expectedDisplayedHm = `${utcHour12}:${utcMinutes} ${utcAmPm}`;
+    expect(displayedText).toContain(expectedDisplayedHm);
     
     await utcContext.close();
   });

@@ -106,7 +106,7 @@
                                 </div>
                                 <div class="col-sm-6">
                                     <strong>Created:</strong><br>
-                                    <small class="text-muted"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .project.CreatedAt }}" data-format="ymd_hm" title="{{ formatRFC3339UTC .project.CreatedAt }}">{{ .project.CreatedAt.UTC.Format "2006-01-02 15:04 UTC" }}</span></small>
+                                    <small class="text-muted"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .project.CreatedAt }}" data-format="ymd_hm" title="{{ formatRFC3339UTC .project.CreatedAt }}">{{ (.project.CreatedAt.UTC).Format "2006-01-02 15:04 UTC" }}</span></small>
                                 </div>
                             </div>
                         </div>
