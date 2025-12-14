@@ -196,13 +196,18 @@ func TestServiceExponentialBackoff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
 	}
+	defer func() {
+		_ = service.Stop()
+	}()
 
 	// Start service in background first
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	runDone := make(chan error, 1)
+
 	go func() {
-		_ = service.Run(ctx, false)
+		runDone <- service.Run(ctx, false)
 	}()
 
 	// Give service time to start
@@ -218,7 +223,13 @@ func TestServiceExponentialBackoff(t *testing.T) {
 
 	// Wait for retries to complete
 	time.Sleep(2 * time.Second)
-	_ = service.Stop()
+
+	cancel()
+	select {
+	case <-runDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("service.Run did not exit after cancel")
+	}
 
 	// Should have tried exactly 3 times (fail twice, then succeed).
 	if retryCount != 3 {
@@ -263,13 +274,18 @@ func TestServicePermanentError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
 	}
+	defer func() {
+		_ = service.Stop()
+	}()
 
 	// Start service in background first
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	runDone := make(chan error, 1)
+
 	go func() {
-		_ = service.Run(ctx, false)
+		runDone <- service.Run(ctx, false)
 	}()
 
 	// Give service time to start
@@ -285,7 +301,13 @@ func TestServicePermanentError(t *testing.T) {
 
 	// Wait for processing
 	time.Sleep(500 * time.Millisecond)
-	_ = service.Stop()
+
+	cancel()
+	select {
+	case <-runDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("service.Run did not exit after cancel")
+	}
 
 	// Should only try once (no retries for permanent errors)
 	if retryCount != 1 {
@@ -315,13 +337,18 @@ func TestServiceMetricsTracking(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService failed: %v", err)
 	}
+	defer func() {
+		_ = service.Stop()
+	}()
 
 	// Start service first
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	runDone := make(chan error, 1)
+
 	go func() {
-		_ = service.Run(ctx, false)
+		runDone <- service.Run(ctx, false)
 	}()
 
 	// Give service time to start
@@ -339,7 +366,13 @@ func TestServiceMetricsTracking(t *testing.T) {
 
 	// Wait for processing and metrics updates
 	time.Sleep(1 * time.Second)
-	_ = service.Stop()
+
+	cancel()
+	select {
+	case <-runDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("service.Run did not exit after cancel")
+	}
 
 	// Check stats
 	processed, _, sent := service.Stats()
