@@ -177,7 +177,7 @@ func (d *DB) DBGetProjectByID(ctx context.Context, projectID string) (Project, e
 }
 
 func (d *DB) DBUpdateProject(ctx context.Context, project Project) error {
-	project.UpdatedAt = time.Now()
+	project.UpdatedAt = time.Now().UTC()
 
 	query := `
 	UPDATE projects

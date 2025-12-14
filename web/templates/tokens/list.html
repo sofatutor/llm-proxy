@@ -71,15 +71,7 @@
                                     <span class="badge bg-secondary" title="Total requests made" data-bs-toggle="tooltip">
                                         {{ .RequestCount }}
                                     </span>
-                                    {{ if .MaxRequests }}
-                                        {{ if gt .MaxRequests 0 }}
-                                            / {{ .MaxRequests }}
-                                        {{ else }}
-                                            / ∞
-                                        {{ end }}
-                                    {{ else }}
-                                        / ∞
-                                    {{ end }}
+                                    / {{ formatMaxRequests .MaxRequests }}
                                     <span class="text-muted">|</span>
                                     <span class="badge bg-success" title="Responses served from cache" data-bs-toggle="tooltip">
                                         <i class="bi bi-hdd"></i> {{ .CacheHitCount }}
@@ -119,20 +111,20 @@
                                 <td>
                                     {{ if .ExpiresAt }}
                                         {{ if lt .ExpiresAt.Unix now.Unix }}
-                                            <small class="text-danger">{{ .ExpiresAt.Format "2006-01-02 15:04" }}</small>
+                                            <small class="text-danger"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .ExpiresAt }}" data-format="ymd_hm" title="{{ formatRFC3339UTC .ExpiresAt }}">{{ (.ExpiresAt.UTC).Format "2006-01-02 15:04 UTC" }}</span></small>
                                         {{ else }}
-                                            <small class="text-muted">{{ .ExpiresAt.Format "2006-01-02 15:04" }}</small>
+                                            <small class="text-muted"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .ExpiresAt }}" data-format="ymd_hm" title="{{ formatRFC3339UTC .ExpiresAt }}">{{ (.ExpiresAt.UTC).Format "2006-01-02 15:04 UTC" }}</span></small>
                                         {{ end }}
                                     {{ else }}
                                         <small class="text-muted">Never</small>
                                     {{ end }}
                                 </td>
                                 <td>
-                                    <small class="text-muted">{{ .CreatedAt.Format "2006-01-02 15:04" }}</small>
+                                    <small class="text-muted"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .CreatedAt }}" data-format="ymd_hm" title="{{ formatRFC3339UTC .CreatedAt }}">{{ (.CreatedAt.UTC).Format "2006-01-02 15:04 UTC" }}</span></small>
                                 </td>
                                 <td>
                                     {{ if .LastUsedAt }}
-                                    <small class="text-muted">{{ .LastUsedAt.Format "2006-01-02 15:04" }}</small>
+                                        <small class="text-muted"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .LastUsedAt }}" data-format="ymd_hm" title="{{ formatRFC3339UTC .LastUsedAt }}">{{ (.LastUsedAt.UTC).Format "2006-01-02 15:04 UTC" }}</span></small>
                                     {{ else }}
                                     <small class="text-muted">Never</small>
                                     {{ end }}
@@ -142,7 +134,7 @@
                                         <a href="/projects/{{ .ProjectID }}" class="btn btn-outline-primary" title="View Project">
                                             <i class="bi bi-folder"></i>
                                         </a>
-                                        <a href="/tokens/{{ .TokenID }}/edit" class="btn btn-outline-warning" title="Edit Token">
+                                        <a href="/tokens/{{ .ID }}/edit" class="btn btn-outline-warning" title="Edit Token">
                                             <i class="bi bi-pencil"></i>
                                         </a>
                                         {{ if .ExpiresAt }}
@@ -152,23 +144,23 @@
                                                 </button>
                                             {{ else if .IsActive }}
                                                 <button type="button" class="btn btn-outline-danger" title="Revoke Token" 
-                                                        onclick="revokeToken('{{ .TokenID }}', '{{ obfuscateToken .TokenID }}')">
+                                                        onclick="revokeToken('{{ .ID }}', '{{ .Token }}')">
                                                     <i class="bi bi-x-circle"></i>
                                                 </button>
                                             {{ else }}
                                                 <button type="button" class="btn btn-outline-success" title="Reactivate Token" 
-                                                        onclick="reactivateToken('{{ .TokenID }}', '{{ obfuscateToken .TokenID }}')">
+                                                        onclick="reactivateToken('{{ .ID }}', '{{ .Token }}')">
                                                     <i class="bi bi-arrow-clockwise"></i>
                                                 </button>
                                             {{ end }}
                                         {{ else if .IsActive }}
                                             <button type="button" class="btn btn-outline-danger" title="Revoke Token" 
-                                                    onclick="revokeToken('{{ .TokenID }}', '{{ obfuscateToken .TokenID }}')">
+                                                    onclick="revokeToken('{{ .ID }}', '{{ .Token }}')">
                                                 <i class="bi bi-x-circle"></i>
                                             </button>
                                         {{ else }}
                                             <button type="button" class="btn btn-outline-success" title="Reactivate Token" 
-                                                    onclick="reactivateToken('{{ .TokenID }}', '{{ obfuscateToken .TokenID }}')">
+                                                    onclick="reactivateToken('{{ .ID }}', '{{ .Token }}')">
                                                 <i class="bi bi-arrow-clockwise"></i>
                                             </button>
                                         {{ end }}

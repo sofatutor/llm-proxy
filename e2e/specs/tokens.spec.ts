@@ -10,6 +10,7 @@ test.describe('Tokens Management', () => {
   let seed: SeedFixture;
   let projectId: string;
   let tokenId: string;
+  let tokenValue: string;
 
   test.beforeEach(async ({ page }) => {
     auth = new AuthFixture(page);
@@ -18,7 +19,9 @@ test.describe('Tokens Management', () => {
     await auth.login(MANAGEMENT_TOKEN);
     
     projectId = await seed.createProject('Token Test Project', 'sk-test-key');
-    tokenId = await seed.createToken(projectId, 120);
+    const token = await seed.createToken(projectId, 120);
+    tokenId = token.id;
+    tokenValue = token.token;
   });
 
   test.afterEach(async () => {
@@ -33,7 +36,7 @@ test.describe('Tokens Management', () => {
     
     // Should not contain raw token values
     const pageContent = await page.textContent('body');
-    expect(pageContent).not.toContain(tokenId);
+    expect(pageContent).not.toContain(tokenValue);
     
     // Should show at least one status badge in the first row
     await expect(page.locator('table tbody tr').first().locator('.badge').first()).toBeVisible();
@@ -59,10 +62,66 @@ test.describe('Tokens Management', () => {
     await page.uncheck('#is_active');
     
     // Submit form
-    await page.click('button[type="submit"]');
+    await page.getByRole('button', { name: 'Update Token' }).click();
     
     // Should redirect to token details (or, in rare cases, back to login)
     await expect(page).toHaveURL(new RegExp(`/tokens/${tokenId}(?:/.*)?$|/auth/login$`));
+  });
+
+  test('should allow clearing max requests to set unlimited (regression)', async ({ page }) => {
+    const openTokenEdit = async () => {
+      await page.goto(`/tokens/${tokenId}/edit`);
+      if (page.url().includes('/auth/login')) {
+        await auth.login(MANAGEMENT_TOKEN);
+        await page.goto(`/tokens/${tokenId}/edit`);
+      }
+
+      await expect(page).toHaveURL(`/tokens/${tokenId}/edit`);
+      await expect(page.locator('#max_requests')).toBeVisible();
+    };
+
+    // Set a finite max_requests first
+    await openTokenEdit();
+    await page.fill('#max_requests', '10');
+    const saveFiniteResponse = page.waitForResponse((response) => {
+      return (
+        response.request().method() === 'POST' &&
+        response.url().includes(`/tokens/${tokenId}`)
+      );
+    });
+    await page.getByRole('button', { name: 'Update Token' }).click();
+    await saveFiniteResponse;
+    if (page.url().includes('/auth/login')) {
+      await auth.login(MANAGEMENT_TOKEN);
+    }
+    // Don't assert the exact redirect target (can vary); assert persisted state instead.
+    const updatedTokenAfterSet = await seed.getToken(tokenId);
+    expect(updatedTokenAfterSet.max_requests).toBe(10);
+
+    // Now clear it back to unlimited
+    await openTokenEdit();
+    await page.fill('#max_requests', '');
+    const saveUnlimitedResponse = page.waitForResponse((response) => {
+      return (
+        response.request().method() === 'POST' &&
+        response.url().includes(`/tokens/${tokenId}`)
+      );
+    });
+    await page.getByRole('button', { name: 'Update Token' }).click();
+    await saveUnlimitedResponse;
+    if (page.url().includes('/auth/login')) {
+      await auth.login(MANAGEMENT_TOKEN);
+    }
+    const updatedTokenAfterClear = await seed.getToken(tokenId);
+    expect([null, 0]).toContain(updatedTokenAfterClear.max_requests ?? null);
+
+    // Tokens table should show unlimited as ∞ for this token
+    await page.goto('/tokens');
+    const tokenRow = page.locator('table tbody tr', {
+      has: page.locator(`a[href="/tokens/${tokenId}/edit"]`),
+    });
+    await expect(tokenRow).toBeVisible();
+    await expect(tokenRow).toContainText('∞');
   });
 
   test('should show token details', async ({ page }) => {

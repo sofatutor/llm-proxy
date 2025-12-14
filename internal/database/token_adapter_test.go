@@ -55,22 +55,26 @@ func TestDBTokenStoreAdapter_UpdateToken_Integration(t *testing.T) {
 	err = adapter.CreateToken(context.Background(), testToken)
 	require.NoError(t, err)
 
-	// Update the token
-	testToken.IsActive = false
-	testToken.MaxRequests = intPtr(2000)
-	testToken.RequestCount = 100
+	// Retrieve the token to get the auto-generated ID
+	retrievedToken, err := adapter.GetTokenByToken(context.Background(), testToken.Token)
+	require.NoError(t, err)
+
+	// Update the token using the retrieved ID
+	retrievedToken.IsActive = false
+	retrievedToken.MaxRequests = intPtr(2000)
+	retrievedToken.RequestCount = 100
 
 	// This should hit the UpdateToken method with 0% coverage
-	err = adapter.UpdateToken(context.Background(), testToken)
+	err = adapter.UpdateToken(context.Background(), retrievedToken)
 	require.NoError(t, err)
 
 	// Verify the update worked
-	retrievedToken, err := adapter.GetTokenByID(context.Background(), testToken.Token)
+	verifyToken, err := adapter.GetTokenByToken(context.Background(), testToken.Token)
 	require.NoError(t, err)
 
-	assert.Equal(t, false, retrievedToken.IsActive)
-	assert.Equal(t, intPtr(2000), retrievedToken.MaxRequests)
-	assert.Equal(t, 100, retrievedToken.RequestCount)
+	assert.Equal(t, false, verifyToken.IsActive)
+	assert.Equal(t, intPtr(2000), verifyToken.MaxRequests)
+	assert.Equal(t, 100, verifyToken.RequestCount)
 }
 
 func TestDBTokenStoreAdapter_Coverage(t *testing.T) {

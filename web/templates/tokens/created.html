@@ -48,18 +48,15 @@
                 </div>
 
                 <div class="row">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <div class="mb-3">
                             <label class="form-label fw-bold">Expires:</label>
                             <div class="text-muted">
-                                {{ .token.ExpiresAt.Format "Monday, January 2, 2006 at 3:04 PM" }}
+                                <span data-local-time="true" data-ts="{{ formatRFC3339UTC .token.ExpiresAt }}" data-format="long" title="{{ formatRFC3339UTC .token.ExpiresAt }}">{{ (.token.ExpiresAt.UTC).Format "Monday, January 2, 2006 at 3:04 PM UTC" }}</span>
                             </div>
-                            <small class="text-muted">
-                                ({{ .token.ExpiresAt.Format "2006-01-02 15:04:05 MST" }})
-                            </small>
                         </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <div class="mb-3">
                             <label class="form-label fw-bold">Status:</label>
                             <div>
@@ -67,6 +64,14 @@
                                     <i class="bi bi-check-circle"></i>
                                     Active
                                 </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Request limit:</label>
+                            <div class="text-muted">
+                                {{ formatMaxRequests .token.MaxRequests }}
                             </div>
                         </div>
                     </div>
@@ -134,7 +139,7 @@ client = OpenAI::Client.new(
                         <li>Store this token securely</li>
                         <li>Never share it in public repositories</li>
                         <li>Use environment variables in production</li>
-                        <li>This token will expire on {{ .token.ExpiresAt.Format "January 2, 2006" }}</li>
+                        <li>This token will expire on <span data-local-time="true" data-ts="{{ formatRFC3339UTC .token.ExpiresAt }}" data-format="date_only" title="{{ formatRFC3339UTC .token.ExpiresAt }}">{{ (.token.ExpiresAt.UTC).Format "January 2, 2006 UTC" }}</span></li>
                     </ul>
                 </div>
             </div>

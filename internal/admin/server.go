@@ -48,7 +48,7 @@ type APIClientInterface interface {
 	GetDashboardData(ctx context.Context) (*DashboardData, error)
 	GetProjects(ctx context.Context, page, pageSize int) ([]Project, *Pagination, error)
 	GetTokens(ctx context.Context, projectID string, page, pageSize int) ([]Token, *Pagination, error)
-	CreateToken(ctx context.Context, projectID string, durationMinutes int) (*TokenCreateResponse, error)
+	CreateToken(ctx context.Context, projectID string, durationMinutes int, maxRequests *int) (*TokenCreateResponse, error)
 	GetProject(ctx context.Context, projectID string) (*Project, error)
 	UpdateProject(ctx context.Context, projectID string, name string, openAIAPIKey string, isActive *bool) (*Project, error)
 	DeleteProject(ctx context.Context, projectID string) error
@@ -70,6 +70,8 @@ type Server struct {
 	engine    *gin.Engine
 	apiClient *APIClient
 	logger    *zap.Logger
+
+	assetVersion string
 
 	// For testability: allow injection of token validation logic
 	ValidateTokenWithAPI func(context.Context, string) bool
@@ -136,11 +138,12 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	}
 
 	s := &Server{
-		config:      cfg,
-		engine:      engine,
-		apiClient:   apiClient,
-		logger:      logger,
-		auditLogger: auditLogger,
+		config:       cfg,
+		engine:       engine,
+		apiClient:    apiClient,
+		logger:       logger,
+		assetVersion: strconv.FormatInt(time.Now().Unix(), 10),
+		auditLogger:  auditLogger,
 		server: &http.Server{
 			Addr:         cfg.AdminUI.ListenAddr,
 			Handler:      engine,
@@ -460,7 +463,7 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 
 	var req struct {
 		Name         string `form:"name" binding:"required"`
-		OpenAIAPIKey string `form:"openai_api_key" binding:"required"`
+		OpenAIAPIKey string `form:"openai_api_key"` // Optional - empty means keep existing
 		IsActive     *bool  `form:"is_active"`
 	}
 
@@ -647,6 +650,7 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 	var req struct {
 		ProjectID       string `form:"project_id" binding:"required"`
 		DurationMinutes int    `form:"duration_minutes" binding:"required,min=1,max=525600"`
+		MaxRequests     string `form:"max_requests"`
 	}
 
 	if err := c.ShouldBind(&req); err != nil {
@@ -662,10 +666,13 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 		}
 		projects, _, _ := apiClient.GetProjects(projCtx, 1, 100)
 		c.HTML(http.StatusBadRequest, "tokens/new.html", gin.H{
-			"title":    "Generate Token",
-			"active":   "tokens",
-			"projects": projects,
-			"error":    "Please fill in all required fields correctly",
+			"title":            "Generate Token",
+			"active":           "tokens",
+			"projects":         projects,
+			"project_id":       c.PostForm("project_id"),
+			"duration_minutes": c.PostForm("duration_minutes"),
+			"max_requests":     c.PostForm("max_requests"),
+			"error":            "Please fill in all required fields correctly",
 		})
 		return
 	}
@@ -679,7 +686,32 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 	if ref := c.Request.Referer(); ref != "" {
 		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
 	}
-	token, err := apiClient.CreateToken(ctx, req.ProjectID, req.DurationMinutes)
+	renderNewTokenFormError := func(status int, message string) {
+		projects, _, _ := apiClient.GetProjects(ctx, 1, 100)
+		c.HTML(status, "tokens/new.html", gin.H{
+			"title":            "Generate Token",
+			"active":           "tokens",
+			"projects":         projects,
+			"project_id":       req.ProjectID,
+			"duration_minutes": req.DurationMinutes,
+			"max_requests":     req.MaxRequests,
+			"error":            message,
+		})
+	}
+	var maxRequests *int
+	if strings.TrimSpace(req.MaxRequests) != "" {
+		parsedMaxRequests, err := strconv.Atoi(strings.TrimSpace(req.MaxRequests))
+		if err != nil || parsedMaxRequests < 0 {
+			renderNewTokenFormError(http.StatusBadRequest, "Please fill in all required fields correctly")
+			return
+		}
+		// 0 means unlimited; omit from payload.
+		if parsedMaxRequests > 0 {
+			maxRequests = &parsedMaxRequests
+		}
+	}
+
+	token, err := apiClient.CreateToken(ctx, req.ProjectID, req.DurationMinutes, maxRequests)
 	if err != nil {
 		// forward context as well for consistency in audit logs
 		projCtx := ctx
@@ -753,7 +785,6 @@ func (s *Server) handleTokensShow(c *gin.Context) {
 		"active":      "tokens",
 		"token":       token,
 		"project":     project,
-		"tokenID":     tokenID,
 		"now":         time.Now(),
 		"currentTime": time.Now(),
 	})
@@ -816,6 +847,15 @@ func (s *Server) templateFuncs() template.FuncMap {
 			}
 			return a - b
 		},
+		"formatMaxRequests": func(max *int) string {
+			if max == nil {
+				return "∞"
+			}
+			if *max <= 0 {
+				return "∞"
+			}
+			return strconv.Itoa(*max)
+		},
 		"inc": func(a int) int {
 			return a + 1
 		},
@@ -834,6 +874,9 @@ func (s *Server) templateFuncs() template.FuncMap {
 		},
 		"now": func() time.Time {
 			return time.Now()
+		},
+		"assetVersion": func() string {
+			return s.assetVersion
 		},
 		"eq": func(a, b any) bool {
 			return a == b
@@ -969,6 +1012,15 @@ func (s *Server) templateFuncs() template.FuncMap {
 				dict[key] = values[i+1]
 			}
 			return dict
+		},
+		"formatRFC3339UTC": func(t time.Time) string {
+			return t.UTC().Format(time.RFC3339Nano)
+		},
+		"formatRFC3339UTCPtr": func(t *time.Time) string {
+			if t == nil {
+				return ""
+			}
+			return t.UTC().Format(time.RFC3339Nano)
 		},
 	}
 }
@@ -1320,8 +1372,8 @@ func (s *Server) handleTokensUpdate(c *gin.Context) {
 	}
 
 	var req struct {
-		IsActive    *bool `form:"is_active"`
-		MaxRequests *int  `form:"max_requests"`
+		IsActive    *bool  `form:"is_active"`
+		MaxRequests string `form:"max_requests"`
 	}
 
 	if err := c.ShouldBind(&req); err != nil {
@@ -1342,7 +1394,33 @@ func (s *Server) handleTokensUpdate(c *gin.Context) {
 		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
 	}
 
-	_, err := apiClient.UpdateToken(ctx, tokenID, req.IsActive, req.MaxRequests)
+	var maxRequests *int
+	maxRequestsStr := strings.TrimSpace(req.MaxRequests)
+	if maxRequestsStr == "" {
+		// Empty input means "unset" (unlimited). We send 0 and let the management API
+		// normalize it to nil.
+		zero := 0
+		maxRequests = &zero
+	} else {
+		parsedMaxRequests, err := strconv.Atoi(maxRequestsStr)
+		if err != nil {
+			c.HTML(http.StatusBadRequest, "error.html", gin.H{
+				"error":   "Invalid form data",
+				"details": err.Error(),
+			})
+			return
+		}
+		if parsedMaxRequests < 0 {
+			c.HTML(http.StatusBadRequest, "error.html", gin.H{
+				"error":   "Invalid form data",
+				"details": "max_requests must be >= 0",
+			})
+			return
+		}
+		maxRequests = &parsedMaxRequests
+	}
+
+	_, err := apiClient.UpdateToken(ctx, tokenID, req.IsActive, maxRequests)
 	if err != nil {
 		if strings.Contains(err.Error(), "404") {
 			c.HTML(http.StatusNotFound, "error.html", gin.H{

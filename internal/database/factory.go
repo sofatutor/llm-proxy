@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/database/migrations"
+
+	_ "github.com/lib/pq" // PostgreSQL driver
 )
 
 // DriverType represents the database driver type.
@@ -136,7 +138,9 @@ func newSQLiteDB(config FullConfig) (*DB, error) {
 	}
 
 	// Open connection
-	db, err := sql.Open("sqlite3", config.Path+"?_journal=WAL&_foreign_keys=on")
+	// NOTE: We persist and interpret timestamps in UTC to avoid timezone drift.
+	// SQLite stores timestamps without timezone info; `_loc=UTC` forces parsing as UTC.
+	db, err := sql.Open("sqlite3", config.Path+"?_journal=WAL&_foreign_keys=on&_loc=UTC")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open SQLite database: %w", err)
 	}
@@ -159,17 +163,23 @@ func newSQLiteDB(config FullConfig) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping SQLite database: %w", err)
 	}
 
-	// Run database migrations
-	if err := runMigrationsForDriver(db, "sqlite3"); err != nil {
+	// Initialize SQLite schema (SQLite uses schema.sql, NOT migrations)
+	if err := initSQLiteSchema(db); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("failed to run SQLite migrations: %w", err)
+		return nil, fmt.Errorf("failed to initialize SQLite schema: %w", err)
 	}
 
 	return &DB{db: db, driver: DriverSQLite}, nil
 }
 
 // runMigrationsForDriver runs database migrations for the specified driver.
+// Note: Only PostgreSQL uses migrations. SQLite uses schema.sql directly.
 func runMigrationsForDriver(db *sql.DB, dialect string) error {
+	if dialect == "sqlite3" || dialect == "sqlite" {
+		// SQLite does NOT use migrations - it uses schema.sql directly
+		return fmt.Errorf("SQLite does not use migrations; use initSQLiteSchema instead")
+	}
+
 	migrationsPath, err := getMigrationsPathForDialect(dialect)
 	if err != nil {
 		return fmt.Errorf("failed to get migrations path: %w", err)
@@ -184,9 +194,13 @@ func runMigrationsForDriver(db *sql.DB, dialect string) error {
 }
 
 // getMigrationsPathForDialect returns the path to migrations for the specified dialect.
-// It looks for dialect-specific migrations first (e.g., sql/postgres/), then falls back
-// to the common migrations directory (sql/).
+// Note: Only PostgreSQL uses migrations. SQLite uses schema.sql directly.
 func getMigrationsPathForDialect(dialect string) (string, error) {
+	// SQLite does not use migrations
+	if dialect == "sqlite3" || dialect == "sqlite" {
+		return "", fmt.Errorf("SQLite does not use migrations; use schema.sql instead")
+	}
+
 	// Common base paths to try
 	basePaths := []string{
 		"internal/database/migrations",
@@ -207,26 +221,28 @@ func getMigrationsPathForDialect(dialect string) (string, error) {
 		basePaths = append(basePaths, filepath.Join(filepath.Dir(execDir), "internal/database/migrations"))
 	}
 
-	// Dialect-specific subdirectory (e.g., "postgres", "sqlite3")
-	dialectDir := dialect
-	if dialect == "sqlite3" {
-		dialectDir = "sqlite"
-	}
-
-	// Try each base path
+	// Try each base path for PostgreSQL
 	for _, basePath := range basePaths {
-		// First, try dialect-specific directory
-		dialectPath := filepath.Join(basePath, "sql", dialectDir)
-		if _, err := os.Stat(dialectPath); err == nil {
-			return dialectPath, nil
-		}
-
-		// Fall back to common SQL directory
-		commonPath := filepath.Join(basePath, "sql")
-		if _, err := os.Stat(commonPath); err == nil {
-			return commonPath, nil
+		// PostgreSQL migrations are in sql/postgres/
+		postgresPath := filepath.Join(basePath, "sql", "postgres")
+		if _, err := os.Stat(postgresPath); err == nil {
+			return postgresPath, nil
 		}
 	}
 
 	return "", fmt.Errorf("migrations directory not found for dialect: %s", dialect)
+}
+
+// MigrationsPathForDriver returns the migrations directory for the given driver type.
+// Note: Only PostgreSQL uses migrations. SQLite uses schema.sql directly.
+// This ensures CLI and server code share the same dialect-aware lookup logic.
+func MigrationsPathForDriver(driver DriverType) (string, error) {
+	switch driver {
+	case DriverSQLite:
+		return "", fmt.Errorf("SQLite does not use migrations; use schema.sql instead")
+	case DriverPostgres:
+		return getMigrationsPathForDialect("postgres")
+	default:
+		return getMigrationsPathForDialect(string(driver))
+	}
 }

@@ -20,7 +20,8 @@ test.describe('Cross-Feature Workflow E2E Tests', () => {
     
     // Create test data
     projectId = await seed.createProject('Workflow Test Project', 'sk-workflow-test-key');
-    tokenId = await seed.createToken(projectId, 60);
+    const token = await seed.createToken(projectId, 60);
+    tokenId = token.id;
   });
 
   test.afterEach(async () => {
@@ -116,7 +117,7 @@ test.describe('Cross-Feature Workflow E2E Tests', () => {
 
   test('should handle bulk operations → audit trail workflow', async ({ page }) => {
     // Step 1: Create multiple tokens for the project
-    const additionalTokens = [];
+    const additionalTokens: Array<{ id: string; token: string }> = [];
     for (let i = 0; i < 2; i++) {
       const token = await seed.createToken(projectId, 30);
       additionalTokens.push(token);
@@ -180,11 +181,11 @@ test.describe('Cross-Feature Workflow E2E Tests', () => {
     // Filter tokens by project (if supported) or verify via API
     for (const token of additionalTokens) {
       try {
-        const tokenInfo = await seed.getToken(token);
+        const tokenInfo = await seed.getToken(token.id);
         expect(tokenInfo.is_active).toBe(false);
       } catch (error) {
         // Token might be deleted or API might return 404 for revoked tokens
-        console.log(`Token ${token} verification: ${error}`);
+        console.log(`Token ${token.id} verification: ${error}`);
       }
     }
   });
@@ -226,9 +227,9 @@ test.describe('Cross-Feature Workflow E2E Tests', () => {
   test('should handle search and filtering in audit events during workflows', async ({ page }) => {
     // Step 1: Perform multiple actions to create diverse audit events
     await seed.revokeToken(tokenId);
-    const newTokenId = await seed.createToken(projectId, 45);
+    const newToken = await seed.createToken(projectId, 45);
     await seed.updateProject(projectId, { is_active: false });
-    await seed.revokeToken(newTokenId);
+    await seed.revokeToken(newToken.id);
     
     // Step 2: Test audit search functionality with workflow data
     await page.goto('/audit');
@@ -278,13 +279,13 @@ test.describe('Cross-Feature Workflow E2E Tests', () => {
     
     // Step 2: Perform a complete workflow
     // Create token
-    const workflowTokenId = await seed.createToken(projectId, 30);
+    const workflowToken = await seed.createToken(projectId, 30);
     
     // Update project
     await seed.updateProject(projectId, { name: 'Updated Workflow Project' });
     
     // Revoke token
-    await seed.revokeToken(workflowTokenId);
+    await seed.revokeToken(workflowToken.id);
     
     // Bulk revoke remaining tokens
     await seed.revokeProjectTokens(projectId);

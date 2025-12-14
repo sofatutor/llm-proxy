@@ -275,8 +275,10 @@ func TestServer_Shutdown_NoServer(t *testing.T) {
 // Only implements methods needed for handler coverage
 
 type mockAPIClient struct {
-	DashboardData *DashboardData
-	DashboardErr  error
+	DashboardData         *DashboardData
+	DashboardErr          error
+	LastCreateMaxRequests *int
+	LastUpdateMaxRequests *int
 }
 
 func (m *mockAPIClient) GetDashboardData(ctx context.Context) (*DashboardData, error) {
@@ -297,10 +299,11 @@ func (m *mockAPIClient) GetTokens(ctx context.Context, projectID string, page, p
 	return []Token{{ProjectID: "1", IsActive: true}}, &Pagination{Page: page, PageSize: pageSize, TotalItems: 1, TotalPages: 1, HasNext: false, HasPrev: false}, nil
 }
 
-func (m *mockAPIClient) CreateToken(ctx context.Context, projectID string, durationMinutes int) (*TokenCreateResponse, error) {
+func (m *mockAPIClient) CreateToken(ctx context.Context, projectID string, durationMinutes int, maxRequests *int) (*TokenCreateResponse, error) {
 	if m.DashboardErr != nil {
 		return nil, m.DashboardErr
 	}
+	m.LastCreateMaxRequests = maxRequests
 	return &TokenCreateResponse{Token: "tok-1234", ExpiresAt: time.Now().Add(time.Duration(durationMinutes) * time.Minute)}, nil
 }
 
@@ -353,14 +356,15 @@ func (m *mockAPIClient) GetToken(ctx context.Context, tokenID string) (*Token, e
 	if m.DashboardErr != nil {
 		return nil, m.DashboardErr
 	}
-	return &Token{TokenID: tokenID, ProjectID: "1", IsActive: true}, nil
+	return &Token{ID: tokenID, ProjectID: "1", IsActive: true}, nil
 }
 
 func (m *mockAPIClient) UpdateToken(ctx context.Context, tokenID string, isActive *bool, maxRequests *int) (*Token, error) {
 	if m.DashboardErr != nil {
 		return nil, m.DashboardErr
 	}
-	token := &Token{TokenID: tokenID, ProjectID: "1", IsActive: true}
+	m.LastUpdateMaxRequests = maxRequests
+	token := &Token{ID: tokenID, ProjectID: "1", IsActive: true}
 	if isActive != nil {
 		token.IsActive = *isActive
 	}
@@ -674,13 +678,13 @@ func TestServer_HandleTokensCreate(t *testing.T) {
 	s.engine.SetFuncMap(template.FuncMap{})
 	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens", "*.html"))
 
+	client := &mockAPIClient{}
 	s.engine.POST("/tokens", func(c *gin.Context) {
-		var client APIClientInterface = &mockAPIClient{}
 		c.Set("apiClient", client)
 		s.handleTokensCreate(c)
 	})
 
-	form := strings.NewReader("project_id=1&duration_minutes=1440")
+	form := strings.NewReader("project_id=1&duration_minutes=1440&max_requests=25")
 	req, _ := http.NewRequest("POST", "/tokens", form)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
@@ -688,6 +692,44 @@ func TestServer_HandleTokensCreate(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	if client.LastCreateMaxRequests == nil || *client.LastCreateMaxRequests != 25 {
+		t.Fatalf("expected max_requests to be forwarded, got %v", client.LastCreateMaxRequests)
+	}
+}
+
+func TestServer_HandleTokensCreate_AllowsBlankMaxRequests(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tokensFile := filepath.Join(testTemplateDir(), "tokens", "new.html")
+	_ = os.WriteFile(tokensFile, []byte("<html><body>tokens new</body></html>"), 0644)
+	defer func() {
+		if err := os.Remove(tokensFile); err != nil {
+			t.Errorf("failed to remove %s: %v", tokensFile, err)
+		}
+	}()
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "tokens", "*.html"))
+
+	client := &mockAPIClient{}
+	s.engine.POST("/tokens", func(c *gin.Context) {
+		c.Set("apiClient", client)
+		s.handleTokensCreate(c)
+	})
+
+	form := strings.NewReader("project_id=1&duration_minutes=1440&max_requests=")
+	req, _ := http.NewRequest("POST", "/tokens", form)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	s.engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if client.LastCreateMaxRequests != nil {
+		t.Fatalf("expected max_requests to be omitted (nil), got %v", client.LastCreateMaxRequests)
 	}
 }
 
@@ -1416,6 +1458,38 @@ func TestServer_HandleTokensUpdate_BadRequest(t *testing.T) {
 	}
 }
 
+func TestServer_HandleTokensUpdate_AllowsEmptyMaxRequests_Unlimited(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	errTpl := filepath.Join(testTemplateDir(), "error.html")
+	if err := os.WriteFile(errTpl, []byte("<html><body>error</body></html>"), 0644); err != nil {
+		t.Fatalf("write error.html: %v", err)
+	}
+	defer func() { _ = os.Remove(errTpl) }()
+
+	s := &Server{engine: gin.New()}
+	s.engine.SetFuncMap(template.FuncMap{})
+	s.engine.LoadHTMLGlob(filepath.Join(testTemplateDir(), "*.html"))
+
+	client := &mockAPIClient{}
+	s.engine.PUT("/tokens/:token", func(c *gin.Context) {
+		c.Set("apiClient", client)
+		s.handleTokensUpdate(c)
+	})
+
+	form := strings.NewReader("max_requests=")
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("PUT", "/tokens/tok-1", form)
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	s.engine.ServeHTTP(w, r)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d", w.Code)
+	}
+	if client.LastUpdateMaxRequests == nil || *client.LastUpdateMaxRequests != 0 {
+		t.Fatalf("expected max_requests=0 sentinel for unlimited, got %v", client.LastUpdateMaxRequests)
+	}
+}
+
 func TestServer_TokenAndProjectHandlers_MissingParams(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	// error.html template for 400s
@@ -1762,6 +1836,17 @@ func TestServer_templateFuncs(t *testing.T) {
 	}
 	if !funcs["not"].(func(bool) bool)(false) {
 		t.Error("not(false) = false, want true")
+	}
+	if got := funcs["formatMaxRequests"].(func(*int) string)(nil); got != "∞" {
+		t.Errorf("formatMaxRequests(nil) = %q, want ∞", got)
+	}
+	max := 100
+	if got := funcs["formatMaxRequests"].(func(*int) string)(&max); got != "100" {
+		t.Errorf("formatMaxRequests(100) = %q, want 100", got)
+	}
+	zero := 0
+	if got := funcs["formatMaxRequests"].(func(*int) string)(&zero); got != "∞" {
+		t.Errorf("formatMaxRequests(0) = %q, want ∞", got)
 	}
 	if got := funcs["obfuscateAPIKey"].(func(string) string)("sk-1234567890abcdef"); !strings.HasPrefix(got, "sk-1234") {
 		t.Errorf("obfuscateAPIKey() = %q, want prefix sk-1234", got)

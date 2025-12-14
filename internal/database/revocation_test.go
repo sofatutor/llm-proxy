@@ -60,7 +60,7 @@ func TestDBTokenStoreAdapter_RevokeToken(t *testing.T) {
 
 			// If successful, verify token is deactivated
 			if !tt.wantErr && err == nil {
-				dbToken, getErr := db.GetTokenByID(ctx, tt.tokenID)
+				dbToken, getErr := db.GetTokenByToken(ctx, tt.tokenID)
 				if getErr != nil {
 					t.Errorf("Failed to get revoked token: %v", getErr)
 				} else if dbToken.IsActive {
@@ -269,7 +269,7 @@ func TestDBTokenStoreAdapter_RevokeExpiredTokens(t *testing.T) {
 	// Verify expired tokens are revoked
 	expiredTokens := []string{"token-expired-1", "token-expired-2"}
 	for _, tokenID := range expiredTokens {
-		dbToken, getErr := db.GetTokenByID(ctx, tokenID)
+		dbToken, getErr := db.GetTokenByToken(ctx, tokenID)
 		if getErr != nil {
 			t.Errorf("Failed to get token %s: %v", tokenID, getErr)
 		} else if dbToken.IsActive {
@@ -280,7 +280,7 @@ func TestDBTokenStoreAdapter_RevokeExpiredTokens(t *testing.T) {
 	// Verify non-expired tokens are still active
 	activeTokens := []string{"token-active", "token-no-expiry"}
 	for _, tokenID := range activeTokens {
-		dbToken, getErr := db.GetTokenByID(ctx, tokenID)
+		dbToken, getErr := db.GetTokenByToken(ctx, tokenID)
 		if getErr != nil {
 			t.Errorf("Failed to get token %s: %v", tokenID, getErr)
 		} else if !dbToken.IsActive {
@@ -329,7 +329,7 @@ func TestDBTokenStoreAdapter_RevokeToken_Idempotency(t *testing.T) {
 	}
 
 	// Get the deactivated_at time from first revocation
-	firstRevoke, err := db.GetTokenByID(ctx, "test-token-idem")
+	firstRevoke, err := db.GetTokenByToken(ctx, "test-token-idem")
 	if err != nil {
 		t.Fatalf("Failed to get token after first revocation: %v", err)
 	}
@@ -341,7 +341,7 @@ func TestDBTokenStoreAdapter_RevokeToken_Idempotency(t *testing.T) {
 	}
 
 	// Verify deactivated_at didn't change
-	secondRevoke, err := db.GetTokenByID(ctx, "test-token-idem")
+	secondRevoke, err := db.GetTokenByToken(ctx, "test-token-idem")
 	if err != nil {
 		t.Fatalf("Failed to get token after second revocation: %v", err)
 	}
@@ -406,7 +406,7 @@ func TestDBTokenStoreAdapter_DeleteToken(t *testing.T) {
 
 			// If successful deletion of existing token, verify it's completely gone
 			if !tt.wantErr && err == nil && tt.tokenID == "test-token-delete" {
-				_, getErr := db.GetTokenByID(ctx, tt.tokenID)
+				_, getErr := db.GetTokenByToken(ctx, tt.tokenID)
 				if getErr == nil {
 					t.Error("Token should be completely deleted from database")
 				}
@@ -476,14 +476,14 @@ func TestDBTokenStoreAdapter_DeleteToken_Comprehensive(t *testing.T) {
 
 	// Verify tokens are actually deleted
 	for _, tokenID := range []string{"token-del-1", "token-del-2"} {
-		_, getErr := db.GetTokenByID(ctx, tokenID)
+		_, getErr := db.GetTokenByToken(ctx, tokenID)
 		if getErr == nil {
 			t.Errorf("Token %s should be completely deleted from database", tokenID)
 		}
 	}
 
 	// Verify remaining token is still there
-	remainingToken, err := db.GetTokenByID(ctx, "token-del-3")
+	remainingToken, err := db.GetTokenByToken(ctx, "token-del-3")
 	if err != nil {
 		t.Errorf("Remaining token should still exist: %v", err)
 	} else if remainingToken.Token != "token-del-3" {
@@ -551,7 +551,7 @@ func TestDBTokenStoreAdapter_RevokeExpiredTokens_EdgeCases(t *testing.T) {
 		t.Fatalf("Failed to create test project: %v", err)
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	veryOld := now.Add(-24 * time.Hour)
 	barelyExpired := now.Add(-1 * time.Millisecond)
 
