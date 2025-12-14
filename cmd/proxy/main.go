@@ -339,11 +339,82 @@ func runDispatcher(cmd *cobra.Command, args []string) {
 	// Determine event bus backend
 	busBackend := os.Getenv("LLM_PROXY_EVENT_BUS")
 	if busBackend == "" {
-		busBackend = "redis"
+		busBackend = "redis-streams" // Default to Redis Streams for durability
 	}
 
 	var eventBus eventbus.EventBus
 	switch busBackend {
+	case "redis-streams":
+		redisAddr := os.Getenv("REDIS_ADDR")
+		if redisAddr == "" {
+			redisAddr = "localhost:6379"
+		}
+		redisDB := 0
+		if dbStr := os.Getenv("REDIS_DB"); dbStr != "" {
+			if dbVal, err := strconv.Atoi(dbStr); err == nil {
+				redisDB = dbVal
+			}
+		}
+		client := redis.NewClient(&redis.Options{
+			Addr: redisAddr,
+			DB:   redisDB,
+		})
+
+		// Configure Redis Streams
+		config := eventbus.DefaultRedisStreamsConfig()
+		if streamKey := os.Getenv("REDIS_STREAM_KEY"); streamKey != "" {
+			config.StreamKey = streamKey
+		}
+		if consumerGroup := os.Getenv("REDIS_CONSUMER_GROUP"); consumerGroup != "" {
+			config.ConsumerGroup = consumerGroup
+		}
+		if consumerName := os.Getenv("REDIS_CONSUMER_NAME"); consumerName != "" {
+			config.ConsumerName = consumerName
+		} else {
+			// Generate unique consumer name: dispatcher-{service}-{hostname}-{pid}
+			hostname, _ := os.Hostname()
+			if hostname == "" {
+				hostname = "unknown"
+			}
+			config.ConsumerName = fmt.Sprintf("dispatcher-%s-%s-%d", dispatcherService, hostname, os.Getpid())
+		}
+		if maxLenStr := os.Getenv("REDIS_STREAM_MAX_LEN"); maxLenStr != "" {
+			if maxLen, err := strconv.ParseInt(maxLenStr, 10, 64); err == nil {
+				config.MaxLen = maxLen
+			}
+		}
+		if blockTimeStr := os.Getenv("REDIS_STREAM_BLOCK_TIME"); blockTimeStr != "" {
+			if blockTime, err := time.ParseDuration(blockTimeStr); err == nil {
+				config.BlockTimeout = blockTime
+			}
+		}
+		if claimTimeStr := os.Getenv("REDIS_STREAM_CLAIM_TIME"); claimTimeStr != "" {
+			if claimTime, err := time.ParseDuration(claimTimeStr); err == nil {
+				config.ClaimMinIdleTime = claimTime
+			}
+		}
+		if batchSizeStr := os.Getenv("REDIS_STREAM_BATCH_SIZE"); batchSizeStr != "" {
+			if batchSize, err := strconv.ParseInt(batchSizeStr, 10, 64); err == nil {
+				config.BatchSize = batchSize
+			}
+		}
+
+		adapter := &eventbus.RedisStreamsClientAdapter{Client: client}
+		streamsBus := eventbus.NewRedisStreamsEventBus(adapter, config)
+
+		// Ensure consumer group exists
+		if err := streamsBus.EnsureConsumerGroup(ctx); err != nil {
+			logger.Fatal("Failed to ensure consumer group", zap.Error(err))
+		}
+
+		eventBus = streamsBus
+		logger.Info("Using Redis Streams event bus",
+			zap.String("addr", redisAddr),
+			zap.Int("db", redisDB),
+			zap.String("stream_key", config.StreamKey),
+			zap.String("consumer_group", config.ConsumerGroup),
+			zap.String("consumer_name", config.ConsumerName))
+
 	case "redis":
 		redisAddr := os.Getenv("REDIS_ADDR")
 		if redisAddr == "" {
@@ -361,7 +432,7 @@ func runDispatcher(cmd *cobra.Command, args []string) {
 		})
 		adapter := &eventbus.RedisGoClientAdapter{Client: client}
 		eventBus = eventbus.NewRedisEventBusLog(adapter, "llm-proxy-events", 24*time.Hour, 100000)
-		logger.Info("Using Redis event bus", zap.String("addr", redisAddr), zap.Int("db", redisDB))
+		logger.Info("Using Redis LIST event bus (legacy)", zap.String("addr", redisAddr), zap.Int("db", redisDB))
 	case "memory":
 		if dispatcherService != "file" {
 			logger.Fatal("In-memory event bus only works for single-process file logging. Use Redis for multi-process/event dispatching.")

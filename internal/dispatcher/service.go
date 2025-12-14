@@ -44,6 +44,10 @@ type Service struct {
 	eventsProcessed int64
 	eventsDropped   int64
 	eventsSent      int64
+	lastProcessedAt time.Time
+	processingRate  float64 // events per second
+	lagCount        int64   // current lag (pending messages)
+	streamLength    int64   // total messages in stream
 }
 
 // NewService creates a new dispatcher service
@@ -220,6 +224,11 @@ func (s *Service) EventBus() eventbus.EventBus {
 func (s *Service) processEvents(ctx context.Context) {
 	defer s.wg.Done()
 
+	// Start metrics tracking
+	metricsTicker := time.NewTicker(10 * time.Second)
+	defer metricsTicker.Stop()
+	go s.trackMetrics(ctx, metricsTicker.C)
+
 	sub := s.eventBus.Subscribe()
 	batch := make([]EventPayload, 0, s.config.BatchSize)
 	ticker := time.NewTicker(s.config.FlushInterval)
@@ -300,6 +309,7 @@ func (s *Service) processEvents(ctx context.Context) {
 						batch = append(batch, *payload)
 						s.mu.Lock()
 						s.eventsProcessed++
+						s.lastProcessedAt = time.Now()
 						s.mu.Unlock()
 						if evt.LogID > maxLogID {
 							maxLogID = evt.LogID
@@ -353,6 +363,7 @@ func (s *Service) processEvents(ctx context.Context) {
 			batch = append(batch, *payload)
 			s.mu.Lock()
 			s.eventsProcessed++
+			s.lastProcessedAt = time.Now()
 			s.mu.Unlock()
 
 			// Send batch if it's full
@@ -378,7 +389,7 @@ func (s *Service) processEvents(ctx context.Context) {
 	}
 }
 
-// sendBatch sends a batch of events to the configured backend with retry logic
+// sendBatch sends a batch of events to the configured backend with exponential backoff retry logic
 func (s *Service) sendBatch(ctx context.Context, batch []EventPayload) {
 	for attempt := 0; attempt <= s.config.RetryAttempts; attempt++ {
 		err := s.config.Plugin.SendEvents(ctx, batch)
@@ -392,9 +403,23 @@ func (s *Service) sendBatch(ctx context.Context, batch []EventPayload) {
 			return
 		}
 
+		// Check for permanent errors that should not be retried
+		if _, ok := err.(*PermanentBackendError); ok {
+			s.logger.Warn("Permanent backend error, skipping batch", zap.Error(err), zap.Int("batch_size", len(batch)))
+			s.mu.Lock()
+			s.eventsDropped += int64(len(batch))
+			s.mu.Unlock()
+			return
+		}
+
 		if attempt < s.config.RetryAttempts {
-			backoff := time.Duration(attempt+1) * s.config.RetryBackoff
-			s.logger.Warn("Failed to send batch, retrying",
+			// Exponential backoff: 2^attempt * base backoff
+			backoff := time.Duration(1<<uint(attempt)) * s.config.RetryBackoff
+			// Cap at 30 seconds
+			if backoff > 30*time.Second {
+				backoff = 30 * time.Second
+			}
+			s.logger.Warn("Failed to send batch, retrying with exponential backoff",
 				zap.Error(err),
 				zap.Int("attempt", attempt+1),
 				zap.Duration("backoff", backoff))
@@ -417,7 +442,7 @@ func (s *Service) sendBatch(ctx context.Context, batch []EventPayload) {
 	}
 }
 
-// sendBatchWithResult sends a batch of events to the configured backend with retry logic and returns the result
+// sendBatchWithResult sends a batch of events to the configured backend with exponential backoff retry logic and returns the result
 func (s *Service) sendBatchWithResult(ctx context.Context, batch []EventPayload) error {
 	for attempt := 0; attempt <= s.config.RetryAttempts; attempt++ {
 		err := s.config.Plugin.SendEvents(ctx, batch)
@@ -439,8 +464,13 @@ func (s *Service) sendBatchWithResult(ctx context.Context, batch []EventPayload)
 			return nil // treat as delivered
 		}
 		if attempt < s.config.RetryAttempts {
-			backoff := time.Duration(attempt+1) * s.config.RetryBackoff
-			s.logger.Warn("Failed to send batch, retrying",
+			// Exponential backoff: 2^attempt * base backoff
+			backoff := time.Duration(1<<uint(attempt)) * s.config.RetryBackoff
+			// Cap at 30 seconds
+			if backoff > 30*time.Second {
+				backoff = 30 * time.Second
+			}
+			s.logger.Warn("Failed to send batch, retrying with exponential backoff",
 				zap.Error(err),
 				zap.Int("attempt", attempt+1),
 				zap.Duration("backoff", backoff))
@@ -464,9 +494,131 @@ func (s *Service) sendBatchWithResult(ctx context.Context, batch []EventPayload)
 	return fmt.Errorf("unreachable")
 }
 
+// trackMetrics periodically updates metrics like processing rate and lag
+func (s *Service) trackMetrics(ctx context.Context, ticker <-chan time.Time) {
+	lastProcessed := int64(0)
+	lastTime := time.Now()
+
+	for {
+		select {
+		case <-ticker:
+			now := time.Now()
+			s.mu.Lock()
+			currentProcessed := s.eventsProcessed
+			s.mu.Unlock()
+
+			// Calculate processing rate
+			elapsed := now.Sub(lastTime).Seconds()
+			if elapsed > 0 {
+				rate := float64(currentProcessed-lastProcessed) / elapsed
+				s.mu.Lock()
+				s.processingRate = rate
+				s.mu.Unlock()
+			}
+
+			lastProcessed = currentProcessed
+			lastTime = now
+
+			// Update lag metrics for Redis Streams
+			if streamsBus, ok := s.eventBus.(*eventbus.RedisStreamsEventBus); ok {
+				if pending, err := streamsBus.PendingCount(ctx); err == nil {
+					s.mu.Lock()
+					s.lagCount = pending
+					s.mu.Unlock()
+				}
+				if length, err := streamsBus.StreamLength(ctx); err == nil {
+					s.mu.Lock()
+					s.streamLength = length
+					s.mu.Unlock()
+				}
+			}
+
+		case <-s.stopCh:
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
 // Stats returns service statistics
 func (s *Service) Stats() (processed, dropped, sent int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.eventsProcessed, s.eventsDropped, s.eventsSent
+}
+
+// DetailedStats returns detailed service statistics including lag and rate
+func (s *Service) DetailedStats() map[string]interface{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return map[string]interface{}{
+		"events_processed":  s.eventsProcessed,
+		"events_dropped":    s.eventsDropped,
+		"events_sent":       s.eventsSent,
+		"processing_rate":   s.processingRate,
+		"lag_count":         s.lagCount,
+		"stream_length":     s.streamLength,
+		"last_processed_at": s.lastProcessedAt,
+	}
+}
+
+// HealthStatus represents the health status of the dispatcher
+type HealthStatus struct {
+	Healthy         bool      `json:"healthy"`
+	Status          string    `json:"status"`
+	EventsProcessed int64     `json:"events_processed"`
+	EventsDropped   int64     `json:"events_dropped"`
+	EventsSent      int64     `json:"events_sent"`
+	ProcessingRate  float64   `json:"processing_rate"`
+	LagCount        int64     `json:"lag_count"`
+	StreamLength    int64     `json:"stream_length"`
+	LastProcessedAt time.Time `json:"last_processed_at"`
+	Message         string    `json:"message,omitempty"`
+}
+
+// Health returns the health status of the dispatcher
+func (s *Service) Health(ctx context.Context) HealthStatus {
+	s.mu.Lock()
+	stats := HealthStatus{
+		EventsProcessed: s.eventsProcessed,
+		EventsDropped:   s.eventsDropped,
+		EventsSent:      s.eventsSent,
+		ProcessingRate:  s.processingRate,
+		LagCount:        s.lagCount,
+		StreamLength:    s.streamLength,
+		LastProcessedAt: s.lastProcessedAt,
+	}
+	s.mu.Unlock()
+
+	// Check if we're using Redis Streams
+	if streamsBus, ok := s.eventBus.(*eventbus.RedisStreamsEventBus); ok {
+		// Update lag and stream length from Redis
+		if pending, err := streamsBus.PendingCount(ctx); err == nil {
+			stats.LagCount = pending
+		}
+		if length, err := streamsBus.StreamLength(ctx); err == nil {
+			stats.StreamLength = length
+		}
+
+		// Consider unhealthy if lag is very high (>10000 messages)
+		if stats.LagCount > 10000 {
+			stats.Healthy = false
+			stats.Status = "unhealthy"
+			stats.Message = fmt.Sprintf("High lag: %d pending messages", stats.LagCount)
+			return stats
+		}
+
+		// Consider unhealthy if we haven't processed anything in the last 5 minutes and there are pending messages
+		if !stats.LastProcessedAt.IsZero() && time.Since(stats.LastProcessedAt) > 5*time.Minute && stats.LagCount > 0 {
+			stats.Healthy = false
+			stats.Status = "unhealthy"
+			stats.Message = fmt.Sprintf("No processing activity for %v with %d pending messages", time.Since(stats.LastProcessedAt), stats.LagCount)
+			return stats
+		}
+	}
+
+	stats.Healthy = true
+	stats.Status = "healthy"
+	return stats
 }
