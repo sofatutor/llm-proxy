@@ -52,7 +52,7 @@
                         <div class="mb-3">
                             <label class="form-label fw-bold">Expires:</label>
                             <div class="text-muted">
-                                <span data-local-time="true" data-ts="{{ formatRFC3339UTC .token.ExpiresAt }}" data-format="long" title="{{ formatRFC3339UTC .token.ExpiresAt }}">{{ .token.ExpiresAt.Format "Monday, January 2, 2006 15:04" }}</span>
+                                <span data-local-time="true" data-ts="{{ formatRFC3339UTC .token.ExpiresAt }}" data-format="long" title="{{ formatRFC3339UTC .token.ExpiresAt }}">{{ .token.ExpiresAt.UTC.Format "Monday, January 2, 2006 15:04 UTC" }}</span>
                             </div>
                         </div>
                     </div>
@@ -139,7 +139,7 @@ client = OpenAI::Client.new(
                         <li>Store this token securely</li>
                         <li>Never share it in public repositories</li>
                         <li>Use environment variables in production</li>
-                        <li>This token will expire on <span data-local-time="true" data-ts="{{ formatRFC3339UTC .token.ExpiresAt }}" data-format="date_only" title="{{ formatRFC3339UTC .token.ExpiresAt }}">{{ .token.ExpiresAt.Format "January 2, 2006" }}</span></li>
+                        <li>This token will expire on <span data-local-time="true" data-ts="{{ formatRFC3339UTC .token.ExpiresAt }}" data-format="date_only" title="{{ formatRFC3339UTC .token.ExpiresAt }}">{{ .token.ExpiresAt.UTC.Format "January 2, 2006 UTC" }}</span></li>
                     </ul>
                 </div>
             </div>

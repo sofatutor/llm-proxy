@@ -686,35 +686,23 @@ func (s *Server) handleTokensCreate(c *gin.Context) {
 	if ref := c.Request.Referer(); ref != "" {
 		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
 	}
+	renderNewTokenFormError := func(status int, message string) {
+		projects, _, _ := apiClient.GetProjects(ctx, 1, 100)
+		c.HTML(status, "tokens/new.html", gin.H{
+			"title":            "Generate Token",
+			"active":           "tokens",
+			"projects":         projects,
+			"project_id":       req.ProjectID,
+			"duration_minutes": req.DurationMinutes,
+			"max_requests":     req.MaxRequests,
+			"error":            message,
+		})
+	}
 	var maxRequests *int
 	if strings.TrimSpace(req.MaxRequests) != "" {
 		parsedMaxRequests, err := strconv.Atoi(strings.TrimSpace(req.MaxRequests))
-		if err != nil {
-			projCtx := ctx
-			projects, _, _ := apiClient.GetProjects(projCtx, 1, 100)
-			c.HTML(http.StatusBadRequest, "tokens/new.html", gin.H{
-				"title":            "Generate Token",
-				"active":           "tokens",
-				"projects":         projects,
-				"project_id":       req.ProjectID,
-				"duration_minutes": req.DurationMinutes,
-				"max_requests":     req.MaxRequests,
-				"error":            "Please fill in all required fields correctly",
-			})
-			return
-		}
-		if parsedMaxRequests < 0 {
-			projCtx := ctx
-			projects, _, _ := apiClient.GetProjects(projCtx, 1, 100)
-			c.HTML(http.StatusBadRequest, "tokens/new.html", gin.H{
-				"title":            "Generate Token",
-				"active":           "tokens",
-				"projects":         projects,
-				"project_id":       req.ProjectID,
-				"duration_minutes": req.DurationMinutes,
-				"max_requests":     req.MaxRequests,
-				"error":            "Please fill in all required fields correctly",
-			})
+		if err != nil || parsedMaxRequests < 0 {
+			renderNewTokenFormError(http.StatusBadRequest, "Please fill in all required fields correctly")
 			return
 		}
 		// 0 means unlimited; omit from payload.

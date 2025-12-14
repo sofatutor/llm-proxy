@@ -54,7 +54,7 @@
                                     {{ end }}
                                 </td>
                                 <td>
-                                    <small class="text-muted"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .CreatedAt }}" data-format="ymd_hm" title="{{ formatRFC3339UTC .CreatedAt }}">{{ .CreatedAt.Format "2006-01-02 15:04" }}</span></small>
+                                    <small class="text-muted"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .CreatedAt }}" data-format="ymd_hm" title="{{ formatRFC3339UTC .CreatedAt }}">{{ .CreatedAt.UTC.Format "2006-01-02 15:04 UTC" }}</span></small>
                                 </td>
                                 <td class="text-end">
                                     <div class="btn-group btn-group-sm">

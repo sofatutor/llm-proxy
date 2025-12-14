@@ -111,20 +111,20 @@
                                 <td>
                                     {{ if .ExpiresAt }}
                                         {{ if lt .ExpiresAt.Unix now.Unix }}
-                                            <small class="text-danger"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .ExpiresAt }}" data-format="ymd_hm" title="{{ formatRFC3339UTC .ExpiresAt }}">{{ .ExpiresAt.Format "2006-01-02 15:04" }}</span></small>
+                                            <small class="text-danger"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .ExpiresAt }}" data-format="ymd_hm" title="{{ formatRFC3339UTC .ExpiresAt }}">{{ .ExpiresAt.UTC.Format "2006-01-02 15:04 UTC" }}</span></small>
                                         {{ else }}
-                                            <small class="text-muted"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .ExpiresAt }}" data-format="ymd_hm" title="{{ formatRFC3339UTC .ExpiresAt }}">{{ .ExpiresAt.Format "2006-01-02 15:04" }}</span></small>
+                                            <small class="text-muted"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .ExpiresAt }}" data-format="ymd_hm" title="{{ formatRFC3339UTC .ExpiresAt }}">{{ .ExpiresAt.UTC.Format "2006-01-02 15:04 UTC" }}</span></small>
                                         {{ end }}
                                     {{ else }}
                                         <small class="text-muted">Never</small>
                                     {{ end }}
                                 </td>
                                 <td>
-                                    <small class="text-muted"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .CreatedAt }}" data-format="ymd_hm" title="{{ formatRFC3339UTC .CreatedAt }}">{{ .CreatedAt.Format "2006-01-02 15:04" }}</span></small>
+                                    <small class="text-muted"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .CreatedAt }}" data-format="ymd_hm" title="{{ formatRFC3339UTC .CreatedAt }}">{{ .CreatedAt.UTC.Format "2006-01-02 15:04 UTC" }}</span></small>
                                 </td>
                                 <td>
                                     {{ if .LastUsedAt }}
-                                        <small class="text-muted"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .LastUsedAt }}" data-format="ymd_hm" title="{{ formatRFC3339UTC .LastUsedAt }}">{{ .LastUsedAt.Format "2006-01-02 15:04" }}</span></small>
+                                        <small class="text-muted"><span data-local-time="true" data-ts="{{ formatRFC3339UTC .LastUsedAt }}" data-format="ymd_hm" title="{{ formatRFC3339UTC .LastUsedAt }}">{{ .LastUsedAt.UTC.Format "2006-01-02 15:04 UTC" }}</span></small>
                                     {{ else }}
                                     <small class="text-muted">Never</small>
                                     {{ end }}
