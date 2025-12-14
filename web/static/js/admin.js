@@ -196,6 +196,9 @@ document.addEventListener('DOMContentLoaded', function() {
             const iso = serverTime.toISOString();
             serverTimeSpan.title = iso;
             serverTimeSpan.setAttribute('data-ts', iso);
+
+            // Re-localize so text stays in sync with updated attributes.
+            localizeTimestamps();
         }
     }
     if (backendStatus) {
