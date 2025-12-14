@@ -14,6 +14,17 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	// maxBackoffDuration is the maximum backoff duration for retries
+	maxBackoffDuration = 30 * time.Second
+	// maxHealthyLagCount is the maximum number of pending messages before the dispatcher is considered unhealthy
+	maxHealthyLagCount = 10000
+	// maxInactivityDuration is the maximum time without processing activity before the dispatcher is considered unhealthy
+	maxInactivityDuration = 5 * time.Minute
+	// metricsUpdateInterval is the interval at which metrics are updated
+	metricsUpdateInterval = 10 * time.Second
+)
+
 // Config holds configuration for the dispatcher service
 type Config struct {
 	BufferSize       int
@@ -225,7 +236,7 @@ func (s *Service) processEvents(ctx context.Context) {
 	defer s.wg.Done()
 
 	// Start metrics tracking
-	metricsTicker := time.NewTicker(10 * time.Second)
+	metricsTicker := time.NewTicker(metricsUpdateInterval)
 	defer metricsTicker.Stop()
 	go s.trackMetrics(ctx, metricsTicker.C)
 
@@ -416,7 +427,7 @@ func (s *Service) sendBatch(ctx context.Context, batch []EventPayload) {
 			// Exponential backoff: 2^attempt * base backoff
 			backoff := time.Duration(1<<uint(attempt)) * s.config.RetryBackoff
 			// Cap at 30 seconds
-			if backoff > 30*time.Second {
+			if backoff > maxBackoffDuration {
 				backoff = 30 * time.Second
 			}
 			s.logger.Warn("Failed to send batch, retrying with exponential backoff",
@@ -467,7 +478,7 @@ func (s *Service) sendBatchWithResult(ctx context.Context, batch []EventPayload)
 			// Exponential backoff: 2^attempt * base backoff
 			backoff := time.Duration(1<<uint(attempt)) * s.config.RetryBackoff
 			// Cap at 30 seconds
-			if backoff > 30*time.Second {
+			if backoff > maxBackoffDuration {
 				backoff = 30 * time.Second
 			}
 			s.logger.Warn("Failed to send batch, retrying with exponential backoff",
@@ -601,16 +612,16 @@ func (s *Service) Health(ctx context.Context) HealthStatus {
 			stats.StreamLength = length
 		}
 
-		// Consider unhealthy if lag is very high (>10000 messages)
-		if stats.LagCount > 10000 {
+		// Consider unhealthy if lag is very high
+		if stats.LagCount > maxHealthyLagCount {
 			stats.Healthy = false
 			stats.Status = "unhealthy"
 			stats.Message = fmt.Sprintf("High lag: %d pending messages", stats.LagCount)
 			return stats
 		}
 
-		// Consider unhealthy if we haven't processed anything in the last 5 minutes and there are pending messages
-		if !stats.LastProcessedAt.IsZero() && time.Since(stats.LastProcessedAt) > 5*time.Minute && stats.LagCount > 0 {
+		// Consider unhealthy if we haven't processed anything recently and there are pending messages
+		if !stats.LastProcessedAt.IsZero() && time.Since(stats.LastProcessedAt) > maxInactivityDuration && stats.LagCount > 0 {
 			stats.Healthy = false
 			stats.Status = "unhealthy"
 			stats.Message = fmt.Sprintf("No processing activity for %v with %d pending messages", time.Since(stats.LastProcessedAt), stats.LagCount)

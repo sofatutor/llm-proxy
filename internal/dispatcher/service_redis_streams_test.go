@@ -150,12 +150,13 @@ func TestServiceExponentialBackoff(t *testing.T) {
 
 	// Check that backoff times increase exponentially
 	if len(retryTimes) >= 3 {
+		const minBackoffMultiplier = 1.5 // Allow some margin for scheduling delays
 		firstBackoff := retryTimes[1].Sub(retryTimes[0])
 		secondBackoff := retryTimes[2].Sub(retryTimes[1])
 
 		// Second backoff should be roughly 2x the first (exponential)
 		// Allow some margin for scheduling delays
-		if secondBackoff < firstBackoff*15/10 { // 1.5x minimum
+		if secondBackoff < time.Duration(float64(firstBackoff)*minBackoffMultiplier) {
 			t.Errorf("Expected exponential backoff, got first=%v, second=%v", firstBackoff, secondBackoff)
 		}
 	}
