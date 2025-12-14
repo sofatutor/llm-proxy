@@ -16,18 +16,18 @@ llm-proxy/
 │   ├── proxy/             # Main CLI application (llm-proxy)
 │   └── eventdispatcher/   # Standalone event dispatcher CLI
 ├── internal/              # Internal packages (not for external import)
-│   ├── server/            # HTTP server and lifecycle management
-│   ├── proxy/             # Transparent reverse proxy implementation
-│   ├── token/             # Token management and validation
-│   ├── database/          # Data storage abstraction and implementations
-│   ├── eventbus/          # Async event system
-│   ├── dispatcher/        # Event dispatcher service
+│   ├── server/            # HTTP server and lifecycle management [README](../../internal/server/README.md)
+│   ├── proxy/             # Transparent reverse proxy implementation [README](../../internal/proxy/README.md)
+│   ├── token/             # Token management and validation [README](../../internal/token/README.md)
+│   ├── database/          # Data storage abstraction and implementations [README](../../internal/database/README.md)
+│   ├── eventbus/          # Async event system [README](../../internal/eventbus/README.md)
+│   ├── dispatcher/        # Event dispatcher service [README](../../internal/dispatcher/README.md)
 │   ├── middleware/        # HTTP middleware components
-│   ├── admin/             # Admin UI handlers and logic
+│   ├── admin/             # Admin UI handlers and logic [README](../../internal/admin/README.md)
 │   ├── api/               # Management API handlers
-│   ├── config/            # Configuration management
-│   ├── logging/           # Structured logging utilities
-│   ├── audit/             # Audit logging system
+│   ├── config/            # Configuration management [README](../../internal/config/README.md)
+│   ├── logging/           # Structured logging utilities [README](../../internal/logging/README.md)
+│   ├── audit/             # Audit logging system [README](../../internal/audit/README.md)
 │   ├── utils/             # Shared utilities and helpers
 │   └── ...                # Other internal packages
 ├── api/                   # API specifications and shared types
@@ -94,8 +94,11 @@ The codebase follows a clean architecture with well-defined layers and dependenc
 
 ### Core Packages
 
+For detailed documentation on each package, see the package-level README files linked below.
+
 #### `internal/token/`
-**Purpose**: Token lifecycle management
+**Purpose**: Token lifecycle management  
+**Documentation**: [Token Package README](../../internal/token/README.md)  
 **Key Components**:
 - `manager.go`: High-level token operations
 - `generator.go`: Secure token generation
@@ -109,7 +112,8 @@ The codebase follows a clean architecture with well-defined layers and dependenc
 - Configurable caching and rate limiting
 
 #### `internal/database/`
-**Purpose**: Data persistence abstraction
+**Purpose**: Data persistence abstraction  
+**Documentation**: [Database Package README](../../internal/database/README.md)  
 **Key Components**:
 - `store.go`: Repository interface definitions
 - `sqlite.go`: SQLite implementation
@@ -122,7 +126,8 @@ The codebase follows a clean architecture with well-defined layers and dependenc
 - Connection pooling and health checks
 
 #### `internal/proxy/`
-**Purpose**: Transparent HTTP proxying
+**Purpose**: Transparent HTTP proxying  
+**Documentation**: [Proxy Package README](../../internal/proxy/README.md)  
 **Key Components**:
 - `proxy.go`: Main reverse proxy implementation
 - `director.go`: Request routing and transformation
@@ -137,7 +142,8 @@ The codebase follows a clean architecture with well-defined layers and dependenc
 ### Infrastructure Packages
 
 #### `internal/eventbus/`
-**Purpose**: Async event publishing and subscription
+**Purpose**: Async event publishing and subscription  
+**Documentation**: [EventBus Package README](../../internal/eventbus/README.md)  
 **Key Components**:
 - `eventbus.go`: Core event bus interface and in-memory implementation
 - `redis.go`: Redis-based event bus for distributed deployments
@@ -149,7 +155,8 @@ The codebase follows a clean architecture with well-defined layers and dependenc
 - Fan-out broadcasting to multiple subscribers
 
 #### `internal/dispatcher/`
-**Purpose**: Event processing and backend integration
+**Purpose**: Event processing and backend integration  
+**Documentation**: [Dispatcher Package README](../../internal/dispatcher/README.md)  
 **Key Components**:
 - `service.go`: Main dispatcher service
 - `plugins/`: Backend plugin implementations (File, Lunary, Helicone)
@@ -161,7 +168,8 @@ The codebase follows a clean architecture with well-defined layers and dependenc
 - Graceful degradation on backend failures
 
 #### `internal/middleware/`
-**Purpose**: HTTP middleware components
+**Purpose**: HTTP middleware components  
+**Note**: Lightweight package with inline documentation  
 **Key Components**:
 - `instrumentation.go`: Request/response instrumentation
 - `requestid.go`: Request ID generation and propagation
@@ -176,21 +184,24 @@ The codebase follows a clean architecture with well-defined layers and dependenc
 ### HTTP Layer Packages
 
 #### `internal/server/`
-**Purpose**: HTTP server lifecycle and configuration
+**Purpose**: HTTP server lifecycle and configuration  
+**Documentation**: [Server Package README](../../internal/server/README.md)  
 **Key Components**:
 - `server.go`: HTTP server setup and graceful shutdown
 - `routes.go`: Route registration and middleware composition
 - `config.go`: Server configuration validation
 
 #### `internal/api/`
-**Purpose**: Management API handlers
+**Purpose**: Management API handlers  
+**Note**: Lightweight package with inline documentation  
 **Key Components**:
 - `projects.go`: Project CRUD operations
 - `tokens.go`: Token management endpoints
 - `health.go`: Health check endpoints
 
 #### `internal/admin/`
-**Purpose**: Admin UI handlers and logic
+**Purpose**: Admin UI handlers and logic  
+**Documentation**: [Admin Package README](../../internal/admin/README.md)  
 **Key Components**:
 - `handlers.go`: UI route handlers
 - `client.go`: Management API client
@@ -256,15 +267,16 @@ internal/package/
 ### Configuration Sources
 
 Configuration is loaded from multiple sources in order of precedence:
-1. Command-line flags
-2. Environment variables
-3. Configuration files (`.env`, YAML)
-4. Default values
+1. Environment variables
+2. Default values
+
+**Note**: Command-line flags and configuration files are not currently supported. All configuration is via environment variables.
 
 ### Configuration Packages
 
-- `internal/config/`: Core configuration structures and validation
-- `cmd/proxy/config.go`: CLI-specific configuration
+- [`internal/config/`](../../internal/config/README.md): Core configuration structures and validation
+- [`internal/logging/`](../../internal/logging/README.md): Structured logging configuration
+- [`internal/audit/`](../../internal/audit/README.md): Audit logging configuration
 - Environment variable mapping follows `SNAKE_CASE` convention
 
 ## Error Handling Patterns
