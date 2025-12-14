@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/database/migrations"
@@ -189,7 +190,7 @@ func TestPostgresIntegration_TokenCRUD(t *testing.T) {
 
 	// First create a project (required for token foreign key)
 	project := proxy.Project{
-		ID:           "token-test-project-" + time.Now().Format("20060102150405"),
+		ID:           uuid.NewString(),
 		Name:         "Token Test Project",
 		OpenAIAPIKey: "test-api-key-tokens",
 		IsActive:     true,
@@ -201,8 +202,9 @@ func TestPostgresIntegration_TokenCRUD(t *testing.T) {
 
 	// Create token
 	expiresAt := now.Add(24 * time.Hour)
+	tokenID := uuid.NewString()
 	token := Token{
-		Token:        "test-token-pg-" + time.Now().Format("20060102150405"),
+		Token:        tokenID,
 		ProjectID:    project.ID,
 		ExpiresAt:    &expiresAt,
 		IsActive:     true,
@@ -337,7 +339,7 @@ func TestPostgresIntegration_ConcurrentOperations(t *testing.T) {
 
 	// Create a project for concurrent token operations
 	project := proxy.Project{
-		ID:           "concurrent-test-" + time.Now().Format("20060102150405"),
+		ID:           uuid.NewString(),
 		Name:         "Concurrent Test Project",
 		OpenAIAPIKey: "concurrent-api-key",
 		IsActive:     true,
@@ -348,8 +350,9 @@ func TestPostgresIntegration_ConcurrentOperations(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a token
+	tokenID := uuid.NewString()
 	token := Token{
-		Token:        "concurrent-token-" + time.Now().Format("20060102150405"),
+		Token:        tokenID,
 		ProjectID:    project.ID,
 		IsActive:     true,
 		RequestCount: 0,
@@ -389,8 +392,8 @@ func TestPostgresIntegration_TransactionRollback(t *testing.T) {
 
 	// Try to create a token without a valid project (should fail due to foreign key)
 	token := Token{
-		Token:        "invalid-project-token-" + time.Now().Format("20060102150405"),
-		ProjectID:    "non-existent-project-id",
+		Token:        uuid.NewString(),
+		ProjectID:    uuid.NewString(),
 		IsActive:     true,
 		RequestCount: 0,
 		CreatedAt:    time.Now(),
