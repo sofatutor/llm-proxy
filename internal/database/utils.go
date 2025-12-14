@@ -180,7 +180,7 @@ func (d *DB) GetStats(ctx context.Context) (map[string]interface{}, error) {
 	var activeTokens int
 	err = d.QueryRowContextRebound(ctx,
 		"SELECT COUNT(*) FROM tokens WHERE is_active = ? AND (expires_at IS NULL OR expires_at > ?)",
-		d.boolValue(true), time.Now()).Scan(&activeTokens)
+		d.boolValue(true), time.Now().UTC()).Scan(&activeTokens)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count active tokens: %w", err)
 	}
@@ -190,7 +190,7 @@ func (d *DB) GetStats(ctx context.Context) (map[string]interface{}, error) {
 	var expiredTokens int
 	err = d.QueryRowContextRebound(ctx,
 		"SELECT COUNT(*) FROM tokens WHERE expires_at IS NOT NULL AND expires_at <= ?",
-		time.Now()).Scan(&expiredTokens)
+		time.Now().UTC()).Scan(&expiredTokens)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count expired tokens: %w", err)
 	}

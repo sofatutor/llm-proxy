@@ -253,7 +253,7 @@ func (d *DB) GetTokensByProjectID(ctx context.Context, projectID string) ([]Toke
 
 // IncrementTokenUsage increments the request count and updates the last_used_at timestamp.
 func (d *DB) IncrementTokenUsage(ctx context.Context, tokenID string) error {
-	now := time.Now()
+	now := time.Now().UTC()
 	query := `
 	UPDATE tokens
 	SET request_count = request_count + 1, last_used_at = ?
@@ -279,7 +279,7 @@ func (d *DB) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 
 // CleanExpiredTokens deletes expired tokens from the database.
 func (d *DB) CleanExpiredTokens(ctx context.Context) (int64, error) {
-	now := time.Now()
+	now := time.Now().UTC()
 	query := `
 	DELETE FROM tokens
 	WHERE expires_at IS NOT NULL AND expires_at < ?
@@ -464,7 +464,7 @@ func (a *DBTokenStoreAdapter) RevokeToken(ctx context.Context, tokenID string) e
 		return token.ErrTokenNotFound
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	query := `UPDATE tokens SET is_active = ?, deactivated_at = COALESCE(deactivated_at, ?) WHERE token = ? AND is_active = ?`
 	result, err := a.db.ExecContextRebound(ctx, query, false, now, tokenID, true)
 	if err != nil {
@@ -517,7 +517,7 @@ func (a *DBTokenStoreAdapter) RevokeBatchTokens(ctx context.Context, tokenIDs []
 	if len(tokenIDs) == 0 {
 		return 0, nil
 	}
-	now := time.Now()
+	now := time.Now().UTC()
 	placeholders := make([]string, len(tokenIDs))
 	args := make([]interface{}, len(tokenIDs)+3)
 	args[0] = false
@@ -545,7 +545,7 @@ func (a *DBTokenStoreAdapter) RevokeProjectTokens(ctx context.Context, projectID
 	if projectID == "" {
 		return 0, nil
 	}
-	now := time.Now()
+	now := time.Now().UTC()
 	query := `UPDATE tokens SET is_active = ?, deactivated_at = COALESCE(deactivated_at, ?) WHERE project_id = ? AND is_active = ?`
 	result, err := a.db.ExecContextRebound(ctx, query, false, now, projectID, true)
 	if err != nil {
@@ -560,7 +560,7 @@ func (a *DBTokenStoreAdapter) RevokeProjectTokens(ctx context.Context, projectID
 
 // RevokeExpiredTokens revokes all tokens that have expired
 func (a *DBTokenStoreAdapter) RevokeExpiredTokens(ctx context.Context) (int, error) {
-	now := time.Now()
+	now := time.Now().UTC()
 	query := `UPDATE tokens SET is_active = ?, deactivated_at = COALESCE(deactivated_at, ?) WHERE expires_at IS NOT NULL AND expires_at < ? AND is_active = ?`
 	result, err := a.db.ExecContextRebound(ctx, query, false, now, now, true)
 	if err != nil {

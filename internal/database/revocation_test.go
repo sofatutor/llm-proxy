@@ -551,7 +551,7 @@ func TestDBTokenStoreAdapter_RevokeExpiredTokens_EdgeCases(t *testing.T) {
 		t.Fatalf("Failed to create test project: %v", err)
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 	veryOld := now.Add(-24 * time.Hour)
 	barelyExpired := now.Add(-1 * time.Millisecond)
 
