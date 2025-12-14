@@ -115,7 +115,6 @@ sequenceDiagram
 ## Related Documentation
 
 - [Audit Package](../audit/README.md) - Security audit logging (separate from application logs)
-- [Issue #60](https://github.com/sofatutor/llm-proxy/issues/60) - Log search utilities (planned)
 
 ## Files
 

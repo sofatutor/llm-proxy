@@ -172,6 +172,14 @@ All unmatched routes are handled by the transparent proxy, forwarding requests t
 | [`token`](../token/README.md) | Token validation for authentication |
 | [`database`](../database/README.md) | Token and project storage |
 | [`middleware`](../middleware/) | Request instrumentation and observability |
-| [`eventbus`](../eventbus/) | Async event publishing |
-| [`audit`](../audit/) | Audit event logging |
-| [`config`](../config/) | Server configuration |
+| [`eventbus`](../eventbus/README.md) | Async event publishing |
+| [`audit`](../audit/README.md) | Audit event logging |
+| [`config`](../config/README.md) | Server configuration |
+
+## Files
+
+| File | Description |
+|------|-------------|
+| `server.go` | Main HTTP server implementation and lifecycle management |
+| `routes.go` | Route registration and middleware composition |
+| `handlers.go` | HTTP handler implementations for management API |

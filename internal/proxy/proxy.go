@@ -875,6 +875,8 @@ func (p *TransparentProxy) Handler() http.Handler {
 								w.Header().Add(hk, v)
 							}
 						}
+						// Set fresh timing headers for conditional cache hit
+						setFreshCacheTimingHeaders(w, time.Now())
 						w.Header().Set("Cache-Status", "llm-proxy; conditional-hit")
 						w.Header().Set("X-PROXY-CACHE", "conditional-hit")
 						w.Header().Set("X-PROXY-CACHE-KEY", key)
@@ -888,6 +890,8 @@ func (p *TransparentProxy) Handler() http.Handler {
 						w.Header().Add(hk, v)
 					}
 				}
+				// Set fresh timing headers for cache hit (for accurate latency measurement)
+				setFreshCacheTimingHeaders(w, time.Now())
 				w.Header().Set("Cache-Status", "llm-proxy; hit")
 				w.Header().Set("X-PROXY-CACHE", "hit")
 				w.Header().Set("X-PROXY-CACHE-KEY", key)
@@ -962,6 +966,15 @@ func (p *TransparentProxy) recordCacheHit(r *http.Request) {
 			p.cacheStatsAggregator.RecordCacheHit(tokenID)
 		}
 	}
+}
+
+func setFreshCacheTimingHeaders(w http.ResponseWriter, now time.Time) {
+	formatted := now.Format(time.RFC3339Nano)
+	w.Header().Set("X-Proxy-Received-At", formatted)
+	// For cache hits/conditional-hits, the full response is served immediately from cache.
+	w.Header().Set("X-Proxy-First-Response-At", formatted)
+	w.Header().Set("X-Proxy-Final-Response-At", formatted)
+	w.Header().Set("Date", now.UTC().Format(http.TimeFormat))
 }
 
 func setTimingHeaders(res *http.Response, ctx context.Context) {
