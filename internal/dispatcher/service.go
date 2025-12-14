@@ -428,7 +428,7 @@ func (s *Service) sendBatch(ctx context.Context, batch []EventPayload) {
 			backoff := time.Duration(1<<uint(attempt)) * s.config.RetryBackoff
 			// Cap at 30 seconds
 			if backoff > maxBackoffDuration {
-				backoff = 30 * time.Second
+				backoff = maxBackoffDuration
 			}
 			s.logger.Warn("Failed to send batch, retrying with exponential backoff",
 				zap.Error(err),
@@ -479,7 +479,7 @@ func (s *Service) sendBatchWithResult(ctx context.Context, batch []EventPayload)
 			backoff := time.Duration(1<<uint(attempt)) * s.config.RetryBackoff
 			// Cap at 30 seconds
 			if backoff > maxBackoffDuration {
-				backoff = 30 * time.Second
+				backoff = maxBackoffDuration
 			}
 			s.logger.Warn("Failed to send batch, retrying with exponential backoff",
 				zap.Error(err),
