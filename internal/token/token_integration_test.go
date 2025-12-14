@@ -52,6 +52,22 @@ func (m *MockStore) GetTokenByID(ctx context.Context, tokenID string) (TokenData
 	return token, nil
 }
 
+// GetTokenByToken retrieves a token by its token string (for authentication)
+func (m *MockStore) GetTokenByToken(ctx context.Context, tokenString string) (TokenData, error) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	if m.failOnGet {
+		return TokenData{}, ErrLimitOperation
+	}
+
+	token, exists := m.tokens[tokenString]
+	if !exists {
+		return TokenData{}, ErrTokenNotFound
+	}
+
+	return token, nil
+}
+
 func (m *MockStore) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()

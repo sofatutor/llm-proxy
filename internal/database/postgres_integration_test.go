@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/database/migrations"
@@ -189,7 +190,7 @@ func TestPostgresIntegration_TokenCRUD(t *testing.T) {
 
 	// First create a project (required for token foreign key)
 	project := proxy.Project{
-		ID:           "token-test-project-" + time.Now().Format("20060102150405"),
+		ID:           uuid.NewString(),
 		Name:         "Token Test Project",
 		OpenAIAPIKey: "test-api-key-tokens",
 		IsActive:     true,
@@ -201,8 +202,11 @@ func TestPostgresIntegration_TokenCRUD(t *testing.T) {
 
 	// Create token
 	expiresAt := now.Add(24 * time.Hour)
+	tokenID := uuid.NewString()
+	tokenSecret := "tok-" + uuid.NewString()
 	token := Token{
-		Token:        "test-token-pg-" + time.Now().Format("20060102150405"),
+		ID:           tokenID,
+		Token:        tokenSecret,
 		ProjectID:    project.ID,
 		ExpiresAt:    &expiresAt,
 		IsActive:     true,
@@ -215,9 +219,10 @@ func TestPostgresIntegration_TokenCRUD(t *testing.T) {
 	require.NoError(t, err, "Failed to create token")
 
 	// Read token
-	retrieved, err := db.GetTokenByID(ctx, token.Token)
+	retrieved, err := db.GetTokenByID(ctx, token.ID)
 	require.NoError(t, err, "Failed to get token by ID")
 	assert.Equal(t, token.Token, retrieved.Token)
+	assert.Equal(t, token.ID, retrieved.ID)
 	assert.Equal(t, token.ProjectID, retrieved.ProjectID)
 	assert.True(t, retrieved.IsActive)
 	assert.Equal(t, 0, retrieved.RequestCount)
@@ -226,7 +231,7 @@ func TestPostgresIntegration_TokenCRUD(t *testing.T) {
 	err = db.IncrementTokenUsage(ctx, token.Token)
 	require.NoError(t, err, "Failed to increment token usage")
 
-	incremented, err := db.GetTokenByID(ctx, token.Token)
+	incremented, err := db.GetTokenByID(ctx, token.ID)
 	require.NoError(t, err, "Failed to get incremented token")
 	assert.Equal(t, 1, incremented.RequestCount)
 	assert.NotNil(t, incremented.LastUsedAt)
@@ -236,7 +241,7 @@ func TestPostgresIntegration_TokenCRUD(t *testing.T) {
 	err = db.UpdateToken(ctx, incremented)
 	require.NoError(t, err, "Failed to reset token usage via UpdateToken")
 
-	reset, err := db.GetTokenByID(ctx, token.Token)
+	reset, err := db.GetTokenByID(ctx, token.ID)
 	require.NoError(t, err, "Failed to get reset token")
 	assert.Equal(t, 0, reset.RequestCount)
 
@@ -252,7 +257,7 @@ func TestPostgresIntegration_TokenCRUD(t *testing.T) {
 	err = db.UpdateToken(ctx, reset)
 	require.NoError(t, err, "Failed to revoke token")
 
-	revoked, err := db.GetTokenByID(ctx, token.Token)
+	revoked, err := db.GetTokenByID(ctx, token.ID)
 	require.NoError(t, err, "Failed to get revoked token")
 	assert.False(t, revoked.IsActive)
 }
@@ -337,7 +342,7 @@ func TestPostgresIntegration_ConcurrentOperations(t *testing.T) {
 
 	// Create a project for concurrent token operations
 	project := proxy.Project{
-		ID:           "concurrent-test-" + time.Now().Format("20060102150405"),
+		ID:           uuid.NewString(),
 		Name:         "Concurrent Test Project",
 		OpenAIAPIKey: "concurrent-api-key",
 		IsActive:     true,
@@ -348,8 +353,11 @@ func TestPostgresIntegration_ConcurrentOperations(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a token
+	tokenID := uuid.NewString()
+	tokenSecret := "tok-" + uuid.NewString()
 	token := Token{
-		Token:        "concurrent-token-" + time.Now().Format("20060102150405"),
+		ID:           tokenID,
+		Token:        tokenSecret,
 		ProjectID:    project.ID,
 		IsActive:     true,
 		RequestCount: 0,
@@ -375,7 +383,7 @@ func TestPostgresIntegration_ConcurrentOperations(t *testing.T) {
 	}
 
 	// Verify final count
-	final, err := db.GetTokenByID(ctx, token.Token)
+	final, err := db.GetTokenByID(ctx, token.ID)
 	require.NoError(t, err)
 	assert.Equal(t, numGoroutines, final.RequestCount, "Request count should match number of increments")
 }
@@ -389,8 +397,9 @@ func TestPostgresIntegration_TransactionRollback(t *testing.T) {
 
 	// Try to create a token without a valid project (should fail due to foreign key)
 	token := Token{
-		Token:        "invalid-project-token-" + time.Now().Format("20060102150405"),
-		ProjectID:    "non-existent-project-id",
+		ID:           uuid.NewString(),
+		Token:        "tok-" + uuid.NewString(),
+		ProjectID:    uuid.NewString(),
 		IsActive:     true,
 		RequestCount: 0,
 		CreatedAt:    time.Now(),
@@ -400,7 +409,7 @@ func TestPostgresIntegration_TransactionRollback(t *testing.T) {
 	assert.Error(t, err, "Creating token with non-existent project should fail")
 
 	// Verify token wasn't created
-	_, err = db.GetTokenByID(ctx, token.Token)
+	_, err = db.GetTokenByID(ctx, token.ID)
 	assert.Error(t, err, "Token should not exist after failed creation")
 }
 

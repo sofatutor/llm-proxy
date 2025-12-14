@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // testMutex protects global command variables from concurrent modification during tests
@@ -191,29 +190,6 @@ func TestGetMigrationResources_ErrorPaths(t *testing.T) {
 	}
 }
 
-func TestGetMigrationsPathForCLI_ErrorPaths(t *testing.T) {
-	// Test error path when migrations directory doesn't exist
-	// We can't easily test this without changing the working directory,
-	// but we can verify the function handles errors gracefully
-
-	// Save original working directory
-	originalWD, err := os.Getwd()
-	require.NoError(t, err)
-	defer func() {
-		_ = os.Chdir(originalWD)
-	}()
-
-	// Change to temp directory that doesn't have migrations
-	tmpDir := t.TempDir()
-	err = os.Chdir(tmpDir)
-	require.NoError(t, err)
-
-	// Should return error when migrations not found
-	_, err = getMigrationsPathForCLI()
-	assert.Error(t, err, "Should return error when migrations directory not found")
-	assert.Contains(t, err.Error(), "migrations directory not found", "Error message should mention migrations directory")
-}
-
 func TestRunMigrateUp_ErrorHandling(t *testing.T) {
 	// Synchronize access to global command to prevent race conditions
 	testMutex.Lock()
@@ -265,26 +241,6 @@ func TestRunMigrateStatus_ErrorHandling(t *testing.T) {
 	if err == nil {
 		t.Log("Note: Status command succeeded (may have created database)")
 	}
-}
-
-func TestGetMigrationsPathForCLI_ErrorPath(t *testing.T) {
-	// Save current working directory
-	originalWd, err := os.Getwd()
-	require.NoError(t, err)
-	defer func() {
-		// Restore working directory
-		_ = os.Chdir(originalWd)
-	}()
-
-	// Change to a temp directory where migrations won't be found
-	tempDir := t.TempDir()
-	err = os.Chdir(tempDir)
-	require.NoError(t, err)
-
-	// getMigrationsPathForCLI should fail when not in project directory
-	_, err = getMigrationsPathForCLI()
-	assert.Error(t, err, "Should fail when migrations not found")
-	assert.Contains(t, err.Error(), "migrations directory not found")
 }
 
 func TestRunMigrationsDuringSetup_ErrorPath(t *testing.T) {

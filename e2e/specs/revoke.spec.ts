@@ -18,7 +18,8 @@ test.describe('Token and Project Revocation', () => {
     await auth.login(MANAGEMENT_TOKEN);
     
     projectId = await seed.createProject('Revoke Test Project', 'sk-test-key');
-    tokenId = await seed.createToken(projectId, 60);
+    const token = await seed.createToken(projectId, 60);
+    tokenId = token.id;
   });
 
   test.afterEach(async () => {

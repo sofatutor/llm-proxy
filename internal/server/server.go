@@ -21,6 +21,7 @@ import (
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/middleware"
+	"github.com/sofatutor/llm-proxy/internal/obfuscate"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"go.uber.org/zap"
@@ -549,8 +550,22 @@ func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
 	_ = s.auditLogger.Log(s.auditEvent(audit.ActionProjectList, audit.ActorManagement, audit.ResultSuccess, r, requestID).
 		WithDetail("project_count", len(projects)))
 
+	// Create response with obfuscated API keys
+	sanitizedProjects := make([]ProjectResponse, len(projects))
+	for i, p := range projects {
+		sanitizedProjects[i] = ProjectResponse{
+			ID:            p.ID,
+			Name:          p.Name,
+			OpenAIAPIKey:  obfuscate.ObfuscateTokenGeneric(p.OpenAIAPIKey),
+			IsActive:      p.IsActive,
+			DeactivatedAt: p.DeactivatedAt,
+			CreatedAt:     p.CreatedAt,
+			UpdatedAt:     p.UpdatedAt,
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(projects); err != nil {
+	if err := json.NewEncoder(w).Encode(sanitizedProjects); err != nil {
 		s.logger.Error("failed to encode projects response", zap.Error(err))
 		s.logger.Debug("handleListProjects: END (encode error)")
 	} else {
@@ -578,7 +593,12 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Name == "" || req.OpenAIAPIKey == "" {
-		s.logger.Error("missing required fields", zap.String("name", req.Name), zap.String("openai_api_key", req.OpenAIAPIKey), zap.String("request_id", requestID))
+		s.logger.Error(
+			"missing required fields",
+			zap.String("name", req.Name),
+			zap.Bool("api_key_provided", req.OpenAIAPIKey != ""),
+			zap.String("request_id", requestID),
+		)
 
 		// Audit: project creation failure - missing fields
 		_ = s.auditLogger.Log(s.auditEvent(audit.ActionProjectCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
@@ -587,6 +607,18 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 			WithDetail("api_key_provided", req.OpenAIAPIKey != ""))
 
 		http.Error(w, `{"error":"name and openai_api_key are required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Reject obfuscated keys to prevent data corruption
+	if strings.Contains(req.OpenAIAPIKey, "...") || strings.Contains(req.OpenAIAPIKey, "****") {
+		s.logger.Error("attempted to create project with obfuscated API key", zap.String("request_id", requestID))
+
+		// Audit: project creation failure - obfuscated key
+		_ = s.auditLogger.Log(s.auditEvent(audit.ActionProjectCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
+			WithDetail("validation_error", "cannot save obfuscated API key"))
+
+		http.Error(w, `{"error":"cannot save obfuscated API key - please provide the full API key"}`, http.StatusBadRequest)
 		return
 	}
 	id := uuid.NewString()
@@ -640,8 +672,20 @@ func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"project not found"}`, http.StatusNotFound)
 		return
 	}
+
+	// Create response with obfuscated API key
+	response := ProjectResponse{
+		ID:            project.ID,
+		Name:          project.Name,
+		OpenAIAPIKey:  obfuscate.ObfuscateTokenGeneric(project.OpenAIAPIKey),
+		IsActive:      project.IsActive,
+		DeactivatedAt: project.DeactivatedAt,
+		CreatedAt:     project.CreatedAt,
+		UpdatedAt:     project.UpdatedAt,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(project); err != nil {
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		s.logger.Error("failed to encode project response", zap.Error(err))
 	}
 }
@@ -713,7 +757,19 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		project.Name = *req.Name
 		updatedFields = append(updatedFields, "name")
 	}
-	if req.OpenAIAPIKey != nil {
+	if req.OpenAIAPIKey != nil && *req.OpenAIAPIKey != "" {
+		// Reject obfuscated keys to prevent data corruption
+		if strings.Contains(*req.OpenAIAPIKey, "...") || strings.Contains(*req.OpenAIAPIKey, "****") {
+			s.logger.Error("attempted to save obfuscated API key", zap.String("project_id", id))
+
+			// Audit: project update failure - obfuscated key
+			_ = s.auditLogger.Log(s.auditEvent(audit.ActionProjectUpdate, audit.ActorManagement, audit.ResultFailure, r, requestID).
+				WithProjectID(id).
+				WithDetail("validation_error", "cannot save obfuscated API key"))
+
+			http.Error(w, `{"error":"cannot save obfuscated API key - please provide the full API key"}`, http.StatusBadRequest)
+			return
+		}
 		project.OpenAIAPIKey = *req.OpenAIAPIKey
 		updatedFields = append(updatedFields, "openai_api_key")
 	}
@@ -882,10 +938,10 @@ func (s *Server) handleBulkRevokeProjectTokens(w http.ResponseWriter, r *http.Re
 
 		if err := s.tokenStore.UpdateToken(ctx, token); err != nil {
 			s.logger.Warn("failed to revoke individual token during bulk revoke",
-				zap.String("token_id", token.Token),
+				zap.String("token_id", token.ID),
 				zap.String("project_id", projectID),
 				zap.Error(err))
-			failedRevocations = append(failedRevocations, token.Token)
+			failedRevocations = append(failedRevocations, token.ID)
 		} else {
 			revokedCount++
 		}
@@ -985,6 +1041,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ProjectID       string `json:"project_id"`
 			DurationMinutes int    `json:"duration_minutes"`
+			MaxRequests     *int   `json:"max_requests"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			s.logger.Error("invalid token create request body", zap.Error(err), zap.String("request_id", requestID))
@@ -1034,6 +1091,19 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"project_id is required"}`, http.StatusBadRequest)
 			return
 		}
+		if req.MaxRequests != nil && *req.MaxRequests <= 0 {
+			s.logger.Error("max_requests must be positive", zap.Int("max_requests", *req.MaxRequests), zap.String("request_id", requestID))
+
+			// Audit: token creation failure - invalid max_requests
+			_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
+				WithProjectID(req.ProjectID).
+				WithDetail("validation_error", "max_requests must be positive").
+				WithDetail("requested_max_requests", *req.MaxRequests))
+
+			http.Error(w, `{"error":"max_requests must be positive"}`, http.StatusBadRequest)
+			return
+		}
+
 		// Check project exists and is active
 		project, err := s.projectStore.GetProjectByID(ctx, req.ProjectID)
 		if err != nil {
@@ -1062,8 +1132,9 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"cannot create tokens for inactive projects","code":"project_inactive"}`, http.StatusForbidden)
 			return
 		}
-		// Generate token
-		tokenStr, expiresAt, _, err := token.NewTokenGenerator().GenerateWithOptions(duration, nil)
+		// Generate token ID (UUID) and token string
+		tokenID := uuid.New().String()
+		tokenStr, expiresAt, _, err := token.NewTokenGenerator().GenerateWithOptions(duration, req.MaxRequests)
 		if err != nil {
 			s.logger.Error("failed to generate token", zap.Error(err), zap.String("request_id", requestID))
 
@@ -1078,11 +1149,13 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		}
 		now := time.Now().UTC()
 		dbToken := token.TokenData{
+			ID:           tokenID,
 			Token:        tokenStr,
 			ProjectID:    req.ProjectID,
 			ExpiresAt:    expiresAt,
 			IsActive:     true,
 			RequestCount: 0,
+			MaxRequests:  req.MaxRequests,
 			CreatedAt:    now,
 		}
 		if err := s.tokenStore.CreateToken(ctx, dbToken); err != nil {
@@ -1091,7 +1164,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			// Audit: token creation failure - storage error
 			_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
 				WithProjectID(req.ProjectID).
-				WithTokenID(tokenStr).
+				WithTokenID(tokenID).
 				WithError(err).
 				WithDetail("error_type", "storage failed"))
 
@@ -1105,20 +1178,29 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		)
 
 		// Audit: token creation success
-		_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultSuccess, r, requestID).
+		auditEvent := s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultSuccess, r, requestID).
 			WithProjectID(req.ProjectID).
 			WithRequestID(requestID).
 			WithHTTPMethod(r.Method).
 			WithEndpoint(r.URL.Path).
-			WithTokenID(tokenStr).
+			WithTokenID(tokenID).
 			WithDetail("duration_minutes", req.DurationMinutes).
-			WithDetail("expires_at", expiresAt.Format(time.RFC3339)))
+			WithDetail("expires_at", expiresAt.Format(time.RFC3339))
+		if req.MaxRequests != nil {
+			auditEvent.WithDetail("max_requests", *req.MaxRequests)
+		}
+		_ = s.auditLogger.Log(auditEvent)
 
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		response := map[string]interface{}{
+			"id":         tokenID,
 			"token":      tokenStr,
 			"expires_at": expiresAt,
-		}); err != nil {
+		}
+		if req.MaxRequests != nil {
+			response["max_requests"] = *req.MaxRequests
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
 			s.logger.Error("failed to encode token response", zap.Error(err))
 		}
 	case http.MethodGet:
@@ -1162,19 +1244,20 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 
-		// Create sanitized response without actual token values
+		// Create sanitized response with token IDs and obfuscated token strings
 		sanitizedTokens := make([]TokenListResponse, len(tokens))
-		for i, token := range tokens {
+		for i, t := range tokens {
 			sanitizedTokens[i] = TokenListResponse{
-				TokenID:       token.Token,
-				ProjectID:     token.ProjectID,
-				ExpiresAt:     token.ExpiresAt,
-				IsActive:      token.IsActive,
-				RequestCount:  token.RequestCount,
-				MaxRequests:   token.MaxRequests,
-				CreatedAt:     token.CreatedAt,
-				LastUsedAt:    token.LastUsedAt,
-				CacheHitCount: token.CacheHitCount,
+				ID:            t.ID,
+				Token:         token.ObfuscateToken(t.Token),
+				ProjectID:     t.ProjectID,
+				ExpiresAt:     t.ExpiresAt,
+				IsActive:      t.IsActive,
+				RequestCount:  t.RequestCount,
+				MaxRequests:   t.MaxRequests,
+				CreatedAt:     t.CreatedAt,
+				LastUsedAt:    t.LastUsedAt,
+				CacheHitCount: t.CacheHitCount,
 			}
 		}
 
@@ -1239,9 +1322,10 @@ func (s *Server) handleGetToken(w http.ResponseWriter, r *http.Request, tokenID 
 		WithHTTPMethod(r.Method).
 		WithEndpoint(r.URL.Path))
 
-	// Create sanitized response without the actual token value
+	// Create sanitized response with ID and obfuscated token string
 	response := TokenListResponse{
-		TokenID:      tokenID,
+		ID:           tokenData.ID,
+		Token:        token.ObfuscateToken(tokenData.Token),
 		ProjectID:    tokenData.ProjectID,
 		ExpiresAt:    tokenData.ExpiresAt,
 		IsActive:     tokenData.IsActive,
@@ -1355,9 +1439,10 @@ func (s *Server) handleUpdateToken(w http.ResponseWriter, r *http.Request, token
 	}
 	_ = s.auditLogger.Log(auditEvent)
 
-	// Return updated token (sanitized)
+	// Return updated token (sanitized with ID and obfuscated token)
 	response := TokenListResponse{
-		TokenID:      tokenID,
+		ID:           tokenData.ID,
+		Token:        token.ObfuscateToken(tokenData.Token),
 		ProjectID:    tokenData.ProjectID,
 		ExpiresAt:    tokenData.ExpiresAt,
 		IsActive:     tokenData.IsActive,

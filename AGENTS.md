@@ -130,7 +130,57 @@ OBSERVABILITY_BUFFER_SIZE=1000 → Event bus buffer size
 
 ---
 
-## 🔧 Development Environment
+## �️ Database & Migration Rules (CRITICAL)
+
+**These rules are MANDATORY and must NEVER be violated:**
+
+### 1. **NEVER use secrets as PRIMARY KEYs**
+- ❌ **WRONG:** `token TEXT PRIMARY KEY` (secret in URLs, logs, cannot be obfuscated)
+- ✅ **CORRECT:** `id TEXT PRIMARY KEY, token TEXT UNIQUE` (UUID for management, secret for auth)
+- **Rationale:** Secrets must never appear in URLs, logs, or admin UIs. Always use UUIDs for identifiers.
+- **Pattern:** Same as projects table: `id` (UUID) for management operations, separate field for secrets
+
+### 2. **Always use goose for PostgreSQL migrations**
+- ❌ **WRONG:** Creating raw SQL scripts in `/scripts/` directory
+- ✅ **CORRECT:** Create versioned migration in `internal/database/migrations/sql/postgres/00XXX_name.sql`
+- **Location:** `internal/database/migrations/sql/postgres/` (dialect-specific directory)
+- **Format:** goose format with `-- +goose Up` and `-- +goose Down` markers
+- **Versioning:** Sequential numbering: `00001_initial.sql`, `00002_feature.sql`, etc.
+- **Execution:** Migrations run automatically via `migrations.NewMigrationRunner(db, migrationsPath).Up()`
+- **Library:** Uses [pressly/goose](https://github.com/pressly/goose) - proper Go migration framework
+- **Dialect Isolation:** The migration runner only scans the dialect-specific directory (`postgres/`), so goose only runs migrations built for that engine. This ensures PostgreSQL migrations never accidentally run against SQLite and vice versa.
+
+### 3. **SQLite: Only maintain current schema, NO migrations**
+- ❌ **WRONG:** Creating migration files for SQLite
+- ✅ **CORRECT:** Update base schema in `/scripts/schema.sql` only
+- **Rationale:** SQLite is for testing/dev purposes only. Production uses PostgreSQL.
+- **Development:** Run `make clean-db && make build && make run` to recreate from current schema
+- **Location:** `/scripts/schema.sql` contains the authoritative current schema for SQLite
+
+### 4. **Migration Development Workflow (PostgreSQL)**
+```bash
+# 1. Create new goose migration file
+# Location: internal/database/migrations/sql/postgres/00XXX_description.sql
+# Format:
+# -- +goose Up
+# ALTER TABLE foo ADD COLUMN bar TEXT;
+#
+# -- +goose Down  
+# ALTER TABLE foo DROP COLUMN bar;
+
+# 2. Test migration locally (PostgreSQL only)
+docker compose --profile postgres up --build --force-recreate
+
+# 3. Verify migration ran successfully
+docker compose logs llm-proxy-postgres | grep migration
+
+# 4. NEVER create manual SQL scripts for migrations
+# The goose runner handles execution automatically
+```
+
+---
+
+## �🔧 Development Environment
 
 **Setup:**
 ```bash

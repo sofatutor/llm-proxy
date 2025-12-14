@@ -73,6 +73,10 @@ COPY --chown=appuser:appgroup web/static /app/web/static
 # Use absolute path from builder stage (WORKDIR is /app)
 COPY --from=builder --chown=appuser:appgroup /app/internal/database/migrations /app/internal/database/migrations
 
+# Copy SQLite schema (required for runtime SQLite initialization, used by docker-smoke)
+RUN mkdir -p /app/scripts
+COPY --from=builder --chown=appuser:appgroup /app/scripts/schema.sql /app/scripts/schema.sql
+
 # Define volumes for data persistence
 VOLUME ["/app/data", "/app/logs", "/app/config", "/app/certs"]
 

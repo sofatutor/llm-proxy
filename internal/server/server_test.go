@@ -315,6 +315,9 @@ type mockTokenStore struct{}
 func (m *mockTokenStore) GetTokenByID(ctx context.Context, tokenID string) (token.TokenData, error) {
 	return token.TokenData{}, errors.New("not implemented")
 }
+func (m *mockTokenStore) GetTokenByToken(ctx context.Context, tokenString string) (token.TokenData, error) {
+	return token.TokenData{}, errors.New("not implemented")
+}
 func (m *mockTokenStore) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	return errors.New("not implemented")
 }
@@ -348,6 +351,24 @@ func (m *mockProjectStore) GetProjectByID(ctx context.Context, id string) (proxy
 }
 func (m *mockProjectStore) UpdateProject(ctx context.Context, p proxy.Project) error { return nil }
 func (m *mockProjectStore) DeleteProject(ctx context.Context, id string) error       { return nil }
+
+// recordingTokenStore captures the last created token for assertions.
+type recordingTokenStore struct {
+	mockTokenStore
+	created token.TokenData
+}
+
+func (r *recordingTokenStore) CreateToken(ctx context.Context, td token.TokenData) error {
+	r.created = td
+	return nil
+}
+
+// activeProjectStore returns an active project for creation tests.
+type activeProjectStore struct{ mockProjectStore }
+
+func (a *activeProjectStore) GetProjectByID(ctx context.Context, id string) (proxy.Project, error) {
+	return proxy.Project{ID: id, IsActive: true}, nil
+}
 
 // testProjectStore embeds mockProjectStore and allows method overrides for testing
 type testProjectStore struct {
@@ -1131,6 +1152,47 @@ func TestHandleTokens_Create_DurationTooLong(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for too long duration, got %d", w.Code)
 	}
+}
+
+func TestHandleTokens_Create_WithMaxRequests(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, ManagementToken: "testtoken", EventBusBackend: "in-memory"}
+	ts := &recordingTokenStore{}
+	ps := &activeProjectStore{}
+	srv, err := New(cfg, ts, ps)
+	require.NoError(t, err)
+
+	body := `{"project_id":"any","duration_minutes":60,"max_requests":5}`
+	r := httptest.NewRequest(http.MethodPost, "/manage/tokens", strings.NewReader(body))
+	r.Header.Set("Authorization", "Bearer "+cfg.ManagementToken)
+	w := httptest.NewRecorder()
+	srv.handleTokens(w, r)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	if ts.created.MaxRequests == nil || *ts.created.MaxRequests != 5 {
+		t.Fatalf("expected max_requests to be stored, got %v", ts.created.MaxRequests)
+	}
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	val, ok := resp["max_requests"].(float64)
+	if !ok {
+		t.Fatalf("expected max_requests in response, got %#v", resp)
+	}
+	require.Equal(t, float64(5), val)
+}
+
+func TestHandleTokens_Create_InvalidMaxRequests(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, ManagementToken: "testtoken", EventBusBackend: "in-memory"}
+	srv, err := New(cfg, &recordingTokenStore{}, &activeProjectStore{})
+	require.NoError(t, err)
+
+	body := `{"project_id":"any","duration_minutes":60,"max_requests":0}`
+	r := httptest.NewRequest(http.MethodPost, "/manage/tokens", strings.NewReader(body))
+	r.Header.Set("Authorization", "Bearer "+cfg.ManagementToken)
+	w := httptest.NewRecorder()
+	srv.handleTokens(w, r)
+
+	require.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestInitializeAPIRoutes_FallbackToDefaultWhenProviderMissing(t *testing.T) {

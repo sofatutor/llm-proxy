@@ -56,6 +56,11 @@ func (m *mockManagerStore) GetTokenByID(ctx context.Context, tokenID string) (To
 	return m.tokenData, m.err
 }
 
+// GetTokenByToken retrieves a token by its token string (for authentication)
+func (m *mockManagerStore) GetTokenByToken(ctx context.Context, tokenString string) (TokenData, error) {
+	return m.tokenData, m.err
+}
+
 // Implement other required methods as no-ops
 func (m *mockManagerStore) IncrementTokenUsage(ctx context.Context, tokenID string) error { return nil }
 func (m *mockManagerStore) ResetTokenUsage(ctx context.Context, tokenID string) error     { return nil }

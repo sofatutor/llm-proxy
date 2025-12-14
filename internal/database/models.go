@@ -17,6 +17,7 @@ type Project struct {
 
 // Token represents a token in the database.
 type Token struct {
+	ID            string     `json:"id"`
 	Token         string     `json:"token"`
 	ProjectID     string     `json:"project_id"`
 	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
