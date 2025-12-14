@@ -8,6 +8,7 @@ export class SeedFixture {
   private readonly managementToken: string;
   private readonly createdProjects: string[] = [];
   private readonly createdTokens: string[] = [];
+  private readonly createdTokenIDs: string[] = [];
 
   constructor(baseUrl: string, managementToken: string) {
     // Require explicit Management API base URL; do not fall back silently
@@ -53,7 +54,7 @@ export class SeedFixture {
   /**
    * Create a test token for a project
    */
-  async createToken(projectId: string, durationMinutes: number = 60): Promise<string> {
+  async createToken(projectId: string, durationMinutes: number = 60): Promise<{ id: string; token: string }> {
     const response = await fetch(`${this.baseUrl}/manage/tokens`, {
       method: 'POST',
       headers: {
@@ -71,8 +72,70 @@ export class SeedFixture {
     }
 
     const tokenResponse = await response.json();
-    this.createdTokens.push(tokenResponse.token);
-    return tokenResponse.token;
+    const tokenValue = tokenResponse.token as string | undefined;
+
+    if (!tokenValue) {
+      throw new Error('Token creation response missing token value');
+    }
+
+    // Fetch the token list filtered by project to obtain the new token ID (UUID primary key)
+    const tokenListResponse = await fetch(`${this.baseUrl}/manage/tokens?projectId=${encodeURIComponent(projectId)}`, {
+      headers: {
+        'Authorization': `Bearer ${this.managementToken}`,
+      },
+    });
+
+    if (!tokenListResponse.ok) {
+      throw new Error(`Failed to list tokens for project ${projectId}: ${tokenListResponse.status} ${tokenListResponse.statusText}`);
+    }
+
+    type TokenListEntry = { id: string; project_id: string; token: string };
+    const tokens = await tokenListResponse.json() as TokenListEntry[];
+
+    if (!Array.isArray(tokens) || tokens.length === 0) {
+      throw new Error(`No tokens found for project ${projectId} after creation`);
+    }
+
+    const obfuscatedToken = this.obfuscateToken(tokenValue);
+    const createdToken = tokens.find(t => t.project_id === projectId && t.token === obfuscatedToken)
+      ?? tokens.find(t => t.project_id === projectId)
+      ?? tokens[0];
+    const tokenID = (tokenResponse.id as string | undefined) ?? createdToken.id;
+
+    if (!tokenID) {
+      throw new Error('Token creation response missing token ID');
+    }
+
+    this.createdTokens.push(tokenValue);
+    this.createdTokenIDs.push(tokenID);
+
+    return { id: tokenID, token: tokenValue };
+  }
+
+  private obfuscateToken(token: string): string {
+    if (!token) {
+      return token;
+    }
+
+    const prefix = 'sk-';
+    if (!token.startsWith(prefix)) {
+      if (token.length <= 4) {
+        return '*'.repeat(token.length);
+      }
+      if (token.length <= 12) {
+        return `${token.slice(0, 2)}${'*'.repeat(token.length - 2)}`;
+      }
+      return `${token.slice(0, 8)}...${token.slice(-4)}`;
+    }
+
+    const rest = token.slice(prefix.length);
+    if (rest.length <= 8) {
+      return token;
+    }
+
+    const visible = 4;
+    const middle = '*'.repeat(rest.length - visible * 2);
+    return `${prefix}${rest.slice(0, visible)}${middle}${rest.slice(-visible)}`;
   }
 
   /**
@@ -164,7 +227,7 @@ export class SeedFixture {
    */
   async cleanup(): Promise<void> {
     // Revoke all created tokens first
-    for (const tokenId of this.createdTokens) {
+    for (const tokenId of this.createdTokenIDs) {
       try {
         await this.revokeToken(tokenId);
       } catch (error) {
@@ -177,6 +240,7 @@ export class SeedFixture {
 
     this.createdProjects.length = 0;
     this.createdTokens.length = 0;
+    this.createdTokenIDs.length = 0;
   }
 
   /**
@@ -191,5 +255,12 @@ export class SeedFixture {
    */
   getCreatedTokens(): string[] {
     return [...this.createdTokens];
+  }
+
+  /**
+   * Get all created token IDs (UUID primary keys)
+   */
+  getCreatedTokenIDs(): string[] {
+    return [...this.createdTokenIDs];
   }
 }
