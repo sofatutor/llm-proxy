@@ -19,7 +19,8 @@ test.describe('Timestamp Localization', () => {
     
     // Create test data
     projectId = await seed.createProject('Timestamp Test Project', 'sk-test-key');
-    tokenId = await seed.createToken(projectId, 120);
+    const token = await seed.createToken(projectId, 120);
+    tokenId = token.id;
   });
 
   test.afterEach(async () => {
@@ -40,6 +41,11 @@ test.describe('Timestamp Localization', () => {
       const tsValue = await el.getAttribute('data-ts');
       expect(tsValue).toBeTruthy();
       expect(tsValue).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+
+      // Should preserve the canonical UTC ISO timestamp in title
+      const title = await el.getAttribute('title');
+      expect(title).toBeTruthy();
+      expect(title).toBe(tsValue);
       
       // Should end with Z (UTC) or have timezone offset
       expect(tsValue).toMatch(/Z$|[+-]\d{2}:\d{2}$/);
@@ -87,6 +93,13 @@ test.describe('Timestamp Localization', () => {
     
     // Should have at least 2 timestamp elements (created and updated)
     expect(timestampElements.length).toBeGreaterThanOrEqual(2);
+
+    // Spot-check first timestamp keeps canonical UTC ISO in title
+    const first = timestampElements[0];
+    const dataTs = await first.getAttribute('data-ts');
+    const title = await first.getAttribute('title');
+    expect(title).toBeTruthy();
+    expect(title).toBe(dataTs);
   });
 
   test('should render timestamps with data-local-time attributes on dashboard', async ({ page }) => {
@@ -98,6 +111,10 @@ test.describe('Timestamp Localization', () => {
     
     const tsValue = await serverTime.getAttribute('data-ts');
     expect(tsValue).toBeTruthy();
+
+    const title = await serverTime.getAttribute('title');
+    expect(title).toBeTruthy();
+    expect(title).toBe(tsValue);
   });
 
   test('should localize timestamps using JavaScript on page load', async ({ page }) => {
@@ -161,7 +178,8 @@ test.describe('Timestamp Localization - Timezone Variations', () => {
     await auth.login(MANAGEMENT_TOKEN);
     
     projectId = await seed.createProject('TZ Test Project', 'sk-test-key');
-    tokenId = await seed.createToken(projectId, 120);
+    const token = await seed.createToken(projectId, 120);
+    tokenId = token.id;
   });
 
   test.afterEach(async () => {
@@ -178,7 +196,11 @@ test.describe('Timestamp Localization - Timezone Variations', () => {
     await pacificAuth.login(MANAGEMENT_TOKEN);
     await pacificPage.goto(`/tokens/${tokenId}`);
     await pacificPage.waitForLoadState('networkidle');
-    const pacificTime = await pacificPage.locator('[data-format="ymd_hms"]').first().textContent();
+    const pacificTimestampEl = pacificPage.locator('[data-local-time="true"][data-ts]').first();
+    const pacificDataTs = await pacificTimestampEl.getAttribute('data-ts');
+    const pacificTitle = await pacificTimestampEl.getAttribute('title');
+    const pacificText = await pacificTimestampEl.textContent();
+    const pacificDisplayedHm = pacificText?.match(/\b\d{2}:\d{2}\b/)?.[0];
     
     // Test in Tokyo timezone  
     const tokyoContext = await browser.newContext({
@@ -189,12 +211,29 @@ test.describe('Timestamp Localization - Timezone Variations', () => {
     await tokyoAuth.login(MANAGEMENT_TOKEN);
     await tokyoPage.goto(`/tokens/${tokenId}`);
     await tokyoPage.waitForLoadState('networkidle');
-    const tokyoTime = await tokyoPage.locator('[data-format="ymd_hms"]').first().textContent();
+    const tokyoTimestampEl = tokyoPage.locator('[data-local-time="true"][data-ts]').first();
+    const tokyoDataTs = await tokyoTimestampEl.getAttribute('data-ts');
+    const tokyoTitle = await tokyoTimestampEl.getAttribute('title');
+    const tokyoText = await tokyoTimestampEl.textContent();
+    const tokyoDisplayedHm = tokyoText?.match(/\b\d{2}:\d{2}\b/)?.[0];
     
     // The times should be different (Pacific is typically 17 hours behind Tokyo)
-    expect(pacificTime).toBeTruthy();
-    expect(tokyoTime).toBeTruthy();
-    expect(pacificTime).not.toBe(tokyoTime);
+    expect(pacificDataTs).toBeTruthy();
+    expect(tokyoDataTs).toBeTruthy();
+    expect(pacificDataTs).toBe(tokyoDataTs);
+
+    // If a title is present, it should preserve UTC ISO (and be identical across timezones)
+    if (pacificTitle !== null && tokyoTitle !== null) {
+      expect(pacificTitle).toBeTruthy();
+      expect(tokyoTitle).toBeTruthy();
+      expect(pacificTitle).toBe(tokyoTitle);
+      expect(pacificTitle).toBe(pacificDataTs);
+    }
+
+    // Visible text should differ because the browser timezone differs
+    expect(pacificDisplayedHm).toBeTruthy();
+    expect(tokyoDisplayedHm).toBeTruthy();
+    expect(pacificDisplayedHm).not.toBe(tokyoDisplayedHm);
     
     await pacificContext.close();
     await tokyoContext.close();
@@ -219,11 +258,16 @@ test.describe('Timestamp Localization - Timezone Variations', () => {
     // Parse both and verify they represent the same instant
     expect(dataTs).toBeTruthy();
     expect(displayedText).toBeTruthy();
+
+    const title = await timestampEl.getAttribute('title');
+    if (title !== null) {
+      expect(title).toBe(dataTs);
+    }
     
-    // The displayed text should contain the same date as the ISO timestamp
-    // (since we're in UTC timezone)
-    const isoDate = dataTs?.substring(0, 10); // YYYY-MM-DD
-    expect(displayedText).toContain(isoDate);
+    // Since we're in UTC timezone, the displayed HH:MM should match the UTC HH:MM in the ISO timestamp.
+    const isoHm = dataTs?.substring(11, 16); // HH:MM
+    expect(isoHm).toMatch(/^\d{2}:\d{2}$/);
+    expect(displayedText).toContain(isoHm);
     
     await utcContext.close();
   });
