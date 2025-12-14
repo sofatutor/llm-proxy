@@ -80,9 +80,8 @@ llm-proxy dispatcher --backend file --file ./data/events.jsonl
 - Event delivery is fully async, non-blocking, batched, and resilient to failures.
 
 ## Event Bus Backends
-- **In-Memory** (`in-memory`): Fast, simple, for local/dev use. Single process only.
-- **Redis List** (`redis`): For distributed event delivery and multi-process fan-out. At-most-once delivery.
-- **Redis Streams** (`redis-streams`): For production with consumer groups, acknowledgment, and at-least-once delivery. See [Redis Streams Backend](#redis-streams-backend-recommended-for-production).
+- **Redis Streams** (`redis-streams`): **Recommended for production**. Provides consumer groups, acknowledgment, at-least-once delivery, and crash recovery. See [Redis Streams Backend](#redis-streams-backend-recommended-for-production).
+- **In-Memory** (`in-memory`): Fast, simple, for local/dev use. Single process only. No durability or delivery guarantees.
 - **Custom**: Implement the `EventBus` interface for other backends (Kafka, HTTP, etc.).
 
 ## Event Schema Example
@@ -360,11 +359,11 @@ redis:
   restart: unless-stopped
 ```
 
-Configure both the proxy and dispatcher to use Redis:
+Configure both the proxy and dispatcher to use Redis Streams:
 
 ```bash
-LLM_PROXY_EVENT_BUS=redis llm-proxy ...
-LLM_PROXY_EVENT_BUS=redis llm-proxy dispatcher ...
+LLM_PROXY_EVENT_BUS=redis-streams llm-proxy server ...
+LLM_PROXY_EVENT_BUS=redis-streams llm-proxy dispatcher ...
 ```
 
 This enables full async event delivery and observability pipeline testing across processes.
@@ -390,7 +389,7 @@ LLM_PROXY_EVENT_BUS=redis-streams llm-proxy server ...
 
 | Environment Variable | Description | Default |
 |---------------------|-------------|---------|
-| `LLM_PROXY_EVENT_BUS` | Set to `redis-streams` to enable | `redis` |
+| `LLM_PROXY_EVENT_BUS` | Event bus backend | `redis-streams` |
 | `REDIS_ADDR` | Redis server address | `localhost:6379` |
 | `REDIS_DB` | Redis database number | `0` |
 | `REDIS_STREAM_KEY` | Stream key name | `llm-proxy-events` |
@@ -440,16 +439,17 @@ REDIS_CONSUMER_NAME=dispatcher-2 llm-proxy dispatcher --service lunary
 
 Each message is delivered to exactly one consumer in the group. If a consumer fails, its pending messages are automatically reassigned.
 
-### When to Use Redis Streams vs Redis List
+### Redis Streams vs In-Memory
 
-| Feature | Redis List (`redis`) | Redis Streams (`redis-streams`) |
-|---------|---------------------|--------------------------------|
-| Delivery guarantee | At-most-once | At-least-once |
+| Feature | In-Memory | Redis Streams |
+|---------|-----------|---------------|
+| Delivery guarantee | None (buffer overflow drops events) | At-least-once |
+| Processes | Single process only | Distributed across multiple processes/hosts |
 | Consumer groups | No | Yes |
-| Multiple dispatchers | No (all see same events) | Yes (events distributed) |
+| Multiple dispatchers | No | Yes (events distributed via consumer groups) |
 | Crash recovery | No | Yes (pending message claiming) |
 | Acknowledgment | No | Yes |
-| Recommended for | Development, simple setups | Production, high reliability |
+| Recommended for | Development, local testing | Production, high reliability |
 
 ## Production Reliability Warning: Event Retention & Loss
 

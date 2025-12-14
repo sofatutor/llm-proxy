@@ -152,9 +152,11 @@ services:
       - LOG_LEVEL=info
       - HTTP_CACHE_ENABLED=true
       - HTTP_CACHE_BACKEND=redis
-      - LLM_PROXY_EVENT_BUS=redis
+      - LLM_PROXY_EVENT_BUS=redis-streams
       - REDIS_ADDR=redis:6379
       - REDIS_DB=0
+      - REDIS_STREAM_KEY=llm-proxy-events
+      - REDIS_CONSUMER_GROUP=llm-proxy-dispatchers
     depends_on:
       redis:
         condition: service_started
@@ -179,8 +181,10 @@ services:
     volumes:
       - ./logs:/app/logs
     environment:
-      - LLM_PROXY_EVENT_BUS=redis
+      - LLM_PROXY_EVENT_BUS=redis-streams
       - REDIS_ADDR=redis:6379
+      - REDIS_STREAM_KEY=llm-proxy-events
+      - REDIS_CONSUMER_GROUP=llm-proxy-dispatchers
     depends_on:
       - redis
 

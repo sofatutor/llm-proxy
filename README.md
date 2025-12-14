@@ -304,16 +304,16 @@ db:
   restart: unless-stopped
 ```
 
-### Configuring the Proxy and Dispatcher to Use Redis
+### Configuring the Proxy and Dispatcher to Use Redis Streams
 
-Set the event bus backend to Redis by using the appropriate environment variable or CLI flag (see documentation for exact flag):
+Set the event bus backend to Redis Streams (default) for production deployments with guaranteed delivery:
 
 ```bash
-LLM_PROXY_EVENT_BUS=redis llm-proxy ...
-LLM_PROXY_EVENT_BUS=redis llm-proxy dispatcher ...
+LLM_PROXY_EVENT_BUS=redis-streams llm-proxy server
+LLM_PROXY_EVENT_BUS=redis-streams llm-proxy dispatcher --service file --endpoint events.jsonl
 ```
 
-This ensures both the proxy and dispatcher share events via Redis, enabling full async pipeline testing and production-like operation.
+Redis Streams provides at-least-once delivery, consumer groups, and automatic crash recovery. For local development, you can use `in-memory` for single-process testing.
 
 ## Project Structure
 - `/cmd` — Entrypoints (`proxy`, `eventdispatcher`)

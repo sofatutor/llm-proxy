@@ -399,9 +399,9 @@ MAX_REQUEST_SIZE=50MB
 
 **Solutions**:
 
-1. **In-memory vs Redis** - For multi-process, use Redis:
+1. **In-memory vs Redis Streams** - For multi-process, use Redis Streams (default):
    ```bash
-   LLM_PROXY_EVENT_BUS=redis
+   LLM_PROXY_EVENT_BUS=redis-streams
    REDIS_ADDR=redis:6379
    ```
 

@@ -5,11 +5,10 @@ Asynchronous, non-blocking event bus for observability and instrumentation event
 ## Purpose & Responsibilities
 
 - **Non-blocking Event Publishing**: Events published asynchronously to avoid blocking request handling
-- **Fan-out Broadcasting**: Multiple subscribers receive all published events
-- **Backend Flexibility**: In-memory (single process), Redis List, or Redis Streams (distributed with consumer groups)
-- **Graceful Degradation**: Buffer overflow drops events rather than blocking
-- **Monotonic Event IDs**: Redis backend assigns sequential `LogID` values for ordering
-- **At-least-once Delivery**: Redis Streams backend with consumer groups and acknowledgment
+- **Fan-out Broadcasting**: Multiple subscribers receive all published events (in-memory backend only)
+- **Backend Flexibility**: In-memory (single process) or Redis Streams (distributed with guaranteed delivery)
+- **Graceful Degradation**: Buffer overflow drops events rather than blocking (in-memory backend)
+- **At-least-once Delivery**: Redis Streams backend with consumer groups, acknowledgment, and crash recovery
 
 ## Architecture
 
@@ -51,21 +50,7 @@ Best for single-process deployments and local development.
 
 **Key Functions**: `NewInMemoryEventBus(bufferSize)`, `Publish()`, `Subscribe()`, `Stop()`, `Stats()`
 
-### Redis EventBus (List-based)
-
-Best for distributed deployments where multiple processes share events with simple semantics.
-
-| Feature | Behavior |
-|---------|----------|
-| Delivery | Distributed across processes |
-| Storage | Redis LIST with JSON serialization |
-| TTL | Configurable expiration |
-| Trimming | Automatic via max length |
-| Ordering | Monotonic `LogID` via Redis INCR |
-
-**Key Functions**: `NewRedisEventBusPublisher()`, `NewRedisEventBusLog()`, `ReadEvents()`, `EventCount()`
-
-### Redis Streams EventBus
+### Redis Streams EventBus (Recommended for Production)
 
 Best for distributed deployments requiring durable, guaranteed delivery with consumer groups.
 
@@ -130,7 +115,7 @@ The `Event` struct captures HTTP request/response data for observability:
 | Environment Variable | Description | Default |
 |---------------------|-------------|---------|
 | `OBSERVABILITY_BUFFER_SIZE` | Event buffer size for in-memory bus | `1000` |
-| `LLM_PROXY_EVENT_BUS` | Backend type: `in-memory`, `redis`, or `redis-streams` | `redis` |
+| `LLM_PROXY_EVENT_BUS` | Backend type: `in-memory` or `redis-streams` | `redis-streams` |
 | `REDIS_ADDR` | Redis server address | `localhost:6379` |
 | `REDIS_DB` | Redis database number | `0` |
 
