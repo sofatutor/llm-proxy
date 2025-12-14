@@ -101,7 +101,7 @@ llm-proxy dispatcher --service helicone --api-key $HELICONE_API_KEY
 |----------|-------------|---------|
 | `LLM_PROXY_API_KEY` | API key for selected service | - |
 | `LLM_PROXY_ENDPOINT` | Default endpoint URL | - |
-| `LLM_PROXY_EVENT_BUS` | Event bus backend (`memory` or `redis`) | `memory` |
+| `LLM_PROXY_EVENT_BUS` | Event bus backend (`in-memory` or `redis-streams`) | `redis-streams` |
 
 ## Batching and Retry Flow
 

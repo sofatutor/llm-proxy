@@ -144,10 +144,23 @@ The async event bus handles observability events for all API calls.
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `OBSERVABILITY_ENABLED` | bool | - | **Deprecated**: Event bus is always enabled |
-| `OBSERVABILITY_BUFFER_SIZE` | int | `1000` | Event buffer size |
+| `OBSERVABILITY_BUFFER_SIZE` | int | `1000` | Event buffer size (for in-memory backend) |
 | `FILE_EVENT_LOG` | string | - | Path to persistent event log file |
-| `LLM_PROXY_EVENT_BUS` | string | `in-memory` | Event bus backend: `in-memory` or `redis` |
+| `LLM_PROXY_EVENT_BUS` | string | `redis-streams` | Event bus backend: `redis-streams` or `in-memory` |
 | `REDIS_ADDR` | string | `localhost:6379` | Redis address for event bus |
+| `REDIS_DB` | int | `0` | Redis database number |
+
+### Redis Streams Configuration (Recommended for Production)
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `REDIS_STREAM_KEY` | string | `llm-proxy-events` | Stream key name |
+| `REDIS_CONSUMER_GROUP` | string | `llm-proxy-dispatchers` | Consumer group name |
+| `REDIS_CONSUMER_NAME` | string | auto-generated | Consumer name (unique per instance) |
+| `REDIS_STREAM_MAX_LEN` | int | `10000` | Max stream length (0 = unlimited) |
+| `REDIS_STREAM_BLOCK_TIME` | duration | `5s` | Block timeout for reading |
+| `REDIS_STREAM_CLAIM_TIME` | duration | `30s` | Min idle time before claiming pending messages |
+| `REDIS_STREAM_BATCH_SIZE` | int | `100` | Batch size for reading messages |
 
 ### Event Dispatcher
 
@@ -326,9 +339,12 @@ HTTP_CACHE_ENABLED=true
 HTTP_CACHE_BACKEND=redis
 
 # Redis (shared by cache and event bus)
-LLM_PROXY_EVENT_BUS=redis
+LLM_PROXY_EVENT_BUS=redis-streams
 REDIS_ADDR=redis:6379
 REDIS_DB=0
+REDIS_STREAM_KEY=llm-proxy-events
+REDIS_CONSUMER_GROUP=llm-proxy-dispatchers
+REDIS_STREAM_MAX_LEN=50000
 OBSERVABILITY_BUFFER_SIZE=2000
 
 # Security

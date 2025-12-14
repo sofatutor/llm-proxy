@@ -9,20 +9,22 @@ x-llm-proxy-base: &llm-proxy-base
     - ALL
   tmpfs:
     - /tmp
-  environment:
-    - OPENAI_API_KEY=${OPENAI_API_KEY}
-    - MANAGEMENT_TOKEN=${MANAGEMENT_TOKEN}
-    - LOG_LEVEL=${LOG_LEVEL:-info}
-    - ENABLE_METRICS=true
-    - PORT=${PORT:-8080}
-    - LLM_PROXY_EVENT_BUS=redis
-    - REDIS_ADDR=redis:6379
-    - DB_DRIVER=postgres
-    - DATABASE_URL=postgres://llmproxy:${POSTGRES_PASSWORD:-secret}@postgres:5432/llmproxy?sslmode=disable
-    - HTTP_CACHE_ENABLED=${HTTP_CACHE_ENABLED:-false}
-    - HTTP_CACHE_BACKEND=${HTTP_CACHE_BACKEND:-in-memory}
-    - HTTP_CACHE_DEFAULT_TTL=${HTTP_CACHE_DEFAULT_TTL:-300}
-    - CACHE_STATS_BUFFER_SIZE=${CACHE_STATS_BUFFER_SIZE:-1000}
+  environment: &llm-proxy-env
+    OPENAI_API_KEY: ${OPENAI_API_KEY}
+    MANAGEMENT_TOKEN: ${MANAGEMENT_TOKEN}
+    LOG_LEVEL: ${LOG_LEVEL:-info}
+    ENABLE_METRICS: "true"
+    PORT: ${PORT:-8080}
+    LLM_PROXY_EVENT_BUS: redis-streams
+    REDIS_ADDR: redis:6379
+    REDIS_STREAM_KEY: llm-proxy-events
+    REDIS_CONSUMER_GROUP: llm-proxy-dispatchers
+    DB_DRIVER: postgres
+    DATABASE_URL: postgres://llmproxy:${POSTGRES_PASSWORD:-secret}@postgres:5432/llmproxy?sslmode=disable
+    HTTP_CACHE_ENABLED: ${HTTP_CACHE_ENABLED:-false}
+    HTTP_CACHE_BACKEND: ${HTTP_CACHE_BACKEND:-in-memory}
+    HTTP_CACHE_DEFAULT_TTL: ${HTTP_CACHE_DEFAULT_TTL:-300}
+    CACHE_STATS_BUFFER_SIZE: ${CACHE_STATS_BUFFER_SIZE:-1000}
   volumes:
     - ./tmp/llm-proxy-data:/app/data
     - ./tmp/llm-proxy-logs:/app/logs
@@ -95,6 +97,9 @@ services:
   logger:
     <<: *llm-proxy-base
     container_name: llm-proxy-file-logger
+    environment:
+      <<: *llm-proxy-env
+      REDIS_CONSUMER_GROUP: llm-proxy-dispatchers-file
     command: ["dispatcher", "--service", "file", "--endpoint", "/app/logs/events.jsonl"]
     volumes:
       - ./tmp/llm-proxy-logs:/app/logs
@@ -104,6 +109,9 @@ services:
   helicone:
     <<: *llm-proxy-base
     container_name: llm-proxy-helicone-logger
+    environment:
+      <<: *llm-proxy-env
+      REDIS_CONSUMER_GROUP: llm-proxy-dispatchers-helicone
     command: ["dispatcher", "--service", "helicone", "--api-key", "${HELICONE_API_KEY}"]
     depends_on:
       - redis

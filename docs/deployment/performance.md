@@ -173,17 +173,21 @@ OBSERVABILITY_BUFFER_SIZE=5000
 OBSERVABILITY_BUFFER_SIZE=10000
 ```
 
-### Redis Event Bus (Recommended for Production)
+### Redis Streams Event Bus (Recommended for Production)
 
 ```bash
-# Use Redis for distributed event handling
-LLM_PROXY_EVENT_BUS=redis
+# Use Redis Streams for distributed event handling with guaranteed delivery
+LLM_PROXY_EVENT_BUS=redis-streams
 REDIS_ADDR=redis:6379
+REDIS_STREAM_KEY=llm-proxy-events
+REDIS_CONSUMER_GROUP=llm-proxy-dispatchers
 ```
 
 Benefits:
+- At-least-once delivery guarantees
 - Events survive proxy restarts
-- Multiple dispatcher instances can consume
+- Multiple dispatcher instances share workload via consumer groups
+- Automatic crash recovery and pending message claiming
 - Cross-process event sharing
 
 ### Dispatcher Tuning
@@ -286,9 +290,11 @@ DATABASE_POOL_SIZE=20  # Per instance
 # Cache and Event bus - all instances share same Redis
 HTTP_CACHE_ENABLED=true
 HTTP_CACHE_BACKEND=redis
-LLM_PROXY_EVENT_BUS=redis
+LLM_PROXY_EVENT_BUS=redis-streams
 REDIS_ADDR=redis:6379
 REDIS_DB=0
+REDIS_STREAM_KEY=llm-proxy-events
+REDIS_CONSUMER_GROUP=llm-proxy-dispatchers
 
 # Rate limiting - distributed
 DISTRIBUTED_RATE_LIMIT_ENABLED=true

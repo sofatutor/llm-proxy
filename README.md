@@ -304,16 +304,21 @@ db:
   restart: unless-stopped
 ```
 
-### Configuring the Proxy and Dispatcher to Use Redis
+### Configuring the Proxy and Dispatcher to Use Redis Streams
 
-Set the event bus backend to Redis by using the appropriate environment variable or CLI flag (see documentation for exact flag):
+Set the event bus backend to Redis Streams (default) for production deployments with guaranteed delivery:
 
 ```bash
-LLM_PROXY_EVENT_BUS=redis llm-proxy ...
-LLM_PROXY_EVENT_BUS=redis llm-proxy dispatcher ...
+LLM_PROXY_EVENT_BUS=redis-streams llm-proxy server
+LLM_PROXY_EVENT_BUS=redis-streams llm-proxy dispatcher --service file --endpoint events.jsonl
 ```
 
-This ensures both the proxy and dispatcher share events via Redis, enabling full async pipeline testing and production-like operation.
+Redis Streams provides at-least-once delivery, consumer groups, and automatic crash recovery. For local development, you can use `in-memory` for single-process testing.
+
+#### Fan-out vs Load Balancing (Important)
+
+- If you run **multiple instances of the same dispatcher backend** (e.g. multiple Helicone dispatchers for throughput), use the **same** `REDIS_CONSUMER_GROUP` to **share** work.
+- If you run **multiple different dispatcher backends** (e.g. Helicone *and* file) and want **both to receive all events**, use **different** `REDIS_CONSUMER_GROUP` values per backend to **fan-out**.
 
 ## Project Structure
 - `/cmd` — Entrypoints (`proxy`, `eventdispatcher`)

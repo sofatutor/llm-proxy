@@ -80,9 +80,8 @@ llm-proxy dispatcher --backend file --file ./data/events.jsonl
 - Event delivery is fully async, non-blocking, batched, and resilient to failures.
 
 ## Event Bus Backends
-- **In-Memory** (`in-memory`): Fast, simple, for local/dev use. Single process only.
-- **Redis List** (`redis`): For distributed event delivery and multi-process fan-out. At-most-once delivery.
-- **Redis Streams** (`redis-streams`): For production with consumer groups, acknowledgment, and at-least-once delivery. See [Redis Streams Backend](#redis-streams-backend-recommended-for-production).
+- **Redis Streams** (`redis-streams`): **Recommended for production**. Provides consumer groups, acknowledgment, at-least-once delivery, and crash recovery. See [Redis Streams Backend](#redis-streams-backend-recommended-for-production).
+- **In-Memory** (`in-memory`): Fast, simple, for local/dev use. Single process only. No durability or delivery guarantees.
 - **Custom**: Implement the `EventBus` interface for other backends (Kafka, HTTP, etc.).
 
 ## Event Schema Example
@@ -360,11 +359,11 @@ redis:
   restart: unless-stopped
 ```
 
-Configure both the proxy and dispatcher to use Redis:
+Configure both the proxy and dispatcher to use Redis Streams:
 
 ```bash
-LLM_PROXY_EVENT_BUS=redis llm-proxy ...
-LLM_PROXY_EVENT_BUS=redis llm-proxy dispatcher ...
+LLM_PROXY_EVENT_BUS=redis-streams llm-proxy server ...
+LLM_PROXY_EVENT_BUS=redis-streams llm-proxy dispatcher ...
 ```
 
 This enables full async event delivery and observability pipeline testing across processes.
@@ -390,7 +389,7 @@ LLM_PROXY_EVENT_BUS=redis-streams llm-proxy server ...
 
 | Environment Variable | Description | Default |
 |---------------------|-------------|---------|
-| `LLM_PROXY_EVENT_BUS` | Set to `redis-streams` to enable | `redis` |
+| `LLM_PROXY_EVENT_BUS` | Event bus backend | `redis-streams` |
 | `REDIS_ADDR` | Redis server address | `localhost:6379` |
 | `REDIS_DB` | Redis database number | `0` |
 | `REDIS_STREAM_KEY` | Stream key name | `llm-proxy-events` |
@@ -440,27 +439,77 @@ REDIS_CONSUMER_NAME=dispatcher-2 llm-proxy dispatcher --service lunary
 
 Each message is delivered to exactly one consumer in the group. If a consumer fails, its pending messages are automatically reassigned.
 
-### When to Use Redis Streams vs Redis List
+### Multiple Dispatcher Services (Fan-out)
 
-| Feature | Redis List (`redis`) | Redis Streams (`redis-streams`) |
-|---------|---------------------|--------------------------------|
-| Delivery guarantee | At-most-once | At-least-once |
+If you want **multiple backends** (e.g. **file** and **helicone**) to each receive **100% of events**, do **not** run them in the same consumer group.
+
+- **Same `REDIS_CONSUMER_GROUP`** across multiple dispatcher services = **load balancing** (each event goes to only one service)
+- **Different `REDIS_CONSUMER_GROUP`** per service = **fan-out** (each service reads the full stream independently)
+
+Example:
+
+```bash
+# File logger consumes all events
+REDIS_CONSUMER_GROUP=llm-proxy-dispatchers-file \
+  llm-proxy dispatcher --service file --endpoint events.jsonl
+
+# Helicone logger also consumes all events
+REDIS_CONSUMER_GROUP=llm-proxy-dispatchers-helicone \
+  llm-proxy dispatcher --service helicone --api-key $HELICONE_API_KEY
+```
+
+### Redis Streams vs In-Memory
+
+| Feature | In-Memory | Redis Streams |
+|---------|-----------|---------------|
+| Delivery guarantee | None (buffer overflow drops events) | At-least-once |
+| Processes | Single process only | Distributed across multiple processes/hosts |
 | Consumer groups | No | Yes |
-| Multiple dispatchers | No (all see same events) | Yes (events distributed) |
+| Multiple dispatchers | No | Yes (events distributed via consumer groups) |
 | Crash recovery | No | Yes (pending message claiming) |
 | Acknowledgment | No | Yes |
-| Recommended for | Development, simple setups | Production, high reliability |
+| Recommended for | Development, local testing | Production, high reliability |
 
-## Production Reliability Warning: Event Retention & Loss
+## Redis Streams Rollout Checklist
 
-> Important: If the Redis-backed event log expires or is trimmed before the dispatcher reads events, those events are irretrievably lost. The dispatcher will log warnings like "Missed events due to TTL or trimming" when it detects gaps.
+Use this checklist when enabling Redis Streams in new environments:
 
-Recommendations for production:
+### Prerequisites
+- [ ] Redis server accessible from all proxy and dispatcher instances
+- [ ] `MANAGEMENT_TOKEN` configured for admin operations
 
-- Size retention to your worst-case lag: increase the Redis list TTL and max length so they exceed the maximum expected dispatcher downtime/lag and event volume burst.
-- Keep the dispatcher continuously running and sized appropriately: raise batch size and processing concurrency to keep up with peak throughput.
-- Monitor gaps: alert on warnings about missed events and on dispatcher lag.
-- If you require strict, zero-loss semantics, consider a durable queue with consumer offsets (e.g., Redis Streams with consumer groups, Kafka) instead of a simple Redis list with TTL/trim.
+### Configuration
+- [ ] Set `LLM_PROXY_EVENT_BUS=redis-streams` on proxy and dispatcher
+- [ ] Set `REDIS_ADDR` to your Redis server address
+- [ ] Set `REDIS_STREAM_KEY` (default: `llm-proxy-events`)
+- [ ] Set `REDIS_CONSUMER_GROUP` (default: `llm-proxy-dispatchers`)
+- [ ] Configure `REDIS_STREAM_MAX_LEN` based on expected throughput (default: 10000)
+
+### Verification
+- [ ] Verify consumer group exists: `redis-cli XINFO GROUPS llm-proxy-events`
+- [ ] Check stream length: `redis-cli XLEN llm-proxy-events`
+- [ ] Monitor pending count: `redis-cli XPENDING llm-proxy-events llm-proxy-dispatchers`
+- [ ] Verify dispatcher is consuming: check logs for "Using Redis Streams event bus"
+- [ ] Confirm events are being acknowledged: pending count should remain stable or decrease
+
+### Monitoring
+- [ ] Set up alerts for pending count > 1000 (indicates dispatcher lag)
+- [ ] Monitor stream length to ensure it stays below max length
+- [ ] Track dispatcher health endpoint for lag warnings
+- [ ] Monitor dispatcher logs for claim/recovery messages
+
+### Troubleshooting
+
+**High Pending Count:**
+- Increase `REDIS_STREAM_BATCH_SIZE` (default: 100)
+- Reduce `REDIS_STREAM_CLAIM_TIME` to claim stuck messages faster (default: 30s)
+- Scale horizontally: add more dispatcher instances (they share workload via consumer group)
+- Check dispatcher logs for errors or slow backend API calls
+
+**Stream Length Growing:**
+- Increase `REDIS_STREAM_MAX_LEN` if losing events due to trimming
+- Ensure dispatchers are running and healthy
+- Check that dispatchers are acknowledging messages (XACK)
 
 ## References
 - See `internal/middleware/instrumentation.go` for the middleware implementation.

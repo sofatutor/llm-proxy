@@ -2,15 +2,10 @@ package eventbus
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"log"
-
-	"github.com/redis/go-redis/v9"
 )
 
 // Event represents an observability event emitted by the proxy.
@@ -137,146 +132,5 @@ func (b *InMemoryEventBus) Stats() (published, dropped int) {
 	return int(b.stats.published.Load()), int(b.stats.dropped.Load())
 }
 
-// Extend RedisClient interface for LRANGE, LLEN, EXPIRE, LTRIM, Incr, Get, Set
-type RedisClient interface {
-	LPush(ctx context.Context, key string, values ...interface{}) error
-	LRANGE(ctx context.Context, key string, start, stop int64) ([]string, error)
-	LLEN(ctx context.Context, key string) (int64, error)
-	EXPIRE(ctx context.Context, key string, expiration time.Duration) error
-	LTRIM(ctx context.Context, key string, start, stop int64) error
-	Incr(ctx context.Context, key string) (int64, error)
-	Get(ctx context.Context, key string) (string, error)
-	Set(ctx context.Context, key, value string) error
-}
-
-// RedisGoClientAdapter adapts go-redis/v9 Client to the RedisClient interface.
-type RedisGoClientAdapter struct {
-	Client *redis.Client
-}
-
-// Extend RedisGoClientAdapter to implement new methods
-func (a *RedisGoClientAdapter) LRANGE(ctx context.Context, key string, start, stop int64) ([]string, error) {
-	return a.Client.LRange(ctx, key, start, stop).Result()
-}
-func (a *RedisGoClientAdapter) LLEN(ctx context.Context, key string) (int64, error) {
-	return a.Client.LLen(ctx, key).Result()
-}
-func (a *RedisGoClientAdapter) EXPIRE(ctx context.Context, key string, expiration time.Duration) error {
-	return a.Client.Expire(ctx, key, expiration).Err()
-}
-func (a *RedisGoClientAdapter) LTRIM(ctx context.Context, key string, start, stop int64) error {
-	return a.Client.LTrim(ctx, key, start, stop).Err()
-}
-func (a *RedisGoClientAdapter) LPush(ctx context.Context, key string, values ...interface{}) error {
-	return a.Client.LPush(ctx, key, values...).Err()
-}
-func (a *RedisGoClientAdapter) Incr(ctx context.Context, key string) (int64, error) {
-	return a.Client.Incr(ctx, key).Result()
-}
-func (a *RedisGoClientAdapter) Get(ctx context.Context, key string) (string, error) {
-	return a.Client.Get(ctx, key).Result()
-}
-func (a *RedisGoClientAdapter) Set(ctx context.Context, key, value string) error {
-	return a.Client.Set(ctx, key, value, 0).Err()
-}
-
-// Refactor RedisEventBus: remove BRPOP/loop, add non-destructive read
-// Remove NewRedisEventBusSubscriber and loop()
-// Add ReadEvents and SetTTL methods
-
-// NewRedisEventBusLog creates a Redis event bus that acts as a persistent log (non-destructive, with TTL and optional max length)
-func NewRedisEventBusLog(client RedisClient, key string, ttl time.Duration, maxLen int64) *RedisEventBus {
-	return &RedisEventBus{
-		client: client,
-		key:    key,
-		logTTL: ttl,
-		maxLen: maxLen,
-	}
-}
-
-// RedisEventBus is a Redis-backed EventBus implementation. Events are encoded as
-// JSON and pushed to a Redis list. This version is a persistent log: events are never removed by consumers.
-type RedisEventBus struct {
-	client RedisClient
-	key    string
-
-	stats  busStats
-	logTTL time.Duration // TTL for the Redis list
-	maxLen int64         // Max length for the Redis list
-}
-
-// NewRedisEventBusPublisher creates a Redis event bus that only publishes events (no background consumer).
-func NewRedisEventBusPublisher(client RedisClient, key string) *RedisEventBus {
-	return &RedisEventBus{
-		client: client,
-		key:    key,
-	}
-}
-
-// Publish pushes the event JSON to the Redis list.
-func (b *RedisEventBus) Publish(ctx context.Context, evt Event) {
-	// Assign a monotonic LogID
-	seq, err := b.client.Incr(ctx, b.key+":seq")
-	if err != nil {
-		log.Printf("[eventbus] Failed to increment event log sequence: %v", err)
-		b.stats.dropped.Add(1)
-		return
-	}
-	evt.LogID = seq
-	data, err := json.Marshal(evt)
-	if err != nil {
-		log.Printf("[eventbus] Failed to marshal event: %v", err)
-		return
-	}
-	if err := b.client.LPush(ctx, b.key, data); err != nil {
-		log.Printf("[eventbus] Failed to publish event to Redis key %s: %v", b.key, err)
-		b.stats.dropped.Add(1)
-		return
-	}
-	if b.maxLen > 0 {
-		_ = b.client.LTRIM(ctx, b.key, 0, b.maxLen-1)
-	}
-	if b.logTTL > 0 {
-		_ = b.client.EXPIRE(ctx, b.key, b.logTTL)
-	}
-	b.stats.published.Add(1)
-}
-
-// ReadEvents returns events in [start, end] (inclusive, like LRANGE)
-func (b *RedisEventBus) ReadEvents(ctx context.Context, start, end int64) ([]Event, error) {
-	items, err := b.client.LRANGE(ctx, b.key, start, end)
-	if err != nil {
-		return nil, err
-	}
-	var events []Event
-	for _, item := range items {
-		var evt Event
-		if err := json.Unmarshal([]byte(item), &evt); err == nil {
-			events = append(events, evt)
-		}
-	}
-	return events, nil
-}
-
-// EventCount returns the current number of events in the log
-func (b *RedisEventBus) EventCount(ctx context.Context) (int64, error) {
-	return b.client.LLEN(ctx, b.key)
-}
-
-// Stop is a no-op for the log-based RedisEventBus (required to satisfy EventBus interface)
-func (b *RedisEventBus) Stop() {}
-
-// Subscribe is not supported for the log-based RedisEventBus. It returns a closed channel.
-func (b *RedisEventBus) Subscribe() <-chan Event {
-	ch := make(chan Event)
-	close(ch)
-	return ch
-}
-
-// Client returns the underlying RedisClient for this RedisEventBus
-func (b *RedisEventBus) Client() RedisClient {
-	return b.client
-}
-
-// Note: Test-only RedisClient mocks have been moved into test files to avoid
-// mixing testing helpers with production code and to keep coverage meaningful.
+// Note: Legacy Redis LIST backend has been removed. Use Redis Streams for production
+// deployments requiring durability and guaranteed delivery.
