@@ -21,7 +21,11 @@ func TestServiceWithRedisStreams(t *testing.T) {
 	client := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
 	})
-	defer client.Close()
+	t.Cleanup(func() {
+		if err := client.Close(); err != nil {
+			t.Errorf("redis client close: %v", err)
+		}
+	})
 
 	// Create Redis Streams event bus
 	config := eventbus.DefaultRedisStreamsConfig()
@@ -104,7 +108,11 @@ func TestServiceRecoveryFromDowntime(t *testing.T) {
 	client := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
 	})
-	defer client.Close()
+	t.Cleanup(func() {
+		if err := client.Close(); err != nil {
+			t.Errorf("redis client close: %v", err)
+		}
+	})
 
 	// Create Redis Streams event bus
 	config := eventbus.DefaultRedisStreamsConfig()
@@ -178,7 +186,11 @@ func TestServiceLagMonitoring(t *testing.T) {
 	client := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
 	})
-	defer client.Close()
+	t.Cleanup(func() {
+		if err := client.Close(); err != nil {
+			t.Errorf("redis client close: %v", err)
+		}
+	})
 
 	// Create Redis Streams event bus
 	config := eventbus.DefaultRedisStreamsConfig()
@@ -269,7 +281,11 @@ func TestServiceHealthCheckWithStreams(t *testing.T) {
 	client := redis.NewClient(&redis.Options{
 		Addr: mr.Addr(),
 	})
-	defer client.Close()
+	t.Cleanup(func() {
+		if err := client.Close(); err != nil {
+			t.Errorf("redis client close: %v", err)
+		}
+	})
 
 	// Create Redis Streams event bus
 	config := eventbus.DefaultRedisStreamsConfig()

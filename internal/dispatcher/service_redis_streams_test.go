@@ -3,12 +3,89 @@ package dispatcher
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"go.uber.org/zap/zaptest"
 )
+
+type fakeRedisStreamsClient struct {
+	pendingCount int64
+	streamLen    int64
+
+	xPendingErr error
+	xLenErr     error
+}
+
+func (f *fakeRedisStreamsClient) XAdd(_ context.Context, _ *redis.XAddArgs) (string, error) {
+	return "0-1", nil
+}
+
+func (f *fakeRedisStreamsClient) XReadGroup(_ context.Context, _ *redis.XReadGroupArgs) ([]redis.XStream, error) {
+	return nil, nil
+}
+
+func (f *fakeRedisStreamsClient) XAck(_ context.Context, _, _ string, _ ...string) (int64, error) {
+	return 0, nil
+}
+
+func (f *fakeRedisStreamsClient) XGroupCreateMkStream(_ context.Context, _, _, _ string) error {
+	return nil
+}
+
+func (f *fakeRedisStreamsClient) XPending(_ context.Context, _, _ string) (*redis.XPending, error) {
+	if f.xPendingErr != nil {
+		return nil, f.xPendingErr
+	}
+	return &redis.XPending{Count: f.pendingCount}, nil
+}
+
+func (f *fakeRedisStreamsClient) XPendingExt(_ context.Context, _ *redis.XPendingExtArgs) ([]redis.XPendingExt, error) {
+	return nil, nil
+}
+
+func (f *fakeRedisStreamsClient) XClaim(_ context.Context, _ *redis.XClaimArgs) ([]redis.XMessage, error) {
+	return nil, nil
+}
+
+func (f *fakeRedisStreamsClient) XLen(_ context.Context, _ string) (int64, error) {
+	if f.xLenErr != nil {
+		return 0, f.xLenErr
+	}
+	return f.streamLen, nil
+}
+
+func (f *fakeRedisStreamsClient) XInfoGroups(_ context.Context, _ string) ([]redis.XInfoGroup, error) {
+	return nil, nil
+}
+
+func newServiceWithFakeStreamsBus(t *testing.T, client *fakeRedisStreamsClient) *Service {
+	t.Helper()
+	logger := zaptest.NewLogger(t)
+	plugin := &mockPlugin{}
+
+	config := eventbus.DefaultRedisStreamsConfig()
+	streamsBus := eventbus.NewRedisStreamsEventBus(client, config)
+
+	cfg := Config{
+		Plugin:        plugin,
+		BufferSize:    10,
+		BatchSize:     1,
+		FlushInterval: 50 * time.Millisecond,
+		RetryAttempts: 1,
+		RetryBackoff:  10 * time.Millisecond,
+		PluginName:    "test-plugin",
+	}
+
+	service, err := NewServiceWithBus(cfg, logger, streamsBus)
+	if err != nil {
+		t.Fatalf("NewServiceWithBus failed: %v", err)
+	}
+	return service
+}
 
 // TestServiceHealthCheck tests the health check functionality
 func TestServiceHealthCheck(t *testing.T) {
@@ -283,5 +360,129 @@ func TestServiceMetricsTracking(t *testing.T) {
 	processingRate := stats["processing_rate"].(float64)
 	if processingRate < 0 {
 		t.Errorf("Expected non-negative processing rate, got %f", processingRate)
+	}
+}
+
+func TestServiceTrackMetrics_UpdatesRateAndStreamMetrics(t *testing.T) {
+	client := &fakeRedisStreamsClient{pendingCount: 7, streamLen: 123}
+	service := newServiceWithFakeStreamsBus(t, client)
+
+	ticker := make(chan time.Time, 2)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		service.trackMetrics(ctx, ticker)
+		close(done)
+	}()
+
+	service.mu.Lock()
+	service.eventsProcessed = 10
+	service.mu.Unlock()
+
+	ticker <- time.Now()
+
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		service.mu.Lock()
+		lag := service.lagCount
+		length := service.streamLength
+		rate := service.processingRate
+		service.mu.Unlock()
+
+		if lag == 7 && length == 123 && rate > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	service.mu.Lock()
+	if service.lagCount != 7 {
+		service.mu.Unlock()
+		t.Fatalf("expected lagCount=7, got %d", service.lagCount)
+	}
+	if service.streamLength != 123 {
+		service.mu.Unlock()
+		t.Fatalf("expected streamLength=123, got %d", service.streamLength)
+	}
+	if service.processingRate <= 0 {
+		service.mu.Unlock()
+		t.Fatalf("expected processingRate > 0, got %f", service.processingRate)
+	}
+	service.mu.Unlock()
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("trackMetrics did not exit after context cancel")
+	}
+}
+
+func TestServiceHealth_StreamLagAndInactivityChecks(t *testing.T) {
+	tests := []struct {
+		name            string
+		pending         int64
+		streamLen       int64
+		lastProcessedAt time.Time
+		wantHealthy     bool
+		wantMsgContains string
+	}{
+		{
+			name:            "healthy with no lag",
+			pending:         0,
+			streamLen:       10,
+			lastProcessedAt: time.Now(),
+			wantHealthy:     true,
+		},
+		{
+			name:            "unhealthy on high lag",
+			pending:         maxHealthyLagCount + 1,
+			streamLen:       100,
+			lastProcessedAt: time.Now(),
+			wantHealthy:     false,
+			wantMsgContains: "High lag",
+		},
+		{
+			name:            "unhealthy on inactivity with pending",
+			pending:         1,
+			streamLen:       100,
+			lastProcessedAt: time.Now().Add(-maxInactivityDuration - 10*time.Second),
+			wantHealthy:     false,
+			wantMsgContains: "No processing activity",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := &fakeRedisStreamsClient{pendingCount: tt.pending, streamLen: tt.streamLen}
+			service := newServiceWithFakeStreamsBus(t, client)
+			service.mu.Lock()
+			service.lastProcessedAt = tt.lastProcessedAt
+			service.mu.Unlock()
+
+			health := service.Health(context.Background())
+			if health.Healthy != tt.wantHealthy {
+				t.Fatalf("expected healthy=%v, got %v (status=%s msg=%q)", tt.wantHealthy, health.Healthy, health.Status, health.Message)
+			}
+			if tt.wantMsgContains != "" && !strings.Contains(health.Message, tt.wantMsgContains) {
+				t.Fatalf("expected message to contain %q, got %q", tt.wantMsgContains, health.Message)
+			}
+		})
+	}
+}
+
+func TestServiceHealth_StreamsMetricsErrors_DoNotFailHealth(t *testing.T) {
+	client := &fakeRedisStreamsClient{xPendingErr: fmt.Errorf("boom"), xLenErr: fmt.Errorf("boom")}
+	service := newServiceWithFakeStreamsBus(t, client)
+
+	service.mu.Lock()
+	service.lastProcessedAt = time.Now().Add(-maxInactivityDuration - 10*time.Second)
+	service.mu.Unlock()
+
+	health := service.Health(context.Background())
+	if !health.Healthy {
+		t.Fatalf("expected health to remain healthy when streams metrics fail, got unhealthy (msg=%q)", health.Message)
 	}
 }
