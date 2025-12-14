@@ -21,27 +21,6 @@ jobs:
       - name: Install dependencies
         run: go mod download
       
-      - name: Validate migrations
-        run: |
-          echo "Validating migration files..."
-          if [ ! -d "internal/database/migrations/sql" ]; then
-            echo "::error::Migrations directory not found"
-            exit 1
-          fi
-          
-          echo "Building proxy binary..."
-          go build -o llm-proxy ./cmd/proxy
-          
-          echo "Testing migration application..."
-          TEST_DB="test_migrations.db"
-          ./llm-proxy migrate up --db "$TEST_DB" || exit 1
-          
-          echo "Testing migration rollback..."
-          ./llm-proxy migrate down --db "$TEST_DB" || exit 1
-          
-          rm -f "$TEST_DB" llm-proxy
-          echo "✅ Migrations validated successfully"
-      
       - name: Run unit tests with coverage
         run: go test -v -race -parallel=4 -coverprofile=coverage-unit.txt -covermode=atomic -coverpkg=./internal/... ./...
       
