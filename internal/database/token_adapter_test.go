@@ -56,7 +56,7 @@ func TestDBTokenStoreAdapter_UpdateToken_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Retrieve the token to get the auto-generated ID
-	retrievedToken, err := adapter.GetTokenByID(context.Background(), testToken.Token)
+	retrievedToken, err := adapter.GetTokenByToken(context.Background(), testToken.Token)
 	require.NoError(t, err)
 
 	// Update the token using the retrieved ID
@@ -69,7 +69,7 @@ func TestDBTokenStoreAdapter_UpdateToken_Integration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the update worked
-	verifyToken, err := adapter.GetTokenByID(context.Background(), testToken.Token)
+	verifyToken, err := adapter.GetTokenByToken(context.Background(), testToken.Token)
 	require.NoError(t, err)
 
 	assert.Equal(t, false, verifyToken.IsActive)

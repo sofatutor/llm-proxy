@@ -73,34 +73,11 @@ export class SeedFixture {
 
     const tokenResponse = await response.json();
     const tokenValue = tokenResponse.token as string | undefined;
+    const tokenID = tokenResponse.id as string | undefined;
 
     if (!tokenValue) {
       throw new Error('Token creation response missing token value');
     }
-
-    // Fetch the token list filtered by project to obtain the new token ID (UUID primary key)
-    const tokenListResponse = await fetch(`${this.baseUrl}/manage/tokens?projectId=${encodeURIComponent(projectId)}`, {
-      headers: {
-        'Authorization': `Bearer ${this.managementToken}`,
-      },
-    });
-
-    if (!tokenListResponse.ok) {
-      throw new Error(`Failed to list tokens for project ${projectId}: ${tokenListResponse.status} ${tokenListResponse.statusText}`);
-    }
-
-    type TokenListEntry = { id: string; project_id: string; token: string };
-    const tokens = await tokenListResponse.json() as TokenListEntry[];
-
-    if (!Array.isArray(tokens) || tokens.length === 0) {
-      throw new Error(`No tokens found for project ${projectId} after creation`);
-    }
-
-    const obfuscatedToken = this.obfuscateToken(tokenValue);
-    const createdToken = tokens.find(t => t.project_id === projectId && t.token === obfuscatedToken)
-      ?? tokens.find(t => t.project_id === projectId)
-      ?? tokens[0];
-    const tokenID = (tokenResponse.id as string | undefined) ?? createdToken.id;
 
     if (!tokenID) {
       throw new Error('Token creation response missing token ID');
@@ -110,32 +87,6 @@ export class SeedFixture {
     this.createdTokenIDs.push(tokenID);
 
     return { id: tokenID, token: tokenValue };
-  }
-
-  private obfuscateToken(token: string): string {
-    if (!token) {
-      return token;
-    }
-
-    const prefix = 'sk-';
-    if (!token.startsWith(prefix)) {
-      if (token.length <= 4) {
-        return '*'.repeat(token.length);
-      }
-      if (token.length <= 12) {
-        return `${token.slice(0, 2)}${'*'.repeat(token.length - 2)}`;
-      }
-      return `${token.slice(0, 8)}...${token.slice(-4)}`;
-    }
-
-    const rest = token.slice(prefix.length);
-    if (rest.length <= 8) {
-      return token;
-    }
-
-    const visible = 4;
-    const middle = '*'.repeat(rest.length - visible * 2);
-    return `${prefix}${rest.slice(0, visible)}${middle}${rest.slice(-visible)}`;
   }
 
   /**

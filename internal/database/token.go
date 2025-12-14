@@ -54,8 +54,6 @@ func (d *DB) CreateToken(ctx context.Context, token Token) error {
 }
 
 // GetTokenByID retrieves a token by its UUID.
-// For backward compatibility, if no token is found by UUID, it falls back
-// to searching by token string.
 func (d *DB) GetTokenByID(ctx context.Context, id string) (Token, error) {
 	query := `
 	SELECT id, token, project_id, expires_at, is_active, deactivated_at, request_count, max_requests, created_at, last_used_at, cache_hit_count
@@ -82,8 +80,7 @@ func (d *DB) GetTokenByID(ctx context.Context, id string) (Token, error) {
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			// Backward compatibility: try token string lookup
-			return d.GetTokenByToken(ctx, id)
+			return Token{}, ErrTokenNotFound
 		}
 		return Token{}, fmt.Errorf("failed to get token: %w", err)
 	}
@@ -158,23 +155,27 @@ func (d *DB) GetTokenByToken(ctx context.Context, tokenString string) (Token, er
 // It looks up the token by ID (UUID). If ID is empty, it falls back to looking up by token string
 // for backward compatibility.
 func (d *DB) UpdateToken(ctx context.Context, token Token) error {
-	// Determine which field to use for lookup
-	lookupField := "id"
-	lookupValue := token.ID
-	if token.ID == "" {
-		lookupField = "token"
-		lookupValue = token.Token
-	}
-
-	if lookupValue == "" {
+	if token.ID == "" && token.Token == "" {
 		return fmt.Errorf("token ID or token string required for update")
 	}
 
-	query := fmt.Sprintf(`
+	queryByID := `
 	UPDATE tokens
 	SET project_id = ?, expires_at = ?, is_active = ?, request_count = ?, max_requests = ?, last_used_at = ?
-	WHERE %s = ?
-	`, lookupField)
+	WHERE id = ?
+	`
+	queryByToken := `
+	UPDATE tokens
+	SET project_id = ?, expires_at = ?, is_active = ?, request_count = ?, max_requests = ?, last_used_at = ?
+	WHERE token = ?
+	`
+
+	query := queryByID
+	lookupValue := token.ID
+	if token.ID == "" {
+		query = queryByToken
+		lookupValue = token.Token
+	}
 
 	result, err := d.ExecContextRebound(
 		ctx,

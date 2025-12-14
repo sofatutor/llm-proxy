@@ -31,11 +31,13 @@ func TestObfuscation_TokenResponses(t *testing.T) {
 	require.NoError(t, err)
 
 	fullToken := "sk-1234567890abcdefghijklmnop"
+	tokenID := "token-uuid-1"
 	expiresAt := time.Now().Add(24 * time.Hour)
 
 	t.Run("GET_TokenList_ReturnsObfuscatedTokens", func(t *testing.T) {
 		tokenStore.On("ListTokens", mock.Anything).Return([]token.TokenData{
 			{
+				ID:           tokenID,
 				Token:        fullToken,
 				ProjectID:    "project-1",
 				ExpiresAt:    &expiresAt,
@@ -58,16 +60,14 @@ func TestObfuscation_TokenResponses(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, response, 1)
 
-		// Token should be obfuscated (sk-1234****mnop format)
+		assert.Equal(t, tokenID, response[0].ID)
 		assert.NotEqual(t, fullToken, response[0].Token, "Token should be obfuscated")
-		assert.Contains(t, response[0].Token, "sk-", "Obfuscated token should contain prefix")
-		assert.Contains(t, response[0].Token, "****", "Obfuscated token should contain asterisks")
-		assert.True(t, strings.HasPrefix(response[0].Token, "sk-1234"), "Should show first 4 chars after prefix")
-		assert.True(t, strings.HasSuffix(response[0].Token, "mnop"), "Should show last 4 chars")
+		assert.Equal(t, token.ObfuscateToken(fullToken), response[0].Token)
 	})
 
 	t.Run("GET_TokenByID_ReturnsObfuscatedToken", func(t *testing.T) {
-		tokenStore.On("GetTokenByID", mock.Anything, fullToken).Return(token.TokenData{
+		tokenStore.On("GetTokenByID", mock.Anything, tokenID).Return(token.TokenData{
+			ID:           tokenID,
 			Token:        fullToken,
 			ProjectID:    "project-1",
 			ExpiresAt:    &expiresAt,
@@ -76,7 +76,7 @@ func TestObfuscation_TokenResponses(t *testing.T) {
 			CreatedAt:    time.Now(),
 		}, nil)
 
-		req := httptest.NewRequest("GET", "/manage/tokens/"+fullToken, nil)
+		req := httptest.NewRequest("GET", "/manage/tokens/"+tokenID, nil)
 		req.Header.Set("Authorization", "Bearer test_management_token")
 		w := httptest.NewRecorder()
 
@@ -88,10 +88,9 @@ func TestObfuscation_TokenResponses(t *testing.T) {
 		err := json.NewDecoder(w.Body).Decode(&response)
 		require.NoError(t, err)
 
-		// Token should be obfuscated
+		assert.Equal(t, tokenID, response.ID)
 		assert.NotEqual(t, fullToken, response.Token, "Token should be obfuscated")
-		assert.Contains(t, response.Token, "sk-", "Obfuscated token should contain prefix")
-		assert.Contains(t, response.Token, "****", "Obfuscated token should contain asterisks")
+		assert.Equal(t, token.ObfuscateToken(fullToken), response.Token)
 	})
 
 	t.Run("POST_TokenCreate_ReturnsFullToken", func(t *testing.T) {
@@ -120,6 +119,11 @@ func TestObfuscation_TokenResponses(t *testing.T) {
 		var response map[string]interface{}
 		err := json.NewDecoder(w.Body).Decode(&response)
 		require.NoError(t, err)
+
+		// Token ID should be present for management operations
+		idValue, ok := response["id"].(string)
+		require.True(t, ok, "Response should contain id field")
+		assert.NotEmpty(t, idValue, "Created token id should be set")
 
 		// Token should be present and NOT obfuscated (full token on creation)
 		tokenValue, ok := response["token"].(string)

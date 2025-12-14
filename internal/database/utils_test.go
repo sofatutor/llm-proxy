@@ -35,6 +35,7 @@ func TestDatabaseUtils(t *testing.T) {
 	maxRequests := 10
 
 	validToken := Token{
+		ID:           "valid-token-id",
 		Token:        "valid-token",
 		ProjectID:    project.ID,
 		ExpiresAt:    &futureExpiry,
@@ -49,7 +50,7 @@ func TestDatabaseUtils(t *testing.T) {
 	}
 
 	// Test IsTokenValid
-	isValid, err := db.IsTokenValid(ctx, validToken.Token)
+	isValid, err := db.IsTokenValid(ctx, validToken.ID)
 	if err != nil {
 		t.Fatalf("IsTokenValid failed: %v", err)
 	}

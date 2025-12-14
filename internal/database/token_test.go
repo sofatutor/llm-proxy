@@ -67,13 +67,16 @@ func TestTokenCRUD(t *testing.T) {
 		t.Fatalf("Failed to create token2: %v", err)
 	}
 
-	// Test GetTokenByID
-	retrievedToken1, err := db.GetTokenByID(ctx, token1.Token)
+	// Test GetTokenByToken (token string lookup)
+	retrievedToken1, err := db.GetTokenByToken(ctx, token1.Token)
 	if err != nil {
 		t.Fatalf("Failed to get token1: %v", err)
 	}
 	if retrievedToken1.Token != token1.Token {
 		t.Fatalf("Expected token ID %s, got %s", token1.Token, retrievedToken1.Token)
+	}
+	if retrievedToken1.ID == "" {
+		t.Fatalf("Expected token to have ID set, got empty")
 	}
 	if retrievedToken1.ProjectID != token1.ProjectID {
 		t.Fatalf("Expected project ID %s, got %s", token1.ProjectID, retrievedToken1.ProjectID)
@@ -85,7 +88,7 @@ func TestTokenCRUD(t *testing.T) {
 		t.Fatalf("Expected max requests, got nil")
 	}
 
-	retrievedToken2, err := db.GetTokenByID(ctx, token2.Token)
+	retrievedToken2, err := db.GetTokenByToken(ctx, token2.Token)
 	if err != nil {
 		t.Fatalf("Failed to get token2: %v", err)
 	}
@@ -108,7 +111,7 @@ func TestTokenCRUD(t *testing.T) {
 		t.Fatalf("Failed to increment token usage: %v", err)
 	}
 
-	updatedToken1, err := db.GetTokenByID(ctx, token1.Token)
+	updatedToken1, err := db.GetTokenByToken(ctx, token1.Token)
 	if err != nil {
 		t.Fatalf("Failed to get updated token1: %v", err)
 	}
@@ -136,7 +139,7 @@ func TestTokenCRUD(t *testing.T) {
 		t.Fatalf("Failed to update token: %v", err)
 	}
 
-	retrievedAfterUpdate, err := db.GetTokenByID(ctx, token1.Token)
+	retrievedAfterUpdate, err := db.GetTokenByID(ctx, updatedToken1.ID)
 	if err != nil {
 		t.Fatalf("Failed to get token after update: %v", err)
 	}
@@ -196,7 +199,7 @@ func TestTokenCRUD(t *testing.T) {
 	}
 
 	// Verify token was deleted
-	_, err = db.GetTokenByID(ctx, token1.Token)
+	_, err = db.GetTokenByToken(ctx, token1.Token)
 	if err != ErrTokenNotFound {
 		t.Fatalf("Expected ErrTokenNotFound after deletion, got %v", err)
 	}
@@ -284,7 +287,7 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 	}
 
 	// Test expiration
-	retrievedExpiredToken, err := db.GetTokenByID(ctx, expiredToken.Token)
+	retrievedExpiredToken, err := db.GetTokenByToken(ctx, expiredToken.Token)
 	if err != nil {
 		t.Fatalf("Failed to get expired token: %v", err)
 	}
@@ -293,7 +296,7 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 	}
 
 	// Test rate limiting
-	retrievedRateLimitedToken, err := db.GetTokenByID(ctx, rateLimitedToken.Token)
+	retrievedRateLimitedToken, err := db.GetTokenByToken(ctx, rateLimitedToken.Token)
 	if err != nil {
 		t.Fatalf("Failed to get rate-limited token: %v", err)
 	}
@@ -302,7 +305,7 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 	}
 
 	// Test inactive token
-	retrievedInactiveToken, err := db.GetTokenByID(ctx, inactiveToken.Token)
+	retrievedInactiveToken, err := db.GetTokenByToken(ctx, inactiveToken.Token)
 	if err != nil {
 		t.Fatalf("Failed to get inactive token: %v", err)
 	}
@@ -311,7 +314,7 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 	}
 
 	// Test valid token
-	retrievedValidToken, err := db.GetTokenByID(ctx, validToken.Token)
+	retrievedValidToken, err := db.GetTokenByToken(ctx, validToken.Token)
 	if err != nil {
 		t.Fatalf("Failed to get valid token: %v", err)
 	}
@@ -329,7 +332,7 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 	}
 
 	// Verify expired token was cleaned
-	_, err = db.GetTokenByID(ctx, expiredToken.Token)
+	_, err = db.GetTokenByToken(ctx, expiredToken.Token)
 	if err != ErrTokenNotFound {
 		t.Fatalf("Expected ErrTokenNotFound for cleaned token, got %v", err)
 	}
@@ -502,11 +505,14 @@ func TestDBTokenStoreAdapter_GetTokenByID(t *testing.T) {
 		CreatedAt:    time.Now(),
 	}
 	require.NoError(t, db.CreateToken(ctx, tok))
+	created, err := db.GetTokenByToken(ctx, tok.Token)
+	require.NoError(t, err)
 
 	// Happy path
-	res, err := adapter.GetTokenByID(ctx, "tok1")
+	res, err := adapter.GetTokenByID(ctx, created.ID)
 	require.NoError(t, err)
 	require.Equal(t, "tok1", res.Token)
+	require.Equal(t, created.ID, res.ID)
 
 	// Error path
 	_, err = adapter.GetTokenByID(ctx, "notfound")
@@ -624,7 +630,7 @@ func TestDeleteToken_UpdateToken_IncrementTokenUsage_EdgeCases(t *testing.T) {
 	t.Run("delete happy path", func(t *testing.T) {
 		err := db.DeleteToken(ctx, "tok1")
 		require.NoError(t, err)
-		_, err = db.GetTokenByID(ctx, "tok1")
+		_, err = db.GetTokenByToken(ctx, "tok1")
 		require.ErrorIs(t, err, ErrTokenNotFound)
 	})
 
@@ -645,7 +651,7 @@ func TestDeleteToken_UpdateToken_IncrementTokenUsage_EdgeCases(t *testing.T) {
 		tk.RequestCount = 42
 		err := db.UpdateToken(ctx, tk)
 		require.NoError(t, err)
-		got, err := db.GetTokenByID(ctx, tk.Token)
+		got, err := db.GetTokenByToken(ctx, tk.Token)
 		require.NoError(t, err)
 		require.Equal(t, 42, got.RequestCount)
 	})
@@ -665,7 +671,7 @@ func TestDeleteToken_UpdateToken_IncrementTokenUsage_EdgeCases(t *testing.T) {
 	t.Run("increment happy path", func(t *testing.T) {
 		err := db.IncrementTokenUsage(ctx, tk.Token)
 		require.NoError(t, err)
-		got, err := db.GetTokenByID(ctx, tk.Token)
+		got, err := db.GetTokenByToken(ctx, tk.Token)
 		require.NoError(t, err)
 		require.Equal(t, 43, got.RequestCount)
 	})
@@ -723,7 +729,7 @@ func TestIncrementCacheHitCount(t *testing.T) {
 		err := db.IncrementCacheHitCount(ctx, tk.Token, 5)
 		require.NoError(t, err)
 
-		got, err := db.GetTokenByID(ctx, tk.Token)
+		got, err := db.GetTokenByToken(ctx, tk.Token)
 		require.NoError(t, err)
 		require.Equal(t, 5, got.CacheHitCount)
 	})
@@ -732,7 +738,7 @@ func TestIncrementCacheHitCount(t *testing.T) {
 		err := db.IncrementCacheHitCount(ctx, tk.Token, 3)
 		require.NoError(t, err)
 
-		got, err := db.GetTokenByID(ctx, tk.Token)
+		got, err := db.GetTokenByToken(ctx, tk.Token)
 		require.NoError(t, err)
 		require.Equal(t, 8, got.CacheHitCount)
 	})
@@ -741,7 +747,7 @@ func TestIncrementCacheHitCount(t *testing.T) {
 		err := db.IncrementCacheHitCount(ctx, tk.Token, 0)
 		require.NoError(t, err)
 
-		got, err := db.GetTokenByID(ctx, tk.Token)
+		got, err := db.GetTokenByToken(ctx, tk.Token)
 		require.NoError(t, err)
 		require.Equal(t, 8, got.CacheHitCount) // Unchanged
 	})
@@ -750,7 +756,7 @@ func TestIncrementCacheHitCount(t *testing.T) {
 		err := db.IncrementCacheHitCount(ctx, tk.Token, -1)
 		require.NoError(t, err)
 
-		got, err := db.GetTokenByID(ctx, tk.Token)
+		got, err := db.GetTokenByToken(ctx, tk.Token)
 		require.NoError(t, err)
 		require.Equal(t, 8, got.CacheHitCount) // Unchanged
 	})
@@ -786,9 +792,9 @@ func TestIncrementCacheHitCountBatch(t *testing.T) {
 		err := db.IncrementCacheHitCountBatch(ctx, deltas)
 		require.NoError(t, err)
 
-		got1, _ := db.GetTokenByID(ctx, tk1.Token)
-		got2, _ := db.GetTokenByID(ctx, tk2.Token)
-		got3, _ := db.GetTokenByID(ctx, tk3.Token)
+		got1, _ := db.GetTokenByToken(ctx, tk1.Token)
+		got2, _ := db.GetTokenByToken(ctx, tk2.Token)
+		got3, _ := db.GetTokenByToken(ctx, tk3.Token)
 
 		require.Equal(t, 5, got1.CacheHitCount)
 		require.Equal(t, 10, got2.CacheHitCount)
@@ -809,9 +815,9 @@ func TestIncrementCacheHitCountBatch(t *testing.T) {
 		err := db.IncrementCacheHitCountBatch(ctx, deltas)
 		require.NoError(t, err)
 
-		got1, _ := db.GetTokenByID(ctx, tk1.Token)
-		got2, _ := db.GetTokenByID(ctx, tk2.Token)
-		got3, _ := db.GetTokenByID(ctx, tk3.Token)
+		got1, _ := db.GetTokenByToken(ctx, tk1.Token)
+		got2, _ := db.GetTokenByToken(ctx, tk2.Token)
+		got3, _ := db.GetTokenByToken(ctx, tk3.Token)
 
 		require.Equal(t, 5, got1.CacheHitCount)  // Unchanged from previous test
 		require.Equal(t, 10, got2.CacheHitCount) // Unchanged from previous test

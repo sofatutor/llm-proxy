@@ -491,6 +491,7 @@ func TestHandleTokens(t *testing.T) {
 		var response map[string]interface{}
 		err := json.NewDecoder(w.Body).Decode(&response)
 		require.NoError(t, err)
+		assert.Contains(t, response, "id")
 		assert.Contains(t, response, "token")
 		assert.Contains(t, response, "expires_at")
 	})

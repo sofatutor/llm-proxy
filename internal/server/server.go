@@ -933,10 +933,10 @@ func (s *Server) handleBulkRevokeProjectTokens(w http.ResponseWriter, r *http.Re
 
 		if err := s.tokenStore.UpdateToken(ctx, token); err != nil {
 			s.logger.Warn("failed to revoke individual token during bulk revoke",
-				zap.String("token_id", token.Token),
+				zap.String("token_id", token.ID),
 				zap.String("project_id", projectID),
 				zap.Error(err))
-			failedRevocations = append(failedRevocations, token.Token)
+			failedRevocations = append(failedRevocations, token.ID)
 		} else {
 			revokedCount++
 		}
@@ -1159,7 +1159,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			// Audit: token creation failure - storage error
 			_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
 				WithProjectID(req.ProjectID).
-				WithTokenID(tokenStr).
+				WithTokenID(tokenID).
 				WithError(err).
 				WithDetail("error_type", "storage failed"))
 
@@ -1178,7 +1178,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			WithRequestID(requestID).
 			WithHTTPMethod(r.Method).
 			WithEndpoint(r.URL.Path).
-			WithTokenID(tokenStr).
+			WithTokenID(tokenID).
 			WithDetail("duration_minutes", req.DurationMinutes).
 			WithDetail("expires_at", expiresAt.Format(time.RFC3339))
 		if req.MaxRequests != nil {
@@ -1188,6 +1188,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 		response := map[string]interface{}{
+			"id":         tokenID,
 			"token":      tokenStr,
 			"expires_at": expiresAt,
 		}
