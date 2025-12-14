@@ -38,7 +38,7 @@
                         <table class="table table-sm">
                             <tr>
                                 <td><strong>Timestamp:</strong></td>
-                                <td>{{ .event.Timestamp.Format "2006-01-02 15:04:05 MST" }}</td>
+                                <td><span data-local-time="true" data-ts="{{ formatRFC3339UTC .event.Timestamp }}" data-format="ymd_hms_tz">{{ .event.Timestamp.Format "2006-01-02 15:04:05 MST" }}</span></td>
                             </tr>
                             <tr>
                                 <td><strong>Action:</strong></td>

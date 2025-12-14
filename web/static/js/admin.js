@@ -1,6 +1,99 @@
 // Admin UI JavaScript functionality
 
+// Localize timestamps to viewer's timezone
+function localizeTimestamps() {
+    const elements = document.querySelectorAll('[data-local-time="true"][data-ts]');
+    elements.forEach(function(el) {
+        const tsStr = el.getAttribute('data-ts');
+        if (!tsStr) return;
+        
+        try {
+            const date = new Date(tsStr);
+            if (isNaN(date.getTime())) return;
+            
+            const format = el.getAttribute('data-format') || 'ymd_hm';
+            let formatted;
+            
+            switch(format) {
+                case 'ymd_hm':
+                    // YYYY-MM-DD HH:mm
+                    formatted = formatDateTime(date, false);
+                    break;
+                case 'ymd_hms':
+                    // YYYY-MM-DD HH:mm:ss
+                    formatted = formatDateTime(date, true);
+                    break;
+                case 'ymd_hms_tz':
+                    // YYYY-MM-DD HH:mm:ss TZ
+                    formatted = formatDateTime(date, true) + ' ' + getTimezoneName(date);
+                    break;
+                case 'long':
+                    // Monday, January 2, 2006 at 3:04 PM
+                    formatted = formatLongDate(date);
+                    break;
+                case 'date_only':
+                    // January 2, 2006
+                    formatted = formatDateOnly(date);
+                    break;
+                default:
+                    formatted = formatDateTime(date, false);
+            }
+            
+            el.textContent = formatted;
+        } catch (e) {
+            console.error('Failed to localize timestamp:', e);
+        }
+    });
+}
+
+function formatDateTime(date, includeSeconds) {
+    const pad = n => n.toString().padStart(2, '0');
+    const year = date.getFullYear();
+    const month = pad(date.getMonth() + 1);
+    const day = pad(date.getDate());
+    const hours = pad(date.getHours());
+    const minutes = pad(date.getMinutes());
+    
+    let result = `${year}-${month}-${day} ${hours}:${minutes}`;
+    if (includeSeconds) {
+        const seconds = pad(date.getSeconds());
+        result += `:${seconds}`;
+    }
+    return result;
+}
+
+function formatLongDate(date) {
+    const options = { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    };
+    return date.toLocaleString('en-US', options).replace(',', ' at');
+}
+
+function formatDateOnly(date) {
+    const options = { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric'
+    };
+    return date.toLocaleDateString('en-US', options);
+}
+
+function getTimezoneName(date) {
+    const tzString = date.toLocaleTimeString('en-US', { timeZoneName: 'short' });
+    const parts = tzString.split(' ');
+    return parts[parts.length - 1];
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+    // Localize all timestamps on page load
+    localizeTimestamps();
+    
     // Initialize tooltips
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {

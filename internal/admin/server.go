@@ -970,6 +970,15 @@ func (s *Server) templateFuncs() template.FuncMap {
 			}
 			return dict
 		},
+		"formatRFC3339UTC": func(t time.Time) string {
+			return t.UTC().Format(time.RFC3339Nano)
+		},
+		"formatRFC3339UTCPtr": func(t *time.Time) string {
+			if t == nil {
+				return ""
+			}
+			return t.UTC().Format(time.RFC3339Nano)
+		},
 	}
 }
 

@@ -136,7 +136,7 @@
                 </p>
                 <p class="text-muted mb-2">
                     <i class="bi bi-clock"></i>
-                    Server Time: <span id="server-time">{{ now.Format "2006-01-02 15:04:05" }}</span>
+                    Current Time: <span id="server-time" data-local-time="true" data-ts="{{ formatRFC3339UTC now }}" data-format="ymd_hms">{{ now.Format "2006-01-02 15:04:05" }}</span>
                 </p>
                 <a href="/health" class="btn btn-outline-primary btn-sm" target="_blank">
                     <i class="bi bi-heart-pulse"></i>
