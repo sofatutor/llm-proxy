@@ -51,6 +51,26 @@ services:
       - "5432:5432"  # Development only - remove or restrict for production
     restart: unless-stopped
 
+  postgres-test:
+    image: postgres:15
+    container_name: llm-proxy-postgres-test
+    profiles: ["postgres-test"]
+    environment:
+      POSTGRES_USER: llmproxy
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      POSTGRES_DB: llmproxy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U llmproxy -d llmproxy"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    ports:
+      - "55432:5432"  # Test-only Postgres; avoid clashing with dev instance
+    restart: unless-stopped
+
   # LLM Proxy service (uses PostgreSQL)
   llm-proxy:
     <<: *llm-proxy-base
@@ -115,3 +135,5 @@ services:
 volumes:
   postgres_data:
     name: llm-proxy-postgres-data
+  postgres_test_data:
+    name: llm-proxy-postgres-test-data
