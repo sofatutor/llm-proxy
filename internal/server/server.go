@@ -1091,17 +1091,23 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"project_id is required"}`, http.StatusBadRequest)
 			return
 		}
-		if req.MaxRequests != nil && *req.MaxRequests <= 0 {
-			s.logger.Error("max_requests must be positive", zap.Int("max_requests", *req.MaxRequests), zap.String("request_id", requestID))
+		if req.MaxRequests != nil {
+			if *req.MaxRequests < 0 {
+				s.logger.Error("max_requests must be >= 0", zap.Int("max_requests", *req.MaxRequests), zap.String("request_id", requestID))
 
-			// Audit: token creation failure - invalid max_requests
-			_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
-				WithProjectID(req.ProjectID).
-				WithDetail("validation_error", "max_requests must be positive").
-				WithDetail("requested_max_requests", *req.MaxRequests))
+				// Audit: token creation failure - invalid max_requests
+				_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
+					WithProjectID(req.ProjectID).
+					WithDetail("validation_error", "max_requests must be >= 0").
+					WithDetail("requested_max_requests", *req.MaxRequests))
 
-			http.Error(w, `{"error":"max_requests must be positive"}`, http.StatusBadRequest)
-			return
+				http.Error(w, `{"error":"max_requests must be >= 0"}`, http.StatusBadRequest)
+				return
+			}
+			// 0 means unlimited.
+			if *req.MaxRequests == 0 {
+				req.MaxRequests = nil
+			}
 		}
 
 		// Check project exists and is active
@@ -1379,14 +1385,34 @@ func (s *Server) handleUpdateToken(w http.ResponseWriter, r *http.Request, token
 		return
 	}
 
+	// Normalize max_requests semantics:
+	// - negative: invalid
+	// - 0: unlimited (stored as nil)
+	maxRequestsProvided := req.MaxRequests != nil
+	normalizedMaxRequests := req.MaxRequests
+	if maxRequestsProvided {
+		if *req.MaxRequests < 0 {
+			s.logger.Error("max_requests must be >= 0", zap.Int("max_requests", *req.MaxRequests), zap.String("request_id", requestID))
+
+			_ = s.auditLogger.Log(s.auditEvent(audit.ActionTokenUpdate, audit.ActorManagement, audit.ResultFailure, r, requestID).
+				WithTokenID(tokenID).
+				WithError(fmt.Errorf("max_requests must be >= 0")))
+			http.Error(w, `{"error":"max_requests must be >= 0"}`, http.StatusBadRequest)
+			return
+		}
+		if *req.MaxRequests == 0 {
+			normalizedMaxRequests = nil
+		}
+	}
+
 	// Update fields if provided
 	updated := false
 	if req.IsActive != nil {
 		tokenData.IsActive = *req.IsActive
 		updated = true
 	}
-	if req.MaxRequests != nil {
-		tokenData.MaxRequests = req.MaxRequests
+	if maxRequestsProvided {
+		tokenData.MaxRequests = normalizedMaxRequests
 		updated = true
 	}
 
@@ -1434,8 +1460,11 @@ func (s *Server) handleUpdateToken(w http.ResponseWriter, r *http.Request, token
 	if req.IsActive != nil {
 		auditEvent.WithDetail("updated_is_active", *req.IsActive)
 	}
-	if req.MaxRequests != nil {
-		auditEvent.WithDetail("updated_max_requests", *req.MaxRequests)
+	if maxRequestsProvided && normalizedMaxRequests != nil {
+		auditEvent.WithDetail("updated_max_requests", *normalizedMaxRequests)
+	}
+	if maxRequestsProvided && normalizedMaxRequests == nil {
+		auditEvent.WithDetail("updated_max_requests", "unlimited")
 	}
 	_ = s.auditLogger.Log(auditEvent)
 

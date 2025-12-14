@@ -363,6 +363,21 @@ func (r *recordingTokenStore) CreateToken(ctx context.Context, td token.TokenDat
 	return nil
 }
 
+type updatingTokenStore struct {
+	mockTokenStore
+	existing token.TokenData
+	updated  token.TokenData
+}
+
+func (u *updatingTokenStore) GetTokenByID(ctx context.Context, tokenID string) (token.TokenData, error) {
+	return u.existing, nil
+}
+
+func (u *updatingTokenStore) UpdateToken(ctx context.Context, td token.TokenData) error {
+	u.updated = td
+	return nil
+}
+
 // activeProjectStore returns an active project for creation tests.
 type activeProjectStore struct{ mockProjectStore }
 
@@ -1186,13 +1201,60 @@ func TestHandleTokens_Create_InvalidMaxRequests(t *testing.T) {
 	srv, err := New(cfg, &recordingTokenStore{}, &activeProjectStore{})
 	require.NoError(t, err)
 
-	body := `{"project_id":"any","duration_minutes":60,"max_requests":0}`
+	body := `{"project_id":"any","duration_minutes":60,"max_requests":-1}`
 	r := httptest.NewRequest(http.MethodPost, "/manage/tokens", strings.NewReader(body))
 	r.Header.Set("Authorization", "Bearer "+cfg.ManagementToken)
 	w := httptest.NewRecorder()
 	srv.handleTokens(w, r)
 
 	require.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestHandleTokens_Create_MaxRequestsZeroMeansUnlimited(t *testing.T) {
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, ManagementToken: "testtoken", EventBusBackend: "in-memory"}
+	ts := &recordingTokenStore{}
+	ps := &activeProjectStore{}
+	srv, err := New(cfg, ts, ps)
+	require.NoError(t, err)
+
+	body := `{"project_id":"any","duration_minutes":60,"max_requests":0}`
+	r := httptest.NewRequest(http.MethodPost, "/manage/tokens", strings.NewReader(body))
+	r.Header.Set("Authorization", "Bearer "+cfg.ManagementToken)
+	w := httptest.NewRecorder()
+	srv.handleTokens(w, r)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	if ts.created.MaxRequests != nil {
+		t.Fatalf("expected max_requests to be stored as nil (unlimited), got %v", ts.created.MaxRequests)
+	}
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	if _, ok := resp["max_requests"]; ok {
+		t.Fatalf("did not expect max_requests in response for unlimited, got %#v", resp)
+	}
+}
+
+func TestHandleUpdateToken_MaxRequestsZeroClearsLimit(t *testing.T) {
+	intPtr := func(v int) *int { return &v }
+
+	cfg := &config.Config{ListenAddr: ":0", RequestTimeout: time.Second, ManagementToken: "testtoken", EventBusBackend: "in-memory"}
+	store := &updatingTokenStore{existing: token.TokenData{ID: "tok-1", Token: "sk-test123456789", ProjectID: "any", IsActive: true, RequestCount: 0, MaxRequests: intPtr(10), CreatedAt: time.Now()}}
+	srv, err := New(cfg, store, &activeProjectStore{})
+	require.NoError(t, err)
+
+	body := `{"max_requests":0}`
+	r := httptest.NewRequest(http.MethodPatch, "/manage/tokens/tok-1", strings.NewReader(body))
+	r.Header.Set("Authorization", "Bearer "+cfg.ManagementToken)
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	srv.handleUpdateToken(w, r, "tok-1")
+
+	require.Equal(t, http.StatusOK, w.Code)
+	if store.updated.MaxRequests != nil {
+		t.Fatalf("expected max_requests to be cleared (nil), got %v", store.updated.MaxRequests)
+	}
 }
 
 func TestInitializeAPIRoutes_FallbackToDefaultWhenProviderMissing(t *testing.T) {
