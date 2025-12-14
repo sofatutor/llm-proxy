@@ -315,6 +315,11 @@ LLM_PROXY_EVENT_BUS=redis-streams llm-proxy dispatcher --service file --endpoint
 
 Redis Streams provides at-least-once delivery, consumer groups, and automatic crash recovery. For local development, you can use `in-memory` for single-process testing.
 
+#### Fan-out vs Load Balancing (Important)
+
+- If you run **multiple instances of the same dispatcher backend** (e.g. multiple Helicone dispatchers for throughput), use the **same** `REDIS_CONSUMER_GROUP` to **share** work.
+- If you run **multiple different dispatcher backends** (e.g. Helicone *and* file) and want **both to receive all events**, use **different** `REDIS_CONSUMER_GROUP` values per backend to **fan-out**.
+
 ## Project Structure
 - `/cmd` — Entrypoints (`proxy`, `eventdispatcher`)
 - `/internal` — Core logic (token, database, proxy, admin, logging, eventbus, dispatcher)

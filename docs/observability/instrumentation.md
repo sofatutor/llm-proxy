@@ -439,6 +439,25 @@ REDIS_CONSUMER_NAME=dispatcher-2 llm-proxy dispatcher --service lunary
 
 Each message is delivered to exactly one consumer in the group. If a consumer fails, its pending messages are automatically reassigned.
 
+### Multiple Dispatcher Services (Fan-out)
+
+If you want **multiple backends** (e.g. **file** and **helicone**) to each receive **100% of events**, do **not** run them in the same consumer group.
+
+- **Same `REDIS_CONSUMER_GROUP`** across multiple dispatcher services = **load balancing** (each event goes to only one service)
+- **Different `REDIS_CONSUMER_GROUP`** per service = **fan-out** (each service reads the full stream independently)
+
+Example:
+
+```bash
+# File logger consumes all events
+REDIS_CONSUMER_GROUP=llm-proxy-dispatchers-file \
+  llm-proxy dispatcher --service file --endpoint events.jsonl
+
+# Helicone logger also consumes all events
+REDIS_CONSUMER_GROUP=llm-proxy-dispatchers-helicone \
+  llm-proxy dispatcher --service helicone --api-key $HELICONE_API_KEY
+```
+
 ### Redis Streams vs In-Memory
 
 | Feature | In-Memory | Redis Streams |
