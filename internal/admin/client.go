@@ -76,8 +76,9 @@ type Token struct {
 
 // TokenCreateResponse represents the response when creating a token
 type TokenCreateResponse struct {
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Token       string    `json:"token"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	MaxRequests *int      `json:"max_requests,omitempty"`
 }
 
 // Pagination represents pagination metadata

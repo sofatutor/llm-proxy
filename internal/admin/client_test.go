@@ -595,6 +595,9 @@ func TestAPIClient_CreateToken(t *testing.T) {
 					Token:     "tok-abcd1234",
 					ExpiresAt: time.Now().Add(time.Duration(req["duration_minutes"].(float64)) * time.Minute),
 				}
+				if tt.maxRequests != nil {
+					response.MaxRequests = tt.maxRequests
+				}
 				if err := json.NewEncoder(w).Encode(response); err != nil {
 					t.Errorf("failed to encode token create response: %v", err)
 				}
@@ -611,6 +614,18 @@ func TestAPIClient_CreateToken(t *testing.T) {
 
 			if token.Token != "tok-abcd1234" {
 				t.Errorf("Token = %q, want %q", token.Token, "tok-abcd1234")
+			}
+			if tt.maxRequests == nil {
+				if token.MaxRequests != nil {
+					t.Fatalf("MaxRequests = %v, want nil", *token.MaxRequests)
+				}
+			} else {
+				if token.MaxRequests == nil {
+					t.Fatalf("MaxRequests = nil, want %d", *tt.maxRequests)
+				}
+				if *token.MaxRequests != *tt.maxRequests {
+					t.Fatalf("MaxRequests = %d, want %d", *token.MaxRequests, *tt.maxRequests)
+				}
 			}
 		})
 	}

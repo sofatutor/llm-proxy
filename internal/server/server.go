@@ -1187,10 +1187,14 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 		_ = s.auditLogger.Log(auditEvent)
 
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]interface{}{
+		response := map[string]interface{}{
 			"token":      tokenStr,
 			"expires_at": expiresAt,
-		}); err != nil {
+		}
+		if req.MaxRequests != nil {
+			response["max_requests"] = *req.MaxRequests
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
 			s.logger.Error("failed to encode token response", zap.Error(err))
 		}
 	case http.MethodGet:

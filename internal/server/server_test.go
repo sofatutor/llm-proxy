@@ -1171,6 +1171,14 @@ func TestHandleTokens_Create_WithMaxRequests(t *testing.T) {
 	if ts.created.MaxRequests == nil || *ts.created.MaxRequests != 5 {
 		t.Fatalf("expected max_requests to be stored, got %v", ts.created.MaxRequests)
 	}
+
+	var resp map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	val, ok := resp["max_requests"].(float64)
+	if !ok {
+		t.Fatalf("expected max_requests in response, got %#v", resp)
+	}
+	require.Equal(t, float64(5), val)
 }
 
 func TestHandleTokens_Create_InvalidMaxRequests(t *testing.T) {

@@ -22,10 +22,12 @@ type ProjectCreateResponse struct {
 type TokenCreateRequest struct {
 	ProjectID       string `json:"project_id"`
 	DurationMinutes int    `json:"duration_minutes"`
+	MaxRequests     *int   `json:"max_requests,omitempty"`
 }
 
 // TokenCreateResponse is the response body for a created token.
 type TokenCreateResponse struct {
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Token       string    `json:"token"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	MaxRequests *int      `json:"max_requests,omitempty"`
 }
