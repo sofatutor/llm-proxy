@@ -150,7 +150,7 @@ graph LR
 | `MemoryRateLimiter` | Single instance | In-process |
 | `RedisRateLimiter` | Multi-instance | Distributed |
 
-See [Distributed Rate Limiting Documentation](/docs/distributed-rate-limiting.md) for more details.
+See [Distributed Rate Limiting Documentation](../../docs/observability/distributed-rate-limiting.md) for more details.
 
 ## Configuration
 

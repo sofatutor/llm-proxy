@@ -178,7 +178,7 @@ sequenceDiagram
 ## Related Documentation
 
 - [Dispatcher Package](../dispatcher/README.md) - Event processing and backend delivery
-- [Instrumentation Guide](../../docs/instrumentation.md) - Complete observability documentation
+- [Instrumentation Guide](../../docs/observability/instrumentation.md) - Complete observability documentation
 
 ## Files
 

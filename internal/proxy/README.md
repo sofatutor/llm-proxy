@@ -201,8 +201,8 @@ The proxy exposes cache metrics via `Metrics()`:
 | [`token`](../token/README.md) | Token validation interface |
 | [`database`](../database/README.md) | Project and token storage |
 | [`middleware`](../middleware/) | Observability middleware integration |
-| [`eventbus`](../eventbus/) | Event publishing for observability |
-| [`audit`](../audit/) | Audit logging integration |
+| [`eventbus`](../eventbus/README.md) | Event publishing for observability |
+| [`audit`](../audit/README.md) | Audit logging integration |
 
 ## Files
 
