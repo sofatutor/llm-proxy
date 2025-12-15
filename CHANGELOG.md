@@ -6,6 +6,13 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ---
 
+## December 15, 2025
+
+### Changed
+
+- **Realign Docs Links** ([#197](https://github.com/sofatutor/llm-proxy/pull/197)): Updated documentation references after the reorg, added lightweight redirect stubs for legacy entrypoints, refreshed archived issue tracking docs, and introduced the Phase 6 runtime config proposal for DB overrides.
+
+
 ## December 14, 2025
 
 ### Added
