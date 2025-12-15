@@ -164,18 +164,18 @@ Documentation is a critical part of the project. All changes should include appr
 
 ### Core Documentation
 
-- **[Architecture Guide](docs/architecture.md)**: System design, async event system, and component interactions
-- **[Code Organization](docs/code-organization.md)**: Package structure, layering, and dependency management  
-- **[Testing Guide](docs/testing-guide.md)**: TDD workflow, coverage requirements, and testing practices
-- **[API Configuration](docs/api-configuration.md)**: Advanced proxy configuration and API provider setup
-- **[Security Guide](docs/security.md)**: Production security, secrets management, and best practices
+- **[Architecture Guide](docs/architecture/index.md)**: System design, async event system, and component interactions
+- **[Code Organization](docs/architecture/code-organization.md)**: Package structure, layering, and dependency management  
+- **[Testing Guide](docs/development/testing-guide.md)**: TDD workflow, coverage requirements, and testing practices
+- **[API Configuration](docs/guides/api-configuration.md)**: Advanced proxy configuration and API provider setup
+- **[Security Guide](docs/deployment/security.md)**: Production security, secrets management, and best practices
 
 ### Development Resources
 
-- **[CLI Reference](docs/cli-reference.md)**: Complete command-line interface documentation
-- **[Go Packages](docs/go-packages.md)**: Using LLM Proxy packages in Go applications
-- **[Instrumentation](docs/instrumentation.md)**: Event system and observability setup
-- **[Coverage Reports](docs/coverage-reports.md)**: Test coverage reporting and CI integration
+- **[CLI Reference](docs/guides/cli-reference.md)**: Complete command-line interface documentation
+- **[Instrumentation](docs/observability/instrumentation.md)**: Event system and observability setup
+- **[Coverage Reports](docs/observability/coverage.md)**: Live test coverage report
+- **[Coverage Setup](docs/observability/coverage-reports.md)**: Coverage reporting and CI integration
 
 ### Project Tracking
 

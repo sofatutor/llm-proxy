@@ -515,8 +515,8 @@ Use this checklist when enabling Redis Streams in new environments:
 - See `internal/middleware/instrumentation.go` for the middleware implementation.
 - See `internal/eventbus/eventbus.go` for the event bus interface and in-memory backend.
 - See `internal/dispatcher/` for the pluggable dispatcher architecture.
-- See `docs/issues/phase-5-generic-async-middleware.md` for the original design issue.
-- See `docs/issues/phase-5-event-dispatcher-service.md` for the dispatcher design.
+- See `docs/issues/done/phase-5-generic-async-middleware.md` for the original design issue.
+- See `docs/issues/done/phase-5-event-dispatcher-service.md` for the dispatcher design.
 
 ---
 For questions or advanced integration, open an issue or see the code comments for extension points. 

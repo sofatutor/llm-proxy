@@ -10,7 +10,7 @@ nav_order: 2
 **Date**: December 3, 2025  
 **Purpose**: Capture the ACTUAL state of the LLM Proxy codebase for AI agents and developers
 
-> **CRITICAL**: This document describes the CURRENT STATE of the system, including technical debt, workarounds, and real-world constraints. It is NOT an aspirational architecture document. For ideal architecture, see `docs/architecture.md`.
+> **CRITICAL**: This document describes the CURRENT STATE of the system, including technical debt, workarounds, and real-world constraints. It is NOT an aspirational architecture document. For ideal architecture, see `docs/architecture/index.md`.
 
 ---
 
@@ -728,7 +728,7 @@ curl http://localhost:8081/admin/
 
 **Start Here**:
 1. Read this document first (brownfield reality)
-2. Then read `docs/architecture.md` (ideal architecture)
+2. Then read `docs/architecture/architecture.md` (ideal architecture)
 3. Check `PLAN.md` for current phase and objectives
 4. Review [#174](https://github.com/sofatutor/llm-proxy/issues/174) for AWS deployment status
 

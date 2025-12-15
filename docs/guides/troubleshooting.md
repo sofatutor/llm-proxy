@@ -545,4 +545,4 @@ If you're still experiencing issues:
 - [Configuration Reference](configuration.md)
 - [PostgreSQL Troubleshooting](postgresql-troubleshooting.md)
 - [Performance Tuning Guide](performance.md)
-- [Security Best Practices](security.md)
+- [Security Best Practices](../deployment/security.md)

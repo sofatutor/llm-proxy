@@ -64,7 +64,7 @@ Copilot should treat these as required before suggesting a commit is ready and c
 
 ## Documentation Updates
 - Update `docs/` and issue docs under `docs/issues/` when behavior changes.
-- Keep `PLAN.md` and `WIP.md` consistent with notable architectural changes.
+- Keep `PLAN.md` consistent with notable architectural changes.
 
 ## PR Discipline
 - Do not merge with failing tests, lint errors, or reduced coverage.

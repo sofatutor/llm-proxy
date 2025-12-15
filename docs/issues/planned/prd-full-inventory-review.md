@@ -1,5 +1,7 @@
 # PRD: Initial Full Inventory & Review of the Codebase (One-off)
 
+Tracking: [Issue #199](https://github.com/sofatutor/llm-proxy/issues/199)
+
 ## 1. Introduction / Overview
 This document defines a one-off, lightweight governance process to perform a comprehensive initial inventory and review of the LLM Proxy codebase. The goal is to proactively prevent architectural drift, remove dead code, and keep documentation, tests, and coverage aligned with the current implementation. This PRD focuses on maintainers and aligns with repository practices described in `AGENTS.md`, `README.md`, and the documentation under `docs/`.
 
@@ -33,8 +35,8 @@ This effort is a process and documentation deliverable with optional supporting 
      - Eventing: `internal/eventbus`, `internal/dispatcher`, `internal/eventtransformer`
      - Database: `internal/database` (schema, usage patterns)
      - Logging/obfuscation/security: `internal/logging`, `internal/obfuscate`, `internal/audit`
-     - CLI and entrypoints: `cmd/*`, `docs/cli-reference.md`
-     - Documentation: `docs/**`, `PLAN.md`, `WIP.md`, issue docs under `docs/issues/`
+   - CLI and entrypoints: `cmd/*`, `docs/guides/cli-reference.md`
+   - Documentation: `docs/**`, `PLAN.md`, `docs/issues/archive/WIP.md`, issue docs under `docs/issues/`
 
 3) Deliverable Artifact
    - A Markdown report committed under `docs/reviews/` with filename pattern: `review-PRs-<start>-to-<end>.md` (e.g., `review-PRs-201-to-300.md`).
@@ -47,7 +49,7 @@ This effort is a process and documentation deliverable with optional supporting 
 
 5) Security & Compliance Checks (in-scope for review, manual or scripted as feasible)
    - Secret scanning in repository history and config files as part of the checklist.
-   - Access control review (e.g., `MANAGEMENT_TOKEN` usage paths, token scopes, admin endpoints protections) against `docs/security.md` and `AGENTS.md`.
+   - Access control review (e.g., `MANAGEMENT_TOKEN` usage paths, token scopes, admin endpoints protections) against `docs/deployment/security.md` and `AGENTS.md`.
    - Dependency and license review (Go modules) with notes on any flagged items.
 
 6) Acceptance Gates
@@ -64,10 +66,10 @@ This effort is a process and documentation deliverable with optional supporting 
 - No external SaaS integrations (e.g., uploading reports, third-party dashboards).
 
 ## 7. Design Considerations (References)
-- See `docs/architecture.md` for system design and components.
-- See `docs/instrumentation.md` for event/dispatcher design (note: events are not emitted by this process).
-- See `docs/api-configuration.md` and `docs/security.md` for configuration and security practices.
-- See `PLAN.md`, `WIP.md`, and `docs/issues/*` for project plan and active tasks.
+- See `docs/architecture/index.md` for system design and components.
+- See `docs/observability/instrumentation.md` for event/dispatcher design (note: events are not emitted by this process).
+- See `docs/guides/api-configuration.md` and `docs/deployment/security.md` for configuration and security practices.
+- See `PLAN.md`, `docs/issues/archive/WIP.md`, and `docs/issues/*` for project plan and active tasks.
 
 ## 8. Technical Considerations
 - Language/Env: Go 1.23+.
@@ -113,8 +115,8 @@ Reviewed by: <Maintainer>
 - internal/eventbus, internal/dispatcher, internal/eventtransformer: <notes>
 - internal/database: <notes>
 - internal/logging, internal/obfuscate, internal/audit: <notes>
-- cmd/* and docs/cli-reference.md: <notes>
-- Documentation (docs/**, PLAN.md, WIP.md, docs/issues/*): <notes>
+- cmd/* and docs/guides/cli-reference.md: <notes>
+- Documentation (docs/**, PLAN.md, docs/issues/archive/WIP.md, docs/issues/*): <notes>
 
 ## Security & Compliance
 - Secret scanning: <pass/fail> (notes)

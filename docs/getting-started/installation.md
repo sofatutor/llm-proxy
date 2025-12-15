@@ -455,13 +455,13 @@ netstat -an | findstr :8080  # Windows
 After installation:
 
 1. **[Configuration Guide](configuration.md)** - Configure environment variables and settings
-2. **[Admin UI Quickstart](admin/quickstart.md)** - Set up projects and tokens via the web interface
-3. **[Token Management](token-management.md)** - Understand token lifecycle and management
-4. **[Security Best Practices](security.md)** - Secure your deployment
+2. **[Admin UI Quickstart](../admin/quickstart.md)** - Set up projects and tokens via the web interface
+3. **[Token Management](../guides/token-management.md)** - Understand token lifecycle and management
+4. **[Security Best Practices](../deployment/security.md)** - Secure your deployment
 
 ## Related Documentation
 
 - [Configuration Reference](configuration.md)
-- [Docker Compose PostgreSQL Setup](docker-compose-postgres.md)
-- [CLI Reference](cli-reference.md)
-- [Architecture Guide](architecture.md)
+- [Docker Compose PostgreSQL Setup](../database/docker-compose-postgres.md)
+- [CLI Reference](../guides/cli-reference.md)
+- [Architecture Guide](../architecture/index.md)
