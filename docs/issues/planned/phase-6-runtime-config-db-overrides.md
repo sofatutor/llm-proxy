@@ -1,6 +1,6 @@
 # Phase 6: DB-Backed Runtime Config + Per-Project Overrides
 
-Tracking: TBD (create GitHub issue)
+Tracking: [Issue #200](https://github.com/sofatutor/llm-proxy/issues/200)
 
 ## Summary
 Introduce a structured configuration system that moves “runtime tunables” out of environment variables into the management API + database, with safe, validated **per-project overrides**. The system keeps a small “bootstrap” config in env (secrets + connectivity), and adds a new **runtime config layer** stored in DB, hot-reloadable in-process, and queryable/editable via the management API and Admin UI.

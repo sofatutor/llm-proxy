@@ -1,6 +1,6 @@
 # UI and Integration Tests
 
-Tracking: [Issue #45](https://github.com/sofatutor/llm-proxy/issues/45)
+Tracking: [Issue #198](https://github.com/sofatutor/llm-proxy/issues/198) (follow-up to [Issue #45](https://github.com/sofatutor/llm-proxy/issues/45))
 
 ## Summary
 Some integration tests are already present due to ongoing TDD. This issue remains open to further DRY up, refactor, and ensure comprehensive and efficient coverage of all UI and integration flows, keeping coverage above 90% at all times. In addition, Playwright E2E testing will be added, with tests running in GitHub Actions using a matrix for different browsers (e.g., Chromium, Firefox, WebKit).

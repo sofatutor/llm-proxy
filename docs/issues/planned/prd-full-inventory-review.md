@@ -1,5 +1,7 @@
 # PRD: Initial Full Inventory & Review of the Codebase (One-off)
 
+Tracking: [Issue #199](https://github.com/sofatutor/llm-proxy/issues/199)
+
 ## 1. Introduction / Overview
 This document defines a one-off, lightweight governance process to perform a comprehensive initial inventory and review of the LLM Proxy codebase. The goal is to proactively prevent architectural drift, remove dead code, and keep documentation, tests, and coverage aligned with the current implementation. This PRD focuses on maintainers and aligns with repository practices described in `AGENTS.md`, `README.md`, and the documentation under `docs/`.
 

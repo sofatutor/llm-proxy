@@ -347,7 +347,7 @@ A new `llm-proxy manage` command will be introduced to provide a clear, user-fri
 ## Phase 6: Deployment and Documentation
 - [Docker Optimization](docs/issues/done/phase-6-docker-optimization.md)
 - [Container Orchestration](docs/issues/backlog/phase-6-container-orchestration.md)
-- [User Documentation](docs/issues/planned/phase-6-user-docs.md)
+- [User Documentation](docs/issues/done/phase-6-user-docs.md)
 - [Developer Documentation](docs/issues/done/phase-6-dev-docs.md)
 - [Security Documentation](docs/issues/planned/phase-6-security-docs.md)
 

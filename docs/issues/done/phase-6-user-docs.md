@@ -20,4 +20,4 @@ Update and expand the README and user documentation for the LLM proxy. This incl
 ## Acceptance Criteria
 - README and user docs are comprehensive and up to date
 - Installation, configuration, and usage are clearly documented
-- Troubleshooting and performance tuning guides are available 
+- Troubleshooting and performance tuning guides are available

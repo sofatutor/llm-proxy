@@ -1,6 +1,6 @@
 # AWS ECS Production Deployment with CDK
 
-Tracking: [Issue #46](https://github.com/sofatutor/llm-proxy/issues/46)
+Tracking: [Issue #174](https://github.com/sofatutor/llm-proxy/issues/174) (supersedes [Issue #46](https://github.com/sofatutor/llm-proxy/issues/46))
 
 ## Summary
 
