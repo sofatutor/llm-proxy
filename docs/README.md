@@ -31,7 +31,7 @@ Start with the main [README](../README.md) for a quick overview, then follow the
 
 - **[Configuration Reference](configuration.md)** - Complete environment variable reference
 - **[API Configuration](api-configuration.md)** - Configure API providers, endpoints, and security policies
-- **[Security Best Practices](security.md)** - Production security, secrets management, and hardening
+- **[Security Best Practices](deployment/security.md)** - Production security, secrets management, and hardening
 - **[Docker Compose PostgreSQL Setup](docker-compose-postgres.md)** - Run llm-proxy with PostgreSQL using Docker Compose
 - **[Database Selection Guide](database-selection.md)** - Choose between SQLite and PostgreSQL
 - **[Database Migrations Guide](migrations.md)** - Version-controlled schema changes
@@ -40,7 +40,7 @@ Start with the main [README](../README.md) for a quick overview, then follow the
 
 - **[Log Search & Filter Guide](logging.md)** - Structured log fields, jq queries, and observability backend examples
 - **[Instrumentation Guide](instrumentation.md)** - Event system, async middleware, and monitoring
-- **[Security Best Practices](security.md)** - Production security, secrets management, audit logging, and hardening
+- **[Security Best Practices](deployment/security.md)** - Production security, secrets management, audit logging, and hardening
 
 ## Troubleshooting
 
@@ -139,7 +139,7 @@ POST /v1/chat/completions
 | Work with tokens | [Token Management Guide](token-management.md) |
 | Troubleshoot issues | [Troubleshooting & FAQ](troubleshooting.md) |
 | Optimize performance | [Performance Tuning](performance.md) |
-| Secure deployment | [Security Best Practices](security.md) |
+| Secure deployment | [Security Best Practices](deployment/security.md) |
 | Use the CLI | [CLI Reference](cli-reference.md) |
 | Understand architecture | [Architecture Overview](architecture.md) |
 
@@ -147,7 +147,7 @@ POST /v1/chat/completions
 
 - Check existing [issues](../PLAN.md) for known problems and solutions
 - Review [architecture documentation](architecture.md) for system understanding
-- See [security guidelines](security.md) for production deployment
+- See [security guidelines](deployment/security.md) for production deployment
 
 ---
 

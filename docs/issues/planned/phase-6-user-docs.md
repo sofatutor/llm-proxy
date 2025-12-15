@@ -10,12 +10,12 @@ Update and expand the README and user documentation for the LLM proxy. This incl
 - Clear guides and troubleshooting help reduce support burden and improve user experience.
 
 ## Tasks
-- [ ] Update README with comprehensive instructions
-- [ ] Create installation guides (from source, Docker, binaries)
-- [ ] Document configuration options and environment variables
-- [ ] Write user documentation for token management and Admin UI
-- [ ] Add troubleshooting and FAQ sections
-- [ ] Document performance tuning recommendations
+- [x] Update README with comprehensive instructions
+- [x] Create installation guides (from source, Docker, binaries)
+- [x] Document configuration options and environment variables
+- [x] Write user documentation for token management and Admin UI
+- [x] Add troubleshooting and FAQ sections
+- [x] Document performance tuning recommendations
 
 ## Acceptance Criteria
 - README and user docs are comprehensive and up to date

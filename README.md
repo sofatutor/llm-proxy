@@ -14,12 +14,12 @@ A transparent, secure proxy for OpenAI's API with token management, rate limitin
 - **HTTP Response Caching**: Redis-backed cache with configurable TTL, auth-aware shared caching, and streaming response support. Enable with `HTTP_CACHE_ENABLED=true`.
 - **Admin UI**: Web interface for management
 - **Comprehensive Logging & Audit Events**: Full lifecycle operation tracking for compliance
-- **Async Instrumentation Middleware**: Non-blocking, streaming-capable instrumentation for all API calls. See [docs/instrumentation.md](docs/instrumentation.md) for advanced usage and extension.
+- **Async Instrumentation Middleware**: Non-blocking, streaming-capable instrumentation for all API calls. See [docs/observability/instrumentation.md](docs/observability/instrumentation.md) for advanced usage and extension.
 - **Async Event Bus & Dispatcher**: All API instrumentation events are handled via an always-on, fully asynchronous event bus (in-memory or Redis) with support for multiple subscribers, batching, retry logic, and graceful shutdown. Persistent event logging is handled by a dispatcher CLI or the `--file-event-log` flag.
 - **OpenAI Token Counting**: Accurate prompt and completion token counting using tiktoken-go.
 - **Metrics Endpoint (provider-agnostic)**: Optional JSON metrics endpoint; Prometheus scraping/export is optional and not required by core features
 - **Multiple Database Support**: SQLite (default) and PostgreSQL with automatic migrations
-- **Database Migrations**: Version-controlled schema changes with rollback support. See [Migration Guide](docs/migrations.md)
+- **Database Migrations**: Version-controlled schema changes with rollback support. See [Migration Guide](docs/database/migrations.md)
 - **Docker Deployment**
 
 
@@ -94,7 +94,7 @@ The LLM Proxy supports **SQLite** (default) and **PostgreSQL** as database backe
 - `DATABASE_MAX_IDLE_CONNS`: Maximum idle connections (default `5`)
 - `DATABASE_CONN_MAX_LIFETIME`: Connection max lifetime (default `1h`)
 
-See [PostgreSQL Setup Guide](docs/docker-compose-postgres.md) for detailed PostgreSQL configuration.
+See [PostgreSQL Setup Guide](docs/database/docker-compose-postgres.md) for detailed PostgreSQL configuration.
 
 ### Caching Configuration
 - `HTTP_CACHE_ENABLED`: Enable HTTP response caching (default `true`)
@@ -106,7 +106,7 @@ See [PostgreSQL Setup Guide](docs/docker-compose-postgres.md) for detailed Postg
 - `HTTP_CACHE_MAX_OBJECT_BYTES`: Maximum cached object size in bytes (default 1048576)
 - `HTTP_CACHE_DEFAULT_TTL`: Default TTL in seconds when upstream doesn't specify (default 300)
 
-See `docs/api-configuration.md` and [docs/instrumentation.md](docs/instrumentation.md) for all options and advanced usage.
+See `docs/guides/api-configuration.md` and [docs/observability/instrumentation.md](docs/observability/instrumentation.md) for all options and advanced usage.
 
 ### Advanced Example
 ```yaml
@@ -123,7 +123,7 @@ apis:
       - origin
 ```
 
-See `docs/issues/phase-7-param-cors-whitelist.md` for advanced configuration and rationale.
+See `docs/issues/done/phase-4-param-cors-whitelist.md` for advanced configuration and rationale.
 
 ## Main API Endpoints
 
@@ -283,9 +283,9 @@ The dispatcher can be deployed in multiple ways:
 - **Sidecar Container**: Deploy alongside the main proxy in Kubernetes
 - **Background Mode**: Use `--detach` flag for daemon-like operation
 
-See [docs/instrumentation.md](docs/instrumentation.md) for detailed configuration and architecture.
+See [docs/observability/instrumentation.md](docs/observability/instrumentation.md) for detailed configuration and architecture.
 
-> Warning: Event loss can occur if the Redis event log is configured with TTL/max length values that are too low for your dispatcher lag and throughput. In production, increase Redis TTL and list length to cover worst-case backlogs and keep the dispatcher running with sufficient batch size/throughput. For strict guarantees, use a durable queue (e.g., Redis Streams with consumer groups or Kafka). See the Production Reliability section in `docs/instrumentation.md`.
+> Warning: Event loss can occur if the Redis event log is configured with TTL/max length values that are too low for your dispatcher lag and throughput. In production, increase Redis TTL and list length to cover worst-case backlogs and keep the dispatcher running with sufficient batch size/throughput. For strict guarantees, use a durable queue (e.g., Redis Streams with consumer groups or Kafka). See the Production Reliability section in `docs/observability/instrumentation.md`.
 
 ## Using Redis for Distributed Event Bus (Local Development)
 
@@ -333,7 +333,7 @@ Redis Streams provides at-least-once delivery, consumer groups, and automatic cr
 - Admin UI uses basic auth (`ADMIN_USER`, `ADMIN_PASSWORD`)
 - Logs stored locally and/or sent to external backends
 - Use HTTPS in production (via reverse proxy)
-- See `docs/security.md` and `docs/production.md` for best practices
+- See `docs/deployment/security.md` and `docs/deployment/index.md` for best practices
 
 ### Containerization Notes
 - Multi-stage Dockerfile builds a static binary and ships a minimal Alpine runtime
@@ -361,22 +361,21 @@ This README provides a quick overview and getting started guide. For comprehensi
 ### 📚 **[Documentation Site](https://sofatutor.github.io/llm-proxy/)** | **[Source Index](docs/README.md)**
 
 **Getting Started:**
-- **[Installation Guide](docs/installation.md)** - Docker, Docker Compose, and source installation
-- **[Configuration Reference](docs/configuration.md)** - All environment variables and settings
+- **[Installation Guide](docs/getting-started/installation.md)** - Docker, Docker Compose, and source installation
+- **[Configuration Reference](docs/getting-started/configuration.md)** - All environment variables and settings
 - **[Admin UI Quickstart](docs/admin/quickstart.md)** - Web interface setup
 
 **User Guides:**
-- **[Token Management](docs/token-management.md)** - Complete token lifecycle guide
+- **[Token Management](docs/guides/token-management.md)** - Complete token lifecycle guide
 - **[Admin UI Guide](docs/admin/index.md)** - Web interface documentation
-- **[Troubleshooting & FAQ](docs/troubleshooting.md)** - Common issues and solutions
-- **[Performance Tuning](docs/performance.md)** - Caching, scaling, and optimization
+- **[Troubleshooting & FAQ](docs/guides/troubleshooting.md)** - Common issues and solutions
+- **[Performance Tuning](docs/deployment/performance.md)** - Caching, scaling, and optimization
 
 **Reference:**
-- **[CLI Reference](docs/cli-reference.md)** - Complete command-line interface documentation
-- **[Architecture Guide](docs/architecture.md)** - System architecture and design
-- **[API Configuration](docs/api-configuration.md)** - Advanced API provider configuration
-- **[Security Best Practices](docs/security.md)** - Production security guidelines
-- **[Architecture Guide](docs/architecture.md)** - System architecture and design
+- **[CLI Reference](docs/guides/cli-reference.md)** - Complete command-line interface documentation
+- **[Architecture Guide](docs/architecture/index.md)** - System architecture and design
+- **[API Configuration](docs/guides/api-configuration.md)** - Advanced API provider configuration
+- **[Security Best Practices](docs/deployment/security.md)** - Production security guidelines
 
 **For Developers:**
 - [OpenAPI Specification](api/openapi.yaml) - Machine-readable API definitions

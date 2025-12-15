@@ -10,11 +10,11 @@ Document security considerations for the LLM proxy, including token security, AP
 - Clear guidance helps users and operators avoid common security pitfalls.
 
 ## Tasks
-- [ ] Document token security best practices
-- [ ] Add API key management guidance
-- [ ] Document network security recommendations (TLS, firewall, etc.)
-- [ ] Document data protection and encryption measures
-- [ ] Add security troubleshooting and incident response guidance
+- [x] Document token security best practices (see `docs/deployment/security.md`)
+- [x] Add API key management guidance (see `docs/deployment/security.md`)
+- [x] Document network security recommendations (TLS, firewall, etc.) (see `docs/deployment/security.md`)
+- [x] Document data protection and encryption measures (see `docs/deployment/security.md`)
+- [x] Add security troubleshooting and incident response guidance (see `docs/deployment/security.md`)
 
 ## Acceptance Criteria
 - Security documentation is comprehensive and up to date

@@ -457,7 +457,7 @@ After installation:
 1. **[Configuration Guide](configuration.md)** - Configure environment variables and settings
 2. **[Admin UI Quickstart](admin/quickstart.md)** - Set up projects and tokens via the web interface
 3. **[Token Management](token-management.md)** - Understand token lifecycle and management
-4. **[Security Best Practices](security.md)** - Secure your deployment
+4. **[Security Best Practices](../deployment/security.md)** - Secure your deployment
 
 ## Related Documentation
 

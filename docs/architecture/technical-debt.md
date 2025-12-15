@@ -38,7 +38,7 @@ This register tracks all known technical debt, workarounds, and future improveme
 - Redis event bus uses list with TTL and max-length
 - If dispatcher is down or lagging, events can expire before being read
 - No offset tracking or guaranteed delivery
-- Warning documented in `docs/instrumentation.md`
+- Warning documented in `docs/observability/instrumentation.md`
 
 **Workaround**:
 - Size Redis retention generously (high TTL, large max-length)
@@ -54,7 +54,7 @@ This register tracks all known technical debt, workarounds, and future improveme
 - Update tests and documentation
 
 **References**:
-- `docs/instrumentation.md` lines 363-375
+- `docs/observability/instrumentation.md` lines 363-375
 - Brownfield architecture: "Event Loss Risk" section
 
 ---
@@ -233,7 +233,7 @@ This register tracks all known technical debt, workarounds, and future improveme
 
 **References**:
 - PLAN.md line 21
-- `docs/architecture.md` lines 13-17
+- `docs/architecture/architecture.md`
 
 ---
 
@@ -393,8 +393,8 @@ DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
 - Verified 90%+ code coverage
 
 **References**:
-- DONE.md lines 7-9
-- WIP.md review comments
+- `docs/issues/archive/DONE.md`
+- `docs/issues/archive/WIP.md`
 
 ---
 
@@ -414,7 +414,7 @@ DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
 - Tests pass and coverage confirmed
 
 **References**:
-- DONE.md lines 11-13
+- `docs/issues/archive/DONE.md`
 
 ---
 
@@ -435,7 +435,7 @@ DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
 - Type safety now enforced by compiler
 
 **References**:
-- DONE.md lines 14-16
+- `docs/issues/archive/DONE.md`
 
 ---
 
@@ -505,11 +505,11 @@ DISTRIBUTED_RATE_LIMIT_FALLBACK=true   # Fallback to in-memory
 
 ## Related Documentation
 
-- **Brownfield Architecture**: `docs/brownfield-architecture.md` - Actual system state
+- **Brownfield Architecture**: `docs/architecture/brownfield-architecture.md` - Actual system state
 - **PLAN.md**: Project architecture and objectives
-- **WIP.md**: Current work in progress
-- **DONE.md**: Completed work archive
-- **Architecture**: `docs/architecture.md` - Ideal architecture
+- **WIP.md**: Archived work-in-progress history (`docs/issues/archive/WIP.md`)
+- **DONE.md**: Archived completed-work history (`docs/issues/archive/DONE.md`)
+- **Architecture**: `docs/architecture/architecture.md` - Ideal architecture
 
 ---
 

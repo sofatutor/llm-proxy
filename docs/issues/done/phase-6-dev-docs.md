@@ -44,19 +44,19 @@ flowchart TD
 
 **Completed Documentation Updates:**
 
-1. **Architecture Overview** (`docs/architecture.md`):
+1. **Architecture Overview** (`docs/architecture/architecture.md`):
    - Updated system architecture diagram to include async event system
    - Added detailed async event bus and dispatcher architecture
    - Documented Redis and in-memory event bus implementations
    - Included middleware pipeline with instrumentation middleware
 
-2. **Code Organization Guide** (`docs/code-organization.md`) - **NEW**:
+2. **Code Organization Guide** (`docs/architecture/code-organization.md`) - **NEW**:
    - Comprehensive package structure and layering documentation
    - Detailed package responsibilities and dependencies
    - Development workflow and architectural boundaries
    - Performance considerations and design patterns
 
-3. **Testing Guide** (`docs/testing-guide.md`) - **NEW**:
+3. **Testing Guide** (`docs/development/testing-guide.md`) - **NEW**:
    - Complete TDD workflow documentation
    - Coverage requirements and measurement (90% target)
    - Unit, integration, and E2E testing practices

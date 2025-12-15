@@ -141,7 +141,7 @@ _Optional/experimental features (e.g., alerting, tracing, benchmarks) are tracke
 - ✅ **Proxy Guard**: Blocks API key retrieval for inactive projects (403/401 responses)
 - ✅ **Comprehensive Audit Events**: Lifecycle operations, proxy request decisions, compliance logging
 - ✅ **E2E Test Coverage**: Complete UI test automation for all Phase 5 features
-- 🔄 Add opt-in PostgreSQL support while keeping SQLite default. See `docs/issues/phase-5-postgres-support.md`.
+- ✅ Opt-in PostgreSQL support while keeping SQLite default. See `docs/issues/done/phase-5-postgres-support.md`.
 
 ### Phase 6: Production Readiness
 - Complete documentation, refactoring, optimization, security, CI/CD, and containerization.
@@ -198,7 +198,7 @@ _Optional/experimental features (e.g., alerting, tracing, benchmarks) are tracke
 
 ### 8. Benchmark Tool
 - Implement CLI with flag parsing
-- [x] Benchmark tool core (CLI, concurrency, request generation, tests, Makefile integration) implemented and tested. See WIP.md for details.
+- [x] Benchmark tool core (CLI, concurrency, request generation, tests, Makefile integration) implemented and tested. See `docs/issues/archive/WIP.md` for details.
 - Calculate and report performance metrics
 
 ### 9. Containerization
@@ -316,8 +316,8 @@ docker run -d \
 
 ### Container Orchestration
 Container orchestration is now split into two supported tracks:
-- [AWS ECS Deployment](docs/issues/phase-6-aws-ecs.md)
-- [Kubernetes Deployment with HELM](docs/issues/phase-6-kubernetes-helm.md)
+- [AWS ECS Deployment](docs/issues/planned/phase-6-aws-ecs.md)
+- [Kubernetes Deployment with HELM](docs/issues/planned/phase-6-kubernetes-helm.md)
 
 Refer to the linked issue files for detailed tasks, rationale, and acceptance criteria for each orchestration platform.
 
@@ -467,7 +467,7 @@ To maximize security and minimize attack surface, the proxy implements a whiteli
 - [x] Update WIP.md and PLAN.md
 
 ### References
-- See WIP.md for process and status
+- See `docs/issues/archive/WIP.md` for process and status
 
 ## Rationale
 - All backend API instrumentation is now handled via a generic async event bus and dispatcher(s) architecture.

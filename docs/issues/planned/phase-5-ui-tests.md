@@ -15,7 +15,7 @@ Some integration tests are already present due to ongoing TDD. This issue remain
 ## Tasks
 - [ ] Review and refactor existing UI and integration tests for DRYness and efficiency
 - [ ] Ensure all UI and integration flows and edge cases are covered
-- [ ] Add Playwright E2E tests for critical user flows
+- [x] Add Playwright E2E tests for critical user flows
 - [ ] Set up Playwright to run in GitHub Actions with a matrix for Chromium, Firefox, and WebKit
 - [ ] Maintain and improve test coverage reporting
 - [ ] Document UI, integration, and E2E testing best practices

@@ -416,6 +416,6 @@ docker logs llm-proxy | grep -i "config\|error"
 
 - [Installation Guide](installation.md)
 - [API Configuration Guide](api-configuration.md)
-- [Security Best Practices](security.md)
+- [Security Best Practices](../deployment/security.md)
 - [Performance Tuning Guide](performance.md)
 - [PostgreSQL Troubleshooting](postgresql-troubleshooting.md)

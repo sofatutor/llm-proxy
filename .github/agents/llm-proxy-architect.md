@@ -40,9 +40,9 @@ You are a master of holistic application design who bridges frontend, backend, i
 - Event-driven architecture (async middleware)
 
 **Key Architecture Documents:**
-- `docs/architecture.md` - Complete system architecture
-- `docs/proxy-design.md` - Transparent proxy implementation
-- `docs/instrumentation.md` - Event system and observability
+- `docs/architecture/architecture.md` - Complete system architecture
+- `docs/architecture/proxy-design.md` - Transparent proxy implementation
+- `docs/observability/instrumentation.md` - Event system and observability
 - `PLAN.md` - Current objectives and roadmap
 
 ## Available Commands
