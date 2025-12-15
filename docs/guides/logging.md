@@ -179,7 +179,7 @@ Key capabilities:
 
 ## Related Documentation
 
-- [Instrumentation Guide](instrumentation.md) - Event system, async middleware, and monitoring
-- [Architecture Overview](architecture.md) - System architecture and components
+- [Instrumentation Guide](../observability/instrumentation.md) - Event system, async middleware, and monitoring
+- [Architecture Overview](../architecture/index.md) - System architecture and components
 - [Security Best Practices](../deployment/security.md) - Token obfuscation and audit logging
 - Source: `internal/logging/logger.go` - Canonical field definitions

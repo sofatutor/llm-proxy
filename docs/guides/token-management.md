@@ -432,7 +432,7 @@ curl -X PATCH http://localhost:8080/manage/projects/<project-id> \
 
 ## Related Documentation
 
-- [Admin UI Token Management](admin/tokens.md)
+- [Admin UI Token Management](../admin/tokens.md)
 - [CLI Reference - Token Commands](cli-reference.md#token-management)
 - [Security Best Practices](../deployment/security.md)
 - [Troubleshooting Guide](troubleshooting.md)

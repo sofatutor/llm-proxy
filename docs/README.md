@@ -6,46 +6,46 @@ This directory contains comprehensive documentation for the LLM Proxy project. U
 
 Start with the main [README](../README.md) for a quick overview, then follow these guides:
 
-- **[Installation Guide](installation.md)** - Install via Docker, Docker Compose, or from source
-- **[Configuration Reference](configuration.md)** - All environment variables and config options
+- **[Installation Guide](getting-started/installation.md)** - Install via Docker, Docker Compose, or from source
+- **[Configuration Reference](getting-started/configuration.md)** - All environment variables and config options
 - **[Admin UI Quickstart](admin/quickstart.md)** - Set up projects and tokens via web interface
 
 ## User Guides
 
-- **[Token Management Guide](token-management.md)** - Complete token lifecycle: create, use, revoke, expire
+- **[Token Management Guide](guides/token-management.md)** - Complete token lifecycle: create, use, revoke, expire
 - **[Admin UI Guide](admin/index.md)** - Web interface for management
   - [Project Management](admin/projects.md) - Create and manage projects
   - [Token Management](admin/tokens.md) - Generate and manage tokens
   - [Screenshots](admin/screens.md) - Visual tour of all screens
 - **[Troubleshooting & FAQ](troubleshooting.md)** - Common issues and solutions
-- **[Performance Tuning](performance.md)** - Optimize caching, connections, and scaling
+- **[Performance Tuning](deployment/performance.md)** - Optimize caching, connections, and scaling
 
 ## Architecture & Design
 
-- **[Architecture Overview](architecture.md)** - Complete system architecture, components, and data flow
+- **[Architecture Overview](architecture/index.md)** - Complete system architecture, components, and data flow
 - **[Code Organization Guide](code-organization.md)** - Package structure, layering, and dependency management  
 - **[Proxy Design](proxy-design.md)** - Transparent proxy implementation details
 - **[Caching Strategy](caching-strategy.md)** - HTTP response caching with Redis backend and streaming support
 
 ## Configuration & Setup
 
-- **[Configuration Reference](configuration.md)** - Complete environment variable reference
-- **[API Configuration](api-configuration.md)** - Configure API providers, endpoints, and security policies
+- **[Configuration Reference](getting-started/configuration.md)** - Complete environment variable reference
+- **[API Configuration](guides/api-configuration.md)** - Configure API providers, endpoints, and security policies
 - **[Security Best Practices](deployment/security.md)** - Production security, secrets management, and hardening
-- **[Docker Compose PostgreSQL Setup](docker-compose-postgres.md)** - Run llm-proxy with PostgreSQL using Docker Compose
-- **[Database Selection Guide](database-selection.md)** - Choose between SQLite and PostgreSQL
-- **[Database Migrations Guide](migrations.md)** - Version-controlled schema changes
+- **[Docker Compose PostgreSQL Setup](database/docker-compose-postgres.md)** - Run llm-proxy with PostgreSQL using Docker Compose
+- **[Database Selection Guide](database/database-selection.md)** - Choose between SQLite and PostgreSQL
+- **[Database Migrations Guide](database/migrations.md)** - Version-controlled schema changes
 
 ## Observability & Monitoring
 
-- **[Log Search & Filter Guide](logging.md)** - Structured log fields, jq queries, and observability backend examples
-- **[Instrumentation Guide](instrumentation.md)** - Event system, async middleware, and monitoring
+- **[Log Search & Filter Guide](guides/logging.md)** - Structured log fields, jq queries, and observability backend examples
+- **[Instrumentation Guide](observability/instrumentation.md)** - Event system, async middleware, and monitoring
 - **[Security Best Practices](deployment/security.md)** - Production security, secrets management, audit logging, and hardening
 
 ## Troubleshooting
 
 - **[Troubleshooting & FAQ](troubleshooting.md)** - Common issues and solutions for all components
-- **[PostgreSQL Troubleshooting](postgresql-troubleshooting.md)** - PostgreSQL-specific issues and solutions
+- **[PostgreSQL Troubleshooting](database/postgresql-troubleshooting.md)** - PostgreSQL-specific issues and solutions
 
 ## API Reference
 
@@ -56,7 +56,7 @@ For complete API reference, see the main [README](../README.md) which covers:
 - CLI commands and flags
 
 **Detailed References:**
-- **[CLI Reference](cli-reference.md)** - Comprehensive command-line interface documentation
+- **[CLI Reference](guides/cli-reference.md)** - Comprehensive command-line interface documentation
 - **[Go Package Documentation](go-packages.md)** - Using LLM Proxy packages in your Go applications
 
 The [OpenAPI specification](../api/openapi.yaml) provides machine-readable API definitions.
@@ -98,7 +98,7 @@ The [OpenAPI specification](../api/openapi.yaml) provides machine-readable API d
 | `AUDIT_STORE_IN_DB` | Store audit events in DB | `true` |
 | `OBSERVABILITY_BUFFER_SIZE` | Event bus buffer | `1000` |
 
-See [Configuration Reference](configuration.md) for the complete list.
+See [Configuration Reference](getting-started/configuration.md) for the complete list.
 
 ### Key Commands
 
@@ -133,20 +133,20 @@ POST /v1/chat/completions
 
 | If you want to... | Read... |
 |-------------------|---------|
-| Install the proxy | [Installation Guide](installation.md) |
-| Configure settings | [Configuration Reference](configuration.md) |
+| Install the proxy | [Installation Guide](getting-started/installation.md) |
+| Configure settings | [Configuration Reference](getting-started/configuration.md) |
 | Manage via web UI | [Admin UI Guide](admin/index.md) |
-| Work with tokens | [Token Management Guide](token-management.md) |
+| Work with tokens | [Token Management Guide](guides/token-management.md) |
 | Troubleshoot issues | [Troubleshooting & FAQ](troubleshooting.md) |
-| Optimize performance | [Performance Tuning](performance.md) |
+| Optimize performance | [Performance Tuning](deployment/performance.md) |
 | Secure deployment | [Security Best Practices](deployment/security.md) |
-| Use the CLI | [CLI Reference](cli-reference.md) |
-| Understand architecture | [Architecture Overview](architecture.md) |
+| Use the CLI | [CLI Reference](guides/cli-reference.md) |
+| Understand architecture | [Architecture Overview](architecture/index.md) |
 
 ## Support
 
 - Check existing [issues](../PLAN.md) for known problems and solutions
-- Review [architecture documentation](architecture.md) for system understanding
+- Review [architecture documentation](architecture/index.md) for system understanding
 - See [security guidelines](deployment/security.md) for production deployment
 
 ---
