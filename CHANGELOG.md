@@ -6,6 +6,13 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ---
 
+## December 15, 2025
+
+### Added
+
+- **Publish latest Docker tag** ([#201](https://github.com/sofatutor/llm-proxy/pull/201)): Docker workflow now tags GHCR images from the default branch with `:latest` alongside the existing `:main` and `:sha-xxxxx` tags, aligning published artifacts with the README reference and keeping PR builds unchanged.
+
+
 ## December 14, 2025
 
 ### Added
