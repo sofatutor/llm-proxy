@@ -12,6 +12,10 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 - **Publish latest Docker tag** ([#201](https://github.com/sofatutor/llm-proxy/pull/201)): Docker workflow now tags GHCR images from the default branch with `:latest` alongside the existing `:main` and `:sha-xxxxx` tags, aligning published artifacts with the README reference and keeping PR builds unchanged.
 
+### Changed
+
+- **Realign Docs Links** ([#197](https://github.com/sofatutor/llm-proxy/pull/197)): Updated documentation references after the reorg, added lightweight redirect stubs for legacy entrypoints, refreshed archived issue tracking docs, and introduced the Phase 6 runtime config proposal for DB overrides.
+
 
 ## December 14, 2025
 
@@ -262,7 +266,7 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 - **CI/CD & Docker** ([#5](https://github.com/sofatutor/llm-proxy/pull/5)): Added golangci-lint configuration, enhanced GitHub Actions with dependency management and formatting checks, improved Docker workflow with caching, updated Dockerfile with non-root user and volumes, created docker-compose.yml, and comprehensive OpenAPI 3.0 specification.
 
-- **Security & Documentation** ([#6](https://github.com/sofatutor/llm-proxy/pull/6)): Enhanced `.env.example` with security settings, improved `.gitignore` for sensitive files, hardened Dockerfile with non-root execution and health checks, added security best practices documentation (`docs/security.md`), architecture documentation with diagrams, and CONTRIBUTING.md with TDD focus.
+- **Security & Documentation** ([#6](https://github.com/sofatutor/llm-proxy/pull/6)): Enhanced `.env.example` with security settings, improved `.gitignore` for sensitive files, hardened Dockerfile with non-root execution and health checks, added security best practices documentation (`docs/deployment/security.md`), architecture documentation with diagrams, and CONTRIBUTING.md with TDD focus.
 
 ### Changed
 

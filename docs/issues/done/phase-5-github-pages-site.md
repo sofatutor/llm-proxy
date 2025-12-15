@@ -10,7 +10,7 @@ References:
 - PRD: `docs/tasks/prd-github-pages-site.md`
 - Tasks: `docs/tasks/tasks-prd-github-pages-site.md`
 - Screenshots: `docs/assets/screenshots/`
-- Architecture & Docs: `docs/architecture.md`, `docs/cli-reference.md`, `docs/instrumentation.md`, `README.md`, `AGENTS.md`
+- Architecture & Docs: `docs/architecture/architecture.md`, `docs/guides/cli-reference.md`, `docs/observability/instrumentation.md`, `README.md`, `AGENTS.md`
 
 ## Rationale
 

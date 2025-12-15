@@ -45,12 +45,12 @@ This file provides essential context and rules for both human and AI contributor
 ```
 README.md                    → Quick start, overview, basic API usage
 docs/README.md              → Complete documentation index with quick reference
-├── docs/cli-reference.md   → Complete CLI command reference and workflows
-├── docs/go-packages.md     → Go package integration for developers
-├── docs/architecture.md    → System design, data flow, and components
-├── docs/api-configuration.md → Advanced API provider configuration
-├── docs/security.md        → Production security and best practices
-└── docs/instrumentation.md → Event system and observability
+├── docs/guides/cli-reference.md   → Complete CLI command reference and workflows
+├── docs/development/index.md      → Developer documentation index
+├── docs/architecture/index.md     → System design, data flow, and components
+├── docs/guides/api-configuration.md → Advanced API provider configuration
+├── docs/deployment/security.md    → Production security and best practices
+└── docs/observability/instrumentation.md → Event system and observability
 ```
 
 ### **API Structure (Sparse Prime)**
@@ -335,17 +335,17 @@ Fixes #issue-number
 ## 🔗 Quick Links for Context Extension
 
 **Project Understanding:**
-- [Architecture Overview](docs/architecture.md) - Complete system design
+- [Architecture Overview](docs/architecture/index.md) - Complete system design
 - [Project Plan](PLAN.md) - Current objectives and roadmap
 - [Working Agreement](working-agreement.mdc) - Core development rules
 
 **Implementation Details:**
-- [CLI Reference](docs/cli-reference.md) - Complete command documentation
-- [Go Packages](docs/go-packages.md) - Package integration guide
-- [API Configuration](docs/api-configuration.md) - Advanced proxy configuration
+- [CLI Reference](docs/guides/cli-reference.md) - Complete command documentation
+- [Developer Docs](docs/development/index.md) - Developer documentation index
+- [API Configuration](docs/guides/api-configuration.md) - Advanced proxy configuration
 
 **Production & Security:**
-- [Security Guide](docs/security.md) - Production security practices
+- [Security Guide](docs/deployment/security.md) - Production security practices
 - [OpenAPI Spec](api/openapi.yaml) - Machine-readable API definitions
 
 **Development Process:**

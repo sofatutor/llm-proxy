@@ -16,8 +16,8 @@ Thanks for your interest in contributing! Start here:
 Helpful links:
 - Repo: `https://github.com/sofatutor/llm-proxy`
 - Issues: look for `good first issue`
-- Architecture: `docs/architecture.md`
-- CLI Reference: `docs/cli-reference.md`
+- Architecture: `docs/architecture/index.md`
+- CLI Reference: `docs/guides/cli-reference.md`
 
 ### Local validation
 

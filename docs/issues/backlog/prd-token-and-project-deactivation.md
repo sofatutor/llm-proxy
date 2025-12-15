@@ -8,7 +8,7 @@ This PRD defines the work to make token and project lifecycle operations complia
 - Add token edit capabilities in the Admin UI, and enable revoking tokens from the UI.
 - Support deactivating a project and revoking all tokens of that project in one operation.
 
-This aligns with the architecture in `docs/architecture.md` and the repo’s rules in `AGENTS.md` (audit-first, transparent behavior, 90%+ coverage, no TODOs).
+This aligns with the architecture in `docs/architecture/index.md` and the repo’s rules in `AGENTS.md` (audit-first, transparent behavior, 90%+ coverage, no TODOs).
 
 ### Goals
 
@@ -71,7 +71,7 @@ This aligns with the architecture in `docs/architecture.md` and the repo’s rul
 3) Database & Storage (in `internal/database`)
    - Projects: add soft-activation flags
      - Add columns: `projects.is_active BOOLEAN NOT NULL DEFAULT 1`, `projects.deactivated_at TIMESTAMP NULL`.
-     - Migrations for SQLite (and PostgreSQL later per `docs/issues/phase-5-postgres-support.md`).
+     - Migrations for SQLite (and PostgreSQL later per `docs/issues/done/phase-5-postgres-support.md`).
      - DB adapters must include `IsActive` on the `proxy.Project` model and read/write it.
    - Tokens (already have `is_active`):
      - Add optional `deactivated_at TIMESTAMP NULL` for audit clarity.
@@ -108,7 +108,7 @@ This aligns with the architecture in `docs/architecture.md` and the repo’s rul
 
 ### Design Considerations
 
-- Follows reverse-proxy transparency and minimal overhead from `docs/architecture.md`.
+- Follows reverse-proxy transparency and minimal overhead from `docs/architecture/architecture.md`.
 - Uses existing revocation types in `internal/token/revoke.go`; provides concrete DB-backed implementations.
 - Keep DB schema compatible with both SQLite and PostgreSQL; write migrations accordingly.
 - Ensure Admin UI never exposes raw token values except at creation time (already implemented).
