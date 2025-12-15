@@ -65,7 +65,7 @@ This project **strictly follows** test-driven development (TDD) principles:
 - Use `gofmt` and `golangci-lint` before committing
 - Add comprehensive comments for exported functions, types, and constants
 - Each package should have a package-level comment explaining its purpose
-- Follow the [Code Organization Guide](docs/code-organization.md) for architecture
+- Follow the [Code Organization Guide](docs/architecture/code-organization.md) for architecture
 
 **Pre-commit Checks:**
 ```bash
@@ -98,7 +98,7 @@ make test-coverage
 
 ### Pull Request Process
 
-1. **Follow TDD Workflow**: Write failing tests first, then implement (see [Testing Guide](docs/testing-guide.md))
+1. **Follow TDD Workflow**: Write failing tests first, then implement (see [Testing Guide](docs/development/testing-guide.md))
 2. **Run Pre-Push Checks**:
    ```bash
    make fmt           # Format code
@@ -193,7 +193,7 @@ Documentation is a critical part of the project. All changes should include appr
 
 ## Testing
 
-Comprehensive testing is mandatory. See the [Testing Guide](docs/testing-guide.md) for detailed information.
+Comprehensive testing is mandatory. See the [Testing Guide](docs/development/testing-guide.md) for detailed information.
 
 ### Testing Requirements
 

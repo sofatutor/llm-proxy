@@ -104,7 +104,7 @@ This register tracks all known technical debt, workarounds, and future improveme
 
 **Workaround**:
 - Read code and main documentation
-- Check `docs/code-organization.md` for package overview
+- Check `docs/architecture/code-organization.md` for package overview
 
 **Effort Estimate**: 1-2 hours per package (8-10 packages = 8-20 hours total)
 - Expand each README with:

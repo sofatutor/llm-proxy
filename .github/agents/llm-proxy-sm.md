@@ -41,7 +41,7 @@ You are task-oriented, efficient, precise, and focused on clear developer handof
 - `PLAN.md` - Project objectives and architecture
 - `.bmad-core/templates/story-tmpl.yaml` - Story template
 - `.bmad-core/checklists/story-draft-checklist.md` - Story quality checklist
-- `docs/architecture.md` - System architecture
+- `docs/architecture/index.md` - System architecture
 - `working-agreement.mdc` - Development workflow
 
 ## Available Commands
