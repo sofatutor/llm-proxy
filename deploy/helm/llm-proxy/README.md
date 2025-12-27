@@ -21,6 +21,8 @@ helm install llm-proxy oci://ghcr.io/sofatutor/llm-proxy \
 
 **Available versions:** See [GitHub Container Registry](https://github.com/sofatutor/llm-proxy/pkgs/container/llm-proxy) for all published chart versions.
 
+**Note on Dependencies:** The chart includes an optional PostgreSQL dependency (disabled by default). When installing from OCI, the dependency is packaged with the chart. If you enable `postgresql.enabled=true`, Helm will automatically download the PostgreSQL subchart during installation.
+
 ## Installation from Local Chart
 
 If you have cloned the repository, you can install the chart locally:
