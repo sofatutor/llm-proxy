@@ -20,6 +20,7 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Changed
 
+- **Secure dispatcher config** ([#220](https://github.com/sofatutor/llm-proxy/pull/220)): Removed dispatcher.apiKey.value so non-file services must supply API keys via existing secrets, simplified validation, and refreshed docs/NOTES messaging so the optional dispatcher deployment stays secure and clearly documented while tests mirror the new errors.
 - **Postgres Helm Docs** ([#219](https://github.com/sofatutor/llm-proxy/pull/219)): Cleaned Helm examples numbering, removed a redundant NOTES warning, and expanded helper comments so operators understand how Bitnami ports and SSL configuration propagate into the chart values.
 - **Clarify metrics documentation** ([#218](https://github.com/sofatutor/llm-proxy/pull/218)): Documented the new Prometheus scraping example, explained that METRICS_PATH covers both JSON and Prometheus endpoints, updated wording to “additional,” and reaffirmed that the existing `/metrics` JSON behavior remains unchanged so operators can configure scraping reliably.
 - **Harden Helm deployment** ([#215](https://github.com/sofatutor/llm-proxy/pull/215)): Enforced deterministic env var ordering, added NOTES warnings for missing MANAGEMENT_TOKEN, tightened documentation and prerequisites, and rewrote the Helm secret tests to use --show-only rendering plus scoped validation for more reliable verification.
