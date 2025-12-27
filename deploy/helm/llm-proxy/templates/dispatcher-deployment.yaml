@@ -1,0 +1,101 @@
+{{- if .Values.dispatcher.enabled }}
+{{- include "llm-proxy.validateDispatcherConfig" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "llm-proxy.dispatcher.fullname" . }}
+  labels:
+    {{- include "llm-proxy.dispatcher.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.dispatcher.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "llm-proxy.dispatcher.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "llm-proxy.dispatcher.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- if .Values.dispatcher.podSecurityContext }}
+        {{- toYaml .Values.dispatcher.podSecurityContext | nindent 8 }}
+        {{- else }}
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- end }}
+      containers:
+      - name: dispatcher
+        securityContext:
+          {{- if .Values.dispatcher.securityContext }}
+          {{- toYaml .Values.dispatcher.securityContext | nindent 12 }}
+          {{- else }}
+          {{- toYaml .Values.securityContext | nindent 12 }}
+          {{- end }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args:
+          - "dispatcher"
+          - "--service"
+          - {{ .Values.dispatcher.service | quote }}
+          - "--endpoint"
+          - {{ include "llm-proxy.dispatcher.endpoint" . | quote }}
+          - "--buffer"
+          - {{ .Values.dispatcher.config.bufferSize | quote }}
+          - "--batch-size"
+          - {{ .Values.dispatcher.config.batchSize | quote }}
+        {{- $redisPasswordSecret := include "llm-proxy.redisPasswordSecretName" . }}
+        {{- $dispatcherApiKeySecret := include "llm-proxy.dispatcher.apiKeySecretName" . }}
+        env:
+        {{- if .Values.env.LLM_PROXY_EVENT_BUS }}
+        - name: LLM_PROXY_EVENT_BUS
+          value: {{ .Values.env.LLM_PROXY_EVENT_BUS | quote }}
+        {{- end }}
+        {{- if .Values.redis.external.addr }}
+        - name: REDIS_ADDR
+          value: {{ .Values.redis.external.addr | quote }}
+        - name: REDIS_DB
+          value: {{ .Values.redis.external.db | quote }}
+        {{- if $redisPasswordSecret }}
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ $redisPasswordSecret }}
+              key: {{ include "llm-proxy.redisPasswordSecretKey" . }}
+        {{- end }}
+        {{- end }}
+        {{- if $dispatcherApiKeySecret }}
+        - name: LLM_PROXY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ $dispatcherApiKeySecret }}
+              key: {{ include "llm-proxy.dispatcher.apiKeySecretKey" . }}
+        {{- end }}
+        resources:
+          {{- toYaml .Values.dispatcher.resources | nindent 12 }}
+        {{- if and (eq .Values.dispatcher.service "file") .Values.dispatcher.persistence.enabled }}
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+        {{- end }}
+      {{- if and (eq .Values.dispatcher.service "file") .Values.dispatcher.persistence.enabled }}
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: {{ include "llm-proxy.dispatcher.fullname" . }}
+      {{- end }}
+      {{- with .Values.dispatcher.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dispatcher.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dispatcher.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

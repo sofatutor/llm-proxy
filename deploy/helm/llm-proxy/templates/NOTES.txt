@@ -48,6 +48,29 @@ IMPORTANT:
 ********************************************************************************
 {{- end }}
 
+{{- if .Values.dispatcher.enabled }}
+********************************************************************************
+****                      DISPATCHER DEPLOYMENT ENABLED                     ****
+********************************************************************************
+
+Dispatcher Configuration:
+  Service:     {{ .Values.dispatcher.service }}
+  Endpoint:    {{ include "llm-proxy.dispatcher.endpoint" . }}
+  Replicas:    {{ .Values.dispatcher.replicaCount }}
+  Event Bus:   {{ .Values.env.LLM_PROXY_EVENT_BUS }}
+  {{- if and (eq .Values.dispatcher.service "file") .Values.dispatcher.persistence.enabled }}
+  Persistence: Enabled ({{ .Values.dispatcher.persistence.size }})
+  {{- end }}
+
+The dispatcher is processing events from the event bus and forwarding them to {{ .Values.dispatcher.service }}.
+
+To check dispatcher status:
+  kubectl get pods --namespace {{ .Release.Namespace }} -l app.kubernetes.io/component=dispatcher
+  kubectl logs --namespace {{ .Release.Namespace }} -l app.kubernetes.io/component=dispatcher
+
+********************************************************************************
+{{- end }}
+
 1. Get the application URL by running these commands:
 {{- if contains "NodePort" .Values.service.type }}
   export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "llm-proxy.fullname" . }})

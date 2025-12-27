@@ -1,0 +1,17 @@
+{{- if and .Values.dispatcher.enabled (eq .Values.dispatcher.service "file") .Values.dispatcher.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "llm-proxy.dispatcher.fullname" . }}
+  labels:
+    {{- include "llm-proxy.dispatcher.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.dispatcher.persistence.size }}
+  {{- if .Values.dispatcher.persistence.storageClass }}
+  storageClassName: {{ .Values.dispatcher.persistence.storageClass }}
+  {{- end }}
+{{- end }}

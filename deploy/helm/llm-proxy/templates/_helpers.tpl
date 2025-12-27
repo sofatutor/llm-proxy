@@ -224,3 +224,80 @@ Validate Redis configuration
   {{- end }}
 {{- end }}
 {{- end }}
+
+{{/*
+Dispatcher fullname
+*/}}
+{{- define "llm-proxy.dispatcher.fullname" -}}
+{{- printf "%s-dispatcher" (include "llm-proxy.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Dispatcher selector labels
+*/}}
+{{- define "llm-proxy.dispatcher.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "llm-proxy.name" . }}-dispatcher
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: dispatcher
+{{- end }}
+
+{{/*
+Dispatcher labels
+*/}}
+{{- define "llm-proxy.dispatcher.labels" -}}
+helm.sh/chart: {{ include "llm-proxy.chart" . }}
+{{ include "llm-proxy.dispatcher.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+
+{{/*
+Get the name of the secret containing DISPATCHER_API_KEY
+*/}}
+{{- define "llm-proxy.dispatcher.apiKeySecretName" -}}
+{{- if .Values.dispatcher.apiKey.existingSecret.name }}
+{{- .Values.dispatcher.apiKey.existingSecret.name }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get the key within the secret for DISPATCHER_API_KEY
+*/}}
+{{- define "llm-proxy.dispatcher.apiKeySecretKey" -}}
+{{- .Values.dispatcher.apiKey.existingSecret.key | default "DISPATCHER_API_KEY" }}
+{{- end }}
+
+{{/*
+Get dispatcher service endpoint with defaults
+*/}}
+{{- define "llm-proxy.dispatcher.endpoint" -}}
+{{- if .Values.dispatcher.endpoint }}
+{{- .Values.dispatcher.endpoint }}
+{{- else if eq .Values.dispatcher.service "file" }}
+{{- printf "/app/data/events.jsonl" }}
+{{- else if eq .Values.dispatcher.service "lunary" }}
+{{- printf "https://api.lunary.ai/v1/runs/ingest" }}
+{{- else if eq .Values.dispatcher.service "helicone" }}
+{{- printf "https://api.worker.helicone.ai/custom/v1/log" }}
+{{- end }}
+{{- end }}
+
+{{/*
+Validate dispatcher configuration
+*/}}
+{{- define "llm-proxy.validateDispatcherConfig" -}}
+{{- if .Values.dispatcher.enabled }}
+  {{- $eventBus := .Values.env.LLM_PROXY_EVENT_BUS | default "in-memory" }}
+  {{- if and (ne $eventBus "redis") (ne $eventBus "redis-streams") }}
+    {{- fail (printf "Configuration error: Dispatcher requires LLM_PROXY_EVENT_BUS to be 'redis' or 'redis-streams', but it is set to '%s'. Set LLM_PROXY_EVENT_BUS to a supported durable event bus type and configure redis.external.addr." $eventBus) }}
+  {{- end }}
+  {{- if and (or (eq $eventBus "redis") (eq $eventBus "redis-streams")) (not .Values.redis.external.addr) }}
+    {{- fail (printf "Configuration error: Dispatcher is enabled with LLM_PROXY_EVENT_BUS='%s' but redis.external.addr is empty. Please set redis.external.addr to your Redis server address." $eventBus) }}
+  {{- end }}
+  {{- if and (ne .Values.dispatcher.service "file") (not .Values.dispatcher.apiKey.existingSecret.name) }}
+    {{- fail (printf "Configuration error: Dispatcher service '%s' requires an API key via existingSecret. Please set dispatcher.apiKey.existingSecret.name" .Values.dispatcher.service) }}
+  {{- end }}
+{{- end }}
+{{- end }}

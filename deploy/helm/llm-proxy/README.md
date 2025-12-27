@@ -368,6 +368,84 @@ env:
 | `secrets.databaseUrl.existingSecret.name` | Name of existing Secret containing DATABASE_URL (for external PostgreSQL) | `""` |
 | `secrets.databaseUrl.existingSecret.key` | Key within the Secret for database URL | `"DATABASE_URL"` |
 
+### Dispatcher Configuration
+
+The dispatcher is an optional separate workload that consumes events from the event bus and forwards them to external observability platforms (Lunary, Helicone, or file storage).
+
+**IMPORTANT:** The dispatcher requires a durable event bus (Redis). It cannot be used with the in-memory event bus.
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `dispatcher.enabled` | Enable dispatcher deployment | `false` |
+| `dispatcher.replicaCount` | Number of dispatcher replicas | `1` |
+| `dispatcher.service` | Backend service (`file`, `lunary`, `helicone`) | `file` |
+| `dispatcher.endpoint` | Service-specific endpoint URL or file path | `""` (auto-configured based on service) |
+| `dispatcher.apiKey.existingSecret.name` | Name of existing Secret containing API key | `""` |
+| `dispatcher.apiKey.existingSecret.key` | Key within the Secret for API key | `"DISPATCHER_API_KEY"` |
+| `dispatcher.config.bufferSize` | Event bus buffer size | `1000` |
+| `dispatcher.config.batchSize` | Events per batch | `100` |
+| `dispatcher.persistence.enabled` | Enable PVC for file backend | `true` |
+| `dispatcher.persistence.size` | PVC size | `10Gi` |
+| `dispatcher.persistence.storageClass` | Storage class for PVC | `""` |
+| `dispatcher.resources.limits.cpu` | CPU limit | `500m` |
+| `dispatcher.resources.limits.memory` | Memory limit | `256Mi` |
+| `dispatcher.resources.requests.cpu` | CPU request | `100m` |
+| `dispatcher.resources.requests.memory` | Memory request | `128Mi` |
+
+#### Dispatcher Backend Services
+
+The dispatcher supports three backend services:
+
+**File Backend** (default):
+- Writes events to a JSONL file
+- Creates PersistentVolumeClaim when `dispatcher.service=file` and `dispatcher.persistence.enabled=true` (enabled by default)
+- Default endpoint: `/app/data/events.jsonl`
+- No API key required
+
+**Lunary Backend**:
+- Forwards events to [Lunary.ai](https://lunary.ai) for LLM observability
+- Default endpoint: `https://api.lunary.ai/v1/runs/ingest`
+- Requires API key via `dispatcher.apiKey`
+
+**Helicone Backend**:
+- Forwards events to [Helicone](https://helicone.ai) for LLM analytics
+- Default endpoint: `https://api.worker.helicone.ai/custom/v1/log`
+- Requires API key via `dispatcher.apiKey`
+
+#### Dispatcher Configuration Examples
+
+**File Backend (default)**:
+```yaml
+dispatcher:
+  enabled: true
+  service: "file"
+  persistence:
+    enabled: true
+    size: 10Gi
+```
+
+**Lunary Backend**:
+```yaml
+dispatcher:
+  enabled: true
+  service: "lunary"
+  apiKey:
+    existingSecret:
+      name: "dispatcher-secrets"
+      key: "LUNARY_API_KEY"
+```
+
+**Helicone Backend**:
+```yaml
+dispatcher:
+  enabled: true
+  service: "helicone"
+  apiKey:
+    existingSecret:
+      name: "dispatcher-secrets"
+      key: "DISPATCHER_API_KEY"
+```
+
 ## Health Checks
 
 The chart configures health probes with dedicated endpoints:

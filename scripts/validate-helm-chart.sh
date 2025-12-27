@@ -206,6 +206,165 @@ else
 fi
 echo ""
 
+# Test dispatcher disabled (default)
+echo "Running helm template with dispatcher disabled (default)..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set secrets.managementToken.existingSecret.name=test-secret 2>&1); then
+    if echo "$TEMPLATE_OUTPUT" | grep -q 'name:.*llm-proxy-dispatcher'; then
+        echo "✗ Dispatcher resources should not be created when disabled" >&2
+        exit 1
+    fi
+    echo "✓ helm template with dispatcher disabled rendered successfully"
+else
+    echo "✗ helm template with dispatcher disabled failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
+# Test dispatcher enabled with file backend
+echo "Running helm template with dispatcher enabled (file backend)..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set dispatcher.enabled=true \
+    --set redis.external.addr="redis.example.com:6379" \
+    --set env.LLM_PROXY_EVENT_BUS="redis-streams" 2>&1); then
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'name:.*llm-proxy-dispatcher'; then
+        echo "✗ Dispatcher deployment should be created when enabled" >&2
+        exit 1
+    fi
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'kind: PersistentVolumeClaim'; then
+        echo "✗ PVC should be created for file backend" >&2
+        exit 1
+    fi
+    echo "✓ helm template with dispatcher (file backend) rendered successfully"
+else
+    echo "✗ helm template with dispatcher (file backend) failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
+# Test dispatcher with Lunary backend and existing secret
+echo "Running helm template with dispatcher (Lunary + existing secret)..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set dispatcher.enabled=true \
+    --set dispatcher.service="lunary" \
+    --set dispatcher.apiKey.existingSecret.name="dispatcher-secrets" \
+    --set redis.external.addr="redis.example.com:6379" \
+    --set env.LLM_PROXY_EVENT_BUS="redis-streams" 2>&1); then
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q "llm-proxy-dispatcher"; then
+        echo "✗ Dispatcher deployment should be created when enabled" >&2
+        exit 1
+    fi
+    if echo "$TEMPLATE_OUTPUT" | grep -q 'kind: PersistentVolumeClaim'; then
+        echo "✗ PVC should not be created for Lunary backend" >&2
+        exit 1
+    fi
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'name:.*dispatcher-secrets'; then
+        echo "✗ Secret reference should be included for Lunary backend" >&2
+        exit 1
+    fi
+    echo "✓ helm template with dispatcher (Lunary + secret) rendered successfully"
+else
+    echo "✗ helm template with dispatcher (Lunary + secret) failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
+# Test validation: dispatcher with in-memory event bus (should fail)
+echo "Testing validation: dispatcher with in-memory event bus..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set dispatcher.enabled=true \
+    --set env.LLM_PROXY_EVENT_BUS="in-memory" 2>&1); then
+    echo "✗ Validation should have failed for in-memory event bus with dispatcher" >&2
+    exit 1
+else
+    if echo "$TEMPLATE_OUTPUT" | grep -q "Dispatcher requires LLM_PROXY_EVENT_BUS to be 'redis' or 'redis-streams'"; then
+        echo "✓ Validation correctly rejected in-memory event bus with dispatcher"
+    else
+        echo "✗ Unexpected error message" >&2
+        echo "$TEMPLATE_OUTPUT" >&2
+        exit 1
+    fi
+fi
+echo ""
+
+# Test validation: dispatcher without event bus configured (defaults to in-memory, should fail)
+echo "Testing validation: dispatcher without event bus configured (defaults to in-memory)..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set dispatcher.enabled=true 2>&1); then
+    echo "✗ Validation should have failed for default in-memory event bus" >&2
+    exit 1
+else
+    if echo "$TEMPLATE_OUTPUT" | grep -q "Dispatcher requires LLM_PROXY_EVENT_BUS to be 'redis' or 'redis-streams'"; then
+        echo "✓ Validation correctly rejected default in-memory event bus"
+    else
+        echo "✗ Unexpected error message" >&2
+        echo "$TEMPLATE_OUTPUT" >&2
+        exit 1
+    fi
+fi
+echo ""
+
+# Test validation: dispatcher with invalid event bus type (should fail)
+echo "Testing validation: dispatcher with invalid event bus type..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set dispatcher.enabled=true \
+    --set env.LLM_PROXY_EVENT_BUS="invalid-bus" 2>&1); then
+    echo "✗ Validation should have failed for invalid event bus type" >&2
+    exit 1
+else
+    if echo "$TEMPLATE_OUTPUT" | grep -q "Dispatcher requires LLM_PROXY_EVENT_BUS to be 'redis' or 'redis-streams'"; then
+        echo "✓ Validation correctly rejected invalid event bus type"
+    else
+        echo "✗ Unexpected error message" >&2
+        echo "$TEMPLATE_OUTPUT" >&2
+        exit 1
+    fi
+fi
+echo ""
+
+# Test validation: dispatcher without API key for non-file service (should fail)
+echo "Testing validation: dispatcher without API key for non-file service..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set dispatcher.enabled=true \
+    --set dispatcher.service="helicone" \
+    --set redis.external.addr="redis.example.com:6379" \
+    --set env.LLM_PROXY_EVENT_BUS="redis-streams" 2>&1); then
+    echo "✗ Validation should have failed for missing API key" >&2
+    exit 1
+else
+    if echo "$TEMPLATE_OUTPUT" | grep -q "requires an API key via existingSecret"; then
+        echo "✓ Validation correctly rejected missing API key"
+    else
+        echo "✗ Unexpected error message" >&2
+        echo "$TEMPLATE_OUTPUT" >&2
+        exit 1
+    fi
+fi
+echo ""
+
 # Clean up mock chart if we created it
 if [ "$MOCK_CREATED" = true ]; then
     echo "Cleaning up mock postgresql subchart..."

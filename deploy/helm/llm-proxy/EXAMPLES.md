@@ -415,6 +415,253 @@ helm install llm-proxy deploy/helm/llm-proxy \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets
 ```
 
+## Example 11: Dispatcher with File Backend
+
+Deploy the dispatcher to store events in a file:
+
+### Step 1: Create Secrets
+
+```bash
+# Create management token secret
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+```
+
+### Step 2: Deploy with Dispatcher
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set redis.external.addr="redis.example.com:6379" \
+  --set env.LLM_PROXY_EVENT_BUS="redis-streams" \
+  --set dispatcher.enabled=true \
+  --set dispatcher.service="file" \
+  --set dispatcher.persistence.size=20Gi
+```
+
+### Step 3: Verify Dispatcher
+
+```bash
+# Check dispatcher pod status
+kubectl get pods -l app.kubernetes.io/component=dispatcher
+
+# Check dispatcher logs
+kubectl logs -l app.kubernetes.io/component=dispatcher
+
+# Verify PVC was created
+kubectl get pvc
+```
+
+## Example 12: Dispatcher with Lunary Integration
+
+Deploy the dispatcher to forward events to Lunary for LLM observability:
+
+### Step 1: Create Secrets
+
+```bash
+# Create management token secret
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+
+# Create dispatcher API key secret (file-based for security)
+umask 077
+echo -n "your-lunary-api-key" > /tmp/lunary-api-key.txt
+kubectl create secret generic dispatcher-secrets \
+  --from-file=LUNARY_API_KEY=/tmp/lunary-api-key.txt
+rm /tmp/lunary-api-key.txt
+```
+
+### Step 2: Deploy with Lunary Dispatcher
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set redis.external.addr="redis.example.com:6379" \
+  --set env.LLM_PROXY_EVENT_BUS="redis-streams" \
+  --set dispatcher.enabled=true \
+  --set dispatcher.service="lunary" \
+  --set dispatcher.apiKey.existingSecret.name="dispatcher-secrets" \
+  --set dispatcher.apiKey.existingSecret.key="LUNARY_API_KEY"
+```
+
+### Step 3: Verify Dispatcher
+
+```bash
+# Check dispatcher status
+kubectl get pods -l app.kubernetes.io/component=dispatcher
+
+# View dispatcher logs
+kubectl logs -l app.kubernetes.io/component=dispatcher -f
+
+# Check environment variables (structure only, no values)
+kubectl get deployment -o yaml | grep -A 10 "name: dispatcher"
+```
+
+## Example 13: Dispatcher with Helicone Integration
+
+Deploy the dispatcher to forward events to Helicone for LLM analytics:
+
+### Step 1: Create Secrets
+
+```bash
+# Create management token secret
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+
+# Create dispatcher API key secret
+umask 077
+echo -n "your-helicone-api-key" > /tmp/helicone-api-key.txt
+kubectl create secret generic dispatcher-secrets \
+  --from-file=DISPATCHER_API_KEY=/tmp/helicone-api-key.txt
+rm /tmp/helicone-api-key.txt
+```
+
+### Step 2: Deploy with Helicone Dispatcher
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set redis.external.addr="redis.example.com:6379" \
+  --set env.LLM_PROXY_EVENT_BUS="redis-streams" \
+  --set dispatcher.enabled=true \
+  --set dispatcher.service="helicone" \
+  --set dispatcher.apiKey.existingSecret.name="dispatcher-secrets"
+```
+
+## Example 14: Production Deployment with Multi-Replica Dispatcher
+
+Deploy with PostgreSQL, Redis, and dispatcher for full observability:
+
+### Step 1: Create Secrets
+
+```bash
+# Create management token
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+
+# Create database URL
+kubectl create secret generic llm-proxy-db \
+  --from-literal=DATABASE_URL="postgres://user:pass@postgres.example.com:5432/llmproxy?sslmode=require"
+
+# Create Redis password
+echo -n "your-redis-password" > /tmp/redis-password.txt
+kubectl create secret generic redis-password \
+  --from-file=REDIS_PASSWORD=/tmp/redis-password.txt
+rm /tmp/redis-password.txt
+
+# Create dispatcher API key for Lunary
+echo -n "your-lunary-api-key" > /tmp/lunary-api-key.txt
+kubectl create secret generic dispatcher-secrets \
+  --from-file=LUNARY_API_KEY=/tmp/lunary-api-key.txt
+rm /tmp/lunary-api-key.txt
+```
+
+### Step 2: Create Production Values File
+
+```yaml
+# production-with-dispatcher.yaml
+image:
+  repository: your-registry/llm-proxy
+  tag: v1.0.0
+  pullPolicy: IfNotPresent
+
+replicaCount: 3
+
+secrets:
+  managementToken:
+    existingSecret:
+      name: llm-proxy-secrets
+  databaseUrl:
+    existingSecret:
+      name: llm-proxy-db
+
+env:
+  DB_DRIVER: "postgres"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  ENABLE_METRICS: "true"
+  LLM_PROXY_EVENT_BUS: "redis-streams"
+
+redis:
+  external:
+    addr: "redis.example.com:6379"
+    db: 0
+    password:
+      existingSecret:
+        name: redis-password
+
+dispatcher:
+  enabled: true
+  replicaCount: 2
+  service: "lunary"
+  apiKey:
+    existingSecret:
+      name: "dispatcher-secrets"
+      key: "LUNARY_API_KEY"
+  config:
+    bufferSize: 2000
+    batchSize: 200
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 256Mi
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - llm-proxy
+        topologyKey: kubernetes.io/hostname
+```
+
+### Step 3: Deploy
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy -f production-with-dispatcher.yaml
+```
+
+### Step 4: Verify Deployment
+
+```bash
+# Check all pods
+kubectl get pods -l app.kubernetes.io/instance=llm-proxy
+
+# Check main proxy pods
+kubectl get pods -l app.kubernetes.io/name=llm-proxy
+
+# Check dispatcher pods
+kubectl get pods -l app.kubernetes.io/component=dispatcher
+
+# View dispatcher logs
+kubectl logs -l app.kubernetes.io/component=dispatcher --tail=50
+
+# Check services
+kubectl get svc
+```
+
 ## Uninstalling
 
 ```bash
@@ -422,5 +669,5 @@ helm install llm-proxy deploy/helm/llm-proxy \
 helm uninstall llm-proxy
 
 # Optionally, delete the secrets (if they were created for this deployment)
-kubectl delete secret llm-proxy-secrets llm-proxy-db
+kubectl delete secret llm-proxy-secrets llm-proxy-db dispatcher-secrets redis-password
 ```
