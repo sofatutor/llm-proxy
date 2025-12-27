@@ -39,3 +39,19 @@ jobs:
           args: --timeout=5m
           skip-cache: true
           only-new-issues: false
+
+  helm:
+    name: helm-chart-validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Helm
+        run: |
+          chmod +x ./.github/scripts/install-helm.sh
+          ./.github/scripts/install-helm.sh v3.15.4
+      
+      - name: Validate Helm chart
+        run: |
+          chmod +x ./scripts/validate-helm-chart.sh
+          ./scripts/validate-helm-chart.sh
