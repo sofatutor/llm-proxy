@@ -1,3 +1,4 @@
+{{- include "llm-proxy.validateRedisConfig" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
