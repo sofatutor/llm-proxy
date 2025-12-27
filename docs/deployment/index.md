@@ -11,6 +11,7 @@ Production deployment guides for LLM Proxy.
 ## What's in this section
 
 - **[AWS ECS Architecture](aws-ecs-cdk.md)** - Production deployment on AWS ECS with CDK
+- **[Kubernetes / Helm](helm.md)** - Kubernetes deployment with Helm chart
 - **[Performance Tuning](performance.md)** - Optimization and performance best practices
 - **[Security Best Practices](security.md)** - Production security guidelines
 
@@ -26,8 +27,46 @@ For production deployments, we recommend **AWS ECS with CDK**:
 
 See the [AWS ECS Architecture Guide](aws-ecs-cdk.md) for details.
 
-## Alternative Deployments
+## Alternative: Kubernetes/Helm
 
-- **Docker Compose** - Good for development and testing
-- **Kubernetes/Helm** - For existing K8s infrastructure (chart available at `deploy/helm/llm-proxy`)
+For organizations with existing Kubernetes infrastructure, we provide a **comprehensive Helm chart**:
+
+- Single-instance deployments with SQLite (development)
+- Multi-replica deployments with PostgreSQL and Redis (production)
+- Ingress support with TLS (NGINX, Traefik, etc.)
+- Horizontal Pod Autoscaler (HPA) for automatic scaling
+- Event dispatcher for observability platforms (Lunary, Helicone)
+
+See the **[Kubernetes / Helm Deployment Guide](helm.md)** for complete documentation.
+
+**Helm Quick Start (SQLite)**:
+```bash
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets
+```
+
+**Helm Quick Start (Production with PostgreSQL)**:
+```bash
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+
+kubectl create secret generic llm-proxy-db \
+  --from-literal=DATABASE_URL="postgres://user:pass@postgres.example.com:5432/llmproxy?sslmode=require"
+
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set secrets.databaseUrl.existingSecret.name=llm-proxy-db \
+  --set env.DB_DRIVER=postgres
+```
+
+## Other Deployment Options
+
+- **Docker Compose** - Good for local development and testing (see repository root)
 
