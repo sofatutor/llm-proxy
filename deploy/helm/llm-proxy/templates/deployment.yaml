@@ -45,11 +45,29 @@ spec:
           {{- toYaml .Values.readinessProbe | nindent 12 }}
         resources:
           {{- toYaml .Values.resources | nindent 12 }}
-        {{- if .Values.env }}
+        {{- $managementTokenSecret := include "llm-proxy.managementTokenSecretName" . }}
+        {{- $databaseUrlSecret := include "llm-proxy.databaseUrlSecretName" . }}
+        {{- if or .Values.env $managementTokenSecret $databaseUrlSecret }}
         env:
-        {{- range $key, $value := .Values.env }}
+        {{- if .Values.env }}
+        {{- range $key := keys .Values.env | sortAlpha }}
         - name: {{ $key }}
-          value: {{ $value | quote }}
+          value: {{ index $.Values.env $key | quote }}
+        {{- end }}
+        {{- end }}
+        {{- if $managementTokenSecret }}
+        - name: MANAGEMENT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ $managementTokenSecret }}
+              key: {{ include "llm-proxy.managementTokenSecretKey" . }}
+        {{- end }}
+        {{- if $databaseUrlSecret }}
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: {{ $databaseUrlSecret }}
+              key: {{ include "llm-proxy.databaseUrlSecretKey" . }}
         {{- end }}
         {{- end }}
         {{- if .Values.volumeMounts }}

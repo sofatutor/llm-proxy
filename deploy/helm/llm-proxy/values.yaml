@@ -98,4 +98,40 @@ env:
   LOG_FILE: ""
   ENABLE_METRICS: "true"
   METRICS_PATH: "/metrics"
+  # Database driver: sqlite (default) or postgres for external PostgreSQL
+  DB_DRIVER: "sqlite"
+  # Path to SQLite database file (used when DB_DRIVER=sqlite)
   DATABASE_PATH: "/app/data/llm-proxy.db"
+
+# Secrets configuration
+# SECURITY: Never store secrets in values.yaml or version control
+# Best practice: reference existing Kubernetes Secrets created separately
+secrets:
+  # Create a Kubernetes Secret managed by this chart (NOT RECOMMENDED for production)
+  # When false (default), you must create secrets externally and reference them below
+  create: false
+  
+  # Chart-managed secret values (only used when secrets.create=true)
+  # SECURITY WARNING: These values should be overridden via --set-string or --set-file
+  # Example: helm install --set-string secrets.data.managementToken="your-token"
+  data:
+    managementToken: ""
+    databaseUrl: ""
+  
+  # MANAGEMENT_TOKEN: Required for admin operations
+  # Reference an existing Kubernetes Secret containing the management token
+  managementToken:
+    existingSecret:
+      # Name of the existing Kubernetes Secret
+      name: ""
+      # Key within the Secret that contains the management token value
+      key: "MANAGEMENT_TOKEN"
+  
+  # DATABASE_URL: Required when DB_DRIVER=postgres
+  # Reference an existing Kubernetes Secret containing the database URL
+  databaseUrl:
+    existingSecret:
+      # Name of the existing Kubernetes Secret
+      name: ""
+      # Key within the Secret that contains the database URL
+      key: "DATABASE_URL"

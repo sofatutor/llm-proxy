@@ -1,3 +1,29 @@
+{{- $managementTokenSecret := include "llm-proxy.managementTokenSecretName" . }}
+{{- if not $managementTokenSecret }}
+********************************************************************************
+****                            WARNING                                     ****
+********************************************************************************
+
+MANAGEMENT_TOKEN is REQUIRED but not configured!
+
+The application will fail to start without MANAGEMENT_TOKEN.
+
+Please configure one of the following:
+
+1. Reference an existing Kubernetes Secret (RECOMMENDED):
+   helm upgrade {{ .Release.Name }} {{ .Chart.Name }} \
+     --set secrets.managementToken.existingSecret.name=your-secret-name
+
+2. Use chart-managed secret (DEVELOPMENT ONLY):
+   helm upgrade {{ .Release.Name }} {{ .Chart.Name }} \
+     --set secrets.create=true \
+     --set-string secrets.data.managementToken="your-token"
+
+For more information, see the README.md in the chart directory.
+
+********************************************************************************
+{{- end }}
+
 1. Get the application URL by running these commands:
 {{- if contains "NodePort" .Values.service.type }}
   export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "llm-proxy.fullname" . }})

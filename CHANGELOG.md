@@ -10,12 +10,14 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Added
 
+- **Secure Helm secrets** ([#215](https://github.com/sofatutor/llm-proxy/pull/215)): Added secure injection for MANAGEMENT_TOKEN and DATABASE_URL so production can reference existing Secrets while still supporting optional chart-managed values, external Postgres connections, and partial secret deployments without storing sensitive data in values.yaml.
 - **Helm validation workflow** ([#214](https://github.com/sofatutor/llm-proxy/pull/214)): Added a deterministic validation script plus CI job that lint-checks and renders the Helm chart with representative overrides so chart regressions fail fast during validation.
 - **Helm installer helper** ([#214](https://github.com/sofatutor/llm-proxy/pull/214)): Introduced a repo-local Helm install script that downloads releases, verifies SHA-256 checksums, and keeps CI compliant with the organization allowlist before running chart validation.
 - **Bootstrap Helm chart** ([#208](https://github.com/sofatutor/llm-proxy/pull/208)): Introduced a minimal Helm chart with a Deployment, Service, and health probes so the proxy can be deployed to Kubernetes, providing the foundational structure future enhancements will extend.
 
 ### Changed
 
+- **Harden Helm deployment** ([#215](https://github.com/sofatutor/llm-proxy/pull/215)): Enforced deterministic env var ordering, added NOTES warnings for missing MANAGEMENT_TOKEN, tightened documentation and prerequisites, and rewrote the Helm secret tests to use --show-only rendering plus scoped validation for more reliable verification.
 - **Document Helm validation** ([#214](https://github.com/sofatutor/llm-proxy/pull/214)): Updated the Helm chart README to explain how to run the new validation script locally so contributors understand the linting and templating coverage provided by CI.
 
 ### Fixed
