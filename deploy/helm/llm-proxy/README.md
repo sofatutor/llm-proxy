@@ -63,6 +63,19 @@ The chart configures health probes with dedicated endpoints:
 
 Both probes can be customized via `livenessProbe` and `readinessProbe` in values.yaml.
 
+## Validation
+
+The chart includes validation that runs in CI to ensure it lints and renders correctly:
+
+```bash
+# Run validation locally
+./scripts/validate-helm-chart.sh
+```
+
+This script performs:
+- `helm lint` to check for chart issues
+- `helm template` with various value overrides to validate rendering
+
 ## Uninstalling
 
 ```bash
