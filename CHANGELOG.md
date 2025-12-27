@@ -10,6 +10,7 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Added
 
+- **PostgreSQL Helm Config** ([#219](https://github.com/sofatutor/llm-proxy/pull/219)): Added optional in-cluster and external PostgreSQL configuration to the Helm chart with configurable SSL mode so deployments can choose managed Postgres securely while reusing Bitnami helpers.
 - **External Redis Helm Support** ([#217](https://github.com/sofatutor/llm-proxy/pull/217)): Added support for configuring external Redis backends for the event bus, HTTP cache, and distributed rate limiting with validation, environment injections, and secret safeguards so the chart can safely switch between managed Redis and in-memory defaults while doc samples explain secure setup.
 - **Secure Helm secrets** ([#215](https://github.com/sofatutor/llm-proxy/pull/215)): Added secure injection for MANAGEMENT_TOKEN and DATABASE_URL so production can reference existing Secrets while still supporting optional chart-managed values, external Postgres connections, and partial secret deployments without storing sensitive data in values.yaml.
 - **Helm validation workflow** ([#214](https://github.com/sofatutor/llm-proxy/pull/214)): Added a deterministic validation script plus CI job that lint-checks and renders the Helm chart with representative overrides so chart regressions fail fast during validation.
@@ -18,6 +19,7 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Changed
 
+- **Postgres Helm Docs** ([#219](https://github.com/sofatutor/llm-proxy/pull/219)): Cleaned Helm examples numbering, removed a redundant NOTES warning, and expanded helper comments so operators understand how Bitnami ports and SSL configuration propagate into the chart values.
 - **Harden Helm deployment** ([#215](https://github.com/sofatutor/llm-proxy/pull/215)): Enforced deterministic env var ordering, added NOTES warnings for missing MANAGEMENT_TOKEN, tightened documentation and prerequisites, and rewrote the Helm secret tests to use --show-only rendering plus scoped validation for more reliable verification.
 - **Document Helm validation** ([#214](https://github.com/sofatutor/llm-proxy/pull/214)): Updated the Helm chart README to explain how to run the new validation script locally so contributors understand the linting and templating coverage provided by CI.
 
