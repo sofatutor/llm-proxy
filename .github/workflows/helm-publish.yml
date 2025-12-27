@@ -1,0 +1,84 @@
+name: Helm Chart Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Lint, Package and Publish Helm Chart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install Helm
+        run: |
+          chmod +x ./.github/scripts/install-helm.sh
+          ./.github/scripts/install-helm.sh v3.15.4
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          # Extract version from tag (e.g., v1.2.3 -> 1.2.3)
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Chart version: $VERSION"
+
+      - name: Update Chart.yaml with version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          sed -i "s/^version:.*/version: $VERSION/" deploy/helm/llm-proxy/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" deploy/helm/llm-proxy/Chart.yaml
+          echo "Updated Chart.yaml:"
+          cat deploy/helm/llm-proxy/Chart.yaml
+
+      - name: Lint Helm chart
+        run: |
+          chmod +x ./scripts/validate-helm-chart.sh
+          ./scripts/validate-helm-chart.sh
+
+      - name: Package Helm chart
+        run: |
+          # Package chart (dependencies are optional and condition-based)
+          # The postgresql dependency is only used when postgresql.enabled=true
+          # Users installing from OCI can run 'helm dependency update' if needed
+          helm package deploy/helm/llm-proxy -d /tmp/charts || {
+            echo "Package failed, likely due to missing dependencies. Trying without dependency check..."
+            # Temporarily remove dependencies section for packaging
+            cp deploy/helm/llm-proxy/Chart.yaml deploy/helm/llm-proxy/Chart.yaml.bak
+            sed -i '/^dependencies:/,/^$/d' deploy/helm/llm-proxy/Chart.yaml
+            helm package deploy/helm/llm-proxy -d /tmp/charts
+            mv deploy/helm/llm-proxy/Chart.yaml.bak deploy/helm/llm-proxy/Chart.yaml
+          }
+          echo "Packaged chart:"
+          ls -lh /tmp/charts/
+
+      - name: Login to GitHub Container Registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Push Helm chart to GHCR
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          CHART_PACKAGE="/tmp/charts/llm-proxy-${VERSION}.tgz"
+          
+          if [ ! -f "$CHART_PACKAGE" ]; then
+            echo "ERROR: Chart package not found at $CHART_PACKAGE"
+            ls -lh /tmp/charts/
+            exit 1
+          fi
+          
+          # Push to GHCR as OCI artifact
+          helm push "$CHART_PACKAGE" oci://ghcr.io/${{ github.repository_owner }}
+          
+          echo "Successfully pushed Helm chart to oci://ghcr.io/${{ github.repository_owner }}/llm-proxy:${VERSION}"
+
+      - name: Logout from GHCR
+        if: always()
+        run: helm registry logout ghcr.io
