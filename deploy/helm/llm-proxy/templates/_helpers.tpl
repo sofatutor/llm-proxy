@@ -54,7 +54,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 Get the name of the secret containing MANAGEMENT_TOKEN
 */}}
 {{- define "llm-proxy.managementTokenSecretName" -}}
-{{- if .Values.secrets.create }}
+{{- if and .Values.secrets.create .Values.secrets.data.managementToken }}
 {{- include "llm-proxy.fullname" . }}
 {{- else if .Values.secrets.managementToken.existingSecret.name }}
 {{- .Values.secrets.managementToken.existingSecret.name }}
@@ -78,7 +78,7 @@ Get the key within the secret for MANAGEMENT_TOKEN
 Get the name of the secret containing DATABASE_URL
 */}}
 {{- define "llm-proxy.databaseUrlSecretName" -}}
-{{- if .Values.secrets.create }}
+{{- if and .Values.secrets.create .Values.secrets.data.databaseUrl }}
 {{- include "llm-proxy.fullname" . }}
 {{- else if .Values.secrets.databaseUrl.existingSecret.name }}
 {{- .Values.secrets.databaseUrl.existingSecret.name }}
