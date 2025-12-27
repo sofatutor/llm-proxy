@@ -212,7 +212,7 @@ if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
     --set image.repository=test-repo \
     --set image.tag=test-tag \
     --set secrets.managementToken.existingSecret.name=test-secret 2>&1); then
-    if echo "$TEMPLATE_OUTPUT" | grep -q "name.*llm-proxy-dispatcher"; then
+    if echo "$TEMPLATE_OUTPUT" | grep -q 'name: .*llm-proxy-dispatcher'; then
         echo "✗ Dispatcher resources should not be created when disabled" >&2
         exit 1
     fi
@@ -233,11 +233,11 @@ if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
     --set dispatcher.enabled=true \
     --set redis.external.addr="redis.example.com:6379" \
     --set env.LLM_PROXY_EVENT_BUS="redis-streams" 2>&1); then
-    if ! echo "$TEMPLATE_OUTPUT" | grep -q "llm-proxy-dispatcher"; then
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'name: .*llm-proxy-dispatcher'; then
         echo "✗ Dispatcher deployment should be created when enabled" >&2
         exit 1
     fi
-    if ! echo "$TEMPLATE_OUTPUT" | grep -q "kind: PersistentVolumeClaim"; then
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'kind: PersistentVolumeClaim'; then
         echo "✗ PVC should be created for file backend" >&2
         exit 1
     fi
@@ -264,11 +264,11 @@ if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
         echo "✗ Dispatcher deployment should be created when enabled" >&2
         exit 1
     fi
-    if echo "$TEMPLATE_OUTPUT" | grep -q "kind: PersistentVolumeClaim"; then
+    if echo "$TEMPLATE_OUTPUT" | grep -q 'kind: PersistentVolumeClaim'; then
         echo "✗ PVC should not be created for Lunary backend" >&2
         exit 1
     fi
-    if ! echo "$TEMPLATE_OUTPUT" | grep -q "dispatcher-secrets"; then
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'name: dispatcher-secrets'; then
         echo "✗ Secret reference should be included for Lunary backend" >&2
         exit 1
     fi

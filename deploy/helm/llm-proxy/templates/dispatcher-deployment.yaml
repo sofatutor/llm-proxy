@@ -67,7 +67,7 @@ spec:
         {{- end }}
         {{- end }}
         {{- if .Values.dispatcher.apiKey.value }}
-        # WARNING: Direct API key value is NOT recommended for production. Use existingSecret instead.
+        #WARNING: Direct API key value is NOT recommended for production. Use existingSecret instead.
         - name: LLM_PROXY_API_KEY
           value: {{ .Values.dispatcher.apiKey.value | quote }}
         {{- else if $dispatcherApiKeySecret }}
