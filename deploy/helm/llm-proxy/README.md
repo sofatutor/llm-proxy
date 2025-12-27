@@ -380,7 +380,6 @@ The dispatcher is an optional separate workload that consumes events from the ev
 | `dispatcher.replicaCount` | Number of dispatcher replicas | `1` |
 | `dispatcher.service` | Backend service (`file`, `lunary`, `helicone`) | `file` |
 | `dispatcher.endpoint` | Service-specific endpoint URL or file path | `""` (auto-configured based on service) |
-| `dispatcher.apiKey.value` | Direct API key value (not recommended for production) | `""` |
 | `dispatcher.apiKey.existingSecret.name` | Name of existing Secret containing API key | `""` |
 | `dispatcher.apiKey.existingSecret.key` | Key within the Secret for API key | `"DISPATCHER_API_KEY"` |
 | `dispatcher.config.bufferSize` | Event bus buffer size | `1000` |
@@ -425,7 +424,7 @@ dispatcher:
     size: 10Gi
 ```
 
-**Lunary Backend with Existing Secret** (recommended):
+**Lunary Backend**:
 ```yaml
 dispatcher:
   enabled: true
@@ -436,13 +435,15 @@ dispatcher:
       key: "LUNARY_API_KEY"
 ```
 
-**Helicone Backend with Direct Value** (development only):
+**Helicone Backend**:
 ```yaml
 dispatcher:
   enabled: true
   service: "helicone"
   apiKey:
-    value: "your-helicone-api-key"  # Use --set-string for security
+    existingSecret:
+      name: "dispatcher-secrets"
+      key: "DISPATCHER_API_KEY"
 ```
 
 ## Health Checks
