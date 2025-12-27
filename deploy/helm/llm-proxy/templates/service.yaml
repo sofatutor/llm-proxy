@@ -4,9 +4,9 @@ metadata:
   name: {{ include "llm-proxy.fullname" . }}
   labels:
     {{- include "llm-proxy.labels" . | nindent 4 }}
-  {{- if gt (len .Values.service.annotations) 0 }}
+  {{- with .Values.service.annotations }}
   annotations:
-    {{- toYaml .Values.service.annotations | nindent 4 }}
+    {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
   type: {{ .Values.service.type }}

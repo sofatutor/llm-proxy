@@ -32,20 +32,36 @@ echo ""
 
 # Run helm template with minimal overrides to validate rendering
 echo "Running helm template with minimal overrides..."
-if helm template test-release "${CHART_DIR}" \
+TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
     --set image.repository=test-repo \
     --set image.tag=test-tag \
-    --set env.LOG_LEVEL=debug > /dev/null; then
+    --set env.LOG_LEVEL=debug 2>&1)
+if [ $? -eq 0 ]; then
     echo "✓ helm template rendered successfully"
 else
     echo "✗ helm template failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
+# Run helm template with minimal required values only (no env block)
+echo "Running helm template with minimal required values..."
+TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag 2>&1)
+if [ $? -eq 0 ]; then
+    echo "✓ helm template with minimal values rendered successfully"
+else
+    echo "✗ helm template with minimal values failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
     exit 1
 fi
 echo ""
 
 # Run helm template with custom values to test more complex scenarios
 echo "Running helm template with additional overrides..."
-if helm template test-release "${CHART_DIR}" \
+TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
     --set replicaCount=3 \
     --set image.repository=custom-repo \
     --set image.tag=v1.0.0 \
@@ -54,10 +70,12 @@ if helm template test-release "${CHART_DIR}" \
     --set resources.limits.cpu=2000m \
     --set resources.limits.memory=1Gi \
     --set env.LOG_LEVEL=trace \
-    --set env.ENABLE_METRICS=false > /dev/null; then
+    --set env.ENABLE_METRICS=false 2>&1)
+if [ $? -eq 0 ]; then
     echo "✓ helm template with custom values rendered successfully"
 else
     echo "✗ helm template with custom values failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
     exit 1
 fi
 echo ""
