@@ -22,3 +22,17 @@ sources:
 maintainers:
   - name: sofatutor
     url: https://github.com/sofatutor
+
+annotations:
+  # Indicates that the chart supports PostgreSQL as an optional database backend
+  "llm-proxy.io/supports-postgresql": "true"
+  # When using PostgreSQL, ensure the Docker image is built with the postgres build tag
+  "llm-proxy.io/postgres-build-tag-required": "true"
+
+# Optional dependencies (disabled by default)
+# Run 'helm dependency update' before installing with postgresql.enabled=true
+dependencies:
+  - name: postgresql
+    version: 15.5.38
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
