@@ -2,6 +2,60 @@
 
 This Helm chart deploys the LLM Proxy server to Kubernetes.
 
+## Quick Start
+
+### SQLite (Default - Single Instance)
+
+```bash
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets
+```
+
+### PostgreSQL (Production - External)
+
+```bash
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+
+kubectl create secret generic llm-proxy-db \
+  --from-literal=DATABASE_URL="postgres://user:pass@host:5432/db?sslmode=require"
+
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set secrets.databaseUrl.existingSecret.name=llm-proxy-db \
+  --set env.DB_DRIVER=postgres
+```
+
+### PostgreSQL (Development - In-Cluster)
+
+```bash
+# Download PostgreSQL subchart
+helm dependency update deploy/helm/llm-proxy
+
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set env.DB_DRIVER=postgres \
+  --set postgresql.enabled=true \
+  --set-string postgresql.auth.password="$(openssl rand -base64 32)"
+```
+
+**IMPORTANT:** Ensure your Docker image is built with PostgreSQL support:
+```bash
+docker build --build-arg POSTGRES_SUPPORT=true -t your-registry/llm-proxy:v1.0.0 .
+```
+
 ## Prerequisites
 
 - Kubernetes 1.19+
