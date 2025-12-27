@@ -94,6 +94,10 @@ terraform.tfstate
 terraform.tfstate.backup
 *.tfvars
 
+# Helm chart dependencies
+/deploy/helm/*/charts/
+/deploy/helm/*/Chart.lock
+
 # Claude
 .claude/
 

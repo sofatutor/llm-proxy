@@ -20,6 +20,59 @@ echo "Using helm version:"
 helm version --short
 echo ""
 
+# Create a minimal mock postgresql subchart for testing if charts/ doesn't exist
+# This allows validation to run without network access to download the real subchart
+MOCK_CHART_DIR="${CHART_DIR}/charts/postgresql"
+MOCK_CREATED=false
+
+if [ ! -d "${CHART_DIR}/charts/postgresql" ]; then
+    echo "Creating mock postgresql subchart for validation..."
+    mkdir -p "${MOCK_CHART_DIR}/templates"
+    
+    cat > "${MOCK_CHART_DIR}/Chart.yaml" << 'EOF'
+apiVersion: v2
+name: postgresql
+version: 15.5.38
+description: Mock PostgreSQL chart for validation
+type: application
+EOF
+    
+    cat > "${MOCK_CHART_DIR}/values.yaml" << 'EOF'
+auth:
+  username: postgres
+  database: postgres
+  password: ""
+  existingSecret: ""
+  secretKeys:
+    adminPasswordKey: postgres-password
+    userPasswordKey: password
+primary:
+  service:
+    ports:
+      postgresql: 5432
+  persistence:
+    enabled: true
+    size: 8Gi
+  resources:
+    limits:
+      memory: 256Mi
+      cpu: 500m
+    requests:
+      memory: 128Mi
+      cpu: 100m
+EOF
+    
+    cat > "${MOCK_CHART_DIR}/templates/_helpers.tpl" << 'EOF'
+{{- define "postgresql.fullname" -}}
+{{- printf "%s-postgresql" .Release.Name -}}
+{{- end -}}
+EOF
+    
+    MOCK_CREATED=true
+    echo "✓ Mock postgresql subchart created"
+fi
+echo ""
+
 # Run helm lint
 echo "Running helm lint..."
 if helm lint "${CHART_DIR}"; then
@@ -76,5 +129,89 @@ else
     exit 1
 fi
 echo ""
+
+# Test external PostgreSQL configuration
+echo "Running helm template with external PostgreSQL..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set secrets.databaseUrl.existingSecret.name=test-db-secret \
+    --set env.DB_DRIVER=postgres 2>&1); then
+    echo "✓ helm template with external PostgreSQL rendered successfully"
+else
+    echo "✗ helm template with external PostgreSQL failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
+# Test in-cluster PostgreSQL configuration
+echo "Running helm template with in-cluster PostgreSQL..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set env.DB_DRIVER=postgres \
+    --set postgresql.enabled=true \
+    --set-string postgresql.auth.password=test-password 2>&1); then
+    echo "✓ helm template with in-cluster PostgreSQL rendered successfully"
+else
+    echo "✗ helm template with in-cluster PostgreSQL failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
+# Test validation: both in-cluster and external PostgreSQL (should fail)
+echo "Testing validation: both in-cluster and external PostgreSQL..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set secrets.databaseUrl.existingSecret.name=test-db-secret \
+    --set env.DB_DRIVER=postgres \
+    --set postgresql.enabled=true \
+    --set-string postgresql.auth.password=test-password 2>&1); then
+    echo "✗ Validation should have failed for conflicting PostgreSQL configuration" >&2
+    exit 1
+else
+    if echo "$TEMPLATE_OUTPUT" | grep -q "Cannot use both in-cluster PostgreSQL"; then
+        echo "✓ Validation correctly rejected conflicting PostgreSQL configuration"
+    else
+        echo "✗ Unexpected error message" >&2
+        echo "$TEMPLATE_OUTPUT" >&2
+        exit 1
+    fi
+fi
+echo ""
+
+# Test validation: postgres driver without database (should fail)
+echo "Testing validation: postgres driver without database configuration..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set env.DB_DRIVER=postgres 2>&1); then
+    echo "✗ Validation should have failed for missing database configuration" >&2
+    exit 1
+else
+    if echo "$TEMPLATE_OUTPUT" | grep -q "DB_DRIVER is set to 'postgres' but no database configuration found"; then
+        echo "✓ Validation correctly rejected missing database configuration"
+    else
+        echo "✗ Unexpected error message" >&2
+        echo "$TEMPLATE_OUTPUT" >&2
+        exit 1
+    fi
+fi
+echo ""
+
+# Clean up mock chart if we created it
+if [ "$MOCK_CREATED" = true ]; then
+    echo "Cleaning up mock postgresql subchart..."
+    rm -rf "${MOCK_CHART_DIR}"
+    echo "✓ Mock postgresql subchart removed"
+    echo ""
+fi
 
 echo "✅ All Helm chart validations passed!"
