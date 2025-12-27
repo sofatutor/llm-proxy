@@ -501,7 +501,10 @@ if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
         echo "✗ HPA should have correct CPU target" >&2
         exit 1
     fi
-    if echo "$TEMPLATE_OUTPUT" | sed -n '/kind: Deployment/,/selector:/p' | grep -q 'replicas:'; then
+    # Check that Deployment spec doesn't have replicas field when HPA is enabled
+    # Extract only the Deployment resource and check for replicas field right after spec:
+    DEPLOYMENT_SPEC=$(echo "$TEMPLATE_OUTPUT" | awk '/^kind: Deployment$/,/^---$/ {print}' | awk '/^spec:$/,/^  selector:$/ {print}')
+    if echo "$DEPLOYMENT_SPEC" | grep -q '^\s*replicas:'; then
         echo "✗ Deployment should not have replicas field when HPA is enabled" >&2
         exit 1
     fi
@@ -561,6 +564,27 @@ else
     echo "✗ helm template with Ingress + HPA failed" >&2
     echo "$TEMPLATE_OUTPUT" >&2
     exit 1
+fi
+echo ""
+
+# Test validation: HPA enabled without any target metrics (should fail)
+echo "Testing validation: HPA enabled without target metrics..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set autoscaling.enabled=true \
+    --set autoscaling.targetCPUUtilizationPercentage=null \
+    --set autoscaling.targetMemoryUtilizationPercentage=null 2>&1); then
+    echo "✗ Validation should have failed for HPA without metrics" >&2
+    exit 1
+else
+    if echo "$TEMPLATE_OUTPUT" | grep -q "no target metrics are configured"; then
+        echo "✓ Validation correctly rejected HPA without target metrics"
+    else
+        echo "✗ Unexpected error message" >&2
+        echo "$TEMPLATE_OUTPUT" >&2
+        exit 1
+    fi
 fi
 echo ""
 

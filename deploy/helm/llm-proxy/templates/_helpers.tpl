@@ -301,3 +301,14 @@ Validate dispatcher configuration
   {{- end }}
 {{- end }}
 {{- end }}
+
+{{/*
+Validate autoscaling configuration
+*/}}
+{{- define "llm-proxy.validateAutoscalingConfig" -}}
+{{- if .Values.autoscaling.enabled }}
+  {{- if and (not .Values.autoscaling.targetCPUUtilizationPercentage) (not .Values.autoscaling.targetMemoryUtilizationPercentage) }}
+    {{- fail "Configuration error: autoscaling.enabled is true but no target metrics are configured. Please set at least one of autoscaling.targetCPUUtilizationPercentage or autoscaling.targetMemoryUtilizationPercentage." }}
+  {{- end }}
+{{- end }}
+{{- end }}
