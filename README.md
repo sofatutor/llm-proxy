@@ -25,7 +25,26 @@ A transparent, secure proxy for OpenAI's API with token management, rate limitin
 
 ## Quick Start
 
-### Docker (Recommended)
+### Kubernetes with Helm (Recommended for Production)
+
+The Helm chart is published as an OCI artifact to GitHub Container Registry:
+
+```bash
+# Create required secrets
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+
+# Install from OCI registry
+helm install llm-proxy oci://ghcr.io/sofatutor/llm-proxy \
+  --version 0.1.0 \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets
+```
+
+For detailed Helm chart configuration and advanced deployment options, see the [Helm Chart README](deploy/helm/llm-proxy/README.md).
+
+### Docker (Recommended for Development)
 ```bash
 docker pull ghcr.io/sofatutor/llm-proxy:latest
 mkdir -p ./llm-proxy/data
@@ -348,11 +367,22 @@ make docker-smoke
 ```
 
 ### Publishing
+
+**Docker Images:**  
 Images are built and published to GitHub Container Registry on pushes to `main` and tags `v*`.
 
 Registry: `ghcr.io/sofatutor/llm-proxy`
 
 Workflow: `.github/workflows/docker.yml` builds for `linux/amd64` and `linux/arm64` and pushes labels/tags.
+
+**Helm Charts:**  
+Helm charts are packaged and published as OCI artifacts to GitHub Container Registry on tags `v*`.
+
+Registry: `oci://ghcr.io/sofatutor/llm-proxy`
+
+Workflow: `.github/workflows/helm-publish.yml` lints, packages, and pushes the chart.
+
+Install: `helm install llm-proxy oci://ghcr.io/sofatutor/llm-proxy --version <version>`
 
 ## Documentation
 

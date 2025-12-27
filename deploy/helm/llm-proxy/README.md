@@ -2,7 +2,28 @@
 
 This Helm chart deploys the LLM Proxy server to Kubernetes.
 
-## Quick Start
+## Installation from OCI Registry (Recommended)
+
+The LLM Proxy Helm chart is published as an OCI artifact to GitHub Container Registry (GHCR). You can install it directly without cloning the repository:
+
+```bash
+# Create required secrets
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+
+# Install from OCI registry
+helm install llm-proxy oci://ghcr.io/sofatutor/llm-proxy \
+  --version 0.1.0 \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets
+```
+
+**Available versions:** See [GitHub Container Registry](https://github.com/sofatutor/llm-proxy/pkgs/container/llm-proxy) for all published chart versions.
+
+## Installation from Local Chart
+
+If you have cloned the repository, you can install the chart locally:
 
 ### SQLite (Default - Single Instance)
 
@@ -11,8 +32,8 @@ kubectl create secret generic llm-proxy-secrets \
   --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
 
 helm install llm-proxy deploy/helm/llm-proxy \
-  --set image.repository=your-registry/llm-proxy \
-  --set image.tag=v1.0.0 \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets
 ```
 
@@ -26,8 +47,19 @@ kubectl create secret generic llm-proxy-db \
   --from-literal=DATABASE_URL="postgres://user:pass@host:5432/db?sslmode=require"
 
 helm install llm-proxy deploy/helm/llm-proxy \
-  --set image.repository=your-registry/llm-proxy \
-  --set image.tag=v1.0.0 \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set secrets.databaseUrl.existingSecret.name=llm-proxy-db \
+  --set env.DB_DRIVER=postgres
+```
+
+Or using the OCI registry:
+
+```bash
+helm install llm-proxy oci://ghcr.io/sofatutor/llm-proxy --version 0.1.0 \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
   --set secrets.databaseUrl.existingSecret.name=llm-proxy-db \
   --set env.DB_DRIVER=postgres
@@ -35,16 +67,18 @@ helm install llm-proxy deploy/helm/llm-proxy \
 
 ### PostgreSQL (Development - In-Cluster)
 
+**Note:** When using the OCI registry, you'll need to download dependencies separately.
+
 ```bash
-# Download PostgreSQL subchart
+# If using local chart, download PostgreSQL subchart
 helm dependency update deploy/helm/llm-proxy
 
 kubectl create secret generic llm-proxy-secrets \
   --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
 
 helm install llm-proxy deploy/helm/llm-proxy \
-  --set image.repository=your-registry/llm-proxy \
-  --set image.tag=v1.0.0 \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
   --set env.DB_DRIVER=postgres \
   --set postgresql.enabled=true \
@@ -53,7 +87,7 @@ helm install llm-proxy deploy/helm/llm-proxy \
 
 **IMPORTANT:** Ensure your Docker image is built with PostgreSQL support:
 ```bash
-docker build --build-arg POSTGRES_SUPPORT=true -t your-registry/llm-proxy:v1.0.0 .
+docker build --build-arg POSTGRES_SUPPORT=true -t ghcr.io/sofatutor/llm-proxy:latest .
 ```
 
 ## Prerequisites
@@ -80,8 +114,8 @@ Then install the chart referencing this secret:
 
 ```bash
 helm install llm-proxy deploy/helm/llm-proxy \
-  --set image.repository=your-registry/llm-proxy \
-  --set image.tag=v1.0.0 \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets
 ```
 
@@ -91,8 +125,8 @@ For development/testing only, you can have the chart create the secret:
 
 ```bash
 helm install llm-proxy deploy/helm/llm-proxy \
-  --set image.repository=your-registry/llm-proxy \
-  --set image.tag=v1.0.0 \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
   --set secrets.create=true \
   --set-string secrets.data.managementToken="your-token"
 ```
@@ -109,8 +143,8 @@ SQLite is the default and suitable for development or single-instance deployment
 
 ```bash
 helm install llm-proxy deploy/helm/llm-proxy \
-  --set image.repository=your-registry/llm-proxy \
-  --set image.tag=v1.0.0 \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
   --set env.DB_DRIVER=sqlite
 ```
@@ -136,8 +170,8 @@ kubectl create secret generic llm-proxy-db \
 
 ```bash
 helm install llm-proxy deploy/helm/llm-proxy \
-  --set image.repository=your-registry/llm-proxy \
-  --set image.tag=v1.0.0 \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
   --set secrets.databaseUrl.existingSecret.name=llm-proxy-db \
   --set env.DB_DRIVER=postgres
@@ -157,8 +191,8 @@ helm dependency update deploy/helm/llm-proxy
 
 ```bash
 helm install llm-proxy deploy/helm/llm-proxy \
-  --set image.repository=your-registry/llm-proxy \
-  --set image.tag=v1.0.0 \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
   --set env.DB_DRIVER=postgres \
   --set postgresql.enabled=true \
@@ -187,8 +221,8 @@ To use an external Redis instance:
 
 ```bash
 helm install llm-proxy deploy/helm/llm-proxy \
-  --set image.repository=your-registry/llm-proxy \
-  --set image.tag=v1.0.0 \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
   --set redis.external.addr="redis.example.com:6379" \
   --set redis.external.db=0 \
@@ -209,8 +243,8 @@ kubectl create secret generic redis-password \
 rm /tmp/redis-password.txt
 
 helm install llm-proxy deploy/helm/llm-proxy \
-  --set image.repository=your-registry/llm-proxy \
-  --set image.tag=v1.0.0 \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
   --set redis.external.addr="redis.example.com:6379" \
   --set redis.external.password.existingSecret.name=redis-password
@@ -222,8 +256,8 @@ For development or single-instance deployments without Redis:
 
 ```bash
 helm install llm-proxy deploy/helm/llm-proxy \
-  --set image.repository=your-registry/llm-proxy \
-  --set image.tag=v1.0.0 \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
   --set env.LLM_PROXY_EVENT_BUS="in-memory"
 ```
@@ -264,8 +298,8 @@ Example with NGINX Ingress and cert-manager:
 
 ```bash
 helm install llm-proxy deploy/helm/llm-proxy \
-  --set image.repository=your-registry/llm-proxy \
-  --set image.tag=v1.0.0 \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
   --set ingress.enabled=true \
   --set ingress.className=nginx \
@@ -320,8 +354,8 @@ Example with CPU-based autoscaling:
 
 ```bash
 helm install llm-proxy deploy/helm/llm-proxy \
-  --set image.repository=your-registry/llm-proxy \
-  --set image.tag=v1.0.0 \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
   --set env.DB_DRIVER=postgres \
   --set secrets.databaseUrl.existingSecret.name=llm-proxy-db \
