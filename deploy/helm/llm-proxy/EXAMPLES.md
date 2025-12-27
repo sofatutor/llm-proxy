@@ -210,9 +210,11 @@ For production deployments using Redis for event bus and optional caching:
 ### Step 1: Create Secrets
 
 ```bash
-# Create management token secret
+# Create management token secret using file-based approach
+openssl rand -base64 32 > /tmp/mgmt-token.txt
 kubectl create secret generic llm-proxy-secrets \
-  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+  --from-file=MANAGEMENT_TOKEN=/tmp/mgmt-token.txt
+rm /tmp/mgmt-token.txt
 
 # Create Redis password secret (if your Redis requires authentication)
 # Use file-based approach to avoid exposing password in shell history
@@ -241,8 +243,11 @@ helm install llm-proxy deploy/helm/llm-proxy \
 # Check pod logs for Redis connection messages
 kubectl logs -l app.kubernetes.io/name=llm-proxy | grep -i redis
 
-# Verify environment variables are set correctly
+# Verify environment variables are set correctly (requires jq)
 kubectl get deployment llm-proxy -o jsonpath='{.spec.template.spec.containers[0].env}' | jq '.[] | select(.name | startswith("REDIS"))'
+
+# Alternative without jq:
+kubectl get deployment llm-proxy -o yaml | grep -A 2 "REDIS"
 ```
 
 ## Example 8: Multi-Instance Deployment with Redis
@@ -307,10 +312,12 @@ helm install llm-proxy-dev deploy/helm/llm-proxy \
   --set env.DB_DRIVER="sqlite"
 ```
 
-**WARNING:** 
-- This configuration uses in-memory event bus, which does not support multiple replicas
-- Chart-managed secrets are stored in Helm release history
-- Use only for development/testing environments
+**SECURITY WARNING:** 
+- This configuration uses chart-managed secrets stored in Helm release history (insecure)
+- The `--set-string` approach passes the token via command line (may appear in shell history and process listings)
+- In-memory event bus does not support multiple replicas
+- **Use only for development/testing environments**
+- For production, always use existing Kubernetes Secrets created via file-based approach
 
 ## Upgrading
 

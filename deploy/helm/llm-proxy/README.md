@@ -72,9 +72,13 @@ helm install llm-proxy deploy/helm/llm-proxy \
 ### Using External Redis
 
 LLM Proxy uses Redis for:
-- Event bus backend (default: `redis-streams`)
+- Event bus backend (redis-streams or redis)
 - Optional HTTP cache backend
 - Optional distributed rate limiting
+
+**Important:** To use Redis, you must:
+1. Set `redis.external.addr` to your Redis server address
+2. Set `env.LLM_PROXY_EVENT_BUS` to `redis-streams` or `redis` (the chart defaults to `in-memory` for single-instance deployments)
 
 To use an external Redis instance:
 
@@ -91,7 +95,8 @@ helm install llm-proxy deploy/helm/llm-proxy \
 **Note:** If your Redis instance requires authentication, create a secret with the password:
 
 ```bash
-# Create password file (more secure than command-line)
+# Create password file with restricted permissions (more secure than command-line)
+umask 077  # Ensure file is only readable by current user
 echo -n "your-redis-password" > /tmp/redis-password.txt
 
 kubectl create secret generic redis-password \
@@ -159,7 +164,7 @@ env:
   LOG_FORMAT: "json"
   ENABLE_METRICS: "true"
   DB_DRIVER: "sqlite"  # or "postgres" for external PostgreSQL
-  LLM_PROXY_EVENT_BUS: "redis-streams"  # or "redis" or "in-memory"
+  LLM_PROXY_EVENT_BUS: "in-memory"  # Default. Use "redis-streams" or "redis" when Redis is configured
 ```
 
 ### Redis Configuration

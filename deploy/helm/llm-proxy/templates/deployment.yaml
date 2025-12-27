@@ -75,13 +75,13 @@ spec:
           value: {{ .Values.redis.external.addr | quote }}
         - name: REDIS_DB
           value: {{ .Values.redis.external.db | quote }}
-        {{- end }}
         {{- if $redisPasswordSecret }}
         - name: REDIS_PASSWORD
           valueFrom:
             secretKeyRef:
               name: {{ $redisPasswordSecret }}
               key: {{ include "llm-proxy.redisPasswordSecretKey" . }}
+        {{- end }}
         {{- end }}
         {{- end }}
         {{- if .Values.volumeMounts }}
