@@ -253,6 +253,36 @@ func TestMetricsPrometheusEndpoint_NoProxy(t *testing.T) {
 	assert.Contains(t, body, "llm_proxy_cache_stores_total 0")
 }
 
+func TestHandleMetricsPrometheus_WriteError(t *testing.T) {
+	cfg := &config.Config{
+		ListenAddr:      ":8080",
+		RequestTimeout:  30 * time.Second,
+		EnableMetrics:   true,
+		MetricsPath:     "/metrics",
+		EventBusBackend: "in-memory",
+	}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	// Ensure some proxy metrics to exercise data path
+	p := &proxy.TransparentProxy{}
+	p.SetMetrics(&proxy.ProxyMetrics{
+		RequestCount: 10,
+		ErrorCount:   2,
+	})
+	srv.proxy = p
+
+	r := httptest.NewRequest(http.MethodGet, "/metrics/prometheus", nil)
+	rr := httptest.NewRecorder()
+	failing := &mockFailingResponseWriter{ResponseWriter: rr, failOnFirstWrite: true}
+	srv.handleMetricsPrometheus(failing, r)
+
+	// The handler should have attempted to write and encountered an error
+	// Since Write returns an error, the logger.Error should be called
+	// We can't directly verify the log, but we verify the response writer got the error
+	assert.Equal(t, http.StatusInternalServerError, failing.statusCode)
+}
+
 func TestServerLifecycle(t *testing.T) {
 	// Use httptest.NewServer to start the server with the health handler
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

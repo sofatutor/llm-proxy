@@ -68,11 +68,21 @@ const (
 	CacheMetricStore
 )
 
-// Metrics returns a pointer to the current proxy metrics.
-func (p *TransparentProxy) Metrics() *ProxyMetrics {
+// Metrics returns a copy of the current proxy metrics.
+// Returns a value copy to ensure thread-safety when reading metrics.
+func (p *TransparentProxy) Metrics() ProxyMetrics {
 	p.metrics.mu.Lock()
 	defer p.metrics.mu.Unlock()
-	return p.metrics
+	// Return a copy to avoid race conditions when accessing fields
+	return ProxyMetrics{
+		RequestCount:      p.metrics.RequestCount,
+		ErrorCount:        p.metrics.ErrorCount,
+		TotalResponseTime: p.metrics.TotalResponseTime,
+		CacheHits:         p.metrics.CacheHits,
+		CacheMisses:       p.metrics.CacheMisses,
+		CacheBypass:       p.metrics.CacheBypass,
+		CacheStores:       p.metrics.CacheStores,
+	}
 }
 
 // SetMetrics overwrites the current metrics (primarily for testing).
