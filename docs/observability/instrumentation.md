@@ -341,6 +341,103 @@ llm-proxy benchmark \
 
 This will show sample responses with all headers, making it easy to verify cache behavior.
 
+## Prometheus Metrics Endpoint
+
+The proxy provides an optional Prometheus-compatible metrics endpoint for monitoring and alerting. This endpoint complements the existing JSON metrics endpoint without replacing it.
+
+### Endpoints
+
+- **`/metrics`**: Provider-agnostic JSON metrics (default format)
+- **`/metrics/prometheus`**: Prometheus text exposition format
+
+Both endpoints are available when `ENABLE_METRICS=true` (default).
+
+### Available Metrics
+
+The Prometheus endpoint exposes the following metrics:
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `llm_proxy_uptime_seconds` | gauge | Time since the server started |
+| `llm_proxy_requests_total` | counter | Total number of proxy requests |
+| `llm_proxy_errors_total` | counter | Total number of proxy errors |
+| `llm_proxy_cache_hits_total` | counter | Total number of cache hits |
+| `llm_proxy_cache_misses_total` | counter | Total number of cache misses |
+| `llm_proxy_cache_bypass_total` | counter | Total number of cache bypasses |
+| `llm_proxy_cache_stores_total` | counter | Total number of cache stores |
+
+### Example Output
+
+```
+# HELP llm_proxy_uptime_seconds Time since the server started
+# TYPE llm_proxy_uptime_seconds gauge
+llm_proxy_uptime_seconds 3542.12
+# HELP llm_proxy_requests_total Total number of proxy requests
+# TYPE llm_proxy_requests_total counter
+llm_proxy_requests_total 1523
+# HELP llm_proxy_errors_total Total number of proxy errors
+# TYPE llm_proxy_errors_total counter
+llm_proxy_errors_total 12
+# HELP llm_proxy_cache_hits_total Total number of cache hits
+# TYPE llm_proxy_cache_hits_total counter
+llm_proxy_cache_hits_total 842
+# HELP llm_proxy_cache_misses_total Total number of cache misses
+# TYPE llm_proxy_cache_misses_total counter
+llm_proxy_cache_misses_total 681
+# HELP llm_proxy_cache_bypass_total Total number of cache bypasses
+# TYPE llm_proxy_cache_bypass_total counter
+llm_proxy_cache_bypass_total 0
+# HELP llm_proxy_cache_stores_total Total number of cache stores
+# TYPE llm_proxy_cache_stores_total counter
+llm_proxy_cache_stores_total 681
+```
+
+### Prometheus Scrape Configuration
+
+Add the following to your Prometheus configuration:
+
+```yaml
+scrape_configs:
+  - job_name: 'llm-proxy'
+    static_configs:
+      - targets: ['localhost:8080']
+    metrics_path: '/metrics/prometheus'
+    scrape_interval: 15s
+```
+
+### Example Queries
+
+```promql
+# Request rate (per second)
+rate(llm_proxy_requests_total[5m])
+
+# Error rate
+rate(llm_proxy_errors_total[5m]) / rate(llm_proxy_requests_total[5m])
+
+# Cache hit ratio
+llm_proxy_cache_hits_total / (llm_proxy_cache_hits_total + llm_proxy_cache_misses_total)
+
+# Total uptime in hours
+llm_proxy_uptime_seconds / 3600
+```
+
+### Testing
+
+```bash
+# Check Prometheus metrics
+curl http://localhost:8080/metrics/prometheus
+
+# Compare with JSON format
+curl http://localhost:8080/metrics | jq .
+```
+
+### Notes
+
+- The Prometheus endpoint is lightweight and has no external dependencies
+- Metrics are in-memory and reset on server restart
+- Both JSON and Prometheus endpoints can be used simultaneously
+- No secrets are exposed in metrics output
+
 ## Important: In-Memory vs. Redis Event Bus
 
 - The **in-memory event bus** only works within a single process. If you run the proxy and dispatcher as separate processes or containers, they will not share events.

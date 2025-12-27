@@ -272,8 +272,15 @@ See [API Configuration Guide](api-configuration.md) for detailed provider config
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `ENABLE_METRICS` | bool | `true` | Enable metrics endpoint |
-| `METRICS_PATH` | string | `/metrics` | Path for metrics endpoint |
+| `ENABLE_METRICS` | bool | `true` | Enable metrics endpoints |
+| `METRICS_PATH` | string | `/metrics` | Path for JSON metrics endpoint |
+
+### Available Metrics Endpoints
+
+- **`/metrics`**: Provider-agnostic JSON format (default)
+- **`/metrics/prometheus`**: Prometheus text exposition format
+
+Both endpoints expose the same core metrics (uptime, requests, errors, cache statistics) in different formats. See [Instrumentation Guide](../observability/instrumentation.md#prometheus-metrics-endpoint) for Prometheus scraping configuration.
 
 ## Example Configuration Files
 
