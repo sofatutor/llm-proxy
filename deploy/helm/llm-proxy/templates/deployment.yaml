@@ -47,7 +47,8 @@ spec:
           {{- toYaml .Values.resources | nindent 12 }}
         {{- $managementTokenSecret := include "llm-proxy.managementTokenSecretName" . }}
         {{- $databaseUrlSecret := include "llm-proxy.databaseUrlSecretName" . }}
-        {{- if or .Values.env $managementTokenSecret $databaseUrlSecret }}
+        {{- $redisPasswordSecret := include "llm-proxy.redisPasswordSecretName" . }}
+        {{- if or .Values.env $managementTokenSecret $databaseUrlSecret .Values.redis.external.addr $redisPasswordSecret }}
         env:
         {{- if .Values.env }}
         {{- range $key := keys .Values.env | sortAlpha }}
@@ -68,6 +69,19 @@ spec:
             secretKeyRef:
               name: {{ $databaseUrlSecret }}
               key: {{ include "llm-proxy.databaseUrlSecretKey" . }}
+        {{- end }}
+        {{- if .Values.redis.external.addr }}
+        - name: REDIS_ADDR
+          value: {{ .Values.redis.external.addr | quote }}
+        - name: REDIS_DB
+          value: {{ .Values.redis.external.db | quote }}
+        {{- end }}
+        {{- if $redisPasswordSecret }}
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ $redisPasswordSecret }}
+              key: {{ include "llm-proxy.redisPasswordSecretKey" . }}
         {{- end }}
         {{- end }}
         {{- if .Values.volumeMounts }}

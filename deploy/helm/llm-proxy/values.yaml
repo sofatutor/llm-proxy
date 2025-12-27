@@ -102,6 +102,11 @@ env:
   DB_DRIVER: "sqlite"
   # Path to SQLite database file (used when DB_DRIVER=sqlite)
   DATABASE_PATH: "/app/data/llm-proxy.db"
+  # Event bus backend: redis-streams (default), redis, or in-memory
+  # redis-streams: Uses Redis Streams with consumer groups for durable, distributed delivery
+  # redis: Uses Redis List-based event queue
+  # in-memory: Uses in-memory channel (single-process only)
+  LLM_PROXY_EVENT_BUS: "redis-streams"
 
 # Secrets configuration
 # SECURITY: Never store secrets in values.yaml or version control
@@ -135,3 +140,26 @@ secrets:
       name: ""
       # Key within the Secret that contains the database URL
       key: "DATABASE_URL"
+
+# Redis configuration
+# Used for event bus, optional HTTP cache, and optional distributed rate limiting
+redis:
+  # Enable in-cluster Redis (development/testing only)
+  # When false (default), you must configure external Redis below
+  enabled: false
+  
+  # External Redis configuration (recommended for production)
+  external:
+    # Redis server address (required when using redis/redis-streams event bus)
+    # Format: host:port (e.g., "redis.example.com:6379")
+    addr: ""
+    # Redis database number (default: 0)
+    db: 0
+    # Optional: Reference an existing Kubernetes Secret containing Redis password
+    # If not set, assumes Redis has no authentication
+    password:
+      existingSecret:
+        # Name of the existing Kubernetes Secret containing Redis password
+        name: ""
+        # Key within the Secret that contains the Redis password
+        key: "REDIS_PASSWORD"

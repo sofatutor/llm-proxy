@@ -93,3 +93,19 @@ Get the key within the secret for DATABASE_URL
 {{- .Values.secrets.databaseUrl.existingSecret.key | default "DATABASE_URL" }}
 {{- end }}
 {{- end }}
+
+{{/*
+Get the name of the secret containing REDIS_PASSWORD
+*/}}
+{{- define "llm-proxy.redisPasswordSecretName" -}}
+{{- if .Values.redis.external.password.existingSecret.name }}
+{{- .Values.redis.external.password.existingSecret.name }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get the key within the secret for REDIS_PASSWORD
+*/}}
+{{- define "llm-proxy.redisPasswordSecretKey" -}}
+{{- .Values.redis.external.password.existingSecret.key | default "REDIS_PASSWORD" }}
+{{- end }}

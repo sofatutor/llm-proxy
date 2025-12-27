@@ -203,6 +203,112 @@ Deploy with the values file:
 helm install llm-proxy deploy/helm/llm-proxy -f production-values.yaml
 ```
 
+## Example 7: External Redis for Event Bus and Caching
+
+For production deployments using Redis for event bus and optional caching:
+
+### Step 1: Create Secrets
+
+```bash
+# Create management token secret
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+
+# Create Redis password secret (if your Redis requires authentication)
+kubectl create secret generic redis-password \
+  --from-literal=REDIS_PASSWORD="your-redis-password"
+```
+
+### Step 2: Deploy with Redis Configuration
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set redis.external.addr="redis.example.com:6379" \
+  --set redis.external.db=0 \
+  --set redis.external.password.existingSecret.name=redis-password \
+  --set env.LLM_PROXY_EVENT_BUS="redis-streams"
+```
+
+### Step 3: Verify Redis Connection
+
+```bash
+# Check pod logs for Redis connection messages
+kubectl logs -l app.kubernetes.io/name=llm-proxy | grep -i redis
+
+# Verify environment variables are set correctly
+kubectl get deployment llm-proxy -o jsonpath='{.spec.template.spec.containers[0].env}' | jq '.[] | select(.name | startswith("REDIS"))'
+```
+
+## Example 8: Multi-Instance Deployment with Redis
+
+For scaling with multiple replicas (requires Redis for event bus):
+
+```yaml
+# redis-scaling-values.yaml
+image:
+  repository: your-registry/llm-proxy
+  tag: v1.0.0
+  pullPolicy: IfNotPresent
+
+replicaCount: 3
+
+secrets:
+  managementToken:
+    existingSecret:
+      name: llm-proxy-secrets
+
+redis:
+  external:
+    addr: "redis.example.com:6379"
+    db: 0
+    password:
+      existingSecret:
+        name: redis-password
+
+env:
+  DB_DRIVER: "postgres"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  LLM_PROXY_EVENT_BUS: "redis-streams"  # Required for multi-instance
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+```
+
+Deploy with:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy -f redis-scaling-values.yaml \
+  --set secrets.databaseUrl.existingSecret.name=llm-proxy-db
+```
+
+## Example 9: Development with In-Memory Event Bus (Single Instance)
+
+For local development or testing without Redis:
+
+```bash
+helm install llm-proxy-dev deploy/helm/llm-proxy \
+  --set image.repository=llm-proxy \
+  --set image.tag=latest \
+  --set secrets.create=true \
+  --set-string secrets.data.managementToken="$(openssl rand -base64 32)" \
+  --set env.LLM_PROXY_EVENT_BUS="in-memory" \
+  --set env.DB_DRIVER="sqlite"
+```
+
+**WARNING:** 
+- This configuration uses in-memory event bus, which does not support multiple replicas
+- Chart-managed secrets are stored in Helm release history
+- Use only for development/testing environments
+
 ## Upgrading
 
 To upgrade an existing deployment:

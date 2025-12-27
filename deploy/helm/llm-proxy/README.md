@@ -69,6 +69,53 @@ helm install llm-proxy deploy/helm/llm-proxy \
 
 **Note:** When using PostgreSQL, the `DATABASE_PATH` environment variable is ignored.
 
+### Using External Redis
+
+LLM Proxy uses Redis for:
+- Event bus backend (default: `redis-streams`)
+- Optional HTTP cache backend
+- Optional distributed rate limiting
+
+To use an external Redis instance:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set redis.external.addr="redis.example.com:6379" \
+  --set redis.external.db=0 \
+  --set env.LLM_PROXY_EVENT_BUS="redis-streams"
+```
+
+**Note:** If your Redis instance requires authentication, create a secret with the password:
+
+```bash
+kubectl create secret generic redis-password \
+  --from-literal=REDIS_PASSWORD="your-redis-password"
+
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set redis.external.addr="redis.example.com:6379" \
+  --set redis.external.password.existingSecret.name=redis-password
+```
+
+### Using In-Memory Event Bus (Single Instance Only)
+
+For development or single-instance deployments without Redis:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set env.LLM_PROXY_EVENT_BUS="in-memory"
+```
+
+**WARNING:** The in-memory event bus does not support multi-instance deployments. Use Redis for production environments with multiple replicas.
+
 ## Configuration
 
 ### Image Configuration
@@ -106,6 +153,42 @@ env:
   LOG_FORMAT: "json"
   ENABLE_METRICS: "true"
   DB_DRIVER: "sqlite"  # or "postgres" for external PostgreSQL
+  LLM_PROXY_EVENT_BUS: "redis-streams"  # or "redis" or "in-memory"
+```
+
+### Redis Configuration
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `redis.enabled` | Enable in-cluster Redis (development only, not implemented) | `false` |
+| `redis.external.addr` | External Redis server address (e.g., `redis.example.com:6379`) | `""` |
+| `redis.external.db` | Redis database number | `0` |
+| `redis.external.password.existingSecret.name` | Name of existing Secret containing Redis password | `""` |
+| `redis.external.password.existingSecret.key` | Key within the Secret for Redis password | `"REDIS_PASSWORD"` |
+
+The chart supports the following Redis configurations:
+
+#### External Redis (Recommended for Production)
+
+```yaml
+redis:
+  external:
+    addr: "redis.example.com:6379"
+    db: 0
+    password:
+      existingSecret:
+        name: "redis-password"
+        key: "REDIS_PASSWORD"
+env:
+  LLM_PROXY_EVENT_BUS: "redis-streams"
+```
+
+#### In-Memory (Single Instance Only)
+
+```yaml
+env:
+  LLM_PROXY_EVENT_BUS: "in-memory"
+# No redis configuration needed
 ```
 
 ### Secret Configuration
