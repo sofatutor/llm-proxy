@@ -111,6 +111,104 @@ Get the key within the secret for REDIS_PASSWORD
 {{- end }}
 
 {{/*
+Get PostgreSQL hostname
+*/}}
+{{- define "llm-proxy.postgresql.host" -}}
+{{- if .Values.postgresql.enabled }}
+{{- printf "%s-postgresql" (include "llm-proxy.fullname" .) }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get PostgreSQL port
+*/}}
+{{- define "llm-proxy.postgresql.port" -}}
+{{- if .Values.postgresql.enabled }}
+{{- .Values.postgresql.primary.service.ports.postgresql | default "5432" }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get PostgreSQL database name
+*/}}
+{{- define "llm-proxy.postgresql.database" -}}
+{{- if .Values.postgresql.enabled }}
+{{- .Values.postgresql.auth.database | default "llmproxy" }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get PostgreSQL username
+*/}}
+{{- define "llm-proxy.postgresql.username" -}}
+{{- if .Values.postgresql.enabled }}
+{{- .Values.postgresql.auth.username | default "llmproxy" }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get PostgreSQL password secret name
+*/}}
+{{- define "llm-proxy.postgresql.secretName" -}}
+{{- if .Values.postgresql.enabled }}
+{{- if .Values.postgresql.auth.existingSecret }}
+{{- .Values.postgresql.auth.existingSecret }}
+{{- else }}
+{{- printf "%s-postgresql" (include "llm-proxy.fullname" .) }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get PostgreSQL password secret key
+*/}}
+{{- define "llm-proxy.postgresql.secretKey" -}}
+{{- if .Values.postgresql.enabled }}
+{{- if .Values.postgresql.auth.existingSecret }}
+{{- .Values.postgresql.auth.secretKeys.userPasswordKey | default "password" }}
+{{- else }}
+{{- printf "password" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Construct PostgreSQL connection URL for in-cluster PostgreSQL
+*/}}
+{{- define "llm-proxy.postgresql.url" -}}
+{{- if .Values.postgresql.enabled }}
+{{- $host := include "llm-proxy.postgresql.host" . }}
+{{- $port := include "llm-proxy.postgresql.port" . }}
+{{- $database := include "llm-proxy.postgresql.database" . }}
+{{- $username := include "llm-proxy.postgresql.username" . }}
+{{- printf "postgres://%s:$(PGPASSWORD)@%s:%s/%s?sslmode=disable" $username $host $port $database }}
+{{- end }}
+{{- end }}
+
+{{/*
+Validate PostgreSQL configuration
+*/}}
+{{- define "llm-proxy.validatePostgresConfig" -}}
+{{- $dbDriver := .Values.env.DB_DRIVER | default "sqlite" }}
+{{- if eq $dbDriver "postgres" }}
+  {{- $hasInCluster := .Values.postgresql.enabled }}
+  {{- $hasExternal := or (and .Values.secrets.create .Values.secrets.data.databaseUrl) .Values.secrets.databaseUrl.existingSecret.name }}
+  {{- if and $hasInCluster $hasExternal }}
+    {{- fail "Configuration error: Cannot use both in-cluster PostgreSQL (postgresql.enabled=true) and external PostgreSQL (secrets.databaseUrl) at the same time. Please choose one approach." }}
+  {{- end }}
+  {{- if not (or $hasInCluster $hasExternal) }}
+    {{- fail (printf "Configuration error: DB_DRIVER is set to 'postgres' but no database configuration found. Please either:\n  1. Enable in-cluster PostgreSQL with postgresql.enabled=true (development/testing only)\n  2. Configure external PostgreSQL with secrets.databaseUrl.existingSecret.name (recommended for production)\n  3. Change DB_DRIVER to 'sqlite' for single-instance deployments") }}
+  {{- end }}
+  {{- if and $hasInCluster (not .Values.postgresql.auth.password) (not .Values.postgresql.auth.existingSecret) }}
+    {{- fail "Configuration error: postgresql.enabled=true but no password configured. Please set postgresql.auth.password or postgresql.auth.existingSecret" }}
+  {{- end }}
+{{- end }}
+{{- if and .Values.postgresql.enabled (ne $dbDriver "postgres") }}
+  {{- fail (printf "Configuration error: postgresql.enabled=true but DB_DRIVER is set to '%s'. When using in-cluster PostgreSQL, DB_DRIVER must be set to 'postgres'." $dbDriver) }}
+{{- end }}
+{{- end }}
+
+{{/*
 Validate Redis configuration
 */}}
 {{- define "llm-proxy.validateRedisConfig" -}}

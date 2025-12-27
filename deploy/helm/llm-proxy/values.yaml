@@ -142,6 +142,47 @@ secrets:
       # Key within the Secret that contains the database URL
       key: "DATABASE_URL"
 
+# PostgreSQL configuration
+# IMPORTANT: When using PostgreSQL (either in-cluster or external), ensure your Docker image
+# is built with PostgreSQL support using the 'postgres' build tag.
+# Default images built with: docker build --build-arg POSTGRES_SUPPORT=true
+postgresql:
+  # Enable in-cluster PostgreSQL (development/testing only)
+  # When true, deploys a PostgreSQL database as part of this chart
+  # For production, use external PostgreSQL with secrets.databaseUrl.existingSecret
+  enabled: false
+  
+  # Bitnami PostgreSQL subchart configuration
+  # Only applies when postgresql.enabled=true
+  # For full options, see: https://github.com/bitnami/charts/tree/main/bitnami/postgresql
+  auth:
+    # PostgreSQL admin username
+    username: llmproxy
+    # PostgreSQL database name
+    database: llmproxy
+    # PostgreSQL password (override with --set-string for security)
+    # Example: --set-string postgresql.auth.password="$(openssl rand -base64 32)"
+    password: ""
+    # Use existing secret for PostgreSQL password (recommended)
+    # When set, overrides postgresql.auth.password
+    existingSecret: ""
+    secretKeys:
+      adminPasswordKey: postgres-password
+      userPasswordKey: password
+  
+  # PostgreSQL primary configuration
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+    resources:
+      limits:
+        memory: 256Mi
+        cpu: 500m
+      requests:
+        memory: 128Mi
+        cpu: 100m
+
 # Redis configuration
 # Used for event bus, optional HTTP cache, and optional distributed rate limiting
 redis:

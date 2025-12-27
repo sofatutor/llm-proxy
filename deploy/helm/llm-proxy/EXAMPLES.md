@@ -53,7 +53,64 @@ kubectl logs -l app.kubernetes.io/name=llm-proxy
 kubectl get deployment -o yaml | grep -A 3 secretKeyRef
 ```
 
-## Example 2: Development Deployment with Chart-Managed Secret
+## Example 2: Development Deployment with In-Cluster PostgreSQL
+
+**WARNING:** In-cluster PostgreSQL is for development/testing only. Use external PostgreSQL for production.
+
+### Step 1: Update Chart Dependencies
+
+```bash
+# Download the PostgreSQL subchart
+helm dependency update deploy/helm/llm-proxy
+```
+
+### Step 2: Create Management Token Secret
+
+```bash
+# Create management token secret
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+```
+
+### Step 3: Deploy with In-Cluster PostgreSQL
+
+```bash
+# Deploy with in-cluster PostgreSQL
+helm install llm-proxy-dev deploy/helm/llm-proxy \
+  --set image.repository=llm-proxy \
+  --set image.tag=latest \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set env.DB_DRIVER=postgres \
+  --set postgresql.enabled=true \
+  --set-string postgresql.auth.password="$(openssl rand -base64 32)"
+```
+
+### Step 4: Verify Deployment
+
+```bash
+# Check pod status (should see both llm-proxy and postgresql pods)
+kubectl get pods -l app.kubernetes.io/instance=llm-proxy-dev
+
+# Check PostgreSQL pod
+kubectl get pods -l app.kubernetes.io/name=postgresql
+
+# Check PostgreSQL service
+kubectl get svc -l app.kubernetes.io/name=postgresql
+
+# View logs
+kubectl logs -l app.kubernetes.io/name=llm-proxy
+kubectl logs -l app.kubernetes.io/name=postgresql
+
+# Check PersistentVolumeClaim for PostgreSQL
+kubectl get pvc
+```
+
+**IMPORTANT:**
+- Ensure your Docker image is built with PostgreSQL support (postgres build tag)
+- Default images are built with: `docker build --build-arg POSTGRES_SUPPORT=true`
+- Data persists via PersistentVolumeClaim (default 8Gi)
+
+## Example 10: Development Deployment with Chart-Managed Secret
 
 **WARNING:** This approach stores secrets in Helm release history. Use only for development/testing.
 
@@ -62,14 +119,14 @@ kubectl get deployment -o yaml | grep -A 3 secretKeyRef
 MGMT_TOKEN=$(openssl rand -base64 32)
 
 # Deploy with chart-managed secret
-helm install llm-proxy-dev deploy/helm/llm-proxy \
+helm install llm-proxy-simple deploy/helm/llm-proxy \
   --set image.repository=llm-proxy \
   --set image.tag=latest \
   --set secrets.create=true \
   --set-string secrets.data.managementToken="${MGMT_TOKEN}"
 ```
 
-## Example 3: Using External Secret Operator
+## Example 10: Using External Secret Operator
 
 If you're using [External Secrets Operator](https://external-secrets.io/):
 
@@ -112,7 +169,7 @@ helm install llm-proxy deploy/helm/llm-proxy \
   --set env.DB_DRIVER=postgres
 ```
 
-## Example 4: SQLite with Single Secret (Simple Install)
+## Example 10: SQLite with Single Secret (Simple Install)
 
 For single-instance deployments using SQLite:
 
@@ -129,7 +186,7 @@ helm install llm-proxy deploy/helm/llm-proxy \
   --set env.DB_DRIVER=sqlite
 ```
 
-## Example 5: Using Different Secret Keys
+## Example 10: Using Different Secret Keys
 
 If your existing secret uses different key names:
 
@@ -147,7 +204,7 @@ helm install llm-proxy deploy/helm/llm-proxy \
   --set env.DB_DRIVER=postgres
 ```
 
-## Example 6: Production Values File
+## Example 10: Production Values File
 
 Create a `production-values.yaml` file:
 
@@ -203,7 +260,7 @@ Deploy with the values file:
 helm install llm-proxy deploy/helm/llm-proxy -f production-values.yaml
 ```
 
-## Example 7: External Redis for Event Bus and Caching
+## Example 10: External Redis for Event Bus and Caching
 
 For production deployments using Redis for event bus and optional caching:
 
@@ -250,7 +307,7 @@ kubectl get deployment llm-proxy -o jsonpath='{.spec.template.spec.containers[0]
 kubectl get deployment llm-proxy -o yaml | grep -A 2 "REDIS"
 ```
 
-## Example 8: Multi-Instance Deployment with Redis
+## Example 10: Multi-Instance Deployment with Redis
 
 For scaling with multiple replicas (requires Redis for event bus):
 
@@ -298,7 +355,7 @@ helm install llm-proxy deploy/helm/llm-proxy -f redis-scaling-values.yaml \
   --set secrets.databaseUrl.existingSecret.name=llm-proxy-db
 ```
 
-## Example 9: Development with In-Memory Event Bus (Single Instance)
+## Example 10: Development with In-Memory Event Bus (Single Instance)
 
 For local development or testing without Redis:
 

@@ -45,9 +45,31 @@ helm install llm-proxy deploy/helm/llm-proxy \
 
 **WARNING:** This approach stores the secret in Helm release history. Use only for development.
 
-### Using External PostgreSQL
+### Database Configuration
 
-To use an external PostgreSQL database instead of SQLite:
+The chart supports two database backends:
+
+#### SQLite (Default - Single Instance Only)
+
+SQLite is the default and suitable for development or single-instance deployments:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set env.DB_DRIVER=sqlite
+```
+
+**Note:** SQLite does not support multi-replica deployments.
+
+#### PostgreSQL
+
+PostgreSQL is recommended for production and multi-replica deployments. Two modes are supported:
+
+##### Option 1: External PostgreSQL (RECOMMENDED for production)
+
+Use an existing PostgreSQL database:
 
 1. Create a secret with your database connection string:
 
@@ -67,7 +89,34 @@ helm install llm-proxy deploy/helm/llm-proxy \
   --set env.DB_DRIVER=postgres
 ```
 
-**Note:** When using PostgreSQL, the `DATABASE_PATH` environment variable is ignored.
+##### Option 2: In-Cluster PostgreSQL (Development/Testing Only)
+
+Deploy PostgreSQL as part of the Helm release:
+
+1. First, update chart dependencies to download the PostgreSQL subchart:
+
+```bash
+helm dependency update deploy/helm/llm-proxy
+```
+
+2. Install with in-cluster PostgreSQL:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set env.DB_DRIVER=postgres \
+  --set postgresql.enabled=true \
+  --set-string postgresql.auth.password="$(openssl rand -base64 32)"
+```
+
+**IMPORTANT:**
+- In-cluster PostgreSQL is for development/testing only, NOT recommended for production
+- Ensure your Docker image is built with PostgreSQL support using the `postgres` build tag
+- Default images are built with: `docker build --build-arg POSTGRES_SUPPORT=true`
+- You cannot use both in-cluster and external PostgreSQL simultaneously
+- When using in-cluster PostgreSQL, data persists via a PersistentVolumeClaim (default 8Gi)
 
 ### Using External Redis
 
@@ -167,6 +216,57 @@ env:
   LLM_PROXY_EVENT_BUS: "in-memory"  # Default. Use "redis-streams" or "redis" when Redis is configured
 ```
 
+### PostgreSQL Configuration
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `postgresql.enabled` | Enable in-cluster PostgreSQL (development/testing only) | `false` |
+| `postgresql.auth.username` | PostgreSQL username | `llmproxy` |
+| `postgresql.auth.database` | PostgreSQL database name | `llmproxy` |
+| `postgresql.auth.password` | PostgreSQL password (use --set-string for security) | `""` |
+| `postgresql.auth.existingSecret` | Existing Secret containing PostgreSQL password | `""` |
+| `postgresql.primary.persistence.enabled` | Enable persistence for PostgreSQL | `true` |
+| `postgresql.primary.persistence.size` | Size of PostgreSQL PersistentVolumeClaim | `8Gi` |
+| `postgresql.primary.resources.limits.memory` | PostgreSQL memory limit | `256Mi` |
+| `postgresql.primary.resources.limits.cpu` | PostgreSQL CPU limit | `500m` |
+| `postgresql.primary.resources.requests.memory` | PostgreSQL memory request | `128Mi` |
+| `postgresql.primary.resources.requests.cpu` | PostgreSQL CPU request | `100m` |
+
+The chart supports the following PostgreSQL configurations:
+
+#### External PostgreSQL (Recommended for Production)
+
+```yaml
+env:
+  DB_DRIVER: "postgres"
+secrets:
+  databaseUrl:
+    existingSecret:
+      name: "llm-proxy-db"
+      key: "DATABASE_URL"
+```
+
+#### In-Cluster PostgreSQL (Development/Testing Only)
+
+**IMPORTANT:** Run `helm dependency update deploy/helm/llm-proxy` first to download the PostgreSQL subchart.
+
+```yaml
+env:
+  DB_DRIVER: "postgres"
+postgresql:
+  enabled: true
+  auth:
+    username: llmproxy
+    database: llmproxy
+    password: "your-secure-password"  # Use --set-string in practice
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+```
+
+**Note:** Ensure your Docker image is built with PostgreSQL support (postgres build tag).
+
 ### Redis Configuration
 
 | Parameter | Description | Default |
@@ -211,32 +311,8 @@ env:
 | `secrets.data.databaseUrl` | Database URL value (only if `secrets.create=true`) | `""` |
 | `secrets.managementToken.existingSecret.name` | Name of existing Secret containing MANAGEMENT_TOKEN | `""` |
 | `secrets.managementToken.existingSecret.key` | Key within the Secret for management token | `"MANAGEMENT_TOKEN"` |
-| `secrets.databaseUrl.existingSecret.name` | Name of existing Secret containing DATABASE_URL | `""` |
+| `secrets.databaseUrl.existingSecret.name` | Name of existing Secret containing DATABASE_URL (for external PostgreSQL) | `""` |
 | `secrets.databaseUrl.existingSecret.key` | Key within the Secret for database URL | `"DATABASE_URL"` |
-
-### Database Configuration
-
-The chart supports both SQLite (single-instance) and PostgreSQL (production) databases:
-
-#### SQLite (Default)
-
-```yaml
-env:
-  DB_DRIVER: "sqlite"
-  DATABASE_PATH: "/app/data/llm-proxy.db"
-```
-
-#### PostgreSQL (External)
-
-```yaml
-env:
-  DB_DRIVER: "postgres"
-secrets:
-  databaseUrl:
-    existingSecret:
-      name: "llm-proxy-db"
-      key: "DATABASE_URL"
-```
 
 ## Health Checks
 

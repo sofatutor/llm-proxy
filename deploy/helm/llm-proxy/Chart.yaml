@@ -22,3 +22,10 @@ sources:
 maintainers:
   - name: sofatutor
     url: https://github.com/sofatutor
+
+# Optional dependencies (disabled by default)
+dependencies:
+  - name: postgresql
+    version: 15.5.38
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled

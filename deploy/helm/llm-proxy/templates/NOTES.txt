@@ -1,4 +1,6 @@
 {{- $managementTokenSecret := include "llm-proxy.managementTokenSecretName" . }}
+{{- $dbDriver := .Values.env.DB_DRIVER | default "sqlite" }}
+{{- $postgresqlEnabled := .Values.postgresql.enabled }}
 {{- if not $managementTokenSecret }}
 ********************************************************************************
 ****                            WARNING                                     ****
@@ -20,6 +22,54 @@ Please configure one of the following:
      --set-string secrets.data.managementToken="your-token"
 
 For more information, see the README.md in the chart directory.
+
+********************************************************************************
+{{- end }}
+
+{{- if and (eq $dbDriver "postgres") $postgresqlEnabled }}
+********************************************************************************
+****                   IN-CLUSTER POSTGRESQL ENABLED                       ****
+********************************************************************************
+
+You are using in-cluster PostgreSQL for development/testing.
+
+Database Configuration:
+  Host:     {{ include "llm-proxy.postgresql.host" . }}
+  Port:     {{ include "llm-proxy.postgresql.port" . }}
+  Database: {{ include "llm-proxy.postgresql.database" . }}
+  Username: {{ include "llm-proxy.postgresql.username" . }}
+
+IMPORTANT:
+- Ensure your Docker image is built with PostgreSQL support (postgres build tag)
+- Default images are built with: docker build --build-arg POSTGRES_SUPPORT=true
+- In-cluster PostgreSQL is for development/testing only
+- For production, use external PostgreSQL with secrets.databaseUrl.existingSecret
+
+********************************************************************************
+{{- end }}
+
+{{- if and (eq $dbDriver "postgres") (not $postgresqlEnabled) (not (include "llm-proxy.databaseUrlSecretName" .)) }}
+********************************************************************************
+****                            WARNING                                     ****
+********************************************************************************
+
+DB_DRIVER is set to 'postgres' but no database configuration found!
+
+Please configure one of the following:
+
+1. External PostgreSQL (RECOMMENDED for production):
+   kubectl create secret generic llm-proxy-db \
+     --from-literal=DATABASE_URL="postgres://user:pass@host:5432/dbname?sslmode=require"
+   
+   helm upgrade {{ .Release.Name }} {{ .Chart.Name }} \
+     --set secrets.databaseUrl.existingSecret.name=llm-proxy-db
+
+2. In-cluster PostgreSQL (DEVELOPMENT/TESTING only):
+   helm upgrade {{ .Release.Name }} {{ .Chart.Name }} \
+     --set postgresql.enabled=true \
+     --set-string postgresql.auth.password="your-password"
+
+IMPORTANT: Ensure your Docker image is built with PostgreSQL support (postgres build tag)
 
 ********************************************************************************
 {{- end }}

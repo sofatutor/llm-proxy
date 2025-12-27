@@ -1,4 +1,5 @@
 {{- include "llm-proxy.validateRedisConfig" . }}
+{{- include "llm-proxy.validatePostgresConfig" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -49,7 +50,8 @@ spec:
         {{- $managementTokenSecret := include "llm-proxy.managementTokenSecretName" . }}
         {{- $databaseUrlSecret := include "llm-proxy.databaseUrlSecretName" . }}
         {{- $redisPasswordSecret := include "llm-proxy.redisPasswordSecretName" . }}
-        {{- if or .Values.env $managementTokenSecret $databaseUrlSecret .Values.redis.external.addr $redisPasswordSecret }}
+        {{- $postgresqlEnabled := .Values.postgresql.enabled }}
+        {{- if or .Values.env $managementTokenSecret $databaseUrlSecret $postgresqlEnabled .Values.redis.external.addr $redisPasswordSecret }}
         env:
         {{- if .Values.env }}
         {{- range $key := keys .Values.env | sortAlpha }}
@@ -64,7 +66,17 @@ spec:
               name: {{ $managementTokenSecret }}
               key: {{ include "llm-proxy.managementTokenSecretKey" . }}
         {{- end }}
-        {{- if $databaseUrlSecret }}
+        {{- if $postgresqlEnabled }}
+        {{- /* Use in-cluster PostgreSQL */ -}}
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "llm-proxy.postgresql.secretName" . }}
+              key: {{ include "llm-proxy.postgresql.secretKey" . }}
+        - name: DATABASE_URL
+          value: {{ include "llm-proxy.postgresql.url" . | quote }}
+        {{- else if $databaseUrlSecret }}
+        {{- /* Use external PostgreSQL */ -}}
         - name: DATABASE_URL
           valueFrom:
             secretKeyRef:
