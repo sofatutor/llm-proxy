@@ -10,8 +10,12 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Added
 
+- **Helm validation check** ([#214](https://github.com/sofatutor/llm-proxy/pull/214)): Added a multi-platform script and CI job that run `helm lint` and `helm template` with minimal overrides so chart regressions fail fast in validation.
 - **Bootstrap Helm chart** ([#208](https://github.com/sofatutor/llm-proxy/pull/208)): Introduced a minimal Helm chart with a Deployment, Service, and health probes so the proxy can be deployed to Kubernetes, providing the foundational structure future enhancements will extend.
 
+### Changed
+
+- **Document Helm validation** ([#214](https://github.com/sofatutor/llm-proxy/pull/214)): Added a Helm chart README section that explains the new validation script and CI coverage so users understand how the chart is linted and rendered.
 
 ## December 15, 2025
 
