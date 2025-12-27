@@ -662,6 +662,160 @@ kubectl logs -l app.kubernetes.io/component=dispatcher --tail=50
 kubectl get svc
 ```
 
+## Example 7: Production Deployment with Ingress and Autoscaling
+
+This example demonstrates a production-ready deployment with external PostgreSQL, Ingress for external access, and Horizontal Pod Autoscaler for automatic scaling.
+
+### Prerequisites
+
+```bash
+# Ensure your cluster has:
+# - NGINX Ingress Controller (or another Ingress controller)
+# - cert-manager for TLS certificate management (optional but recommended)
+# - metrics-server for HPA to function
+
+# Verify metrics-server is running
+kubectl get deployment metrics-server -n kube-system
+
+# Verify Ingress controller is running
+kubectl get pods -n ingress-nginx
+```
+
+### Step 1: Create Secrets
+
+```bash
+# Create management token secret
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+
+# Create database secret for external PostgreSQL
+kubectl create secret generic llm-proxy-db \
+  --from-literal=DATABASE_URL="postgres://llmproxy:STRONG_DB_PASSWORD@postgres.example.com:5432/llmproxy?sslmode=require"
+```
+
+### Step 2: Deploy with Ingress and HPA
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set secrets.databaseUrl.existingSecret.name=llm-proxy-db \
+  --set env.DB_DRIVER=postgres \
+  --set ingress.enabled=true \
+  --set ingress.className=nginx \
+  --set 'ingress.annotations.cert-manager\.io/cluster-issuer=letsencrypt-prod' \
+  --set 'ingress.annotations.nginx\.ingress\.kubernetes\.io/ssl-redirect=true' \
+  --set ingress.hosts[0].host=api.example.com \
+  --set ingress.hosts[0].paths[0].path=/ \
+  --set ingress.hosts[0].paths[0].pathType=Prefix \
+  --set ingress.tls[0].secretName=llm-proxy-tls \
+  --set ingress.tls[0].hosts[0]=api.example.com \
+  --set autoscaling.enabled=true \
+  --set autoscaling.minReplicas=2 \
+  --set autoscaling.maxReplicas=20 \
+  --set autoscaling.targetCPUUtilizationPercentage=75 \
+  --set autoscaling.targetMemoryUtilizationPercentage=85
+```
+
+Or using a values file (recommended for production):
+
+```yaml
+# production-values.yaml
+image:
+  repository: your-registry/llm-proxy
+  tag: v1.0.0
+
+secrets:
+  managementToken:
+    existingSecret:
+      name: llm-proxy-secrets
+  databaseUrl:
+    existingSecret:
+      name: llm-proxy-db
+
+env:
+  DB_DRIVER: postgres
+  LOG_LEVEL: info
+  ENABLE_METRICS: "true"
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+  hosts:
+    - host: api.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: llm-proxy-tls
+      hosts:
+        - api.example.com
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 75
+  targetMemoryUtilizationPercentage: 85
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: 2000m
+    memory: 1Gi
+```
+
+Deploy with values file:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy -f production-values.yaml
+```
+
+### Step 3: Verify Deployment
+
+```bash
+# Check pod status (should see multiple replicas)
+kubectl get pods -l app.kubernetes.io/name=llm-proxy
+
+# Check HPA status
+kubectl get hpa
+kubectl describe hpa llm-proxy
+
+# Check Ingress status
+kubectl get ingress
+kubectl describe ingress llm-proxy
+
+# Check certificate status (if using cert-manager)
+kubectl get certificate
+kubectl describe certificate llm-proxy-tls
+
+# Test external access (after DNS is configured)
+curl https://api.example.com/live
+```
+
+### Step 4: Monitor Autoscaling
+
+```bash
+# Watch HPA in real-time
+kubectl get hpa -w
+
+# Check current metrics
+kubectl top pods -l app.kubernetes.io/name=llm-proxy
+
+# View HPA events
+kubectl describe hpa llm-proxy | grep -A 10 Events
+
+# Test scaling behavior by generating load
+# (Use your preferred load testing tool)
+```
+
 ## Uninstalling
 
 ```bash

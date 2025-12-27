@@ -248,6 +248,100 @@ helm install llm-proxy deploy/helm/llm-proxy \
 | `service.port` | Service port | `8080` |
 | `service.targetPort` | Container port | `8080` |
 
+### Ingress Configuration
+
+The chart supports optional Ingress resource for external access with TLS support.
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `ingress.enabled` | Enable Ingress resource | `false` |
+| `ingress.className` | Ingress class name (e.g., `nginx`, `traefik`) | `""` |
+| `ingress.annotations` | Annotations for Ingress resource | `{}` |
+| `ingress.hosts` | List of hosts and paths | See values.yaml |
+| `ingress.tls` | TLS configuration for Ingress | `[]` |
+
+Example with NGINX Ingress and cert-manager:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set ingress.enabled=true \
+  --set ingress.className=nginx \
+  --set 'ingress.annotations.cert-manager\.io/cluster-issuer=letsencrypt-prod' \
+  --set ingress.hosts[0].host=api.example.com \
+  --set ingress.hosts[0].paths[0].path=/ \
+  --set ingress.hosts[0].paths[0].pathType=Prefix \
+  --set ingress.tls[0].secretName=llm-proxy-tls \
+  --set ingress.tls[0].hosts[0]=api.example.com
+```
+
+Or via values.yaml:
+
+```yaml
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: api.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: llm-proxy-tls
+      hosts:
+        - api.example.com
+```
+
+### Autoscaling Configuration
+
+The chart supports Horizontal Pod Autoscaler (HPA) for automatic scaling based on CPU and memory metrics.
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `autoscaling.enabled` | Enable HPA | `false` |
+| `autoscaling.minReplicas` | Minimum number of replicas | `1` |
+| `autoscaling.maxReplicas` | Maximum number of replicas | `10` |
+| `autoscaling.targetCPUUtilizationPercentage` | Target CPU utilization percentage | `80` |
+| `autoscaling.targetMemoryUtilizationPercentage` | Target memory utilization percentage (optional) | unset |
+
+**Note:** When HPA is enabled, the `replicaCount` value is ignored as HPA manages the replica count.
+
+**Important:** For autoscaling to work properly:
+- Your cluster must have metrics-server installed
+- Resource requests must be properly configured (CPU/memory)
+- When using SQLite (`DB_DRIVER=sqlite`), autoscaling is not recommended as SQLite doesn't support concurrent writes from multiple replicas
+- For production autoscaling, use PostgreSQL (`DB_DRIVER=postgres`) with external or in-cluster database
+
+Example with CPU-based autoscaling:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set env.DB_DRIVER=postgres \
+  --set secrets.databaseUrl.existingSecret.name=llm-proxy-db \
+  --set autoscaling.enabled=true \
+  --set autoscaling.minReplicas=2 \
+  --set autoscaling.maxReplicas=20 \
+  --set autoscaling.targetCPUUtilizationPercentage=75
+```
+
+Or via values.yaml with both CPU and memory targets:
+
+```yaml
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 75
+  targetMemoryUtilizationPercentage: 85
+```
+
 ### Resource Limits
 
 | Parameter | Description | Default |

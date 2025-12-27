@@ -365,6 +365,229 @@ else
 fi
 echo ""
 
+# Test Ingress disabled (default)
+echo "Running helm template with Ingress disabled (default)..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag 2>&1); then
+    if echo "$TEMPLATE_OUTPUT" | grep -q 'kind: Ingress'; then
+        echo "✗ Ingress should not be created when disabled" >&2
+        exit 1
+    fi
+    echo "✓ helm template with Ingress disabled rendered successfully"
+else
+    echo "✗ helm template with Ingress disabled failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
+# Test Ingress enabled with basic configuration
+echo "Running helm template with Ingress enabled..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set ingress.enabled=true \
+    --set ingress.className=nginx \
+    --set ingress.hosts[0].host=example.com \
+    --set ingress.hosts[0].paths[0].path=/ \
+    --set ingress.hosts[0].paths[0].pathType=Prefix 2>&1); then
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'kind: Ingress'; then
+        echo "✗ Ingress should be created when enabled" >&2
+        exit 1
+    fi
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'ingressClassName: nginx'; then
+        echo "✗ Ingress should have correct className" >&2
+        exit 1
+    fi
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'host: "example.com"'; then
+        echo "✗ Ingress should have correct host" >&2
+        exit 1
+    fi
+    echo "✓ helm template with Ingress enabled rendered successfully"
+else
+    echo "✗ helm template with Ingress enabled failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
+# Test Ingress with TLS configuration
+echo "Running helm template with Ingress TLS..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set ingress.enabled=true \
+    --set ingress.hosts[0].host=example.com \
+    --set ingress.hosts[0].paths[0].path=/ \
+    --set ingress.tls[0].secretName=example-tls \
+    --set ingress.tls[0].hosts[0]=example.com 2>&1); then
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'secretName: example-tls'; then
+        echo "✗ Ingress should have TLS configuration" >&2
+        exit 1
+    fi
+    echo "✓ helm template with Ingress TLS rendered successfully"
+else
+    echo "✗ helm template with Ingress TLS failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
+# Test Ingress with annotations
+echo "Running helm template with Ingress annotations..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set ingress.enabled=true \
+    --set ingress.hosts[0].host=example.com \
+    --set ingress.hosts[0].paths[0].path=/ \
+    --set 'ingress.annotations.cert-manager\.io/cluster-issuer=letsencrypt-prod' 2>&1); then
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'cert-manager.io/cluster-issuer: letsencrypt-prod'; then
+        echo "✗ Ingress should have annotations" >&2
+        exit 1
+    fi
+    echo "✓ helm template with Ingress annotations rendered successfully"
+else
+    echo "✗ helm template with Ingress annotations failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
+# Test HPA disabled (default)
+echo "Running helm template with HPA disabled (default)..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag 2>&1); then
+    if echo "$TEMPLATE_OUTPUT" | grep -q 'kind: HorizontalPodAutoscaler'; then
+        echo "✗ HPA should not be created when disabled" >&2
+        exit 1
+    fi
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'replicas: 1'; then
+        echo "✗ Deployment should have replicas field when HPA is disabled" >&2
+        exit 1
+    fi
+    echo "✓ helm template with HPA disabled rendered successfully"
+else
+    echo "✗ helm template with HPA disabled failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
+# Test HPA enabled with CPU target
+echo "Running helm template with HPA enabled (CPU target)..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set autoscaling.enabled=true \
+    --set autoscaling.minReplicas=2 \
+    --set autoscaling.maxReplicas=20 \
+    --set autoscaling.targetCPUUtilizationPercentage=75 2>&1); then
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'kind: HorizontalPodAutoscaler'; then
+        echo "✗ HPA should be created when enabled" >&2
+        exit 1
+    fi
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'minReplicas: 2'; then
+        echo "✗ HPA should have correct minReplicas" >&2
+        exit 1
+    fi
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'maxReplicas: 20'; then
+        echo "✗ HPA should have correct maxReplicas" >&2
+        exit 1
+    fi
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'averageUtilization: 75'; then
+        echo "✗ HPA should have correct CPU target" >&2
+        exit 1
+    fi
+    # Check that Deployment spec doesn't have replicas field when HPA is enabled
+    # Extract only the Deployment resource and check for replicas field right after spec:
+    DEPLOYMENT_SPEC=$(echo "$TEMPLATE_OUTPUT" | awk '/^kind: Deployment$/,/^---$/ {print}' | awk '/^spec:$/,/^  selector:$/ {print}')
+    if echo "$DEPLOYMENT_SPEC" | grep -q '^\s*replicas:'; then
+        echo "✗ Deployment should not have replicas field when HPA is enabled" >&2
+        exit 1
+    fi
+    echo "✓ helm template with HPA (CPU target) rendered successfully"
+else
+    echo "✗ helm template with HPA (CPU target) failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
+# Test HPA enabled with both CPU and memory targets
+echo "Running helm template with HPA enabled (CPU + memory targets)..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set autoscaling.enabled=true \
+    --set autoscaling.targetCPUUtilizationPercentage=80 \
+    --set autoscaling.targetMemoryUtilizationPercentage=85 2>&1); then
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'kind: HorizontalPodAutoscaler'; then
+        echo "✗ HPA should be created when enabled" >&2
+        exit 1
+    fi
+    # Count metrics - should be 2 (CPU and memory)
+    METRICS_COUNT=$(echo "$TEMPLATE_OUTPUT" | grep -Ec 'name: (cpu|memory)' || true)
+    if [ "$METRICS_COUNT" -ne 2 ]; then
+        echo "✗ HPA should have both CPU and memory metrics (found: $METRICS_COUNT)" >&2
+        exit 1
+    fi
+    echo "✓ helm template with HPA (CPU + memory) rendered successfully"
+else
+    echo "✗ helm template with HPA (CPU + memory) failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
+# Test Ingress and HPA enabled together
+echo "Running helm template with both Ingress and HPA enabled..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set ingress.enabled=true \
+    --set ingress.hosts[0].host=example.com \
+    --set ingress.hosts[0].paths[0].path=/ \
+    --set autoscaling.enabled=true 2>&1); then
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'kind: Ingress'; then
+        echo "✗ Ingress should be created when enabled" >&2
+        exit 1
+    fi
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'kind: HorizontalPodAutoscaler'; then
+        echo "✗ HPA should be created when enabled" >&2
+        exit 1
+    fi
+    echo "✓ helm template with Ingress + HPA rendered successfully"
+else
+    echo "✗ helm template with Ingress + HPA failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
+# Test validation: HPA enabled without any target metrics (should fail)
+echo "Testing validation: HPA enabled without target metrics..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set autoscaling.enabled=true \
+    --set autoscaling.targetCPUUtilizationPercentage=null \
+    --set autoscaling.targetMemoryUtilizationPercentage=null 2>&1); then
+    echo "✗ Validation should have failed for HPA without metrics" >&2
+    exit 1
+else
+    if echo "$TEMPLATE_OUTPUT" | grep -q "no target metrics are configured"; then
+        echo "✓ Validation correctly rejected HPA without target metrics"
+    else
+        echo "✗ Unexpected error message" >&2
+        echo "$TEMPLATE_OUTPUT" >&2
+        exit 1
+    fi
+fi
+echo ""
+
 # Clean up mock chart if we created it
 if [ "$MOCK_CREATED" = true ]; then
     echo "Cleaning up mock postgresql subchart..."
