@@ -211,3 +211,66 @@ redis:
         name: ""
         # Key within the Secret that contains the Redis password
         key: "REDIS_PASSWORD"
+
+# Dispatcher configuration
+# The dispatcher is an optional separate workload that consumes events from the event bus
+# and forwards them to external observability platforms (Lunary, Helicone, or file storage)
+dispatcher:
+  # Enable optional dispatcher deployment
+  enabled: false
+  
+  # Number of dispatcher replicas
+  replicaCount: 1
+  
+  # Dispatcher backend service (file, lunary, helicone)
+  service: "file"
+  
+  # Service-specific endpoint
+  # - file: /app/data/events.jsonl (mounted via PV)
+  # - lunary: https://api.lunary.ai/v1/runs/ingest (default)
+  # - helicone: https://api.worker.helicone.ai/custom/v1/log (default)
+  endpoint: ""
+  
+  # API key configuration (for lunary/helicone)
+  apiKey:
+    # Direct value (not recommended for production)
+    value: ""
+    # Reference existing secret (recommended, follows PostgreSQL pattern)
+    existingSecret:
+      name: ""
+      key: "DISPATCHER_API_KEY"
+  
+  # Dispatcher tuning
+  config:
+    bufferSize: 1000
+    batchSize: 100
+  
+  # Persistence (for file backend)
+  persistence:
+    enabled: true  # auto-enabled when service=file
+    size: 10Gi
+    storageClass: ""
+  
+  # Pod security context (inherits from main deployment if not overridden)
+  podSecurityContext: {}
+  
+  # Container security context (inherits from main deployment if not overridden)
+  securityContext: {}
+  
+  # Resource limits for dispatcher
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  
+  # Node selector for dispatcher pods
+  nodeSelector: {}
+  
+  # Tolerations for dispatcher pods
+  tolerations: []
+  
+  # Affinity rules for dispatcher pods
+  affinity: {}
