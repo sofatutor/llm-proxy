@@ -399,7 +399,7 @@ The dispatcher supports three backend services:
 
 **File Backend** (default):
 - Writes events to a JSONL file
-- Auto-creates PersistentVolumeClaim when `dispatcher.service=file`
+- Creates PersistentVolumeClaim when `dispatcher.service=file` and `dispatcher.persistence.enabled=true` (enabled by default)
 - Default endpoint: `/app/data/events.jsonl`
 - No API key required
 

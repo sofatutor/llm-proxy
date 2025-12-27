@@ -291,7 +291,7 @@ if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
     echo "✗ Validation should have failed for in-memory event bus with dispatcher" >&2
     exit 1
 else
-    if echo "$TEMPLATE_OUTPUT" | grep -q "Dispatcher requires a durable event bus"; then
+    if echo "$TEMPLATE_OUTPUT" | grep -q "Dispatcher requires LLM_PROXY_EVENT_BUS to be 'redis' or 'redis-streams'"; then
         echo "✓ Validation correctly rejected in-memory event bus with dispatcher"
     else
         echo "✗ Unexpected error message" >&2
@@ -311,7 +311,7 @@ if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
     echo "✗ Validation should have failed for default in-memory event bus" >&2
     exit 1
 else
-    if echo "$TEMPLATE_OUTPUT" | grep -q "Dispatcher requires a durable event bus"; then
+    if echo "$TEMPLATE_OUTPUT" | grep -q "Dispatcher requires LLM_PROXY_EVENT_BUS to be 'redis' or 'redis-streams'"; then
         echo "✓ Validation correctly rejected default in-memory event bus"
     else
         echo "✗ Unexpected error message" >&2
@@ -355,7 +355,7 @@ if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
     echo "✗ Validation should have failed for missing API key" >&2
     exit 1
 else
-    if echo "$TEMPLATE_OUTPUT" | grep -q "requires an API key"; then
+    if echo "$TEMPLATE_OUTPUT" | grep -q "requires an API key via existingSecret"; then
         echo "✓ Validation correctly rejected missing API key"
     else
         echo "✗ Unexpected error message" >&2

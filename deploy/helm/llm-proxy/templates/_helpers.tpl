@@ -290,17 +290,14 @@ Validate dispatcher configuration
 {{- define "llm-proxy.validateDispatcherConfig" -}}
 {{- if .Values.dispatcher.enabled }}
   {{- $eventBus := .Values.env.LLM_PROXY_EVENT_BUS | default "in-memory" }}
-  {{- if eq $eventBus "in-memory" }}
-    {{- fail "Configuration error: Dispatcher requires a durable event bus. LLM_PROXY_EVENT_BUS='in-memory' but dispatcher.enabled=true. Set LLM_PROXY_EVENT_BUS to 'redis' or 'redis-streams' and configure redis.external.addr." }}
-  {{- end }}
   {{- if and (ne $eventBus "redis") (ne $eventBus "redis-streams") }}
-    {{- fail (printf "Configuration error: Dispatcher requires LLM_PROXY_EVENT_BUS to be 'redis' or 'redis-streams', but it is set to '%s'. Please set LLM_PROXY_EVENT_BUS to a supported durable event bus type." $eventBus) }}
+    {{- fail (printf "Configuration error: Dispatcher requires LLM_PROXY_EVENT_BUS to be 'redis' or 'redis-streams', but it is set to '%s'. Set LLM_PROXY_EVENT_BUS to a supported durable event bus type and configure redis.external.addr." $eventBus) }}
   {{- end }}
   {{- if and (or (eq $eventBus "redis") (eq $eventBus "redis-streams")) (not .Values.redis.external.addr) }}
     {{- fail (printf "Configuration error: Dispatcher is enabled with LLM_PROXY_EVENT_BUS='%s' but redis.external.addr is empty. Please set redis.external.addr to your Redis server address." $eventBus) }}
   {{- end }}
-  {{- if and (ne .Values.dispatcher.service "file") (not .Values.dispatcher.apiKey.value) (not .Values.dispatcher.apiKey.existingSecret.name) }}
-    {{- fail (printf "Configuration error: Dispatcher service '%s' requires an API key. Please set dispatcher.apiKey.value or dispatcher.apiKey.existingSecret.name" .Values.dispatcher.service) }}
+  {{- if and (ne .Values.dispatcher.service "file") (not .Values.dispatcher.apiKey.existingSecret.name) }}
+    {{- fail (printf "Configuration error: Dispatcher service '%s' requires an API key via existingSecret. Please set dispatcher.apiKey.existingSecret.name" .Values.dispatcher.service) }}
   {{- end }}
 {{- end }}
 {{- end }}

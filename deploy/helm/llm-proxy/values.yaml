@@ -232,10 +232,8 @@ dispatcher:
   endpoint: ""
   
   # API key configuration (for lunary/helicone)
+  # API keys must be provided via existingSecret for security
   apiKey:
-    # Direct value (not recommended for production)
-    value: ""
-    # Reference existing secret (recommended, follows PostgreSQL pattern)
     existingSecret:
       name: ""
       key: "DISPATCHER_API_KEY"
@@ -247,7 +245,7 @@ dispatcher:
   
   # Persistence (for file backend)
   persistence:
-    enabled: true  # auto-enabled when service=file
+    enabled: true  # enabled by default; set to false to disable PVC creation
     size: 10Gi
     storageClass: ""
   

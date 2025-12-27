@@ -66,11 +66,7 @@ spec:
               key: {{ include "llm-proxy.redisPasswordSecretKey" . }}
         {{- end }}
         {{- end }}
-        {{- if .Values.dispatcher.apiKey.value }}
-        # WARNING: Direct API key value is NOT recommended for production. Use existingSecret instead.
-        - name: LLM_PROXY_API_KEY
-          value: {{ .Values.dispatcher.apiKey.value | quote }}
-        {{- else if $dispatcherApiKeySecret }}
+        {{- if $dispatcherApiKeySecret }}
         - name: LLM_PROXY_API_KEY
           valueFrom:
             secretKeyRef:

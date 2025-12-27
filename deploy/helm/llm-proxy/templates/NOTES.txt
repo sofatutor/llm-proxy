@@ -57,7 +57,7 @@ Dispatcher Configuration:
   Service:     {{ .Values.dispatcher.service }}
   Endpoint:    {{ include "llm-proxy.dispatcher.endpoint" . }}
   Replicas:    {{ .Values.dispatcher.replicaCount }}
-  Event Bus:   {{ .Values.env.LLM_PROXY_EVENT_BUS | default "redis-streams" }}
+  Event Bus:   {{ .Values.env.LLM_PROXY_EVENT_BUS }}
   {{- if and (eq .Values.dispatcher.service "file") .Values.dispatcher.persistence.enabled }}
   Persistence: Enabled ({{ .Values.dispatcher.persistence.size }})
   {{- end }}
