@@ -452,7 +452,7 @@ func (s *Server) handleMetricsPrometheus(w http.ResponseWriter, r *http.Request)
 	uptimeSeconds := time.Since(s.metrics.StartTime).Seconds()
 	buf.WriteString("# HELP llm_proxy_uptime_seconds Time since the server started\n")
 	buf.WriteString("# TYPE llm_proxy_uptime_seconds gauge\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_uptime_seconds %.2f\n", uptimeSeconds))
+	buf.WriteString(fmt.Sprintf("llm_proxy_uptime_seconds %g\n", uptimeSeconds))
 
 	// Get proxy metrics or use zero values
 	var requestCount, errorCount, cacheHits, cacheMisses, cacheBypass, cacheStores int64

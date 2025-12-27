@@ -71,6 +71,10 @@ const (
 // Metrics returns a copy of the current proxy metrics.
 // Returns a value copy to ensure thread-safety when reading metrics.
 func (p *TransparentProxy) Metrics() ProxyMetrics {
+	// Defensive nil guard for p.metrics
+	if p.metrics == nil {
+		return ProxyMetrics{}
+	}
 	p.metrics.mu.Lock()
 	defer p.metrics.mu.Unlock()
 	// Return a copy to avoid race conditions when accessing fields

@@ -343,12 +343,14 @@ This will show sample responses with all headers, making it easy to verify cache
 
 ## Prometheus Metrics Endpoint
 
-The proxy provides an optional Prometheus-compatible metrics endpoint for monitoring and alerting. This endpoint complements the existing JSON metrics endpoint without replacing it.
+The proxy provides an additional Prometheus-compatible metrics endpoint for monitoring and alerting. This endpoint complements the existing JSON metrics endpoint without replacing it.
 
 ### Endpoints
 
 - **`/metrics`**: Provider-agnostic JSON metrics (default format)
 - **`/metrics/prometheus`**: Prometheus text exposition format
+
+Both endpoints are enabled when `ENABLE_METRICS=true` (default).
 
 Both endpoints are available when `ENABLE_METRICS=true` (default).
 
