@@ -102,11 +102,12 @@ env:
   DB_DRIVER: "sqlite"
   # Path to SQLite database file (used when DB_DRIVER=sqlite)
   DATABASE_PATH: "/app/data/llm-proxy.db"
-  # Event bus backend: redis-streams (default), redis, or in-memory
+  # Event bus backend: in-memory (default), redis-streams, or redis
+  # in-memory: Uses in-memory channel (single-process only, no Redis required)
   # redis-streams: Uses Redis Streams with consumer groups for durable, distributed delivery
   # redis: Uses Redis List-based event queue
-  # in-memory: Uses in-memory channel (single-process only)
-  LLM_PROXY_EVENT_BUS: "redis-streams"
+  # NOTE: When using redis or redis-streams, you must configure redis.external.addr below
+  LLM_PROXY_EVENT_BUS: "in-memory"
 
 # Secrets configuration
 # SECURITY: Never store secrets in values.yaml or version control
@@ -144,14 +145,15 @@ secrets:
 # Redis configuration
 # Used for event bus, optional HTTP cache, and optional distributed rate limiting
 redis:
-  # Enable in-cluster Redis (development/testing only)
-  # When false (default), you must configure external Redis below
+  # Enable in-cluster Redis (development/testing only, not currently implemented)
+  # When false, you can either configure external Redis below or use in-memory event bus (LLM_PROXY_EVENT_BUS=in-memory)
   enabled: false
   
   # External Redis configuration (recommended for production)
   external:
-    # Redis server address (required when using redis/redis-streams event bus)
+    # Redis server address used when LLM_PROXY_EVENT_BUS is set to redis or redis-streams
     # Format: host:port (e.g., "redis.example.com:6379")
+    # Leave empty when using in-memory event bus
     addr: ""
     # Redis database number (default: 0)
     db: 0

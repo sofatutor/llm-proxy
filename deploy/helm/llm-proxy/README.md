@@ -91,8 +91,14 @@ helm install llm-proxy deploy/helm/llm-proxy \
 **Note:** If your Redis instance requires authentication, create a secret with the password:
 
 ```bash
+# Create password file (more secure than command-line)
+echo -n "your-redis-password" > /tmp/redis-password.txt
+
 kubectl create secret generic redis-password \
-  --from-literal=REDIS_PASSWORD="your-redis-password"
+  --from-file=REDIS_PASSWORD=/tmp/redis-password.txt
+
+# Clean up the temporary file
+rm /tmp/redis-password.txt
 
 helm install llm-proxy deploy/helm/llm-proxy \
   --set image.repository=your-registry/llm-proxy \
@@ -160,7 +166,7 @@ env:
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `redis.enabled` | Enable in-cluster Redis (development only, not implemented) | `false` |
+| `redis.enabled` | Reserved for future use; currently has no effect and does not deploy Redis | `false` |
 | `redis.external.addr` | External Redis server address (e.g., `redis.example.com:6379`) | `""` |
 | `redis.external.db` | Redis database number | `0` |
 | `redis.external.password.existingSecret.name` | Name of existing Secret containing Redis password | `""` |

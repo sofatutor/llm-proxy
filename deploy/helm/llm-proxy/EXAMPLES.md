@@ -215,8 +215,11 @@ kubectl create secret generic llm-proxy-secrets \
   --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
 
 # Create Redis password secret (if your Redis requires authentication)
+# Use file-based approach to avoid exposing password in shell history
+echo -n "your-redis-password" > /tmp/redis-password.txt
 kubectl create secret generic redis-password \
-  --from-literal=REDIS_PASSWORD="your-redis-password"
+  --from-file=REDIS_PASSWORD=/tmp/redis-password.txt
+rm /tmp/redis-password.txt
 ```
 
 ### Step 2: Deploy with Redis Configuration
