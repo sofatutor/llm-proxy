@@ -529,7 +529,7 @@ if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
         exit 1
     fi
     # Count metrics - should be 2 (CPU and memory)
-    METRICS_COUNT=$(echo "$TEMPLATE_OUTPUT" | grep -c 'name: cpu\|name: memory' || true)
+    METRICS_COUNT=$(echo "$TEMPLATE_OUTPUT" | grep -Ec 'name: (cpu|memory)' || true)
     if [ "$METRICS_COUNT" -ne 2 ]; then
         echo "✗ HPA should have both CPU and memory metrics (found: $METRICS_COUNT)" >&2
         exit 1
