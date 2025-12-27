@@ -10,6 +10,7 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Added
 
+- **Prometheus metrics endpoint** ([#218](https://github.com/sofatutor/llm-proxy/pull/218)): Adds a `/metrics/prometheus` handler and route that exposes the proxy’s counters in Prometheus text exposition format while keeping the JSON `/metrics` endpoint intact, with new tests covering format output, key metrics, and resilience when initialization is missing.
 - **Secure Helm secrets** ([#215](https://github.com/sofatutor/llm-proxy/pull/215)): Added secure injection for MANAGEMENT_TOKEN and DATABASE_URL so production can reference existing Secrets while still supporting optional chart-managed values, external Postgres connections, and partial secret deployments without storing sensitive data in values.yaml.
 - **Helm validation workflow** ([#214](https://github.com/sofatutor/llm-proxy/pull/214)): Added a deterministic validation script plus CI job that lint-checks and renders the Helm chart with representative overrides so chart regressions fail fast during validation.
 - **Helm installer helper** ([#214](https://github.com/sofatutor/llm-proxy/pull/214)): Introduced a repo-local Helm install script that downloads releases, verifies SHA-256 checksums, and keeps CI compliant with the organization allowlist before running chart validation.
@@ -17,11 +18,13 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Changed
 
+- **Clarify metrics documentation** ([#218](https://github.com/sofatutor/llm-proxy/pull/218)): Documented the new Prometheus scraping example, explained that METRICS_PATH covers both JSON and Prometheus endpoints, updated wording to “additional,” and reaffirmed that the existing `/metrics` JSON behavior remains unchanged so operators can configure scraping reliably.
 - **Harden Helm deployment** ([#215](https://github.com/sofatutor/llm-proxy/pull/215)): Enforced deterministic env var ordering, added NOTES warnings for missing MANAGEMENT_TOKEN, tightened documentation and prerequisites, and rewrote the Helm secret tests to use --show-only rendering plus scoped validation for more reliable verification.
 - **Document Helm validation** ([#214](https://github.com/sofatutor/llm-proxy/pull/214)): Updated the Helm chart README to explain how to run the new validation script locally so contributors understand the linting and templating coverage provided by CI.
 
 ### Fixed
 
+- **Metrics stability improvements** ([#218](https://github.com/sofatutor/llm-proxy/pull/218)): Eliminated the data race in `Metrics()`, added nil guards, increased uptime precision to full floats, and made the Prometheus handler tests verify no panic on write failures so metrics stay accurate and reliable.
 - **Chart service annotations fix** ([#214](https://github.com/sofatutor/llm-proxy/pull/214)): Prevented emitting an empty Service annotations block to keep rendered templates clean and avoid confusing diffs.
 
 ## December 15, 2025
