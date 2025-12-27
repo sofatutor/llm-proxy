@@ -454,62 +454,42 @@ func (s *Server) handleMetricsPrometheus(w http.ResponseWriter, r *http.Request)
 	buf.WriteString("# TYPE llm_proxy_uptime_seconds gauge\n")
 	buf.WriteString(fmt.Sprintf("llm_proxy_uptime_seconds %.2f\n", uptimeSeconds))
 
-	// Proxy metrics (if available)
+	// Get proxy metrics or use zero values
+	var requestCount, errorCount, cacheHits, cacheMisses, cacheBypass, cacheStores int64
 	if s.proxy != nil {
 		pm := s.proxy.Metrics()
-
-		// Request count
-		buf.WriteString("# HELP llm_proxy_requests_total Total number of proxy requests\n")
-		buf.WriteString("# TYPE llm_proxy_requests_total counter\n")
-		buf.WriteString(fmt.Sprintf("llm_proxy_requests_total %d\n", pm.RequestCount))
-
-		// Error count
-		buf.WriteString("# HELP llm_proxy_errors_total Total number of proxy errors\n")
-		buf.WriteString("# TYPE llm_proxy_errors_total counter\n")
-		buf.WriteString(fmt.Sprintf("llm_proxy_errors_total %d\n", pm.ErrorCount))
-
-		// Cache metrics
-		buf.WriteString("# HELP llm_proxy_cache_hits_total Total number of cache hits\n")
-		buf.WriteString("# TYPE llm_proxy_cache_hits_total counter\n")
-		buf.WriteString(fmt.Sprintf("llm_proxy_cache_hits_total %d\n", pm.CacheHits))
-
-		buf.WriteString("# HELP llm_proxy_cache_misses_total Total number of cache misses\n")
-		buf.WriteString("# TYPE llm_proxy_cache_misses_total counter\n")
-		buf.WriteString(fmt.Sprintf("llm_proxy_cache_misses_total %d\n", pm.CacheMisses))
-
-		buf.WriteString("# HELP llm_proxy_cache_bypass_total Total number of cache bypasses\n")
-		buf.WriteString("# TYPE llm_proxy_cache_bypass_total counter\n")
-		buf.WriteString(fmt.Sprintf("llm_proxy_cache_bypass_total %d\n", pm.CacheBypass))
-
-		buf.WriteString("# HELP llm_proxy_cache_stores_total Total number of cache stores\n")
-		buf.WriteString("# TYPE llm_proxy_cache_stores_total counter\n")
-		buf.WriteString(fmt.Sprintf("llm_proxy_cache_stores_total %d\n", pm.CacheStores))
-	} else {
-		// When proxy is not initialized, expose zero values
-		buf.WriteString("# HELP llm_proxy_requests_total Total number of proxy requests\n")
-		buf.WriteString("# TYPE llm_proxy_requests_total counter\n")
-		buf.WriteString("llm_proxy_requests_total 0\n")
-
-		buf.WriteString("# HELP llm_proxy_errors_total Total number of proxy errors\n")
-		buf.WriteString("# TYPE llm_proxy_errors_total counter\n")
-		buf.WriteString("llm_proxy_errors_total 0\n")
-
-		buf.WriteString("# HELP llm_proxy_cache_hits_total Total number of cache hits\n")
-		buf.WriteString("# TYPE llm_proxy_cache_hits_total counter\n")
-		buf.WriteString("llm_proxy_cache_hits_total 0\n")
-
-		buf.WriteString("# HELP llm_proxy_cache_misses_total Total number of cache misses\n")
-		buf.WriteString("# TYPE llm_proxy_cache_misses_total counter\n")
-		buf.WriteString("llm_proxy_cache_misses_total 0\n")
-
-		buf.WriteString("# HELP llm_proxy_cache_bypass_total Total number of cache bypasses\n")
-		buf.WriteString("# TYPE llm_proxy_cache_bypass_total counter\n")
-		buf.WriteString("llm_proxy_cache_bypass_total 0\n")
-
-		buf.WriteString("# HELP llm_proxy_cache_stores_total Total number of cache stores\n")
-		buf.WriteString("# TYPE llm_proxy_cache_stores_total counter\n")
-		buf.WriteString("llm_proxy_cache_stores_total 0\n")
+		requestCount = pm.RequestCount
+		errorCount = pm.ErrorCount
+		cacheHits = pm.CacheHits
+		cacheMisses = pm.CacheMisses
+		cacheBypass = pm.CacheBypass
+		cacheStores = pm.CacheStores
 	}
+
+	// Write metrics in Prometheus format
+	buf.WriteString("# HELP llm_proxy_requests_total Total number of proxy requests\n")
+	buf.WriteString("# TYPE llm_proxy_requests_total counter\n")
+	buf.WriteString(fmt.Sprintf("llm_proxy_requests_total %d\n", requestCount))
+
+	buf.WriteString("# HELP llm_proxy_errors_total Total number of proxy errors\n")
+	buf.WriteString("# TYPE llm_proxy_errors_total counter\n")
+	buf.WriteString(fmt.Sprintf("llm_proxy_errors_total %d\n", errorCount))
+
+	buf.WriteString("# HELP llm_proxy_cache_hits_total Total number of cache hits\n")
+	buf.WriteString("# TYPE llm_proxy_cache_hits_total counter\n")
+	buf.WriteString(fmt.Sprintf("llm_proxy_cache_hits_total %d\n", cacheHits))
+
+	buf.WriteString("# HELP llm_proxy_cache_misses_total Total number of cache misses\n")
+	buf.WriteString("# TYPE llm_proxy_cache_misses_total counter\n")
+	buf.WriteString(fmt.Sprintf("llm_proxy_cache_misses_total %d\n", cacheMisses))
+
+	buf.WriteString("# HELP llm_proxy_cache_bypass_total Total number of cache bypasses\n")
+	buf.WriteString("# TYPE llm_proxy_cache_bypass_total counter\n")
+	buf.WriteString(fmt.Sprintf("llm_proxy_cache_bypass_total %d\n", cacheBypass))
+
+	buf.WriteString("# HELP llm_proxy_cache_stores_total Total number of cache stores\n")
+	buf.WriteString("# TYPE llm_proxy_cache_stores_total counter\n")
+	buf.WriteString(fmt.Sprintf("llm_proxy_cache_stores_total %d\n", cacheStores))
 
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	if _, err := w.Write([]byte(buf.String())); err != nil {
