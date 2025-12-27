@@ -93,3 +93,31 @@ Get the key within the secret for DATABASE_URL
 {{- .Values.secrets.databaseUrl.existingSecret.key | default "DATABASE_URL" }}
 {{- end }}
 {{- end }}
+
+{{/*
+Get the name of the secret containing REDIS_PASSWORD
+*/}}
+{{- define "llm-proxy.redisPasswordSecretName" -}}
+{{- if .Values.redis.external.password.existingSecret.name }}
+{{- .Values.redis.external.password.existingSecret.name }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get the key within the secret for REDIS_PASSWORD
+*/}}
+{{- define "llm-proxy.redisPasswordSecretKey" -}}
+{{- .Values.redis.external.password.existingSecret.key | default "REDIS_PASSWORD" }}
+{{- end }}
+
+{{/*
+Validate Redis configuration
+*/}}
+{{- define "llm-proxy.validateRedisConfig" -}}
+{{- $eventBus := .Values.env.LLM_PROXY_EVENT_BUS | default "" }}
+{{- if or (eq $eventBus "redis") (eq $eventBus "redis-streams") }}
+  {{- if not .Values.redis.external.addr }}
+    {{- fail (printf "Configuration error: LLM_PROXY_EVENT_BUS is set to '%s' but redis.external.addr is empty. Please set redis.external.addr to your Redis server address (e.g., 'redis.example.com:6379') or change LLM_PROXY_EVENT_BUS to 'in-memory' for single-instance deployments." $eventBus) }}
+  {{- end }}
+{{- end }}
+{{- end }}
