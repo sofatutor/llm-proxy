@@ -212,7 +212,7 @@ if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
     --set image.repository=test-repo \
     --set image.tag=test-tag \
     --set secrets.managementToken.existingSecret.name=test-secret 2>&1); then
-    if echo "$TEMPLATE_OUTPUT" | grep -q "kind: Deployment" && echo "$TEMPLATE_OUTPUT" | grep -q "llm-proxy-dispatcher"; then
+    if echo "$TEMPLATE_OUTPUT" | grep -q "name.*llm-proxy-dispatcher"; then
         echo "✗ Dispatcher resources should not be created when disabled" >&2
         exit 1
     fi

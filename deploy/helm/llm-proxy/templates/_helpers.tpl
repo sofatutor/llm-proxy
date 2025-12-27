@@ -281,8 +281,6 @@ Get dispatcher service endpoint with defaults
 {{- printf "https://api.lunary.ai/v1/runs/ingest" }}
 {{- else if eq .Values.dispatcher.service "helicone" }}
 {{- printf "https://api.worker.helicone.ai/custom/v1/log" }}
-{{- else }}
-{{- .Values.dispatcher.endpoint }}
 {{- end }}
 {{- end }}
 
