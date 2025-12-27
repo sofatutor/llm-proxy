@@ -110,7 +110,7 @@ kubectl get pvc
 - Default images are built with: `docker build --build-arg POSTGRES_SUPPORT=true`
 - Data persists via PersistentVolumeClaim (default 8Gi)
 
-## Example 10: Development Deployment with Chart-Managed Secret
+## Example 3: Development Deployment with Chart-Managed Secret
 
 **WARNING:** This approach stores secrets in Helm release history. Use only for development/testing.
 
@@ -126,7 +126,7 @@ helm install llm-proxy-simple deploy/helm/llm-proxy \
   --set-string secrets.data.managementToken="${MGMT_TOKEN}"
 ```
 
-## Example 10: Using External Secret Operator
+## Example 4: Using External Secret Operator
 
 If you're using [External Secrets Operator](https://external-secrets.io/):
 
@@ -169,7 +169,7 @@ helm install llm-proxy deploy/helm/llm-proxy \
   --set env.DB_DRIVER=postgres
 ```
 
-## Example 10: SQLite with Single Secret (Simple Install)
+## Example 5: SQLite with Single Secret (Simple Install)
 
 For single-instance deployments using SQLite:
 
@@ -186,7 +186,7 @@ helm install llm-proxy deploy/helm/llm-proxy \
   --set env.DB_DRIVER=sqlite
 ```
 
-## Example 10: Using Different Secret Keys
+## Example 6: Using Different Secret Keys
 
 If your existing secret uses different key names:
 
@@ -204,7 +204,7 @@ helm install llm-proxy deploy/helm/llm-proxy \
   --set env.DB_DRIVER=postgres
 ```
 
-## Example 10: Production Values File
+## Example 7: Production Values File
 
 Create a `production-values.yaml` file:
 
@@ -260,7 +260,7 @@ Deploy with the values file:
 helm install llm-proxy deploy/helm/llm-proxy -f production-values.yaml
 ```
 
-## Example 10: External Redis for Event Bus and Caching
+## Example 8: External Redis for Event Bus and Caching
 
 For production deployments using Redis for event bus and optional caching:
 
@@ -307,7 +307,7 @@ kubectl get deployment llm-proxy -o jsonpath='{.spec.template.spec.containers[0]
 kubectl get deployment llm-proxy -o yaml | grep -A 2 "REDIS"
 ```
 
-## Example 10: Multi-Instance Deployment with Redis
+## Example 9: Multi-Instance Deployment with Redis
 
 For scaling with multiple replicas (requires Redis for event bus):
 

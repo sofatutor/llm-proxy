@@ -182,6 +182,11 @@ postgresql:
       requests:
         memory: 128Mi
         cpu: 100m
+  
+  # SSL mode for PostgreSQL connections (require, verify-ca, verify-full, or disable)
+  # SECURITY: Use 'require' or stronger for production environments
+  # Only use 'disable' in trusted development environments
+  sslMode: "require"
 
 # Redis configuration
 # Used for event bus, optional HTTP cache, and optional distributed rate limiting

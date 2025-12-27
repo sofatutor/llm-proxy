@@ -48,32 +48,6 @@ IMPORTANT:
 ********************************************************************************
 {{- end }}
 
-{{- if and (eq $dbDriver "postgres") (not $postgresqlEnabled) (not (include "llm-proxy.databaseUrlSecretName" .)) }}
-********************************************************************************
-****                            WARNING                                     ****
-********************************************************************************
-
-DB_DRIVER is set to 'postgres' but no database configuration found!
-
-Please configure one of the following:
-
-1. External PostgreSQL (RECOMMENDED for production):
-   kubectl create secret generic llm-proxy-db \
-     --from-literal=DATABASE_URL="postgres://user:pass@host:5432/dbname?sslmode=require"
-   
-   helm upgrade {{ .Release.Name }} {{ .Chart.Name }} \
-     --set secrets.databaseUrl.existingSecret.name=llm-proxy-db
-
-2. In-cluster PostgreSQL (DEVELOPMENT/TESTING only):
-   helm upgrade {{ .Release.Name }} {{ .Chart.Name }} \
-     --set postgresql.enabled=true \
-     --set-string postgresql.auth.password="your-password"
-
-IMPORTANT: Ensure your Docker image is built with PostgreSQL support (postgres build tag)
-
-********************************************************************************
-{{- end }}
-
 1. Get the application URL by running these commands:
 {{- if contains "NodePort" .Values.service.type }}
   export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "llm-proxy.fullname" . }})

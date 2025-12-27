@@ -121,6 +121,10 @@ Get PostgreSQL hostname
 
 {{/*
 Get PostgreSQL port
+Returns the PostgreSQL service port from the Bitnami subchart configuration.
+Note: The Bitnami PostgreSQL chart sets postgresql.primary.service.ports.postgresql
+automatically when deployed. This value is not defined in llm-proxy's values.yaml
+but is inherited from the Bitnami subchart's defaults.
 */}}
 {{- define "llm-proxy.postgresql.port" -}}
 {{- if .Values.postgresql.enabled }}
@@ -181,7 +185,8 @@ Construct PostgreSQL connection URL for in-cluster PostgreSQL
 {{- $port := include "llm-proxy.postgresql.port" . }}
 {{- $database := include "llm-proxy.postgresql.database" . }}
 {{- $username := include "llm-proxy.postgresql.username" . }}
-{{- printf "postgres://%s:$(PGPASSWORD)@%s:%s/%s?sslmode=disable" $username $host $port $database }}
+{{- $sslMode := .Values.postgresql.sslMode | default "require" }}
+{{- printf "postgres://%s:$(PGPASSWORD)@%s:%s/%s?sslmode=%s" $username $host $port $database $sslMode }}
 {{- end }}
 {{- end }}
 
