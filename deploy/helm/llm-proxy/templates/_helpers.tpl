@@ -289,9 +289,12 @@ Validate dispatcher configuration
 */}}
 {{- define "llm-proxy.validateDispatcherConfig" -}}
 {{- if .Values.dispatcher.enabled }}
-  {{- $eventBus := .Values.env.LLM_PROXY_EVENT_BUS | default "" }}
-  {{- if eq $eventBus "in-memory" }}
+  {{- $eventBus := .Values.env.LLM_PROXY_EVENT_BUS | default "in-memory" }}
+  {{- if or (eq $eventBus "in-memory") (eq $eventBus "") }}
     {{- fail "Configuration error: Dispatcher requires a durable event bus. LLM_PROXY_EVENT_BUS is set to 'in-memory' but dispatcher.enabled=true. Please set LLM_PROXY_EVENT_BUS to 'redis' or 'redis-streams' and configure redis.external.addr when using the dispatcher." }}
+  {{- end }}
+  {{- if and (ne $eventBus "redis") (ne $eventBus "redis-streams") }}
+    {{- fail (printf "Configuration error: Dispatcher requires LLM_PROXY_EVENT_BUS to be 'redis' or 'redis-streams', but it is set to '%s'. Please set LLM_PROXY_EVENT_BUS to a supported durable event bus type." $eventBus) }}
   {{- end }}
   {{- if and (or (eq $eventBus "redis") (eq $eventBus "redis-streams")) (not .Values.redis.external.addr) }}
     {{- fail (printf "Configuration error: Dispatcher is enabled with LLM_PROXY_EVENT_BUS='%s' but redis.external.addr is empty. Please set redis.external.addr to your Redis server address." $eventBus) }}

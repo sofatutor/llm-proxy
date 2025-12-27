@@ -301,6 +301,47 @@ else
 fi
 echo ""
 
+# Test validation: dispatcher without event bus configured (defaults to in-memory, should fail)
+echo "Testing validation: dispatcher without event bus configured (defaults to in-memory)..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set dispatcher.enabled=true 2>&1); then
+    echo "✗ Validation should have failed for default in-memory event bus" >&2
+    exit 1
+else
+    if echo "$TEMPLATE_OUTPUT" | grep -q "Dispatcher requires a durable event bus"; then
+        echo "✓ Validation correctly rejected default in-memory event bus"
+    else
+        echo "✗ Unexpected error message" >&2
+        echo "$TEMPLATE_OUTPUT" >&2
+        exit 1
+    fi
+fi
+echo ""
+
+# Test validation: dispatcher with invalid event bus type (should fail)
+echo "Testing validation: dispatcher with invalid event bus type..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set dispatcher.enabled=true \
+    --set env.LLM_PROXY_EVENT_BUS="invalid-bus" 2>&1); then
+    echo "✗ Validation should have failed for invalid event bus type" >&2
+    exit 1
+else
+    if echo "$TEMPLATE_OUTPUT" | grep -q "Dispatcher requires LLM_PROXY_EVENT_BUS to be 'redis' or 'redis-streams'"; then
+        echo "✓ Validation correctly rejected invalid event bus type"
+    else
+        echo "✗ Unexpected error message" >&2
+        echo "$TEMPLATE_OUTPUT" >&2
+        exit 1
+    fi
+fi
+echo ""
+
 # Test validation: dispatcher without API key for non-file service (should fail)
 echo "Testing validation: dispatcher without API key for non-file service..."
 if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
