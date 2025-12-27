@@ -6,6 +6,13 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ---
 
+## December 27, 2025
+
+### Added
+
+- **Bootstrap Helm chart** ([#208](https://github.com/sofatutor/llm-proxy/pull/208)): Introduced a minimal Helm chart with a Deployment, Service, and health probes so the proxy can be deployed to Kubernetes, providing the foundational structure future enhancements will extend.
+
+
 ## December 15, 2025
 
 ### Added

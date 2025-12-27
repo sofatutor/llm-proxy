@@ -29,5 +29,5 @@ See the [AWS ECS Architecture Guide](aws-ecs-cdk.md) for details.
 ## Alternative Deployments
 
 - **Docker Compose** - Good for development and testing
-- **Kubernetes/Helm** - For existing K8s infrastructure (see [#49](https://github.com/sofatutor/llm-proxy/issues/49))
+- **Kubernetes/Helm** - For existing K8s infrastructure (chart available at `deploy/helm/llm-proxy`)
 
