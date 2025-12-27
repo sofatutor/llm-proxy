@@ -143,7 +143,7 @@ Important environment variables:
 
 - `env.DB_DRIVER`: Database driver (`sqlite` or `postgres`)
 - `env.LOG_LEVEL`: Logging level (`debug`, `info`, `warn`, `error`)
-- `env.ENABLE_METRICS`: Enable Prometheus metrics endpoint
+- `env.ENABLE_METRICS`: Enable metrics endpoint
 - `env.LLM_PROXY_EVENT_BUS`: Event bus backend (`in-memory`, `redis`, `redis-streams`)
 
 ## Examples

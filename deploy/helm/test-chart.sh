@@ -12,21 +12,21 @@ echo "=========================================="
 echo ""
 echo "Test 1: Helm Lint"
 echo "-------------------"
-helm lint ${CHART_PATH}
+helm lint "${CHART_PATH}"
 echo "✓ Lint passed"
 
 # Test 2: Template rendering with default values
 echo ""
 echo "Test 2: Default Values Rendering"
 echo "-------------------"
-helm template test-release ${CHART_PATH} > /dev/null
+helm template test-release "${CHART_PATH}" > /dev/null
 echo "✓ Default rendering succeeded"
 
 # Test 3: Template with existing secret (production pattern)
 echo ""
 echo "Test 3: Production Pattern - Existing Secret"
 echo "-------------------"
-OUTPUT=$(helm template test-release ${CHART_PATH} \
+OUTPUT=$(helm template test-release "${CHART_PATH}" \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
   --set secrets.managementToken.existingSecret.key=MANAGEMENT_TOKEN)
   
@@ -48,7 +48,7 @@ fi
 echo ""
 echo "Test 4: PostgreSQL Configuration"
 echo "-------------------"
-OUTPUT=$(helm template test-release ${CHART_PATH} \
+OUTPUT=$(helm template test-release "${CHART_PATH}" \
   --set secrets.managementToken.existingSecret.name=llm-secrets \
   --set env.DB_DRIVER=postgres \
   --set secrets.databaseUrl.existingSecret.name=db-secrets \
@@ -72,7 +72,7 @@ fi
 echo ""
 echo "Test 5: Development Pattern - Chart-Managed Secret"
 echo "-------------------"
-OUTPUT=$(helm template test-release ${CHART_PATH} \
+OUTPUT=$(helm template test-release "${CHART_PATH}" \
   --set secrets.create=true \
   --set secrets.data.managementToken=test-token)
 
@@ -94,7 +94,7 @@ fi
 echo ""
 echo "Test 6: Autoscaling Configuration"
 echo "-------------------"
-OUTPUT=$(helm template test-release ${CHART_PATH} \
+OUTPUT=$(helm template test-release "${CHART_PATH}" \
   --set autoscaling.enabled=true \
   --set autoscaling.minReplicas=2 \
   --set autoscaling.maxReplicas=10)
@@ -117,7 +117,7 @@ fi
 echo ""
 echo "Test 7: Ingress Configuration"
 echo "-------------------"
-OUTPUT=$(helm template test-release ${CHART_PATH} \
+OUTPUT=$(helm template test-release "${CHART_PATH}" \
   --set ingress.enabled=true \
   --set ingress.hosts[0].host=llm-proxy.example.com)
 
@@ -139,12 +139,12 @@ fi
 echo ""
 echo "Test 8: Example Values Files"
 echo "-------------------"
-helm template test-release ${CHART_PATH} \
-  -f ${CHART_PATH}/values-sqlite-example.yaml > /dev/null
+helm template test-release "${CHART_PATH}" \
+  -f "${CHART_PATH}/values-sqlite-example.yaml" > /dev/null
 echo "✓ SQLite example values render successfully"
 
-helm template test-release ${CHART_PATH} \
-  -f ${CHART_PATH}/values-postgres-example.yaml > /dev/null
+helm template test-release "${CHART_PATH}" \
+  -f "${CHART_PATH}/values-postgres-example.yaml" > /dev/null
 echo "✓ PostgreSQL example values render successfully"
 
 echo ""

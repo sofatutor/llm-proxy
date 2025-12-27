@@ -306,9 +306,9 @@ autoscaling:
 
 ## Monitoring and Observability
 
-### Prometheus Metrics
+### Metrics Endpoint
 
-The chart exposes Prometheus metrics by default:
+The chart exposes a metrics endpoint by default that can be scraped by Prometheus or other monitoring systems:
 
 ```yaml
 env:
@@ -316,7 +316,7 @@ env:
   METRICS_PATH: "/metrics"
 ```
 
-Scrape configuration:
+Example Prometheus scrape configuration using ServiceMonitor:
 
 ```yaml
 apiVersion: v1
