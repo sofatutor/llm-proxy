@@ -474,10 +474,10 @@ extraSecretEnvFrom:
 
 ## Further Reading
 
-- [Helm Chart README](../deploy/helm/llm-proxy/README.md) - Complete chart documentation
-- [Security Guide](../docs/security.md) - Security best practices
-- [Database Configuration](../docs/database/README.md) - Database setup and migration
-- [Configuration Reference](../docs/configuration.md) - All configuration options
+- [Helm Chart README](../../deploy/helm/llm-proxy/README.md) - Complete chart documentation
+- [Security Guide](../security.md) - Security best practices
+- [Database Configuration](../database/README.md) - Database setup and migration
+- [Configuration Reference](../configuration.md) - All configuration options
 
 ## Support
 
