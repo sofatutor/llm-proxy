@@ -49,3 +49,51 @@ Selector labels
 app.kubernetes.io/name: {{ include "llm-proxy.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
+
+{{/*
+Get the name of the secret containing MANAGEMENT_TOKEN
+*/}}
+{{- define "llm-proxy.managementTokenSecretName" -}}
+{{- if .Values.secrets.create }}
+{{- include "llm-proxy.fullname" . }}
+{{- else if .Values.secrets.managementToken.existingSecret.name }}
+{{- .Values.secrets.managementToken.existingSecret.name }}
+{{- else }}
+{{- printf "" }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get the key within the secret for MANAGEMENT_TOKEN
+*/}}
+{{- define "llm-proxy.managementTokenSecretKey" -}}
+{{- if .Values.secrets.create }}
+{{- printf "MANAGEMENT_TOKEN" }}
+{{- else }}
+{{- .Values.secrets.managementToken.existingSecret.key | default "MANAGEMENT_TOKEN" }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get the name of the secret containing DATABASE_URL
+*/}}
+{{- define "llm-proxy.databaseUrlSecretName" -}}
+{{- if .Values.secrets.create }}
+{{- include "llm-proxy.fullname" . }}
+{{- else if .Values.secrets.databaseUrl.existingSecret.name }}
+{{- .Values.secrets.databaseUrl.existingSecret.name }}
+{{- else }}
+{{- printf "" }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get the key within the secret for DATABASE_URL
+*/}}
+{{- define "llm-proxy.databaseUrlSecretKey" -}}
+{{- if .Values.secrets.create }}
+{{- printf "DATABASE_URL" }}
+{{- else }}
+{{- .Values.secrets.databaseUrl.existingSecret.key | default "DATABASE_URL" }}
+{{- end }}
+{{- end }}

@@ -9,13 +9,65 @@ This Helm chart deploys the LLM Proxy server to Kubernetes.
 
 ## Installation
 
-**Important:** The application requires a `MANAGEMENT_TOKEN` environment variable to be configured. This minimal chart does not yet include secret management. You must manually provide `MANAGEMENT_TOKEN` (for example, via a Kubernetes Secret and corresponding pod configuration) for the deployment to function correctly. Secret handling support will be added in issue #203.
+### Required: Secret Management
+
+The application requires a `MANAGEMENT_TOKEN` environment variable for admin operations. This chart supports two approaches:
+
+#### Option 1: Reference an Existing Secret (RECOMMENDED for production)
+
+Create a Kubernetes Secret separately:
+
+```bash
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="your-secure-random-token"
+```
+
+Then install the chart referencing this secret:
 
 ```bash
 helm install llm-proxy deploy/helm/llm-proxy \
   --set image.repository=your-registry/llm-proxy \
-  --set image.tag=v1.0.0
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets
 ```
+
+#### Option 2: Chart-Managed Secret (NOT recommended for production)
+
+For development/testing only, you can have the chart create the secret:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.create=true \
+  --set-string secrets.data.managementToken="your-token"
+```
+
+**WARNING:** This approach stores the secret in Helm release history. Use only for development.
+
+### Using External PostgreSQL
+
+To use an external PostgreSQL database instead of SQLite:
+
+1. Create a secret with your database connection string:
+
+```bash
+kubectl create secret generic llm-proxy-db \
+  --from-literal=DATABASE_URL="postgres://user:password@host:5432/dbname?sslmode=require"
+```
+
+2. Install the chart with PostgreSQL configuration:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set secrets.databaseUrl.existingSecret.name=llm-proxy-db \
+  --set env.DB_DRIVER=postgres
+```
+
+**Note:** When using PostgreSQL, the `DATABASE_PATH` environment variable is ignored.
 
 ## Configuration
 
@@ -53,6 +105,43 @@ env:
   LOG_LEVEL: "info"
   LOG_FORMAT: "json"
   ENABLE_METRICS: "true"
+  DB_DRIVER: "sqlite"  # or "postgres" for external PostgreSQL
+```
+
+### Secret Configuration
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `secrets.create` | Create a Secret managed by the chart (NOT recommended for production) | `false` |
+| `secrets.data.managementToken` | Management token value (only if `secrets.create=true`) | `""` |
+| `secrets.data.databaseUrl` | Database URL value (only if `secrets.create=true`) | `""` |
+| `secrets.managementToken.existingSecret.name` | Name of existing Secret containing MANAGEMENT_TOKEN | `""` |
+| `secrets.managementToken.existingSecret.key` | Key within the Secret for management token | `"MANAGEMENT_TOKEN"` |
+| `secrets.databaseUrl.existingSecret.name` | Name of existing Secret containing DATABASE_URL | `""` |
+| `secrets.databaseUrl.existingSecret.key` | Key within the Secret for database URL | `"DATABASE_URL"` |
+
+### Database Configuration
+
+The chart supports both SQLite (single-instance) and PostgreSQL (production) databases:
+
+#### SQLite (Default)
+
+```yaml
+env:
+  DB_DRIVER: "sqlite"
+  DATABASE_PATH: "/app/data/llm-proxy.db"
+```
+
+#### PostgreSQL (External)
+
+```yaml
+env:
+  DB_DRIVER: "postgres"
+secrets:
+  databaseUrl:
+    existingSecret:
+      name: "llm-proxy-db"
+      key: "DATABASE_URL"
 ```
 
 ## Health Checks
@@ -62,6 +151,42 @@ The chart configures health probes with dedicated endpoints:
 - **Readiness probe** (`/ready`): Checks if the application is ready to serve traffic
 
 Both probes can be customized via `livenessProbe` and `readinessProbe` in values.yaml.
+
+## Security Best Practices
+
+### Secret Management
+
+- **Never store secrets in `values.yaml` or version control**
+- Always use existing Kubernetes Secrets and reference them in the chart configuration
+- For production, use external secret management tools like:
+  - [External Secrets Operator](https://external-secrets.io/)
+  - [Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets)
+  - Cloud provider secret managers (AWS Secrets Manager, Azure Key Vault, GCP Secret Manager)
+
+### Generating Secure Tokens
+
+Generate a strong management token using:
+
+```bash
+# Using openssl (Linux/macOS)
+openssl rand -base64 32
+
+# Using /dev/urandom (Linux)
+head -c 32 /dev/urandom | base64
+```
+
+### PostgreSQL Connection Security
+
+When using external PostgreSQL:
+- Always use `sslmode=require` or `sslmode=verify-full` in the connection string
+- Use strong, unique passwords
+- Restrict database access to specific IP ranges or use private networking
+- Enable connection pooling with appropriate limits
+
+Example secure connection string:
+```
+postgres://username:password@postgres.example.com:5432/llmproxy?sslmode=verify-full
+```
 
 ## Validation
 
