@@ -98,10 +98,9 @@ env:
   LOG_FILE: ""
   ENABLE_METRICS: "true"
   METRICS_PATH: "/metrics"
-  # DB_DRIVER: Database driver to use. Options: sqlite, postgres (default: sqlite)
-  # Set to "postgres" when using external PostgreSQL with DATABASE_URL secret
+  # Database driver: sqlite (default) or postgres for external PostgreSQL
   DB_DRIVER: "sqlite"
-  # DATABASE_PATH: Path to SQLite database file (used when DB_DRIVER=sqlite)
+  # Path to SQLite database file (used when DB_DRIVER=sqlite)
   DATABASE_PATH: "/app/data/llm-proxy.db"
 
 # Secrets configuration
