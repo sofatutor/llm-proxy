@@ -1,11 +1,5 @@
 1. Get the application URL by running these commands:
-{{- if .Values.ingress.enabled }}
-{{- range $host := .Values.ingress.hosts }}
-  {{- range .paths }}
-  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
-  {{- end }}
-{{- end }}
-{{- else if contains "NodePort" .Values.service.type }}
+{{- if contains "NodePort" .Values.service.type }}
   export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "llm-proxy.fullname" . }})
   export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
   echo http://$NODE_IP:$NODE_PORT
@@ -21,40 +15,5 @@
   kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8080:$CONTAINER_PORT
 {{- end }}
 
-2. SECURITY NOTES:
-{{- if not (or .Values.secrets.create .Values.secrets.managementToken.existingSecret.name) }}
-   WARNING: MANAGEMENT_TOKEN is not configured!
-   The application requires MANAGEMENT_TOKEN to be set.
-   
-   For production, create a Secret externally and configure:
-   secrets.managementToken.existingSecret.name=<your-secret-name>
-   secrets.managementToken.existingSecret.key=<your-secret-key>
-   
-   For development/testing only, you can use:
-   secrets.create=true
-   secrets.data.managementToken=<your-token-value>
-{{- end }}
-
-{{- if eq .Values.env.DB_DRIVER "postgres" }}
-{{- if not (or .Values.secrets.create .Values.secrets.databaseUrl.existingSecret.name) }}
-   WARNING: DATABASE_URL is not configured!
-   PostgreSQL driver (DB_DRIVER=postgres) requires DATABASE_URL to be set.
-   
-   For production, create a Secret externally and configure:
-   secrets.databaseUrl.existingSecret.name=<your-secret-name>
-   secrets.databaseUrl.existingSecret.key=<your-secret-key>
-   
-   For development/testing only, you can use:
-   secrets.create=true
-   secrets.data.databaseUrl=<your-database-url>
-{{- end }}
-{{- end }}
-
-3. Health check endpoint:
+2. Health check endpoint:
    http://<service-url>/health
-
-4. Metrics endpoint (if enabled):
-   http://<service-url>{{ .Values.env.METRICS_PATH }}
-
-5. Admin UI (if enabled):
-   http://<service-url>{{ .Values.env.ADMIN_UI_PATH }}

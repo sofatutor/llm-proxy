@@ -14,17 +14,6 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-serviceAccount:
-  # Specifies whether a service account should be created
-  create: true
-  # Automatically mount a ServiceAccount's API credentials?
-  automount: true
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name: ""
-
 podAnnotations: {}
 podLabels: {}
 
@@ -46,22 +35,6 @@ service:
   port: 8080
   targetPort: 8080
   annotations: {}
-
-ingress:
-  enabled: false
-  className: ""
-  annotations: {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: llm-proxy.local
-      paths:
-        - path: /
-          pathType: Prefix
-  tls: []
-  #  - secretName: llm-proxy-tls
-  #    hosts:
-  #      - llm-proxy.local
 
 resources:
   limits:
@@ -88,13 +61,6 @@ readinessProbe:
   periodSeconds: 10
   timeoutSeconds: 5
   failureThreshold: 3
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
 
 # Additional volumes on the output Deployment definition.
 volumes:
@@ -124,133 +90,11 @@ tolerations: []
 
 affinity: {}
 
-# ===== Secrets Configuration =====
-# SECURITY: Never commit secret values to git!
-# This chart supports two approaches:
-# 1. (RECOMMENDED) Reference existing Kubernetes Secrets
-# 2. (OPTIONAL) Let the chart create a Secret (secrets.create=true)
-
-secrets:
-  # Set to true to have the chart create a Secret resource
-  # WARNING: Only use this for development/testing
-  # For production, create secrets externally and use existingSecret references
-  create: false
-  
-  # When secrets.create=true, these values are used to populate the Secret
-  # SECURITY: Do NOT commit actual secret values here!
-  data:
-    managementToken: ""
-    databaseUrl: ""
-  
-  # Reference to existing Secret for MANAGEMENT_TOKEN
-  # RECOMMENDED approach for production
-  managementToken:
-    existingSecret:
-      # Name of the Kubernetes Secret containing the management token
-      name: ""
-      # Key within the Secret that contains the management token value
-      key: "MANAGEMENT_TOKEN"
-  
-  # Reference to existing Secret for DATABASE_URL
-  # Required when using PostgreSQL (env.DB_DRIVER=postgres)
-  databaseUrl:
-    existingSecret:
-      # Name of the Kubernetes Secret containing the database URL
-      name: ""
-      # Key within the Secret that contains the database URL value
-      key: "DATABASE_URL"
-
-# ===== Application Configuration =====
+# Environment variables (non-sensitive)
 env:
-  # Server settings
   LISTEN_ADDR: ":8080"
-  
-  # Database driver: "sqlite" or "postgres"
-  DB_DRIVER: "sqlite"
-  
-  # SQLite database path (used when DB_DRIVER=sqlite)
-  DATABASE_PATH: "/app/data/llm-proxy.db"
-  
-  # Database connection pool settings
-  DATABASE_POOL_SIZE: "10"
-  DATABASE_MAX_IDLE_CONNS: "5"
-  DATABASE_CONN_MAX_LIFETIME: "1h"
-  
-  # Logging
   LOG_LEVEL: "info"
   LOG_FORMAT: "json"
-  LOG_FILE: ""  # Empty = stdout only (recommended for Kubernetes)
-  
-  # OpenAI API settings
-  OPENAI_API_URL: "https://api.openai.com"
-  REQUEST_TIMEOUT: "30s"
-  MAX_REQUEST_SIZE: "10MB"
-  ENABLE_STREAMING: "true"
-  
-  # Admin UI
-  ADMIN_UI_ENABLED: "true"
-  ADMIN_UI_PATH: "/admin"
-  
-  # CORS settings
-  CORS_ALLOWED_ORIGINS: "*"
-  CORS_ALLOWED_METHODS: "GET,POST,PUT,DELETE,OPTIONS"
-  CORS_ALLOWED_HEADERS: "Authorization,Content-Type"
-  CORS_MAX_AGE: "86400"
-  
-  # TLS/HTTPS
-  ENABLE_TLS: "false"
-  TLS_MIN_VERSION: "1.2"
-  
-  # Rate limiting
-  GLOBAL_RATE_LIMIT: "100"
-  IP_RATE_LIMIT: "30"
-  
-  # Security
-  MASK_API_KEYS: "true"
-  VALIDATE_API_KEY_FORMAT: "true"
-  DEFAULT_TOKEN_LIFETIME: "30d"
-  DEFAULT_TOKEN_REQUEST_LIMIT: "5000"
-  
-  # Performance
-  MAX_CONCURRENT_REQUESTS: "100"
-  WORKER_POOL_SIZE: "10"
-  
-  # Monitoring
+  LOG_FILE: ""
   ENABLE_METRICS: "true"
   METRICS_PATH: "/metrics"
-  
-  # Cleanup
-  TOKEN_CLEANUP_INTERVAL: "1h"
-  
-  # Observability
-  OBSERVABILITY_ENABLED: "true"
-  OBSERVABILITY_BUFFER_SIZE: "100"
-  
-  # Event bus backend: "redis", "redis-streams", or "in-memory"
-  LLM_PROXY_EVENT_BUS: "in-memory"
-  
-  # Redis settings (when using redis or redis-streams)
-  REDIS_ADDR: ""
-  REDIS_DB: "0"
-  REDIS_STREAM_KEY: "llm-proxy-events"
-  REDIS_CONSUMER_GROUP: "llm-proxy-dispatchers"
-  REDIS_STREAM_MAX_LEN: "10000"
-  REDIS_STREAM_BLOCK_TIME: "5s"
-  REDIS_STREAM_CLAIM_TIME: "30s"
-  REDIS_STREAM_BATCH_SIZE: "100"
-  
-  # HTTP Caching
-  HTTP_CACHE_ENABLED: "false"
-  HTTP_CACHE_BACKEND: "in-memory"
-  HTTP_CACHE_DEFAULT_TTL: "300"
-  CACHE_STATS_BUFFER_SIZE: "1000"
-
-# Additional environment variables from ConfigMap
-extraEnvFrom: []
-#  - configMapRef:
-#      name: my-extra-config
-
-# Additional environment variables from Secrets
-extraSecretEnvFrom: []
-#  - secretRef:
-#      name: my-extra-secrets

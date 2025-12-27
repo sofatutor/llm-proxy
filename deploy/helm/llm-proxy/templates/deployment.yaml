@@ -5,16 +5,13 @@ metadata:
   labels:
     {{- include "llm-proxy.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
-  {{- end }}
   selector:
     matchLabels:
       {{- include "llm-proxy.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
-        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -28,7 +25,6 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "llm-proxy.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -49,42 +45,20 @@ spec:
           {{- toYaml .Values.readinessProbe | nindent 12 }}
         resources:
           {{- toYaml .Values.resources | nindent 12 }}
+        {{- if .Values.env }}
         env:
-        # MANAGEMENT_TOKEN - Required secret
-        {{- if or .Values.secrets.create .Values.secrets.managementToken.existingSecret.name }}
-        - name: MANAGEMENT_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: {{ include "llm-proxy.managementTokenSecretName" . }}
-              key: {{ include "llm-proxy.managementTokenSecretKey" . }}
+        {{- range $key, $value := .Values.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
         {{- end }}
-        # DATABASE_URL - Required when DB_DRIVER=postgres
-        {{- if eq .Values.env.DB_DRIVER "postgres" }}
-        {{- if or .Values.secrets.create .Values.secrets.databaseUrl.existingSecret.name }}
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: {{ include "llm-proxy.databaseUrlSecretName" . }}
-              key: {{ include "llm-proxy.databaseUrlSecretKey" . }}
-        {{- end }}
-        {{- end }}
-        envFrom:
-        # Load environment variables from ConfigMap
-        - configMapRef:
-            name: {{ include "llm-proxy.fullname" . }}
-        {{- with .Values.extraEnvFrom }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-        {{- with .Values.extraSecretEnvFrom }}
-        {{- toYaml . | nindent 8 }}
         {{- end }}
         {{- if .Values.volumeMounts }}
         volumeMounts:
           {{- toYaml .Values.volumeMounts | nindent 10 }}
         {{- end }}
-      volumes:
       {{- with .Values.volumes }}
-      {{- toYaml . | nindent 6 }}
+      volumes:
+        {{- toYaml . | nindent 6 }}
       {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
