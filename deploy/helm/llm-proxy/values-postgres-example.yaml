@@ -1,0 +1,83 @@
+# Example: Production deployment with PostgreSQL (multi-instance with autoscaling)
+# Use this for scalable, multi-replica deployments
+
+replicaCount: 3
+
+image:
+  repository: llm-proxy  # Change to your registry
+  tag: "latest"         # Change to specific version
+  pullPolicy: IfNotPresent
+
+# SECURITY: Reference existing Kubernetes Secret (create it first)
+# kubectl create secret generic llm-proxy-secrets \
+#   --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)" \
+#   --from-literal=DATABASE_URL="postgres://user:password@postgres-host:5432/llmproxy?sslmode=require"
+secrets:
+  managementToken:
+    existingSecret:
+      name: llm-proxy-secrets
+      key: MANAGEMENT_TOKEN
+  databaseUrl:
+    existingSecret:
+      name: llm-proxy-secrets
+      key: DATABASE_URL
+
+env:
+  # Database configuration
+  DB_DRIVER: "postgres"
+  DATABASE_POOL_SIZE: "20"
+  DATABASE_MAX_IDLE_CONNS: "10"
+  DATABASE_CONN_MAX_LIFETIME: "1h"
+  
+  # Event bus configuration for multi-instance
+  LLM_PROXY_EVENT_BUS: "redis-streams"
+  REDIS_ADDR: "redis:6379"
+  REDIS_STREAM_KEY: "llm-proxy-events"
+  REDIS_CONSUMER_GROUP: "llm-proxy-dispatchers"
+  
+  # Logging
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  LOG_FILE: ""  # Log to stdout for Kubernetes
+  
+  # Metrics
+  ENABLE_METRICS: "true"
+  METRICS_PATH: "/metrics"
+  
+  # Performance
+  MAX_CONCURRENT_REQUESTS: "200"
+  WORKER_POOL_SIZE: "20"
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# No persistent storage needed with PostgreSQL
+volumes:
+  - name: tmp
+    emptyDir: {}
+  - name: data
+    emptyDir: {}
+  - name: logs
+    emptyDir: {}
+  - name: config
+    emptyDir: {}
+
+# Optional: Service annotations for cloud load balancers
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+    # service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    # service.beta.kubernetes.io/aws-load-balancer-internal: "true"

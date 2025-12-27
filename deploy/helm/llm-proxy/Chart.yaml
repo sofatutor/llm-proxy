@@ -1,0 +1,24 @@
+apiVersion: v2
+name: llm-proxy
+description: A Helm chart for LLM Proxy - Transparent OpenAI-compatible reverse proxy
+type: application
+
+# Chart version - increment this for each chart release
+version: 0.1.0
+
+# Application version - should match the Docker image tag
+appVersion: "latest"
+
+keywords:
+  - llm
+  - proxy
+  - openai
+  - api
+
+home: https://github.com/sofatutor/llm-proxy
+sources:
+  - https://github.com/sofatutor/llm-proxy
+
+maintainers:
+  - name: sofatutor
+    url: https://github.com/sofatutor
