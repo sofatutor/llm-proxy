@@ -10,6 +10,7 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Added
 
+- **Ingress and HPA Helm Support** ([#221](https://github.com/sofatutor/llm-proxy/pull/221)): Added optional Ingress and HorizontalPodAutoscaler templates with TLS, annotations, and autoscaling metrics validation plus README/EXAMPLES docs so production deployments can opt into standard routing and scaling without introducing cloud-specific dependencies.
 - **PostgreSQL Helm Config** ([#219](https://github.com/sofatutor/llm-proxy/pull/219)): Added optional in-cluster and external PostgreSQL configuration to the Helm chart with configurable SSL mode so deployments can choose managed Postgres securely while reusing Bitnami helpers.
 - **Prometheus metrics endpoint** ([#218](https://github.com/sofatutor/llm-proxy/pull/218)): Adds a `/metrics/prometheus` handler and route that exposes the proxy’s counters in Prometheus text exposition format while keeping the JSON `/metrics` endpoint intact, with new tests covering format output, key metrics, and resilience when initialization is missing.
 - **External Redis Helm Support** ([#217](https://github.com/sofatutor/llm-proxy/pull/217)): Added support for configuring external Redis backends for the event bus, HTTP cache, and distributed rate limiting with validation, environment injections, and secret safeguards so the chart can safely switch between managed Redis and in-memory defaults while doc samples explain secure setup.
