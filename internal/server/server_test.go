@@ -163,6 +163,128 @@ func TestMetricsEndpoint_NoProxy(t *testing.T) {
 	}
 }
 
+func TestMetricsPrometheusEndpoint(t *testing.T) {
+	cfg := &config.Config{
+		ListenAddr:      ":8080",
+		RequestTimeout:  30 * time.Second,
+		EnableMetrics:   true,
+		MetricsPath:     "/metrics",
+		EventBusBackend: "in-memory",
+	}
+	server, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	p := &proxy.TransparentProxy{}
+	p.SetMetrics(&proxy.ProxyMetrics{
+		RequestCount: 42,
+		ErrorCount:   7,
+		CacheHits:    10,
+		CacheMisses:  20,
+		CacheBypass:  5,
+		CacheStores:  15,
+	})
+	server.proxy = p
+
+	req := httptest.NewRequest("GET", "/metrics/prometheus", nil)
+	rr := httptest.NewRecorder()
+	server.handleMetricsPrometheus(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "text/plain; version=0.0.4; charset=utf-8", rr.Header().Get("Content-Type"))
+
+	body := rr.Body.String()
+
+	// Verify key metrics are present in Prometheus format
+	assert.Contains(t, body, "# HELP llm_proxy_uptime_seconds")
+	assert.Contains(t, body, "# TYPE llm_proxy_uptime_seconds gauge")
+	assert.Contains(t, body, "llm_proxy_uptime_seconds")
+
+	assert.Contains(t, body, "# HELP llm_proxy_requests_total")
+	assert.Contains(t, body, "# TYPE llm_proxy_requests_total counter")
+	assert.Contains(t, body, "llm_proxy_requests_total 42")
+
+	assert.Contains(t, body, "# HELP llm_proxy_errors_total")
+	assert.Contains(t, body, "# TYPE llm_proxy_errors_total counter")
+	assert.Contains(t, body, "llm_proxy_errors_total 7")
+
+	assert.Contains(t, body, "# HELP llm_proxy_cache_hits_total")
+	assert.Contains(t, body, "# TYPE llm_proxy_cache_hits_total counter")
+	assert.Contains(t, body, "llm_proxy_cache_hits_total 10")
+
+	assert.Contains(t, body, "# HELP llm_proxy_cache_misses_total")
+	assert.Contains(t, body, "# TYPE llm_proxy_cache_misses_total counter")
+	assert.Contains(t, body, "llm_proxy_cache_misses_total 20")
+
+	assert.Contains(t, body, "# HELP llm_proxy_cache_bypass_total")
+	assert.Contains(t, body, "# TYPE llm_proxy_cache_bypass_total counter")
+	assert.Contains(t, body, "llm_proxy_cache_bypass_total 5")
+
+	assert.Contains(t, body, "# HELP llm_proxy_cache_stores_total")
+	assert.Contains(t, body, "# TYPE llm_proxy_cache_stores_total counter")
+	assert.Contains(t, body, "llm_proxy_cache_stores_total 15")
+}
+
+func TestMetricsPrometheusEndpoint_NoProxy(t *testing.T) {
+	cfg := &config.Config{
+		ListenAddr:      ":8080",
+		RequestTimeout:  30 * time.Second,
+		EnableMetrics:   true,
+		MetricsPath:     "/metrics",
+		EventBusBackend: "in-memory",
+	}
+	server, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+	server.proxy = nil
+
+	req := httptest.NewRequest("GET", "/metrics/prometheus", nil)
+	rr := httptest.NewRecorder()
+	server.handleMetricsPrometheus(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	assert.Equal(t, "text/plain; version=0.0.4; charset=utf-8", rr.Header().Get("Content-Type"))
+
+	body := rr.Body.String()
+
+	// Verify all metrics are present with zero values when proxy is not initialized
+	assert.Contains(t, body, "llm_proxy_requests_total 0")
+	assert.Contains(t, body, "llm_proxy_errors_total 0")
+	assert.Contains(t, body, "llm_proxy_cache_hits_total 0")
+	assert.Contains(t, body, "llm_proxy_cache_misses_total 0")
+	assert.Contains(t, body, "llm_proxy_cache_bypass_total 0")
+	assert.Contains(t, body, "llm_proxy_cache_stores_total 0")
+}
+
+func TestHandleMetricsPrometheus_WriteError(t *testing.T) {
+	cfg := &config.Config{
+		ListenAddr:      ":8080",
+		RequestTimeout:  30 * time.Second,
+		EnableMetrics:   true,
+		MetricsPath:     "/metrics",
+		EventBusBackend: "in-memory",
+	}
+	srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+	require.NoError(t, err)
+
+	// Ensure some proxy metrics to exercise data path
+	p := &proxy.TransparentProxy{}
+	p.SetMetrics(&proxy.ProxyMetrics{
+		RequestCount: 10,
+		ErrorCount:   2,
+	})
+	srv.proxy = p
+
+	r := httptest.NewRequest(http.MethodGet, "/metrics/prometheus", nil)
+	rr := httptest.NewRecorder()
+	failing := &mockFailingResponseWriter{ResponseWriter: rr, failOnFirstWrite: true}
+
+	// The handler should not panic when write fails, it only logs the error
+	assert.NotPanics(t, func() {
+		srv.handleMetricsPrometheus(failing, r)
+	})
+
+	// Verify the write was attempted (mock received the call)
+	// The handler doesn't set a status code on write failure, it just logs
+}
+
 func TestServerLifecycle(t *testing.T) {
 	// Use httptest.NewServer to start the server with the health handler
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

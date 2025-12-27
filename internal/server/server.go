@@ -197,6 +197,7 @@ func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectSto
 			path = "/metrics"
 		}
 		mux.HandleFunc(path, s.logRequestMiddleware(s.handleMetrics))
+		mux.HandleFunc(path+"/prometheus", s.logRequestMiddleware(s.handleMetricsPrometheus))
 	}
 
 	return s, nil
@@ -440,6 +441,59 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(m); err != nil {
 		s.logger.Error("Failed to encode metrics", zap.Error(err))
 		http.Error(w, "Failed to encode metrics", http.StatusInternalServerError)
+	}
+}
+
+// handleMetricsPrometheus returns metrics in Prometheus text exposition format.
+func (s *Server) handleMetricsPrometheus(w http.ResponseWriter, r *http.Request) {
+	var buf strings.Builder
+
+	// Uptime gauge
+	uptimeSeconds := time.Since(s.metrics.StartTime).Seconds()
+	buf.WriteString("# HELP llm_proxy_uptime_seconds Time since the server started\n")
+	buf.WriteString("# TYPE llm_proxy_uptime_seconds gauge\n")
+	buf.WriteString(fmt.Sprintf("llm_proxy_uptime_seconds %g\n", uptimeSeconds))
+
+	// Get proxy metrics or use zero values
+	var requestCount, errorCount, cacheHits, cacheMisses, cacheBypass, cacheStores int64
+	if s.proxy != nil {
+		pm := s.proxy.Metrics()
+		requestCount = pm.RequestCount
+		errorCount = pm.ErrorCount
+		cacheHits = pm.CacheHits
+		cacheMisses = pm.CacheMisses
+		cacheBypass = pm.CacheBypass
+		cacheStores = pm.CacheStores
+	}
+
+	// Write metrics in Prometheus format
+	buf.WriteString("# HELP llm_proxy_requests_total Total number of proxy requests\n")
+	buf.WriteString("# TYPE llm_proxy_requests_total counter\n")
+	buf.WriteString(fmt.Sprintf("llm_proxy_requests_total %d\n", requestCount))
+
+	buf.WriteString("# HELP llm_proxy_errors_total Total number of proxy errors\n")
+	buf.WriteString("# TYPE llm_proxy_errors_total counter\n")
+	buf.WriteString(fmt.Sprintf("llm_proxy_errors_total %d\n", errorCount))
+
+	buf.WriteString("# HELP llm_proxy_cache_hits_total Total number of cache hits\n")
+	buf.WriteString("# TYPE llm_proxy_cache_hits_total counter\n")
+	buf.WriteString(fmt.Sprintf("llm_proxy_cache_hits_total %d\n", cacheHits))
+
+	buf.WriteString("# HELP llm_proxy_cache_misses_total Total number of cache misses\n")
+	buf.WriteString("# TYPE llm_proxy_cache_misses_total counter\n")
+	buf.WriteString(fmt.Sprintf("llm_proxy_cache_misses_total %d\n", cacheMisses))
+
+	buf.WriteString("# HELP llm_proxy_cache_bypass_total Total number of cache bypasses\n")
+	buf.WriteString("# TYPE llm_proxy_cache_bypass_total counter\n")
+	buf.WriteString(fmt.Sprintf("llm_proxy_cache_bypass_total %d\n", cacheBypass))
+
+	buf.WriteString("# HELP llm_proxy_cache_stores_total Total number of cache stores\n")
+	buf.WriteString("# TYPE llm_proxy_cache_stores_total counter\n")
+	buf.WriteString(fmt.Sprintf("llm_proxy_cache_stores_total %d\n", cacheStores))
+
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	if _, err := w.Write([]byte(buf.String())); err != nil {
+		s.logger.Error("Failed to write Prometheus metrics", zap.Error(err))
 	}
 }
 
