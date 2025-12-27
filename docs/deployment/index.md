@@ -30,5 +30,4 @@ See the [AWS ECS Architecture Guide](aws-ecs-cdk.md) for details.
 
 - **Docker Compose** - Good for development and testing
 - **Kubernetes/Helm** - For existing K8s infrastructure (chart available at `deploy/helm/llm-proxy`)
-- **AWS ECS** - Recommended for production AWS deployments (see [AWS ECS Architecture](aws-ecs-cdk.md))
 
