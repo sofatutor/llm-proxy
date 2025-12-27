@@ -23,7 +23,7 @@ kubectl create secret generic llm-proxy-secrets \
 
 # Create database secret for PostgreSQL
 kubectl create secret generic llm-proxy-db \
-  --from-literal=DATABASE_URL="postgres://llmproxy:SecurePassword123@postgres.example.com:5432/llmproxy?sslmode=require"
+  --from-literal=DATABASE_URL="postgres://llmproxy:STRONG_DB_PASSWORD_HERE@postgres.example.com:5432/llmproxy?sslmode=require"
 ```
 
 ### Step 2: Deploy with Helm
