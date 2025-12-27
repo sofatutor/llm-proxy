@@ -11,6 +11,7 @@ Production deployment guides for LLM Proxy.
 ## What's in this section
 
 - **[AWS ECS Architecture](aws-ecs-cdk.md)** - Production deployment on AWS ECS with CDK
+- **[Kubernetes with Helm](kubernetes-helm.md)** - Production deployment on Kubernetes using Helm charts
 - **[Performance Tuning](performance.md)** - Optimization and performance best practices
 - **[Security Best Practices](security.md)** - Production security guidelines
 
@@ -29,5 +30,6 @@ See the [AWS ECS Architecture Guide](aws-ecs-cdk.md) for details.
 ## Alternative Deployments
 
 - **Docker Compose** - Good for development and testing
-- **Kubernetes/Helm** - For existing K8s infrastructure (see [#49](https://github.com/sofatutor/llm-proxy/issues/49))
+- **Kubernetes/Helm** - For existing K8s infrastructure (see [Kubernetes Deployment Guide](kubernetes-helm.md))
+- **AWS ECS** - Recommended for production AWS deployments (see [AWS ECS Architecture](aws-ecs-cdk.md))
 
