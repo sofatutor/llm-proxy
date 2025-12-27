@@ -10,6 +10,9 @@ helm version
 
 # Ensure kubectl is configured
 kubectl cluster-info
+
+# Optional: jq for JSON parsing in troubleshooting commands
+jq --version
 ```
 
 ## Example 1: Production Deployment with Existing Secrets (Recommended)
@@ -219,14 +222,14 @@ helm upgrade llm-proxy deploy/helm/llm-proxy -f production-values.yaml
 ### Check if secrets are properly referenced
 
 ```bash
-# Verify deployment environment variables
+# Verify deployment environment variables (structure only, no values)
 kubectl get deployment llm-proxy -o jsonpath='{.spec.template.spec.containers[0].env}' | jq
 
 # Check if secret exists
 kubectl get secret llm-proxy-secrets -o yaml
 
-# Verify pod can read the secret
-kubectl exec -it deployment/llm-proxy -- env | grep MANAGEMENT_TOKEN
+# Verify pod environment configuration (shows secretKeyRef, not actual values)
+kubectl get deployment llm-proxy -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="MANAGEMENT_TOKEN")]}' | jq
 ```
 
 ### Validate secret before deployment

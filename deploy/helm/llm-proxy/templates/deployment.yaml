@@ -50,9 +50,9 @@ spec:
         {{- if or .Values.env $managementTokenSecret $databaseUrlSecret }}
         env:
         {{- if .Values.env }}
-        {{- range $key, $value := .Values.env }}
+        {{- range $key := keys .Values.env | sortAlpha }}
         - name: {{ $key }}
-          value: {{ $value | quote }}
+          value: {{ index $.Values.env $key | quote }}
         {{- end }}
         {{- end }}
         {{- if $managementTokenSecret }}

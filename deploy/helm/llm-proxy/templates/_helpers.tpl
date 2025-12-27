@@ -58,8 +58,6 @@ Get the name of the secret containing MANAGEMENT_TOKEN
 {{- include "llm-proxy.fullname" . }}
 {{- else if .Values.secrets.managementToken.existingSecret.name }}
 {{- .Values.secrets.managementToken.existingSecret.name }}
-{{- else }}
-{{- printf "" }}
 {{- end }}
 {{- end }}
 
@@ -82,8 +80,6 @@ Get the name of the secret containing DATABASE_URL
 {{- include "llm-proxy.fullname" . }}
 {{- else if .Values.secrets.databaseUrl.existingSecret.name }}
 {{- .Values.secrets.databaseUrl.existingSecret.name }}
-{{- else }}
-{{- printf "" }}
 {{- end }}
 {{- end }}
 
