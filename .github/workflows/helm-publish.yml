@@ -6,7 +6,6 @@ on:
       - 'v*'
     branches:
       - 'main'
-      - 'copilot/publish-helm-chart-to-ghcr'
   pull_request:
     paths:
       - 'deploy/helm/**'
@@ -22,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install Helm
         run: |
@@ -36,14 +35,10 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/v}"
           elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
-            # Use semver-compatible version for main branch with build metadata
-            # Format: 0.0.0-main+<short-sha>
+            # Use semver-compatible version for main branch without '+' to avoid OCI issues
+            # Format: 0.0.0-main-<short-sha>
             SHORT_SHA=$(git rev-parse --short HEAD)
-            VERSION="0.0.0-main+${SHORT_SHA}"
-          elif [[ "$GITHUB_REF" == "refs/heads/copilot/publish-helm-chart-to-ghcr" ]]; then
-            # Use simple semver version for this feature branch (no build metadata to avoid OCI + sign issue)
-            # Format: 0.0.0-pr
-            VERSION="0.0.0-pr"
+            VERSION="0.0.0-main-${SHORT_SHA}"
           else
             # Use test version for other PR/branch testing
             VERSION="0.0.0-test"
@@ -54,8 +49,8 @@ jobs:
       - name: Update Chart.yaml with version
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          sed -i "s/^version:.*/version: $VERSION/" deploy/helm/llm-proxy/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" deploy/helm/llm-proxy/Chart.yaml
+          sed -i "s|^version:.*|version: $VERSION|" deploy/helm/llm-proxy/Chart.yaml
+          sed -i "s|^appVersion:.*|appVersion: \"$VERSION\"|" deploy/helm/llm-proxy/Chart.yaml
           echo "Updated Chart.yaml:"
           cat deploy/helm/llm-proxy/Chart.yaml
 
@@ -81,12 +76,12 @@ jobs:
           ls -lh /tmp/charts/
 
       - name: Login to GitHub Container Registry
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/copilot/publish-helm-chart-to-ghcr'
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Push Helm chart to GHCR
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/copilot/publish-helm-chart-to-ghcr'
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           CHART_PACKAGE="/tmp/charts/llm-proxy-${VERSION}.tgz"
@@ -103,7 +98,7 @@ jobs:
           echo "Successfully pushed Helm chart to oci://ghcr.io/${{ github.repository_owner }}/llm-proxy:${VERSION}"
 
       - name: Verify packaged chart (PR/other branch testing)
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/copilot/publish-helm-chart-to-ghcr' }}
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') && github.ref != 'refs/heads/main' }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           CHART_PACKAGE="/tmp/charts/llm-proxy-${VERSION}.tgz"
@@ -125,5 +120,5 @@ jobs:
           echo "NOTE: Skipping push to GHCR (only pushes on version tags and main branch)"
 
       - name: Logout from GHCR
-        if: always() && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/copilot/publish-helm-chart-to-ghcr')
+        if: always() && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
         run: helm registry logout ghcr.io

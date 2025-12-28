@@ -7,7 +7,7 @@ This document describes how to publish a new release of LLM Proxy, including Doc
 Releases are automated through GitHub Actions workflows that trigger on git tags:
 
 - **Docker Images**: Published to `ghcr.io/sofatutor/llm-proxy` on pushes to `main` and tags `v*`
-- **Helm Charts**: Published to `oci://ghcr.io/sofatutor/llm-proxy` on tags `v*`
+- **Helm Charts**: Published to `oci://ghcr.io/sofatutor/llm-proxy` on tags `v*` and `main` branch commits
 
 ## Creating a Release
 
@@ -70,10 +70,10 @@ docker run --rm ghcr.io/sofatutor/llm-proxy:v1.0.0 --version
 ```
 
 #### Helm Chart
-```bash
-# Search for the chart
-helm search repo oci://ghcr.io/sofatutor/llm-proxy --versions
 
+You can view available chart versions in the GitHub Container Registry UI at https://github.com/sofatutor/llm-proxy/pkgs/container/llm-proxy, or verify a specific version exists:
+
+```bash
 # Pull the chart
 helm pull oci://ghcr.io/sofatutor/llm-proxy --version 1.0.0
 
