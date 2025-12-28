@@ -40,8 +40,13 @@ jobs:
             # Format: 0.0.0-main+<short-sha>
             SHORT_SHA=$(git rev-parse --short HEAD)
             VERSION="0.0.0-main+${SHORT_SHA}"
+          elif [[ "$GITHUB_REF" == "refs/heads/copilot/publish-helm-chart-to-ghcr" ]]; then
+            # Use semver-compatible version for this feature branch with build metadata
+            # Format: 0.0.0-pr+<short-sha>
+            SHORT_SHA=$(git rev-parse --short HEAD)
+            VERSION="0.0.0-pr+${SHORT_SHA}"
           else
-            # Use test version for PR/other branch testing
+            # Use test version for other PR/branch testing
             VERSION="0.0.0-test"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -77,12 +82,12 @@ jobs:
           ls -lh /tmp/charts/
 
       - name: Login to GitHub Container Registry
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/copilot/publish-helm-chart-to-ghcr'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Push Helm chart to GHCR
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/copilot/publish-helm-chart-to-ghcr'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           CHART_PACKAGE="/tmp/charts/llm-proxy-${VERSION}.tgz"
@@ -98,8 +103,8 @@ jobs:
           
           echo "Successfully pushed Helm chart to oci://ghcr.io/${{ github.repository_owner }}/llm-proxy:${VERSION}"
 
-      - name: Verify packaged chart (PR/branch testing)
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') && github.ref != 'refs/heads/main' }}
+      - name: Verify packaged chart (PR/other branch testing)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/copilot/publish-helm-chart-to-ghcr' }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           CHART_PACKAGE="/tmp/charts/llm-proxy-${VERSION}.tgz"
@@ -121,5 +126,5 @@ jobs:
           echo "NOTE: Skipping push to GHCR (only pushes on version tags and main branch)"
 
       - name: Logout from GHCR
-        if: always() && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
+        if: always() && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/copilot/publish-helm-chart-to-ghcr')
         run: helm registry logout ghcr.io
