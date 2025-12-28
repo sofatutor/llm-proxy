@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - 'copilot/publish-helm-chart-to-ghcr'
+  pull_request:
+    paths:
+      - 'deploy/helm/**'
+      - '.github/workflows/helm-publish.yml'
 
 permissions:
   contents: read
@@ -25,8 +31,13 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
-          # Extract version from tag (e.g., v1.2.3 -> 1.2.3)
-          VERSION="${GITHUB_REF#refs/tags/v}"
+          # Extract version from tag (e.g., v1.2.3 -> 1.2.3) or use default for testing
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            # Use default version for PR/branch testing
+            VERSION="0.0.0-test"
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Chart version: $VERSION"
 
@@ -60,10 +71,12 @@ jobs:
           ls -lh /tmp/charts/
 
       - name: Login to GitHub Container Registry
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Push Helm chart to GHCR
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           CHART_PACKAGE="/tmp/charts/llm-proxy-${VERSION}.tgz"
@@ -79,6 +92,28 @@ jobs:
           
           echo "Successfully pushed Helm chart to oci://ghcr.io/${{ github.repository_owner }}/llm-proxy:${VERSION}"
 
+      - name: Verify packaged chart (PR/branch testing)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          CHART_PACKAGE="/tmp/charts/llm-proxy-${VERSION}.tgz"
+          
+          if [ ! -f "$CHART_PACKAGE" ]; then
+            echo "ERROR: Chart package not found at $CHART_PACKAGE"
+            ls -lh /tmp/charts/
+            exit 1
+          fi
+          
+          echo "✓ Chart package created successfully: $CHART_PACKAGE"
+          echo ""
+          echo "Verifying package contents:"
+          tar -tzf "$CHART_PACKAGE" | head -20
+          echo ""
+          echo "Chart metadata:"
+          helm show chart "$CHART_PACKAGE"
+          echo ""
+          echo "NOTE: Skipping push to GHCR (only pushes on version tags)"
+
       - name: Logout from GHCR
-        if: always()
+        if: always() && startsWith(github.ref, 'refs/tags/v')
         run: helm registry logout ghcr.io
