@@ -59,7 +59,7 @@ helm install llm-proxy deploy/helm/llm-proxy \
 Or using the OCI registry:
 
 ```bash
-helm install llm-proxy oci://ghcr.io/sofatutor/llm-proxy --version 0.1.0 \
+helm install llm-proxy oci://ghcr.io/sofatutor/llm-proxy --version <version> \
   --set image.repository=ghcr.io/sofatutor/llm-proxy \
   --set image.tag=latest \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
@@ -69,7 +69,7 @@ helm install llm-proxy oci://ghcr.io/sofatutor/llm-proxy --version 0.1.0 \
 
 ### PostgreSQL (Development - In-Cluster)
 
-**Note:** When using the OCI registry, you'll need to download dependencies separately.
+**Note:** When installing from the OCI registry, the chart is published with dependencies included. The `helm dependency update` step below is only required when installing the chart from a local checkout.
 
 ```bash
 # If using local chart, download PostgreSQL subchart

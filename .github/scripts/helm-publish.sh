@@ -97,12 +97,30 @@ cmd_package() {
     
     mkdir -p "$output_dir"
     
+    local require_deps=false
+    # On tag publishes, require deps so OCI artifacts are installable with optional subcharts.
+    if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+        require_deps=true
+    fi
+    # Allow forcing dependency requirement explicitly.
+    case "${HELM_PUBLISH_REQUIRE_DEPS:-}" in
+        1|true|TRUE|yes|YES)
+            require_deps=true
+            ;;
+    esac
+
     log_info "Building chart dependencies..."
     # Build dependencies if Chart.yaml has dependencies
     if grep -q "^dependencies:" "${full_chart_path}/Chart.yaml"; then
-        helm dependency build "$full_chart_path" || {
-            log_warn "Dependency build failed, continuing without dependencies"
-        }
+        if helm dependency build "$full_chart_path"; then
+            log_info "Dependency build completed"
+        else
+            if [[ "$require_deps" == true ]]; then
+                log_error "Dependency build failed but dependencies are required for this run"
+                exit 1
+            fi
+            log_warn "Dependency build failed, continuing without dependencies (validation-only)"
+        fi
     fi
     
     log_info "Packaging chart from: $chart_path"
