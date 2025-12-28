@@ -4,12 +4,11 @@ on:
   push:
     tags:
       - 'v*'
-    branches:
-      - 'main'
   pull_request:
     paths:
       - 'deploy/helm/**'
       - '.github/workflows/helm-publish.yml'
+      - '.github/scripts/helm-publish.sh'
 
 permissions:
   contents: read
@@ -28,31 +27,20 @@ jobs:
           chmod +x ./.github/scripts/install-helm.sh
           ./.github/scripts/install-helm.sh v3.15.4
 
-      - name: Extract version from tag
+      - name: Extract version
         id: version
         run: |
-          # Extract version from tag (e.g., v1.2.3 -> 1.2.3) or use appropriate version for branch
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/v}"
-          elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
-            # Use semver-compatible version for main branch without '+' to avoid OCI issues
-            # Format: 0.0.0-main-<short-sha>
-            SHORT_SHA=$(git rev-parse --short HEAD)
-            VERSION="0.0.0-main-${SHORT_SHA}"
-          else
-            # Use test version for other PR/branch testing
-            VERSION="0.0.0-test"
-          fi
+          chmod +x ./.github/scripts/helm-publish.sh
+          VERSION=$(./.github/scripts/helm-publish.sh extract-version "$GITHUB_REF")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Chart version: $VERSION"
 
-      - name: Update Chart.yaml with version
+      - name: Update Chart.yaml
         run: |
+          # For version tags, use the version as both chart version and appVersion
+          # appVersion should match the Docker image tag (e.g., v1.2.3)
           VERSION="${{ steps.version.outputs.version }}"
-          sed -i "s|^version:.*|version: $VERSION|" deploy/helm/llm-proxy/Chart.yaml
-          sed -i "s|^appVersion:.*|appVersion: \"$VERSION\"|" deploy/helm/llm-proxy/Chart.yaml
-          echo "Updated Chart.yaml:"
-          cat deploy/helm/llm-proxy/Chart.yaml
+          ./.github/scripts/helm-publish.sh update-chart "$VERSION" "v$VERSION"
 
       - name: Lint Helm chart
         run: |
@@ -61,44 +49,22 @@ jobs:
 
       - name: Package Helm chart
         run: |
-          # Package chart (dependencies are optional and condition-based)
-          # The postgresql dependency is only used when postgresql.enabled=true
-          # Users installing from OCI can run 'helm dependency update' if needed
-          helm package deploy/helm/llm-proxy -d /tmp/charts || {
-            echo "Package failed, likely due to missing dependencies. Trying without dependency check..."
-            # Temporarily remove dependencies section for packaging
-            cp deploy/helm/llm-proxy/Chart.yaml deploy/helm/llm-proxy/Chart.yaml.bak
-            sed -i '/^dependencies:/,/^$/d' deploy/helm/llm-proxy/Chart.yaml
-            helm package deploy/helm/llm-proxy -d /tmp/charts
-            mv deploy/helm/llm-proxy/Chart.yaml.bak deploy/helm/llm-proxy/Chart.yaml
-          }
-          echo "Packaged chart:"
-          ls -lh /tmp/charts/
+          ./.github/scripts/helm-publish.sh package deploy/helm/llm-proxy /tmp/charts
 
       - name: Login to GitHub Container Registry
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Push Helm chart to GHCR
-        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           CHART_PACKAGE="/tmp/charts/llm-proxy-${VERSION}.tgz"
-          
-          if [ ! -f "$CHART_PACKAGE" ]; then
-            echo "ERROR: Chart package not found at $CHART_PACKAGE"
-            ls -lh /tmp/charts/
-            exit 1
-          fi
-          
-          # Push to GHCR as OCI artifact
-          helm push "$CHART_PACKAGE" oci://ghcr.io/${{ github.repository_owner }}
-          
-          echo "Successfully pushed Helm chart to oci://ghcr.io/${{ github.repository_owner }}/llm-proxy:${VERSION}"
+          ./.github/scripts/helm-publish.sh push "$CHART_PACKAGE" "oci://ghcr.io/${{ github.repository_owner }}"
 
-      - name: Verify packaged chart (PR/other branch testing)
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') && github.ref != 'refs/heads/main' }}
+      - name: Verify packaged chart (PR/branch testing)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           CHART_PACKAGE="/tmp/charts/llm-proxy-${VERSION}.tgz"
@@ -117,8 +83,8 @@ jobs:
           echo "Chart metadata:"
           helm show chart "$CHART_PACKAGE"
           echo ""
-          echo "NOTE: Skipping push to GHCR (only pushes on version tags and main branch)"
+          echo "NOTE: Skipping push to GHCR (only pushes on version tags)"
 
       - name: Logout from GHCR
-        if: always() && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
+        if: always() && startsWith(github.ref, 'refs/tags/v')
         run: helm registry logout ghcr.io

@@ -7,7 +7,7 @@ This document describes how to publish a new release of LLM Proxy, including Doc
 Releases are automated through GitHub Actions workflows that trigger on git tags:
 
 - **Docker Images**: Published to `ghcr.io/sofatutor/llm-proxy` on pushes to `main` and tags `v*`
-- **Helm Charts**: Published to `oci://ghcr.io/sofatutor/llm-proxy` on tags `v*` and `main` branch commits
+- **Helm Charts**: Published to `oci://ghcr.io/sofatutor/llm-proxy` on tags `v*`
 
 ## Creating a Release
 
@@ -116,7 +116,7 @@ Check the GitHub Actions logs for errors:
 Common issues:
 - Missing `packages: write` permission (should be set in workflow)
 - Tag doesn't match `v*` pattern
-- Chart dependencies missing (handled automatically in workflow)
+- Chart dependencies not building (workflow uses `helm dependency build`)
 
 ### Chart Not Found in GHCR
 

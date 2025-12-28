@@ -11,9 +11,9 @@ The LLM Proxy Helm chart is published as an OCI artifact to GitHub Container Reg
 kubectl create secret generic llm-proxy-secrets \
   --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
 
-# Install from OCI registry
+# Install from OCI registry (replace <version> with actual release, e.g., 1.0.0)
 helm install llm-proxy oci://ghcr.io/sofatutor/llm-proxy \
-  --version 0.1.0 \
+  --version <version> \
   --set image.repository=ghcr.io/sofatutor/llm-proxy \
   --set image.tag=latest \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets
@@ -21,7 +21,7 @@ helm install llm-proxy oci://ghcr.io/sofatutor/llm-proxy \
 
 **Available versions:** See [GitHub Container Registry](https://github.com/sofatutor/llm-proxy/pkgs/container/llm-proxy) for all published chart versions.
 
-**Note on Dependencies:** The chart includes an optional PostgreSQL dependency (disabled by default). When installing from OCI, the dependency is packaged with the chart. If you enable `postgresql.enabled=true`, Helm will automatically download the PostgreSQL subchart during installation.
+**Note on Dependencies:** The chart includes an optional PostgreSQL dependency (disabled by default). OCI charts are published with dependencies included. If you enable `postgresql.enabled=true`, the PostgreSQL subchart will be available from the packaged chart.
 
 ## Installation from Local Chart
 
