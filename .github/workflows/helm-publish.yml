@@ -5,6 +5,7 @@ on:
     tags:
       - 'v*'
     branches:
+      - 'main'
       - 'copilot/publish-helm-chart-to-ghcr'
   pull_request:
     paths:
@@ -31,11 +32,16 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
-          # Extract version from tag (e.g., v1.2.3 -> 1.2.3) or use default for testing
+          # Extract version from tag (e.g., v1.2.3 -> 1.2.3) or use appropriate version for branch
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/v}"
+          elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
+            # Use semver-compatible version for main branch with build metadata
+            # Format: 0.0.0-main+<short-sha>
+            SHORT_SHA=$(git rev-parse --short HEAD)
+            VERSION="0.0.0-main+${SHORT_SHA}"
           else
-            # Use default version for PR/branch testing
+            # Use test version for PR/other branch testing
             VERSION="0.0.0-test"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -71,12 +77,12 @@ jobs:
           ls -lh /tmp/charts/
 
       - name: Login to GitHub Container Registry
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Push Helm chart to GHCR
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           CHART_PACKAGE="/tmp/charts/llm-proxy-${VERSION}.tgz"
@@ -93,7 +99,7 @@ jobs:
           echo "Successfully pushed Helm chart to oci://ghcr.io/${{ github.repository_owner }}/llm-proxy:${VERSION}"
 
       - name: Verify packaged chart (PR/branch testing)
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') && github.ref != 'refs/heads/main' }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           CHART_PACKAGE="/tmp/charts/llm-proxy-${VERSION}.tgz"
@@ -112,8 +118,8 @@ jobs:
           echo "Chart metadata:"
           helm show chart "$CHART_PACKAGE"
           echo ""
-          echo "NOTE: Skipping push to GHCR (only pushes on version tags)"
+          echo "NOTE: Skipping push to GHCR (only pushes on version tags and main branch)"
 
       - name: Logout from GHCR
-        if: always() && startsWith(github.ref, 'refs/tags/v')
+        if: always() && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
         run: helm registry logout ghcr.io
