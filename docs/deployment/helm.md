@@ -73,8 +73,9 @@ Production deployment with external PostgreSQL:
 kubectl create secret generic llm-proxy-secrets \
   --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
 
+# NOTE: Replace USER and PASSWORD with your actual DB credentials; never commit real secrets
 kubectl create secret generic llm-proxy-db \
-  --from-literal=DATABASE_URL="postgres://user:pass@postgres.example.com:5432/llmproxy?sslmode=require"
+  --from-literal=DATABASE_URL="postgres://USER:PASSWORD@postgres.example.com:5432/llmproxy?sslmode=verify-full"
 
 # Deploy with external PostgreSQL
 helm install llm-proxy deploy/helm/llm-proxy \
@@ -99,11 +100,12 @@ Deploy with Redis for event bus and caching:
 kubectl create secret generic llm-proxy-secrets \
   --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
 
+# NOTE: Replace USER and PASSWORD with your actual DB credentials; never commit real secrets
 kubectl create secret generic llm-proxy-db \
-  --from-literal=DATABASE_URL="postgres://user:pass@postgres.example.com:5432/llmproxy?sslmode=require"
+  --from-literal=DATABASE_URL="postgres://USER:PASSWORD@postgres.example.com:5432/llmproxy?sslmode=verify-full"
 
 # Create Redis password secret (if authentication is enabled)
-echo -n "your-redis-password" > /tmp/redis-password.txt
+openssl rand -base64 32 > /tmp/redis-password.txt
 kubectl create secret generic redis-password \
   --from-file=REDIS_PASSWORD=/tmp/redis-password.txt
 rm /tmp/redis-password.txt
@@ -375,5 +377,5 @@ See the [AWS ECS Architecture Guide](aws-ecs-cdk.md) for AWS-specific deployment
 
 - [Performance Tuning](performance.md) - Optimization and resource planning
 - [Security Best Practices](security.md) - Production security guidelines
-- [Configuration Reference](../configuration.md) - Environment variables and settings
-- [Token Management](../token-management.md) - API token configuration
+- [Configuration Reference](../getting-started/configuration.md) - Environment variables and settings
+- [Token Management](../guides/token-management.md) - API token configuration

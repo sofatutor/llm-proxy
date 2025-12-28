@@ -55,8 +55,9 @@ helm install llm-proxy deploy/helm/llm-proxy \
 kubectl create secret generic llm-proxy-secrets \
   --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
 
+# NOTE: Replace USER and PASSWORD with your actual DB credentials; never commit real secrets
 kubectl create secret generic llm-proxy-db \
-  --from-literal=DATABASE_URL="postgres://user:pass@postgres.example.com:5432/llmproxy?sslmode=require"
+  --from-literal=DATABASE_URL="postgres://USER:PASSWORD@postgres.example.com:5432/llmproxy?sslmode=verify-full"
 
 helm install llm-proxy deploy/helm/llm-proxy \
   --set image.repository=your-registry/llm-proxy \
