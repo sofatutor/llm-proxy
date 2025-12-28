@@ -1,0 +1,90 @@
+name: Helm Chart Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+  pull_request:
+    paths:
+      - 'deploy/helm/**'
+      - '.github/workflows/helm-publish.yml'
+      - '.github/scripts/helm-publish.sh'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Lint, Package and Publish Helm Chart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        run: |
+          chmod +x ./.github/scripts/install-helm.sh
+          ./.github/scripts/install-helm.sh v3.15.4
+
+      - name: Extract version
+        id: version
+        run: |
+          chmod +x ./.github/scripts/helm-publish.sh
+          VERSION=$(./.github/scripts/helm-publish.sh extract-version "$GITHUB_REF")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Chart version: $VERSION"
+
+      - name: Update Chart.yaml
+        run: |
+          # For version tags, use the version as both chart version and appVersion
+          # appVersion should match the Docker image tag (e.g., v1.2.3)
+          VERSION="${{ steps.version.outputs.version }}"
+          ./.github/scripts/helm-publish.sh update-chart "$VERSION" "v$VERSION"
+
+      - name: Lint Helm chart
+        run: |
+          chmod +x ./scripts/validate-helm-chart.sh
+          ./scripts/validate-helm-chart.sh
+
+      - name: Package Helm chart
+        run: |
+          ./.github/scripts/helm-publish.sh package deploy/helm/llm-proxy /tmp/charts
+
+      - name: Login to GitHub Container Registry
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Push Helm chart to GHCR
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          CHART_PACKAGE="/tmp/charts/llm-proxy-${VERSION}.tgz"
+          ./.github/scripts/helm-publish.sh push "$CHART_PACKAGE" "oci://ghcr.io/${{ github.repository_owner }}"
+
+      - name: Verify packaged chart (PR/branch testing)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          CHART_PACKAGE="/tmp/charts/llm-proxy-${VERSION}.tgz"
+          
+          if [ ! -f "$CHART_PACKAGE" ]; then
+            echo "ERROR: Chart package not found at $CHART_PACKAGE"
+            ls -lh /tmp/charts/
+            exit 1
+          fi
+          
+          echo "✓ Chart package created successfully: $CHART_PACKAGE"
+          echo ""
+          echo "Verifying package contents:"
+          tar -tzf "$CHART_PACKAGE" | head -20
+          echo ""
+          echo "Chart metadata:"
+          helm show chart "$CHART_PACKAGE"
+          echo ""
+          echo "NOTE: Skipping push to GHCR (only pushes on version tags)"
+
+      - name: Logout from GHCR
+        if: always() && startsWith(github.ref, 'refs/tags/v')
+        run: helm registry logout ghcr.io
