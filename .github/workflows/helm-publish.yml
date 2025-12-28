@@ -41,10 +41,9 @@ jobs:
             SHORT_SHA=$(git rev-parse --short HEAD)
             VERSION="0.0.0-main+${SHORT_SHA}"
           elif [[ "$GITHUB_REF" == "refs/heads/copilot/publish-helm-chart-to-ghcr" ]]; then
-            # Use semver-compatible version for this feature branch with build metadata
-            # Format: 0.0.0-pr+<short-sha>
-            SHORT_SHA=$(git rev-parse --short HEAD)
-            VERSION="0.0.0-pr+${SHORT_SHA}"
+            # Use simple semver version for this feature branch (no build metadata to avoid OCI + sign issue)
+            # Format: 0.0.0-pr
+            VERSION="0.0.0-pr"
           else
             # Use test version for other PR/branch testing
             VERSION="0.0.0-test"
