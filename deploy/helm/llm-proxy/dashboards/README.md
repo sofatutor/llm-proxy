@@ -72,7 +72,33 @@ Copy the JSON file to the provisioning path and restart Grafana.
 
 ### Method 3: Kubernetes/Helm with Grafana Sidecar
 
-If using the Grafana Helm chart with sidecar discovery enabled, create a ConfigMap with the `grafana_dashboard` label:
+If using the Grafana Helm chart with sidecar discovery enabled, you can automatically provision the dashboard using the LLM Proxy Helm chart:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set metrics.enabled=true \
+  --set metrics.grafanaDashboard.enabled=true
+```
+
+Or via values.yaml:
+
+```yaml
+metrics:
+  enabled: true
+  grafanaDashboard:
+    enabled: true
+    labels:
+      grafana_dashboard: "1"  # Default label for Grafana sidecar
+```
+
+This creates a ConfigMap with the dashboard JSON and the `grafana_dashboard: "1"` label, which the Grafana sidecar will automatically discover and import.
+
+**Manual ConfigMap creation:**
+
+If not using the Helm chart, you can create the ConfigMap manually:
 
 ```bash
 kubectl create configmap llm-proxy-dashboard \
