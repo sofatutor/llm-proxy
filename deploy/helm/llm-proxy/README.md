@@ -378,6 +378,105 @@ autoscaling:
   targetMemoryUtilizationPercentage: 85
 ```
 
+### Prometheus Metrics Configuration
+
+The chart supports optional Prometheus metrics scraping in two modes:
+1. **Vanilla Prometheus**: Scrape via Service annotations
+2. **Prometheus Operator**: Scrape via ServiceMonitor CRD
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `metrics.enabled` | Enable Prometheus metrics scraping support | `false` |
+| `metrics.path` | Metrics endpoint path | `/metrics/prometheus` |
+| `metrics.portName` | Port name to scrape (references service port) | `http` |
+| `metrics.annotations` | Prometheus scraping annotations for vanilla Prometheus | See values.yaml |
+| `metrics.serviceMonitor.enabled` | Enable ServiceMonitor resource (requires Prometheus Operator) | `false` |
+| `metrics.serviceMonitor.labels` | Additional labels for ServiceMonitor (e.g., for Prometheus discovery) | `{}` |
+| `metrics.serviceMonitor.interval` | Scrape interval | `30s` |
+| `metrics.serviceMonitor.scrapeTimeout` | Scrape timeout | `10s` |
+
+**Note:** The application metrics endpoint is enabled by default via `ENABLE_METRICS=true` in the base `values.yaml`. The `metrics.*` values in this chart only configure Prometheus scraping of that existing endpoint.
+
+#### Vanilla Prometheus (Service Annotations)
+
+For Prometheus instances without the Prometheus Operator:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set metrics.enabled=true
+```
+
+Or via values.yaml:
+
+```yaml
+metrics:
+  enabled: true
+  path: "/metrics/prometheus"
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics/prometheus"
+    prometheus.io/port: "8080"
+```
+
+This adds standard Prometheus annotations to the Service, allowing Prometheus to auto-discover and scrape the metrics endpoint.
+
+#### Prometheus Operator (ServiceMonitor)
+
+For clusters with Prometheus Operator installed:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set metrics.enabled=true \
+  --set metrics.serviceMonitor.enabled=true \
+  --set metrics.serviceMonitor.labels.prometheus=kube-prometheus
+```
+
+Or via values.yaml:
+
+```yaml
+metrics:
+  enabled: true
+  path: "/metrics/prometheus"
+  serviceMonitor:
+    enabled: true
+    labels:
+      prometheus: kube-prometheus  # Match your Prometheus selector
+    interval: 30s
+    scrapeTimeout: 10s
+```
+
+**Important:** The `labels` must match your Prometheus instance's `serviceMonitorSelector`. Common label examples:
+- `prometheus: kube-prometheus` (kube-prometheus-stack)
+- `release: prometheus` (Prometheus Operator)
+
+#### Available Metrics
+
+The `/metrics/prometheus` endpoint exposes:
+
+**Application Metrics:**
+- `llm_proxy_uptime_seconds` - Server uptime
+- `llm_proxy_requests_total` - Total proxy requests
+- `llm_proxy_errors_total` - Total proxy errors
+- `llm_proxy_cache_hits_total` - Cache hits
+- `llm_proxy_cache_misses_total` - Cache misses
+- `llm_proxy_cache_bypass_total` - Cache bypasses
+- `llm_proxy_cache_stores_total` - Cache stores
+
+**Go Runtime Metrics:**
+- `llm_proxy_goroutines` - Number of goroutines
+- `llm_proxy_memory_heap_alloc_bytes` - Heap bytes allocated
+- `llm_proxy_memory_total_alloc_bytes` - Total bytes allocated (cumulative)
+- `llm_proxy_gc_runs_total` - Total GC runs
+- And more...
+
+See [Instrumentation Documentation](../../docs/observability/instrumentation.md#prometheus-metrics-endpoint) for complete metric list and example queries.
+
 ### Resource Limits
 
 | Parameter | Description | Default |

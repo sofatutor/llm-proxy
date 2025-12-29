@@ -816,6 +816,177 @@ kubectl describe hpa llm-proxy | grep -A 10 Events
 # (Use your preferred load testing tool)
 ```
 
+## Example 15: Prometheus Monitoring with ServiceMonitor
+
+Deploy with Prometheus Operator integration for automatic metrics discovery:
+
+### Prerequisites
+
+```bash
+# Ensure Prometheus Operator is installed in your cluster
+kubectl get crd servicemonitors.monitoring.coreos.com
+
+# Check your Prometheus instance's serviceMonitorSelector
+kubectl get prometheus -A -o yaml | grep -A 5 serviceMonitorSelector
+```
+
+### Step 1: Create Secrets
+
+```bash
+# Create management token secret
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+```
+
+### Step 2: Deploy with ServiceMonitor
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set metrics.enabled=true \
+  --set metrics.serviceMonitor.enabled=true \
+  --set metrics.serviceMonitor.labels.prometheus=kube-prometheus \
+  --set metrics.serviceMonitor.interval=15s
+```
+
+Or using a values file:
+
+```yaml
+# monitoring-values.yaml
+image:
+  repository: your-registry/llm-proxy
+  tag: v1.0.0
+
+secrets:
+  managementToken:
+    existingSecret:
+      name: llm-proxy-secrets
+
+metrics:
+  enabled: true
+  path: "/metrics/prometheus"
+  serviceMonitor:
+    enabled: true
+    labels:
+      prometheus: kube-prometheus  # Match your Prometheus selector
+    interval: 15s
+    scrapeTimeout: 10s
+```
+
+Deploy with values file:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy -f monitoring-values.yaml
+```
+
+### Step 3: Verify Prometheus Integration
+
+```bash
+# Check ServiceMonitor was created
+kubectl get servicemonitor
+kubectl describe servicemonitor llm-proxy
+
+# Verify the ServiceMonitor has correct labels
+kubectl get servicemonitor llm-proxy -o jsonpath='{.metadata.labels}'
+
+# Check if Prometheus discovered the target
+kubectl port-forward -n monitoring svc/prometheus-operated 9090:9090
+# Then open http://localhost:9090/targets in your browser
+
+# Test the metrics endpoint directly
+kubectl port-forward svc/llm-proxy 8080:8080
+curl http://localhost:8080/metrics/prometheus
+```
+
+### Step 4: Query Metrics in Prometheus
+
+Example PromQL queries:
+
+```promql
+# Request rate (requests per second)
+rate(llm_proxy_requests_total[5m])
+
+# Error rate
+rate(llm_proxy_errors_total[5m]) / rate(llm_proxy_requests_total[5m])
+
+# Cache hit ratio
+llm_proxy_cache_hits_total / (llm_proxy_cache_hits_total + llm_proxy_cache_misses_total)
+
+# Memory usage
+llm_proxy_memory_heap_alloc_bytes
+
+# Goroutine count
+llm_proxy_goroutines
+
+# GC frequency
+rate(llm_proxy_gc_runs_total[5m])
+```
+
+## Example 16: Vanilla Prometheus with Annotations
+
+Deploy with standard Prometheus discovery (without Prometheus Operator):
+
+### Step 1: Create Secrets
+
+```bash
+# Create management token secret
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+```
+
+### Step 2: Deploy with Prometheus Annotations
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set metrics.enabled=true
+```
+
+This automatically adds the following annotations to the Service:
+- `prometheus.io/scrape: "true"`
+- `prometheus.io/path: "/metrics/prometheus"`
+- `prometheus.io/port: "8080"`
+
+### Step 3: Verify Annotations
+
+```bash
+# Check Service annotations
+kubectl get svc llm-proxy -o jsonpath='{.metadata.annotations}' | jq
+
+# Verify Prometheus can scrape the endpoint
+kubectl port-forward svc/llm-proxy 8080:8080
+curl http://localhost:8080/metrics/prometheus
+```
+
+### Step 4: Configure Prometheus
+
+Ensure your Prometheus configuration includes Kubernetes service discovery:
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: 'kubernetes-services'
+    kubernetes_sd_configs:
+      - role: service
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+        action: replace
+        target_label: __address__
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+```
+
 ## Uninstalling
 
 ```bash
