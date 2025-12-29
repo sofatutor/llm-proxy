@@ -19,6 +19,9 @@ podLabels: {}
 
 podSecurityContext:
   runAsNonRoot: true
+  # Kubelet can't verify non-root for non-numeric image users; set stable numeric IDs.
+  runAsUser: 100
+  runAsGroup: 101
   # Rely on the container image's non-root user by default, and ensure mounted
   # writable volumes are group-writable.
   fsGroup: 101
