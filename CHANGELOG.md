@@ -6,6 +6,13 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ---
 
+## December 29, 2025
+
+### Added
+
+- **Helm Deployment Docs** ([#222](https://github.com/sofatutor/llm-proxy/pull/222)): Adds docs/deployment/helm.md, updates docs/deployment/index.md with a Helm section, and captures Helm quick starts for SQLite, PostgreSQL, Redis, ingress, and autoscaling along with secure defaults, dispatcher secret guidance, and clarified deployment source choices.
+
+
 ## December 28, 2025
 
 ### Added
