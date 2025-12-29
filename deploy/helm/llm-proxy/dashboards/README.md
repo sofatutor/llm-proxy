@@ -175,7 +175,7 @@ rate(llm_proxy_requests_total[5m])
 
 ### Error Rate Percentage
 ```promql
-rate(llm_proxy_errors_total[5m]) / rate(llm_proxy_requests_total[5m]) * 100
+rate(llm_proxy_errors_total[5m]) / rate(llm_proxy_requests_total[5m])
 ```
 
 ### Cache Hit Ratio
