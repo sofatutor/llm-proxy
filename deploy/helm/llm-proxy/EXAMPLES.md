@@ -864,10 +864,6 @@ secrets:
     existingSecret:
       name: llm-proxy-secrets
 
-env:
-  ENABLE_METRICS: "true"
-  METRICS_PATH: "/metrics"
-
 metrics:
   enabled: true
   path: "/metrics/prometheus"

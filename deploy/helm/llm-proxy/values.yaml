@@ -312,6 +312,8 @@ metrics:
   # Prometheus scraping via Service annotations (for vanilla Prometheus)
   # Only applied when metrics.enabled=true
   # Customize or override these annotations as needed
+  # NOTE: The port annotation must match service.port. If you change service.port,
+  # update this annotation accordingly.
   annotations:
     prometheus.io/scrape: "true"
     prometheus.io/path: "/metrics/prometheus"

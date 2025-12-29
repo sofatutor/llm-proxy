@@ -395,7 +395,7 @@ The chart supports optional Prometheus metrics scraping in two modes:
 | `metrics.serviceMonitor.interval` | Scrape interval | `30s` |
 | `metrics.serviceMonitor.scrapeTimeout` | Scrape timeout | `10s` |
 
-**Note:** The application must have `ENABLE_METRICS=true` (default in values.yaml) for the metrics endpoint to be available.
+**Note:** The application metrics endpoint is enabled by default via `ENABLE_METRICS=true` in the base `values.yaml`. The `metrics.*` values in this chart only configure Prometheus scraping of that existing endpoint.
 
 #### Vanilla Prometheus (Service Annotations)
 
