@@ -397,6 +397,49 @@ The chart supports optional Prometheus metrics scraping in two modes:
 
 **Note:** The application metrics endpoint is enabled by default via `ENABLE_METRICS=true` in the base `values.yaml`. The `metrics.*` values in this chart only configure Prometheus scraping of that existing endpoint.
 
+#### Grafana Dashboard
+
+A ready-to-import Grafana dashboard is available in the `dashboards/` directory:
+
+- **Dashboard JSON**: [`dashboards/llm-proxy.json`](dashboards/llm-proxy.json)
+- **Documentation**: See the [dashboards README](dashboards/README.md) for detailed import instructions
+
+The dashboard provides comprehensive operational visibility including:
+- Request rate, error rate, and uptime monitoring
+- Cache performance metrics (hits, misses, bypass, stores)
+- Memory usage and Go runtime metrics
+- Garbage collection statistics
+
+**Automatic provisioning via Grafana sidecar:**
+
+If using the Grafana Helm chart with sidecar discovery enabled, you can automatically provision the dashboard:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set metrics.enabled=true \
+  --set metrics.grafanaDashboard.enabled=true
+```
+
+Or via values.yaml:
+
+```yaml
+metrics:
+  enabled: true
+  grafanaDashboard:
+    enabled: true
+    labels:
+      grafana_dashboard: "1"  # Default label for Grafana sidecar
+```
+
+This creates a ConfigMap with the `grafana_dashboard: "1"` label, which the Grafana sidecar will automatically discover and import.
+
+**Manual import:**
+
+To manually import the dashboard into Grafana, see the [dashboards README](dashboards/README.md) for detailed instructions.
+
 #### Vanilla Prometheus (Service Annotations)
 
 For Prometheus instances without the Prometheus Operator:

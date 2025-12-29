@@ -340,3 +340,17 @@ metrics:
     # honorLabels: false
     # relabelings: []
     # metricRelabelings: []
+  
+  # Grafana dashboard configuration
+  # Creates a ConfigMap with the dashboard JSON for Grafana sidecar discovery
+  grafanaDashboard:
+    # Enable Grafana dashboard ConfigMap creation
+    enabled: false
+    
+    # Additional labels for ConfigMap (required for Grafana sidecar discovery)
+    # Example: { grafana_dashboard: "1" }
+    labels:
+      grafana_dashboard: "1"
+    
+    # Annotations for ConfigMap
+    annotations: {}

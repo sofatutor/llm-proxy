@@ -1,0 +1,18 @@
+{{- if and .Values.metrics.enabled .Values.metrics.grafanaDashboard.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "llm-proxy.fullname" . }}-dashboard
+  labels:
+    {{- include "llm-proxy.labels" . | nindent 4 }}
+    {{- with .Values.metrics.grafanaDashboard.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.metrics.grafanaDashboard.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  llm-proxy.json: |-
+{{ .Files.Get "dashboards/llm-proxy.json" | indent 4 }}
+{{- end }}

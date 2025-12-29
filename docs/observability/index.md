@@ -16,6 +16,20 @@ Monitoring, logging, and performance tracking for LLM Proxy.
 - **[Coverage Reports](coverage.md)** - Live test coverage report
 - **[Coverage Setup](coverage-reports.md)** - Setting up coverage reporting
 
+## Grafana Dashboards
+
+Ready-to-import Grafana dashboards are available for visualizing LLM Proxy metrics:
+
+- **Location**: [`deploy/helm/llm-proxy/dashboards/`](../../deploy/helm/llm-proxy/dashboards/)
+- **Documentation**: See the [dashboards README](../../deploy/helm/llm-proxy/dashboards/README.md) for import instructions
+- **Datasource**: Prometheus
+
+The operational dashboard (`llm-proxy.json`) includes:
+- Request rate, error rate, and uptime monitoring
+- Cache performance metrics (hits, misses, bypass, stores)
+- Memory usage and Go runtime metrics
+- Garbage collection statistics
+
 ## Event Flow
 
 ```
