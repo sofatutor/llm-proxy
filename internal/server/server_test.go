@@ -221,6 +221,35 @@ func TestMetricsPrometheusEndpoint(t *testing.T) {
 	assert.Contains(t, body, "# HELP llm_proxy_cache_stores_total")
 	assert.Contains(t, body, "# TYPE llm_proxy_cache_stores_total counter")
 	assert.Contains(t, body, "llm_proxy_cache_stores_total 15")
+
+	// Verify Go runtime metrics are present
+	assert.Contains(t, body, "# HELP llm_proxy_goroutines")
+	assert.Contains(t, body, "# TYPE llm_proxy_goroutines gauge")
+	assert.Contains(t, body, "llm_proxy_goroutines")
+
+	assert.Contains(t, body, "# HELP llm_proxy_memory_heap_alloc_bytes")
+	assert.Contains(t, body, "# TYPE llm_proxy_memory_heap_alloc_bytes gauge")
+	assert.Contains(t, body, "llm_proxy_memory_heap_alloc_bytes")
+
+	assert.Contains(t, body, "# HELP llm_proxy_memory_heap_sys_bytes")
+	assert.Contains(t, body, "# TYPE llm_proxy_memory_heap_sys_bytes gauge")
+	assert.Contains(t, body, "llm_proxy_memory_heap_sys_bytes")
+
+	assert.Contains(t, body, "# HELP llm_proxy_memory_total_alloc_bytes")
+	assert.Contains(t, body, "# TYPE llm_proxy_memory_total_alloc_bytes counter")
+	assert.Contains(t, body, "llm_proxy_memory_total_alloc_bytes")
+
+	assert.Contains(t, body, "# HELP llm_proxy_gc_runs_total")
+	assert.Contains(t, body, "# TYPE llm_proxy_gc_runs_total counter")
+	assert.Contains(t, body, "llm_proxy_gc_runs_total")
+
+	assert.Contains(t, body, "# HELP llm_proxy_gc_pause_total_seconds")
+	assert.Contains(t, body, "# TYPE llm_proxy_gc_pause_total_seconds counter")
+	assert.Contains(t, body, "llm_proxy_gc_pause_total_seconds")
+
+	assert.Contains(t, body, "# HELP llm_proxy_gc_next_bytes")
+	assert.Contains(t, body, "# TYPE llm_proxy_gc_next_bytes gauge")
+	assert.Contains(t, body, "llm_proxy_gc_next_bytes")
 }
 
 func TestMetricsPrometheusEndpoint_NoProxy(t *testing.T) {
@@ -251,6 +280,11 @@ func TestMetricsPrometheusEndpoint_NoProxy(t *testing.T) {
 	assert.Contains(t, body, "llm_proxy_cache_misses_total 0")
 	assert.Contains(t, body, "llm_proxy_cache_bypass_total 0")
 	assert.Contains(t, body, "llm_proxy_cache_stores_total 0")
+
+	// Verify Go runtime metrics are still present
+	assert.Contains(t, body, "llm_proxy_goroutines")
+	assert.Contains(t, body, "llm_proxy_memory_heap_alloc_bytes")
+	assert.Contains(t, body, "llm_proxy_gc_runs_total")
 }
 
 func TestHandleMetricsPrometheus_WriteError(t *testing.T) {

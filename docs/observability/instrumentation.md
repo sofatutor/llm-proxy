@@ -358,6 +358,8 @@ Both endpoints are available when `ENABLE_METRICS=true` (default).
 
 The Prometheus endpoint exposes the following metrics:
 
+#### Application Metrics
+
 | Metric | Type | Description |
 |--------|------|-------------|
 | `llm_proxy_uptime_seconds` | gauge | Time since the server started |
@@ -367,6 +369,24 @@ The Prometheus endpoint exposes the following metrics:
 | `llm_proxy_cache_misses_total` | counter | Total number of cache misses |
 | `llm_proxy_cache_bypass_total` | counter | Total number of cache bypasses |
 | `llm_proxy_cache_stores_total` | counter | Total number of cache stores |
+
+#### Go Runtime Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `llm_proxy_goroutines` | gauge | Number of goroutines currently running |
+| `llm_proxy_memory_heap_alloc_bytes` | gauge | Number of heap bytes allocated and currently in use |
+| `llm_proxy_memory_heap_sys_bytes` | gauge | Number of heap bytes obtained from the OS |
+| `llm_proxy_memory_heap_idle_bytes` | gauge | Number of heap bytes waiting to be used |
+| `llm_proxy_memory_heap_inuse_bytes` | gauge | Number of heap bytes that are in use |
+| `llm_proxy_memory_heap_released_bytes` | gauge | Number of heap bytes released to the OS |
+| `llm_proxy_memory_total_alloc_bytes` | counter | Total number of bytes allocated (cumulative) |
+| `llm_proxy_memory_sys_bytes` | gauge | Total number of bytes obtained from the OS |
+| `llm_proxy_memory_mallocs_total` | counter | Total number of malloc operations |
+| `llm_proxy_memory_frees_total` | counter | Total number of free operations |
+| `llm_proxy_gc_runs_total` | counter | Total number of GC runs |
+| `llm_proxy_gc_pause_total_seconds` | counter | Total GC pause time in seconds |
+| `llm_proxy_gc_next_bytes` | gauge | Target heap size for next GC cycle |
 
 ### Example Output
 
@@ -392,6 +412,18 @@ llm_proxy_cache_bypass_total 0
 # HELP llm_proxy_cache_stores_total Total number of cache stores
 # TYPE llm_proxy_cache_stores_total counter
 llm_proxy_cache_stores_total 681
+# HELP llm_proxy_goroutines Number of goroutines currently running
+# TYPE llm_proxy_goroutines gauge
+llm_proxy_goroutines 12
+# HELP llm_proxy_memory_heap_alloc_bytes Number of heap bytes allocated and currently in use
+# TYPE llm_proxy_memory_heap_alloc_bytes gauge
+llm_proxy_memory_heap_alloc_bytes 2097152
+# HELP llm_proxy_memory_total_alloc_bytes Total number of bytes allocated (cumulative)
+# TYPE llm_proxy_memory_total_alloc_bytes counter
+llm_proxy_memory_total_alloc_bytes 104857600
+# HELP llm_proxy_gc_runs_total Total number of GC runs
+# TYPE llm_proxy_gc_runs_total counter
+llm_proxy_gc_runs_total 42
 ```
 
 ### Prometheus Scrape Configuration
@@ -421,6 +453,18 @@ llm_proxy_cache_hits_total / (llm_proxy_cache_hits_total + llm_proxy_cache_misse
 
 # Total uptime in hours
 llm_proxy_uptime_seconds / 3600
+
+# Memory usage trend
+rate(llm_proxy_memory_total_alloc_bytes[5m])
+
+# Heap allocation
+llm_proxy_memory_heap_alloc_bytes
+
+# GC frequency
+rate(llm_proxy_gc_runs_total[5m])
+
+# Active goroutines
+llm_proxy_goroutines
 ```
 
 ### Testing
