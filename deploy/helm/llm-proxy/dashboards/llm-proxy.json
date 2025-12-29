@@ -215,7 +215,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "rate(llm_proxy_errors_total{job=\"$job\"}[5m]) / (rate(llm_proxy_requests_total{job=\"$job\"}[5m]) > 0) or vector(0)",
+          "expr": "rate(llm_proxy_errors_total{job=\"$job\"}[5m]) / rate(llm_proxy_requests_total{job=\"$job\"}[5m]) or vector(0)",
           "refId": "A"
         }
       ],
@@ -284,7 +284,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "llm_proxy_cache_hits_total{job=\"$job\"} / ((llm_proxy_cache_hits_total{job=\"$job\"} + llm_proxy_cache_misses_total{job=\"$job\"}) > 0) or vector(0)",
+          "expr": "llm_proxy_cache_hits_total{job=\"$job\"} / (llm_proxy_cache_hits_total{job=\"$job\"} + llm_proxy_cache_misses_total{job=\"$job\"}) or vector(0)",
           "refId": "A"
         }
       ],
@@ -715,7 +715,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "llm_proxy_cache_hits_total{job=\"$job\"} / ((llm_proxy_cache_hits_total{job=\"$job\"} + llm_proxy_cache_misses_total{job=\"$job\"}) > 0) or vector(0)",
+          "expr": "llm_proxy_cache_hits_total{job=\"$job\"} / (llm_proxy_cache_hits_total{job=\"$job\"} + llm_proxy_cache_misses_total{job=\"$job\"}) or vector(0)",
           "legendFormat": "Cache Hit Ratio",
           "refId": "A"
         }
