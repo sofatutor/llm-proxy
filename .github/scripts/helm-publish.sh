@@ -20,11 +20,13 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 log_info() {
-    echo -e "${GREEN}[INFO]${NC} $*"
+    # IMPORTANT: log to stderr so command outputs (stdout) remain machine-readable.
+    echo -e "${GREEN}[INFO]${NC} $*" >&2
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $*"
+    # IMPORTANT: log to stderr so command outputs (stdout) remain machine-readable.
+    echo -e "${YELLOW}[WARN]${NC} $*" >&2
 }
 
 log_error() {
