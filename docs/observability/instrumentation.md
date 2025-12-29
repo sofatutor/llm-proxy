@@ -477,6 +477,21 @@ curl http://localhost:8080/metrics/prometheus
 curl http://localhost:8080/metrics | jq .
 ```
 
+### Grafana Dashboard
+
+A ready-to-import Grafana dashboard is available for visualizing LLM Proxy metrics:
+
+- **Dashboard JSON**: [`deploy/helm/llm-proxy/dashboards/llm-proxy.json`](../../deploy/helm/llm-proxy/dashboards/llm-proxy.json)
+- **Documentation**: See the [dashboards README](../../deploy/helm/llm-proxy/dashboards/README.md) for import instructions
+
+The dashboard includes panels for:
+- Request rate, error rate, and uptime
+- Cache performance (hits, misses, bypass, stores)
+- Memory usage and Go runtime metrics
+- Garbage collection statistics
+
+Import the dashboard into Grafana and configure it to use your Prometheus datasource.
+
 ### Notes
 
 - The Prometheus endpoint is lightweight and has no external dependencies

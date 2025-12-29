@@ -397,6 +397,21 @@ The chart supports optional Prometheus metrics scraping in two modes:
 
 **Note:** The application metrics endpoint is enabled by default via `ENABLE_METRICS=true` in the base `values.yaml`. The `metrics.*` values in this chart only configure Prometheus scraping of that existing endpoint.
 
+#### Grafana Dashboard
+
+A ready-to-import Grafana dashboard is available in the `dashboards/` directory:
+
+- **Dashboard JSON**: [`dashboards/llm-proxy.json`](dashboards/llm-proxy.json)
+- **Documentation**: See the [dashboards README](dashboards/README.md) for detailed import instructions
+
+The dashboard provides comprehensive operational visibility including:
+- Request rate, error rate, and uptime monitoring
+- Cache performance metrics (hits, misses, bypass, stores)
+- Memory usage and Go runtime metrics
+- Garbage collection statistics
+
+To use the dashboard, import it into Grafana and configure it to use your Prometheus datasource.
+
 #### Vanilla Prometheus (Service Annotations)
 
 For Prometheus instances without the Prometheus Operator:
