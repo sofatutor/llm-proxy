@@ -6,6 +6,17 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ---
 
+## December 28, 2025
+
+### Added
+
+- **Publish Helm Chart OCI** ([#223](https://github.com/sofatutor/llm-proxy/pull/223)): Helm chart is now built, packaged with dependencies, and published as an OCI artifact to GHCR from version tags so cluster installs no longer require cloning the repository.
+
+### Changed
+
+- **Document OCI Helm Install** ([#223](https://github.com/sofatutor/llm-proxy/pull/223)): README, Helm docs, deployment guide, and release process docs now describe the OCI installation flow with placeholder versions, standardized ghcr.io references, clarified dependency packaging, and removal of unsupported search commands.
+
+
 ## December 27, 2025
 
 ### Added

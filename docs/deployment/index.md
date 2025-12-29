@@ -39,6 +39,12 @@ For organizations with existing Kubernetes infrastructure, we provide a **compre
 
 See the **[Kubernetes / Helm Deployment Guide](helm.md)** for complete documentation.
 
+Additional Helm chart references:
+
+- Install from OCI: `helm install llm-proxy oci://ghcr.io/sofatutor/llm-proxy --version <version>`
+- Chart source: `deploy/helm/llm-proxy`
+- Full chart documentation: [Helm Chart README](../../deploy/helm/llm-proxy/README.md)
+
 **Helm Quick Start (SQLite)**:
 ```bash
 kubectl create secret generic llm-proxy-secrets \
@@ -69,5 +75,5 @@ helm install llm-proxy deploy/helm/llm-proxy \
 
 ## Other Deployment Options
 
-- **Docker Compose** - Good for local development and testing (see repository root)
+ - **Docker Compose** - Good for local development and testing (see repository root)
 
