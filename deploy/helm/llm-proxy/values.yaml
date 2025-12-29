@@ -295,3 +295,46 @@ dispatcher:
   
   # Affinity rules for dispatcher pods
   affinity: {}
+
+# Prometheus metrics scraping configuration
+# The application exposes metrics at /metrics/prometheus when ENABLE_METRICS=true
+metrics:
+  # Enable Prometheus metrics scraping support (opt-in)
+  enabled: false
+  
+  # Metrics endpoint path (must match METRICS_PATH + "/prometheus" in env)
+  path: "/metrics/prometheus"
+  
+  # Port name to scrape (references service.port)
+  # The port number is inherited from service.port
+  portName: "http"
+  
+  # Prometheus scraping via Service annotations (for vanilla Prometheus)
+  # Only applied when metrics.enabled=true
+  # Customize or override these annotations as needed
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics/prometheus"
+    prometheus.io/port: "8080"
+  
+  # ServiceMonitor configuration (for Prometheus Operator)
+  # Requires Prometheus Operator CRDs to be installed
+  serviceMonitor:
+    # Enable ServiceMonitor resource creation
+    enabled: false
+    
+    # Additional labels for ServiceMonitor (e.g., for Prometheus discovery)
+    # Example: { prometheus: kube-prometheus }
+    labels: {}
+    
+    # Scrape interval
+    interval: 30s
+    
+    # Scrape timeout
+    scrapeTimeout: 10s
+    
+    # Additional ServiceMonitor configuration
+    # Uncomment and customize as needed:
+    # honorLabels: false
+    # relabelings: []
+    # metricRelabelings: []
