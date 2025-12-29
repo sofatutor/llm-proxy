@@ -12,7 +12,7 @@ kubectl create secret generic llm-proxy-secrets \
   --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
 
 # Install from OCI registry (replace <version> with actual release, e.g., 1.0.0)
-helm install llm-proxy oci://ghcr.io/sofatutor/llm-proxy \
+helm install llm-proxy oci://ghcr.io/sofatutor/charts/llm-proxy \
   --version <version> \
   --set image.repository=ghcr.io/sofatutor/llm-proxy \
   --set image.tag=latest \
@@ -59,7 +59,7 @@ helm install llm-proxy deploy/helm/llm-proxy \
 Or using the OCI registry:
 
 ```bash
-helm install llm-proxy oci://ghcr.io/sofatutor/llm-proxy --version <version> \
+helm install llm-proxy oci://ghcr.io/sofatutor/charts/llm-proxy --version <version> \
   --set image.repository=ghcr.io/sofatutor/llm-proxy \
   --set image.tag=latest \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \

@@ -34,6 +34,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
+            type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha
@@ -43,6 +44,13 @@ jobs:
         id: set_tag
         run: |
           RAW_TAG="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+
+          # For version tags, we publish semver tags without the leading 'v' (e.g. 0.1.0).
+          # Ensure our smoke-test pull uses a tag that actually exists.
+          if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+            RAW_TAG="${GITHUB_REF_NAME#v}"
+          fi
+
           # Sanitize: lowercase, replace invalid chars with '-', trim leading/trailing '.' or '-'
           TAG=$(echo "$RAW_TAG" | tr '[:upper:]' '[:lower:]' | sed -E 's|[^a-z0-9_.-]|-|g; s|^[.-]+||; s|[.-]+$||')
           echo "name=$TAG" >> "$GITHUB_OUTPUT"
