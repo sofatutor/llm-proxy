@@ -10,8 +10,12 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Added
 
+- **Runtime Metrics Export** ([#228](https://github.com/sofatutor/llm-proxy/pull/228)): Added Go runtime metrics (goroutines, heap/memory, and GC stats) to the `/metrics/prometheus` handler so capacity planning and operational monitoring can surface key resource signals, with tests ensuring these metrics appear regardless of proxy initialization.
 - **Helm Deployment Docs** ([#222](https://github.com/sofatutor/llm-proxy/pull/222)): Adds docs/deployment/helm.md, updates docs/deployment/index.md with a Helm section, and captures Helm quick starts for SQLite, PostgreSQL, Redis, ingress, and autoscaling along with secure defaults, dispatcher secret guidance, and clarified deployment source choices.
 
+### Changed
+
+- **Observability Docs Update** ([#228](https://github.com/sofatutor/llm-proxy/pull/228)): Expanded docs/observability/instrumentation.md with a table of the new runtime metrics and sample PromQL queries so operators know what metrics are available and how to query them.
 
 ## December 28, 2025
 
