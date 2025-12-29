@@ -7,8 +7,7 @@ nav_order: 2
 # Kubernetes Deployment with Helm
 
 **Status**: Available  
-**Chart Location**: [`deploy/helm/llm-proxy`](../../deploy/helm/llm-proxy/)  
-**Last Updated**: December 27, 2025
+**Chart Location**: [`deploy/helm/llm-proxy`](../../deploy/helm/llm-proxy/)
 
 ---
 
@@ -45,6 +44,8 @@ For AWS-native deployments without existing K8s infrastructure, consider [AWS EC
 ---
 
 ## Quick Start Scenarios
+
+> **Note on chart path**: These examples use the local chart path `deploy/helm/llm-proxy`, which requires the repository to be checked out. If you prefer to install from the published OCI registry, replace `deploy/helm/llm-proxy` with `oci://ghcr.io/sofatutor/llm-proxy --version <version>` in the `helm install` commands below.
 
 ### 1. SQLite (Single Instance, Development)
 
@@ -86,10 +87,11 @@ helm install llm-proxy deploy/helm/llm-proxy \
   --set env.DB_DRIVER=postgres
 ```
 
-**Important**: Ensure your Docker image is built with PostgreSQL support:
+**Important**: If building images yourself, ensure PostgreSQL support is enabled:
 ```bash
 docker build --build-arg POSTGRES_SUPPORT=true -t your-registry/llm-proxy:v1.0.0 .
 ```
+Pre-built images from `ghcr.io/sofatutor/llm-proxy` include PostgreSQL support by default.
 
 ### 3. External Redis (Multi-Instance)
 
@@ -252,6 +254,10 @@ helm install llm-proxy deploy/helm/llm-proxy -f production-values.yaml
 The optional dispatcher component forwards events to observability platforms:
 
 ```bash
+# Create dispatcher API key secret
+kubectl create secret generic dispatcher-secrets \
+  --from-literal=DISPATCHER_API_KEY="your-lunary-api-key"
+
 # Deploy with dispatcher for Lunary integration
 helm install llm-proxy deploy/helm/llm-proxy \
   --set image.repository=your-registry/llm-proxy \
@@ -261,7 +267,8 @@ helm install llm-proxy deploy/helm/llm-proxy \
   --set env.LLM_PROXY_EVENT_BUS="redis-streams" \
   --set dispatcher.enabled=true \
   --set dispatcher.service="lunary" \
-  --set dispatcher.apiKey.existingSecret.name="dispatcher-secrets"
+  --set dispatcher.apiKey.existingSecret.name="dispatcher-secrets" \
+  --set dispatcher.apiKey.existingSecret.key="DISPATCHER_API_KEY"
 ```
 
 **Supported backends**:

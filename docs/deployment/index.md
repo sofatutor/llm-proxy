@@ -57,6 +57,9 @@ helm install llm-proxy deploy/helm/llm-proxy \
 ```
 
 **Helm Quick Start (Production with PostgreSQL)**:
+
+> **Note**: If using a custom-built image, ensure it's built with PostgreSQL support: `docker build --build-arg POSTGRES_SUPPORT=true ...`. See the [full guide](helm.md) for details.
+
 ```bash
 kubectl create secret generic llm-proxy-secrets \
   --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
@@ -75,5 +78,5 @@ helm install llm-proxy deploy/helm/llm-proxy \
 
 ## Other Deployment Options
 
- - **Docker Compose** - Good for local development and testing (see repository root)
+- **Docker Compose** - Good for local development and testing (see repository root)
 
