@@ -19,9 +19,10 @@ podLabels: {}
 
 podSecurityContext:
   runAsNonRoot: true
-  runAsUser: 1000
-  runAsGroup: 1000
-  fsGroup: 1000
+  # Rely on the container image's non-root user by default, and ensure mounted
+  # writable volumes are group-writable.
+  fsGroup: 101
+  fsGroupChangePolicy: OnRootMismatch
 
 securityContext:
   capabilities:
@@ -95,6 +96,8 @@ volumes:
     emptyDir: {}
   - name: config
     emptyDir: {}
+  - name: certs
+    emptyDir: {}
 
 # Additional volumeMounts on the output Deployment definition.
 volumeMounts:
@@ -106,6 +109,8 @@ volumeMounts:
     mountPath: /app/logs
   - name: config
     mountPath: /app/config
+  - name: certs
+    mountPath: /app/certs
 
 nodeSelector: {}
 
