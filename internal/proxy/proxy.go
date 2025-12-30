@@ -737,6 +737,39 @@ func (p *TransparentProxy) Handler() http.Handler {
 		ctx = context.WithValue(ctx, ctxKeyProxyReceivedAt, receivedAt)
 		r = r.WithContext(ctx)
 
+		// Compute X-Body-Hash once for methods with bodies to support POST/PUT/PATCH caching.
+		// Do this early so we can do cache lookup decisions before token validation.
+		if r.Body != nil && (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch) {
+			bodyBytes, _ := io.ReadAll(r.Body)
+			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+			sum := sha256.Sum256(bodyBytes)
+			r.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
+		}
+
+		// Pre-check cache so we can avoid token usage tracking / upstream auth lookup
+		// on true cache hits. We still enforce auth and project status before serving.
+		var (
+			preCacheKey string
+			preCacheRes cachedResponse
+			preCacheOK  bool
+		)
+		if p.cache != nil && (r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodPost) {
+			optIn := hasClientCacheOptIn(r)
+			allowedLookup := (r.Method == http.MethodGet || r.Method == http.MethodHead) || (r.Method == http.MethodPost && optIn)
+			if allowedLookup {
+				key := CacheKeyFromRequest(r)
+				if cr, ok := p.cache.Get(key); ok {
+					// Only treat as a fast-path cache hit if it is actually eligible to serve
+					// without going upstream.
+					if isVaryCompatible(r, cr, key) && canServeCachedForRequest(r, cr.headers) && !wantsRevalidation(r) {
+						preCacheKey = key
+						preCacheRes = cr
+						preCacheOK = true
+					}
+				}
+			}
+		}
+
 		// --- Token extraction and validation (moved from director) ---
 		authHeader := r.Header.Get("Authorization")
 		tokenStr := extractTokenFromHeader(authHeader)
@@ -744,7 +777,16 @@ func (p *TransparentProxy) Handler() http.Handler {
 			p.handleValidationError(w, r, errors.New("missing or invalid authorization header"))
 			return
 		}
-		projectID, err := p.tokenValidator.ValidateTokenWithTracking(r.Context(), tokenStr)
+		var (
+			projectID string
+			err       error
+		)
+		if preCacheOK {
+			// Avoid per-request DB updates on true cache hits.
+			projectID, err = p.tokenValidator.ValidateToken(r.Context(), tokenStr)
+		} else {
+			projectID, err = p.tokenValidator.ValidateTokenWithTracking(r.Context(), tokenStr)
+		}
 		if err != nil {
 			p.handleValidationError(w, r, err)
 			return
@@ -752,12 +794,28 @@ func (p *TransparentProxy) Handler() http.Handler {
 		ctx = context.WithValue(r.Context(), ctxKeyProjectID, projectID)
 		ctx = context.WithValue(ctx, ctxKeyTokenID, tokenStr)
 		r = r.WithContext(ctx)
-		apiKey, err := p.projectStore.GetAPIKeyForProject(r.Context(), projectID)
-		if err != nil {
-			p.handleValidationError(w, r, fmt.Errorf("failed to get API key: %w", err))
-			return
+		// Defer upstream API key lookup until we actually need to proxy upstream.
+		// This keeps cache-hit latency low under concurrency.
+		var (
+			upstreamAPIKey     string
+			upstreamAPIKeyErr  error
+			upstreamAPIKeyOnce sync.Once
+		)
+		ensureUpstreamAuthorization := func(req *http.Request) bool {
+			upstreamAPIKeyOnce.Do(func() {
+				upstreamAPIKey, upstreamAPIKeyErr = p.projectStore.GetAPIKeyForProject(req.Context(), projectID)
+				if upstreamAPIKeyErr != nil {
+					upstreamAPIKeyErr = fmt.Errorf("failed to get API key: %w", upstreamAPIKeyErr)
+					return
+				}
+			})
+			if upstreamAPIKeyErr != nil {
+				p.handleValidationError(w, r, upstreamAPIKeyErr)
+				return false
+			}
+			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", upstreamAPIKey))
+			return true
 		}
-		r.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
 
 		// Enforce project active status using shared helper (if enabled)
 		if allowed, status, er := shouldAllowProject(r.Context(), p.config.EnforceProjectActive, p.projectStore, projectID, p.auditLogger, r); !allowed {
@@ -826,15 +884,6 @@ func (p *TransparentProxy) Handler() http.Handler {
 			p.errorHandler(w, r, err)
 		}
 
-		// Compute X-Body-Hash once for methods with bodies to support POST/PUT/PATCH caching
-		if r.Body != nil && (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch) {
-			bodyBytes, _ := io.ReadAll(r.Body)
-			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-			// Import hashing lazily to avoid overhead elsewhere
-			sum := sha256.Sum256(bodyBytes)
-			r.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
-		}
-
 		// Simple cache lookup with conditional handling (ETag/Last-Modified)
 		if p.cache != nil && (r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodPost) {
 			// Allow GET/HEAD lookups by default when cache is enabled, since reuse will still be gated by canServeCachedForRequest.
@@ -844,14 +893,26 @@ func (p *TransparentProxy) Handler() http.Handler {
 			if !allowedLookup {
 				// Cache is enabled but this request type/method is not cacheable - count as miss
 				p.recordCacheMiss()
+				if !ensureUpstreamAuthorization(r) {
+					return
+				}
 				p.proxy.ServeHTTP(rw, r)
 				return
 			}
 			key := CacheKeyFromRequest(r)
-			if cr, ok := p.cache.Get(key); ok {
+			cr, ok := p.cache.Get(key)
+			if preCacheOK {
+				key = preCacheKey
+				cr = preCacheRes
+				ok = true
+			}
+			if ok {
 				// Validate Vary compatibility using helper
 				if !isVaryCompatible(r, cr, key) {
 					p.recordCacheMiss()
+					if !ensureUpstreamAuthorization(r) {
+						return
+					}
 					// Note: don't set miss status here; let modifyResponse handle cache status
 					p.proxy.ServeHTTP(rw, r)
 					return
@@ -863,6 +924,9 @@ func (p *TransparentProxy) Handler() http.Handler {
 					w.Header().Set("X-PROXY-CACHE", "bypass")
 					w.Header().Set("X-PROXY-CACHE-KEY", key)
 					p.incrementCacheMetric(CacheMetricBypass)
+					if !ensureUpstreamAuthorization(r) {
+						return
+					}
 					p.proxy.ServeHTTP(rw, r)
 					return
 				}
@@ -875,6 +939,9 @@ func (p *TransparentProxy) Handler() http.Handler {
 					}
 					if lm := cr.headers.Get("Last-Modified"); lm != "" {
 						condReq.Header.Set("If-Modified-Since", lm)
+					}
+					if !ensureUpstreamAuthorization(condReq) {
+						return
 					}
 					// Forward conditionally to upstream; let modifyResponse handle store/refresh
 					// Don't increment miss here since this is a conditional revalidation
@@ -925,7 +992,9 @@ func (p *TransparentProxy) Handler() http.Handler {
 			// Cache is enabled but method is not cacheable (e.g., DELETE, OPTIONS, etc.) - count as miss
 			p.recordCacheMiss()
 		}
-
+		if !ensureUpstreamAuthorization(r) {
+			return
+		}
 		p.proxy.ServeHTTP(rw, r)
 	})
 

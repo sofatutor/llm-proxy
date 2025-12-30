@@ -196,6 +196,7 @@ func TestHTTPCache_BasicHitOnSecondGET(t *testing.T) {
 	mockValidator := new(MockTokenValidator)
 	mockStore := new(MockProjectStore)
 	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
+	mockValidator.On("ValidateToken", mock.Anything, "test_token").Return("project123", nil)
 	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
 	mockStore.On("GetProjectActive", mock.Anything, "project123").Return(true, nil)
 
@@ -251,6 +252,7 @@ func (s *sleepingTokenValidator) ValidateTokenWithTracking(ctx context.Context, 
 }
 
 func (s *sleepingTokenValidator) ValidateToken(ctx context.Context, token string) (string, error) {
+	time.Sleep(s.delay)
 	return "project123", nil
 }
 
@@ -339,6 +341,7 @@ func TestHTTPCache_VaryAcceptSeparatesEntries(t *testing.T) {
 	mockValidator := new(MockTokenValidator)
 	mockStore := new(MockProjectStore)
 	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
+	mockValidator.On("ValidateToken", mock.Anything, "test_token").Return("project123", nil)
 	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
 	mockStore.On("GetProjectActive", mock.Anything, "project123").Return(true, nil)
 
@@ -1766,7 +1769,6 @@ func TestProjectActiveEnforcement_DBErrorReturns503(t *testing.T) {
 	v := new(MockTokenValidator)
 	s := new(MockProjectStore)
 	v.On("ValidateTokenWithTracking", mock.Anything, "tok").Return("p1", nil).Once()
-	s.On("GetAPIKeyForProject", mock.Anything, "p1").Return("sk", nil).Once()
 	s.On("GetProjectActive", mock.Anything, "p1").Return(false, errors.New("db down")).Once()
 
 	p, err := NewTransparentProxyWithLogger(ProxyConfig{
@@ -1878,7 +1880,6 @@ func TestTransparentProxyWithAudit_InactiveProject(t *testing.T) {
 
 	// Set up expected calls - token validation succeeds, project is inactive
 	validator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("inactive-project", nil)
-	store.On("GetAPIKeyForProject", mock.Anything, "inactive-project").Return("api_key_123", nil)
 	store.On("GetProjectActive", mock.Anything, "inactive-project").Return(false, nil)
 
 	// Create proxy with audit and project enforcement enabled
