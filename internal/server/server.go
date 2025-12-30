@@ -919,7 +919,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 					token.DeactivatedAt = nowPtrUTC()
 					if err := s.tokenStore.UpdateToken(ctx, token); err != nil {
 						s.logger.Warn("failed to revoke token during project deactivation",
-							zap.String("token_id", token.Token),
+							zap.String("token_id", token.ID),
 							zap.String("project_id", id),
 							zap.Error(err))
 					} else {
@@ -1080,22 +1080,21 @@ func (s *Server) handleBulkRevokeProjectTokens(w http.ResponseWriter, r *http.Re
 func (s *Server) checkManagementAuth(w http.ResponseWriter, r *http.Request) bool {
 	const prefix = "Bearer "
 	header := r.Header.Get("Authorization")
-	maskedHeader := header
-	if len(header) > 10 {
-		maskedHeader = header[:10] + "..."
-	}
-	s.logger.Debug("checkManagementAuth: header", zap.String("header", maskedHeader))
+	s.logger.Debug("checkManagementAuth: header",
+		zap.Bool("present", header != ""),
+		zap.Bool("has_bearer_prefix", strings.HasPrefix(header, prefix)),
+		zap.Int("header_len", len(header)),
+	)
 	if !strings.HasPrefix(header, prefix) || len(header) <= len(prefix) {
 		s.logger.Debug("checkManagementAuth: missing or invalid prefix")
 		http.Error(w, `{"error":"missing or invalid Authorization header"}`, http.StatusUnauthorized)
 		return false
 	}
 	token := header[len(prefix):]
-	maskedToken := "******"
-	if len(s.config.ManagementToken) > 4 {
-		maskedToken = s.config.ManagementToken[:4] + "******"
-	}
-	s.logger.Debug("checkManagementAuth: token compare", zap.String("token", token), zap.String("expected", maskedToken))
+	s.logger.Debug("checkManagementAuth: token compare",
+		zap.Int("provided_len", len(token)),
+		zap.Int("expected_len", len(s.config.ManagementToken)),
+	)
 	if token != s.config.ManagementToken {
 		s.logger.Debug("checkManagementAuth: token mismatch")
 		http.Error(w, `{"error":"invalid management token"}`, http.StatusUnauthorized)
