@@ -890,7 +890,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 							}
 						}
 						// Set fresh timing headers for conditional cache hit
-						setFreshCacheTimingHeaders(w, time.Now())
+						setFreshCacheTimingHeadersFromRequest(w, r, time.Now())
 						w.Header().Set("Cache-Status", "llm-proxy; conditional-hit")
 						w.Header().Set("X-PROXY-CACHE", "conditional-hit")
 						w.Header().Set("X-PROXY-CACHE-KEY", key)
@@ -905,7 +905,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 					}
 				}
 				// Set fresh timing headers for cache hit (for accurate latency measurement)
-				setFreshCacheTimingHeaders(w, time.Now())
+				setFreshCacheTimingHeadersFromRequest(w, r, time.Now())
 				w.Header().Set("Cache-Status", "llm-proxy; hit")
 				w.Header().Set("X-PROXY-CACHE", "hit")
 				w.Header().Set("X-PROXY-CACHE-KEY", key)
@@ -982,12 +982,20 @@ func (p *TransparentProxy) recordCacheHit(r *http.Request) {
 	}
 }
 
-func setFreshCacheTimingHeaders(w http.ResponseWriter, now time.Time) {
-	formatted := now.Format(time.RFC3339Nano)
-	w.Header().Set("X-Proxy-Received-At", formatted)
-	// For cache hits/conditional-hits, the full response is served immediately from cache.
-	w.Header().Set("X-Proxy-First-Response-At", formatted)
-	w.Header().Set("X-Proxy-Final-Response-At", formatted)
+func setFreshCacheTimingHeadersFromRequest(w http.ResponseWriter, r *http.Request, now time.Time) {
+	receivedAt := now
+	if v := r.Context().Value(ctxKeyProxyReceivedAt); v != nil {
+		if t, ok := v.(time.Time); ok && !t.IsZero() {
+			receivedAt = t
+		}
+	}
+
+	w.Header().Set("X-Proxy-Received-At", receivedAt.UTC().Format(time.RFC3339Nano))
+	// For cache hits/conditional-hits, the response body is served from cache,
+	// but there may still be non-trivial work before we can write the response
+	// (auth, DB lookups, cache lookup, etc.).
+	w.Header().Set("X-Proxy-First-Response-At", now.UTC().Format(time.RFC3339Nano))
+	w.Header().Set("X-Proxy-Final-Response-At", now.UTC().Format(time.RFC3339Nano))
 	w.Header().Set("Date", now.UTC().Format(http.TimeFormat))
 }
 

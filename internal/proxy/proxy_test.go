@@ -241,6 +241,85 @@ func TestHTTPCache_BasicHitOnSecondGET(t *testing.T) {
 	assert.Equal(t, 1, hitCount)
 }
 
+type sleepingTokenValidator struct {
+	delay time.Duration
+}
+
+func (s *sleepingTokenValidator) ValidateTokenWithTracking(ctx context.Context, token string) (string, error) {
+	time.Sleep(s.delay)
+	return "project123", nil
+}
+
+func (s *sleepingTokenValidator) ValidateToken(ctx context.Context, token string) (string, error) {
+	return "project123", nil
+}
+
+func TestHTTPCache_HitTimingHeadersIncludePreCacheWork(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=60")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	validator := &sleepingTokenValidator{delay: 60 * time.Millisecond}
+	store := new(MockProjectStore)
+	store.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
+	store.On("GetProjectActive", mock.Anything, "project123").Return(true, nil)
+
+	cfg := ProxyConfig{
+		TargetBaseURL:       server.URL,
+		AllowedEndpoints:    []string{"/v1/test"},
+		AllowedMethods:      []string{"GET"},
+		HTTPCacheEnabled:    true,
+		HTTPCacheDefaultTTL: 10 * time.Second,
+	}
+
+	p, err := NewTransparentProxyWithLogger(cfg, validator, store, zap.NewNop())
+	require.NoError(t, err)
+
+	// First request stores.
+	req1 := httptest.NewRequest("GET", "/v1/test", nil)
+	req1.Header.Set("Authorization", "Bearer test_token")
+	req1.Header.Set("Cache-Control", "public, max-age=60")
+	w1 := httptest.NewRecorder()
+	p.Handler().ServeHTTP(w1, req1)
+	res1 := w1.Result()
+	_ = res1.Body.Close()
+	require.Equal(t, http.StatusOK, res1.StatusCode)
+	require.Contains(t, res1.Header.Get("Cache-Status"), "stored")
+
+	// Second request is a cache hit; timing headers should reflect validator delay.
+	req2 := httptest.NewRequest("GET", "/v1/test", nil)
+	req2.Header.Set("Authorization", "Bearer test_token")
+	req2.Header.Set("Cache-Control", "public, max-age=60")
+	w2 := httptest.NewRecorder()
+	p.Handler().ServeHTTP(w2, req2)
+	res2 := w2.Result()
+	_ = res2.Body.Close()
+	require.Equal(t, http.StatusOK, res2.StatusCode)
+	require.Contains(t, res2.Header.Get("Cache-Status"), "hit")
+
+	receivedAtStr := res2.Header.Get("X-Proxy-Received-At")
+	finalAtStr := res2.Header.Get("X-Proxy-Final-Response-At")
+	require.NotEmpty(t, receivedAtStr)
+	require.NotEmpty(t, finalAtStr)
+
+	receivedAt, err := time.Parse(time.RFC3339Nano, receivedAtStr)
+	require.NoError(t, err)
+	finalAt, err := time.Parse(time.RFC3339Nano, finalAtStr)
+	require.NoError(t, err)
+
+	if finalAt.Before(receivedAt) {
+		t.Fatalf("expected finalAt >= receivedAt, got receivedAt=%s finalAt=%s", receivedAt, finalAt)
+	}
+
+	// Allow some scheduling noise, but we should observe most of the injected delay.
+	if finalAt.Sub(receivedAt) < 40*time.Millisecond {
+		t.Fatalf("expected cache-hit timing to include pre-cache work; got %s", finalAt.Sub(receivedAt))
+	}
+}
+
 func TestHTTPCache_VaryAcceptSeparatesEntries(t *testing.T) {
 	// Upstream returns different payload for different Accept
 	hits := 0
