@@ -278,6 +278,45 @@ func (d *DB) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	return nil
 }
 
+// IncrementTokenUsageBatch increments request_count for multiple tokens and updates last_used_at.
+// The token IDs are token strings (sk-...).
+func (d *DB) IncrementTokenUsageBatch(ctx context.Context, deltas map[string]int, lastUsedAt time.Time) error {
+	if len(deltas) == 0 {
+		return nil
+	}
+
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback() // No-op if already committed
+	}()
+
+	query := `UPDATE tokens SET request_count = request_count + ?, last_used_at = ? WHERE token = ?`
+	stmt, err := tx.PrepareContext(ctx, d.RebindQuery(query))
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer func() {
+		_ = stmt.Close()
+	}()
+
+	for tokenID, delta := range deltas {
+		if delta <= 0 {
+			continue
+		}
+		if _, err := stmt.ExecContext(ctx, delta, lastUsedAt.UTC(), tokenID); err != nil {
+			return fmt.Errorf("failed to increment token usage for token %s: %w", obfuscate.ObfuscateTokenGeneric(tokenID), err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	return nil
+}
+
 // CleanExpiredTokens deletes expired tokens from the database.
 func (d *DB) CleanExpiredTokens(ctx context.Context) (int64, error) {
 	now := time.Now().UTC()
