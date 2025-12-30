@@ -191,14 +191,14 @@ func (cv *CachedValidator) checkCache(tokenID string) (string, bool) {
 
 // cacheToken retrieves and caches a token
 func (cv *CachedValidator) cacheToken(ctx context.Context, tokenID string) {
-	cv.cacheMutex.Lock()
-	defer cv.cacheMutex.Unlock()
-
 	standardValidator, ok := cv.validator.(*StandardValidator)
 	if !ok {
 		return
 	}
-	tokenData, err := standardValidator.store.GetTokenByID(ctx, tokenID)
+
+	// TokenValidator receives the token *string* (sk-...) in ValidateToken/ValidateTokenWithTracking.
+	// Populate cache using token-string lookup.
+	tokenData, err := standardValidator.store.GetTokenByToken(ctx, tokenID)
 	if err != nil {
 		return
 	}
@@ -207,8 +207,13 @@ func (cv *CachedValidator) cacheToken(ctx context.Context, tokenID string) {
 	}
 
 	validUntil := time.Now().Add(cv.cacheTTL)
+
+	cv.cacheMutex.Lock()
+	defer cv.cacheMutex.Unlock()
+
 	insertedAt := cv.insertCounter
 	cv.insertCounter++
+
 	cv.cache[tokenID] = CacheEntry{
 		Data:       tokenData,
 		ValidUntil: validUntil,
