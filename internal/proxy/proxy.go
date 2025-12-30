@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"path"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -199,9 +201,52 @@ func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator,
 	} else {
 		if config.RedisCacheURL != "" {
 			if opt, err := redis.ParseURL(config.RedisCacheURL); err == nil {
+				// Tune Redis client defaults for cache workloads.
+				// go-redis default pool sizing depends on GOMAXPROCS and can be too small
+				// for bursty cache-hit traffic (especially when an ingress pins many
+				// connections to a single pod).
+				//
+				// Env overrides:
+				// - REDIS_CACHE_POOL_SIZE: int (e.g., 50, 100)
+				// - REDIS_CACHE_TIMEOUT: duration (Go duration string, e.g., 1s, 250ms)
+				//   Applies to dial/read/write.
+				poolSize := 50
+				if v := os.Getenv("REDIS_CACHE_POOL_SIZE"); v != "" {
+					if n, convErr := strconv.Atoi(v); convErr == nil && n > 0 {
+						poolSize = n
+					}
+				}
+				if opt.PoolSize < poolSize {
+					opt.PoolSize = poolSize
+				}
+
+				timeout := 1 * time.Second
+				if v := os.Getenv("REDIS_CACHE_TIMEOUT"); v != "" {
+					if d, convErr := time.ParseDuration(v); convErr == nil && d > 0 {
+						timeout = d
+					}
+				}
+				if opt.DialTimeout == 0 {
+					opt.DialTimeout = timeout
+				}
+				if opt.ReadTimeout == 0 {
+					opt.ReadTimeout = timeout
+				}
+				if opt.WriteTimeout == 0 {
+					opt.WriteTimeout = timeout
+				}
+
 				client := redis.NewClient(opt)
 				proxy.cache = newRedisCache(client, config.RedisCacheKeyPrefix)
-				logger.Info("HTTP cache enabled", zap.String("backend", "redis"))
+				logger.Info(
+					"HTTP cache enabled",
+					zap.String("backend", "redis"),
+					zap.String("redis_addr", opt.Addr),
+					zap.Int("redis_pool_size", opt.PoolSize),
+					zap.Duration("redis_dial_timeout", opt.DialTimeout),
+					zap.Duration("redis_read_timeout", opt.ReadTimeout),
+					zap.Duration("redis_write_timeout", opt.WriteTimeout),
+				)
 			} else {
 				proxy.cache = newInMemoryCache()
 				logger.Warn("Failed to parse RedisCacheURL; falling back to in-memory cache", zap.Error(err))
