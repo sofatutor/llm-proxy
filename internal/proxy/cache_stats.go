@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sofatutor/llm-proxy/internal/obfuscate"
 	"go.uber.org/zap"
 )
 
@@ -125,7 +124,7 @@ func (a *CacheStatsAggregator) RecordCacheHit(tokenID string) {
 	default:
 		// Buffer full, drop the event
 		a.logger.Debug("cache stats buffer full, dropping event",
-			zap.String("token_id", obfuscate.ObfuscateTokenGeneric(tokenID)))
+			zap.String("token_id", tokenID))
 	}
 }
 

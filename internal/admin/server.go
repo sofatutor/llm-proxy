@@ -1057,8 +1057,6 @@ func (s *Server) handleLogin(c *gin.Context) {
 		return
 	}
 
-	req.ManagementToken = strings.TrimSpace(req.ManagementToken)
-
 	logger.Info("login attempt", zap.String("token", obfuscateToken(req.ManagementToken)), zap.Bool("remember_me", req.RememberMe))
 
 	// Use injected or default token validation

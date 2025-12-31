@@ -7,11 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sofatutor/llm-proxy/internal/obfuscate"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
-	"go.uber.org/zap/zaptest/observer"
 )
 
 // mockCacheStatsStore is a mock implementation of CacheStatsStore for testing.
@@ -175,54 +172,6 @@ func TestCacheStatsAggregator_BufferFull_DropsEvents(t *testing.T) {
 	_ = agg.Stop(ctx)
 
 	// We just verify it doesn't block or panic
-}
-
-func TestCacheStatsAggregator_BufferFull_DropsEvents_DoesNotLogRawToken(t *testing.T) {
-	store := &mockCacheStatsStore{
-		delay: 500 * time.Millisecond, // Slow store to cause buffer backup
-	}
-
-	core, recorded := observer.New(zapcore.DebugLevel)
-	logger := zap.New(core)
-
-	config := CacheStatsAggregatorConfig{
-		BufferSize:    1,
-		FlushInterval: time.Hour,
-		BatchSize:     1000,
-	}
-
-	agg := NewCacheStatsAggregator(config, store, logger)
-	agg.Start()
-
-	secretToken := "sk-THIS_SHOULD_NOT_APPEAR_IN_LOGS"
-	agg.RecordCacheHit(secretToken)
-	agg.RecordCacheHit(secretToken) // second enqueue should be dropped and logged
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	_ = agg.Stop(ctx)
-
-	entries := recorded.FilterMessage("cache stats buffer full, dropping event").All()
-	if len(entries) == 0 {
-		t.Fatalf("expected at least one buffer-full log entry")
-	}
-
-	for _, entry := range entries {
-		for _, field := range entry.Context {
-			if field.Key != "token_id" {
-				continue
-			}
-			if field.String == secretToken {
-				t.Fatalf("expected token_id to be obfuscated, got raw token")
-			}
-			if field.String == "" {
-				t.Fatalf("expected token_id field to be set")
-			}
-			if field.String != obfuscate.ObfuscateTokenGeneric(secretToken) {
-				t.Fatalf("expected token_id to be obfuscated; got %q", field.String)
-			}
-		}
-	}
 }
 
 func TestCacheStatsAggregator_GracefulShutdown(t *testing.T) {

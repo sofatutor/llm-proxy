@@ -2,12 +2,10 @@ package database
 
 import (
 	"context"
-	"database/sql"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/sofatutor/llm-proxy/internal/obfuscate"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/stretchr/testify/require"
@@ -338,6 +336,46 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 	if err != ErrTokenNotFound {
 		t.Fatalf("Expected ErrTokenNotFound for cleaned token, got %v", err)
 	}
+}
+
+func TestIncrementTokenUsage_EnforcesMaxRequests(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	project := proxy.Project{
+		ID:           "proj-quota-1",
+		Name:         "Quota Test",
+		OpenAIAPIKey: "test-api-key",
+		IsActive:     true,
+		CreatedAt:    time.Now().UTC().Truncate(time.Second),
+		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+	}
+	require.NoError(t, db.CreateProject(ctx, project))
+
+	maxRequests := 3
+	tk := Token{
+		Token:        "token-quota-1",
+		ProjectID:    project.ID,
+		IsActive:     true,
+		RequestCount: 2,
+		MaxRequests:  &maxRequests,
+		CreatedAt:    time.Now().UTC().Truncate(time.Second),
+	}
+	require.NoError(t, db.CreateToken(ctx, tk))
+
+	// One increment should succeed and reach the quota.
+	require.NoError(t, db.IncrementTokenUsage(ctx, tk.Token))
+	got, err := db.GetTokenByToken(ctx, tk.Token)
+	require.NoError(t, err)
+	require.Equal(t, 3, got.RequestCount)
+
+	// Next increment should fail and must not overshoot.
+	require.ErrorIs(t, db.IncrementTokenUsage(ctx, tk.Token), token.ErrTokenRateLimit)
+	got, err = db.GetTokenByToken(ctx, tk.Token)
+	require.NoError(t, err)
+	require.Equal(t, 3, got.RequestCount)
 }
 
 func TestGetTokenByID_NotFound(t *testing.T) {
@@ -834,59 +872,4 @@ func TestIncrementCacheHitCountBatch(t *testing.T) {
 		err := db.IncrementCacheHitCountBatch(ctx, deltas)
 		require.NoError(t, err) // No error, just no rows updated
 	})
-}
-
-func TestIncrementCacheHitCountBatch_ErrorDoesNotLeakToken(t *testing.T) {
-	db, cleanup := testDB(t)
-	defer cleanup()
-	ctx := context.Background()
-
-	// Create a project and a token (token value is a secret in production).
-	p := proxy.Project{ID: "proj-cache-batch-redact", Name: "Cache Batch Redact Test", OpenAIAPIKey: "key", IsActive: true, CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	require.NoError(t, db.CreateProject(ctx, p))
-
-	secretToken := "sk-THIS_IS_A_SECRET_TOKEN"
-	require.NoError(t, db.CreateToken(ctx, Token{Token: secretToken, ProjectID: p.ID, IsActive: true, CacheHitCount: 0, CreatedAt: time.Now()}))
-
-	// Get the backing SQLite file path so we can open a second connection.
-	rows, err := db.db.Query("PRAGMA database_list")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		require.NoError(t, rows.Close())
-	})
-
-	var dbPath string
-	for rows.Next() {
-		var seq int
-		var name string
-		var file string
-		require.NoError(t, rows.Scan(&seq, &name, &file))
-		if name == "main" {
-			dbPath = file
-			break
-		}
-	}
-	require.NoError(t, rows.Err())
-	require.NotEmpty(t, dbPath)
-
-	lockDB, err := sql.Open("sqlite3", dbPath+"?_journal=WAL&_foreign_keys=on&_loc=UTC&_busy_timeout=1")
-	require.NoError(t, err)
-	defer func() { _ = lockDB.Close() }()
-
-	// Hold a write lock to force the batch update to fail.
-	_, err = lockDB.Exec("BEGIN IMMEDIATE")
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_, _ = lockDB.Exec("ROLLBACK")
-	})
-
-	callCtx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
-	defer cancel()
-
-	err = db.IncrementCacheHitCountBatch(callCtx, map[string]int{secretToken: 1})
-	require.Error(t, err)
-
-	// Must never leak the raw token in errors (errors are often logged).
-	require.NotContains(t, err.Error(), secretToken)
-	require.Contains(t, err.Error(), obfuscate.ObfuscateTokenGeneric(secretToken))
 }

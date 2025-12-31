@@ -3,41 +3,15 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/api"
 	"github.com/spf13/cobra"
 )
-
-func TestNewBenchmarkHTTPClient_ConfiguresReusableTransport(t *testing.T) {
-	client := newBenchmarkHTTPClient(7 * time.Second)
-	if client.Timeout != 7*time.Second {
-		t.Fatalf("expected timeout %s, got %s", 7*time.Second, client.Timeout)
-	}
-
-	transport, ok := client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatalf("expected *http.Transport, got %T", client.Transport)
-	}
-	if transport.MaxIdleConnsPerHost < 100 {
-		t.Fatalf("expected MaxIdleConnsPerHost >= 100, got %d", transport.MaxIdleConnsPerHost)
-	}
-	if transport.MaxIdleConns < 100 {
-		t.Fatalf("expected MaxIdleConns >= 100, got %d", transport.MaxIdleConns)
-	}
-	if transport.DialContext == nil {
-		t.Fatal("expected DialContext to be set")
-	}
-
-	// Ensure we didn't accidentally end up with a nil transport.
-	_ = net.IPv4len
-}
 
 func TestCommandHelp(t *testing.T) {
 	// Save the original os.Exit function
@@ -88,60 +62,6 @@ func TestCommandHelp(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestBenchmark_TokenFromEnv(t *testing.T) {
-	const tokenEnvVar = "LLM_PROXY_BENCHMARK_TOKEN"
-	const tokenValue = "sk-test-123"
-
-	t.Setenv(tokenEnvVar, tokenValue)
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("Authorization"); got != "Bearer "+tokenValue {
-			t.Fatalf("expected Authorization header %q, got %q", "Bearer "+tokenValue, got)
-		}
-		w.Header().Set("X-Cache", "HIT")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"ok":true}`))
-	}))
-	t.Cleanup(server.Close)
-
-	// Capture stdout to keep test output clean.
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-	t.Cleanup(func() {
-		os.Stdout = oldStdout
-	})
-
-	origExit := osExit
-	osExit = func(code int) {
-		t.Fatalf("unexpected osExit(%d)", code)
-	}
-	t.Cleanup(func() {
-		osExit = origExit
-	})
-
-	benchmarkCmd.SetArgs([]string{
-		"--base-url", server.URL,
-		"--endpoint", "/",
-		"--requests", "1",
-		"--concurrency", "1",
-		"--token-env", tokenEnvVar,
-	})
-
-	err := benchmarkCmd.Execute()
-	if err != nil {
-		t.Fatalf("expected no error, got: %v", err)
-	}
-
-	if err := w.Close(); err != nil {
-		t.Fatalf("Error closing write pipe: %v", err)
-	}
-	os.Stdout = oldStdout
-
-	var buf bytes.Buffer
-	_, _ = buf.ReadFrom(r)
 }
 
 func TestChatCommandArgs(t *testing.T) {
