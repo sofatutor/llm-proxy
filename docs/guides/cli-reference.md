@@ -543,13 +543,14 @@ llm-proxy benchmark [flags]
 **Required Flags:**
 - `--base-url string`: Base URL of the target (e.g., `http://localhost:8080` or `https://api.openai.com/v1`)
 - `--endpoint string`: API path to hit (e.g., `/v1/chat/completions` or `/chat/completions` for OpenAI)
-- `--token string`: Bearer token (proxy token or OpenAI API key)
+- `--token string`: Bearer token (proxy token or OpenAI API key). Prefer `--token-env` to avoid putting secrets in shell history.
 - `--requests, -r int`: Total number of requests to send
 - `--concurrency, -c int`: Number of concurrent workers
 
 **Optional Flags:**
 - `--json string`: JSON request body for POST requests
 - `--method string`: HTTP method to use (GET, POST, PUT, PATCH) (default: "POST")
+- `--token-env string`: Environment variable name containing the token (default: "PROXY_TOKEN"; matches `llm-proxy openai chat`)
 - `--cache`: Set `Cache-Control: public` with high TTL for benchmarking cache behavior
 - `--cache-ttl int`: TTL seconds to use with `--cache` (default: 86400)
 - `--debug`: Print sample responses and headers by status code

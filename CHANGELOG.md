@@ -8,11 +8,16 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ## December 31, 2025
 
+### Added
+
+- **Token Env Support** ([#237](https://github.com/sofatutor/llm-proxy/pull/237)): Benchmark mode now honors CLI token environment variables so credentials can be supplied securely and consistently like other commands.
+
 ### Changed
 
 - **Cache Fastpath Tuning** ([#233](https://github.com/sofatutor/llm-proxy/pull/233)): Skips token tracking and upstream API-key lookups on true cache hits while deferring key resolution until a request must go upstream, hardens POST body hashing to opted-in requests with bounded sizes, and retunes Redis cache client defaults for more reliable caching behavior.
 - **Clarify Token Counters** ([#235](https://github.com/sofatutor/llm-proxy/pull/235)): Clarifies the admin UI’s token request counter semantics, sharpens the env-file warning messaging, and trims login token input so administrators avoid confusion and stray whitespace issues.
 - **Async Unlimited Token Tracking** ([#234](https://github.com/sofatutor/llm-proxy/pull/234)): Moves unlimited-token usage tracking into an async, bounded-buffer flow while keeping limited-token tracking synchronous, preventing slowdowns under load (buffer overflows are logged at DEBUG and may drop events).
+- **Pooled Benchmark Client** ([#237](https://github.com/sofatutor/llm-proxy/pull/237)): Benchmark requests reuse a pooled HTTP client with aggressive keep-alive defaults to reduce variance and stress connection reuse across runs.
 
 ### Fixed
 

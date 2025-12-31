@@ -8,10 +8,32 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/api"
 	"github.com/spf13/cobra"
 )
+
+func TestNewBenchmarkHTTPClient_ConfiguresReusableTransport(t *testing.T) {
+	client := newBenchmarkHTTPClient(7 * time.Second)
+	if client.Timeout != 7*time.Second {
+		t.Fatalf("expected timeout %s, got %s", 7*time.Second, client.Timeout)
+	}
+
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("expected *http.Transport, got %T", client.Transport)
+	}
+	if transport.MaxIdleConnsPerHost < 100 {
+		t.Fatalf("expected MaxIdleConnsPerHost >= 100, got %d", transport.MaxIdleConnsPerHost)
+	}
+	if transport.MaxIdleConns < 100 {
+		t.Fatalf("expected MaxIdleConns >= 100, got %d", transport.MaxIdleConns)
+	}
+	if transport.DialContext == nil {
+		t.Fatal("expected DialContext to be set")
+	}
+}
 
 func TestCommandHelp(t *testing.T) {
 	// Save the original os.Exit function
@@ -59,6 +81,118 @@ func TestCommandHelp(t *testing.T) {
 
 			if output == "" {
 				t.Error("Expected help output, got empty string")
+			}
+		})
+	}
+}
+
+func TestBenchmark_TokenFromEnv(t *testing.T) {
+	const tokenEnvVar = "LLM_PROXY_BENCHMARK_TOKEN"
+	const tokenValue = "sk-test-123"
+
+	t.Setenv(tokenEnvVar, tokenValue)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer "+tokenValue {
+			t.Fatalf("expected Authorization header %q, got %q", "Bearer "+tokenValue, got)
+		}
+		w.Header().Set("X-Cache", "HIT")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	t.Cleanup(server.Close)
+
+	// Capture stdout to keep test output clean.
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	t.Cleanup(func() { os.Stdout = oldStdout })
+
+	origExit := osExit
+	osExit = func(code int) {
+		t.Fatalf("unexpected osExit(%d)", code)
+	}
+	t.Cleanup(func() {
+		osExit = origExit
+	})
+
+	benchmarkCmd.SetArgs([]string{
+		"--base-url", server.URL,
+		"--endpoint", "/",
+		"--requests", "1",
+		"--concurrency", "1",
+		"--token-env", tokenEnvVar,
+	})
+	t.Cleanup(func() {
+		benchmarkCmd.SetArgs(nil)
+	})
+
+	err := benchmarkCmd.Execute()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if err := w.Close(); err != nil {
+		t.Fatalf("Error closing write pipe: %v", err)
+	}
+
+	var buf bytes.Buffer
+	_, _ = buf.ReadFrom(r)
+}
+
+func TestProxyLatencyFromProxyTimingHeaders(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	cases := []struct {
+		name      string
+		received  string
+		final     string
+		want      time.Duration
+		wantFound bool
+	}{
+		{
+			name:      "missing headers",
+			wantFound: false,
+		},
+		{
+			name:      "invalid timestamps",
+			received:  "not-a-timestamp",
+			final:     "also-not-a-timestamp",
+			wantFound: false,
+		},
+		{
+			name:      "final before received",
+			received:  base.Add(2 * time.Second).Format(time.RFC3339Nano),
+			final:     base.Add(1 * time.Second).Format(time.RFC3339Nano),
+			wantFound: false,
+		},
+		{
+			name:      "valid latency",
+			received:  base.Format(time.RFC3339Nano),
+			final:     base.Add(1500 * time.Millisecond).Format(time.RFC3339Nano),
+			want:      1500 * time.Millisecond,
+			wantFound: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			headers := make(http.Header)
+			if tc.received != "" {
+				headers.Set("X-Proxy-Received-At", tc.received)
+			}
+			if tc.final != "" {
+				headers.Set("X-Proxy-Final-Response-At", tc.final)
+			}
+
+			got, ok := proxyLatencyFromProxyTimingHeaders(headers)
+			if ok != tc.wantFound {
+				t.Fatalf("expected found=%v, got %v", tc.wantFound, ok)
+			}
+			if ok && got != tc.want {
+				t.Fatalf("expected latency %s, got %s", tc.want, got)
 			}
 		})
 	}
