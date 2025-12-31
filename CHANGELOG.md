@@ -14,11 +14,13 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Changed
 
+- **Cache Fastpath Tuning** ([#233](https://github.com/sofatutor/llm-proxy/pull/233)): Skips token tracking and upstream API-key lookups on true cache hits while deferring key resolution until a request must go upstream, hardens POST body hashing to opted-in requests with bounded sizes, and retunes Redis cache client defaults for more reliable caching behavior.
 - **Helm OCI Publishing** ([#231](https://github.com/sofatutor/llm-proxy/pull/231)): Publishes Helm charts to `oci://ghcr.io/<owner>/charts/llm-proxy` and ensures Docker smoke tests for `v*` tags pull the semver bump so release artifacts no longer collide.
 - **Helm Security Defaults** ([#231](https://github.com/sofatutor/llm-proxy/pull/231)): Aligns container and Helm security contexts with stable numeric UID/GID, executable permissions, and updated NOTES/values defaults for ingress URLs and `fsGroup` so deployments start with consistent settings.
 
 ### Fixed
 
+- **Token Logging Obfuscation** ([#236](https://github.com/sofatutor/llm-proxy/pull/236)): Masks tokens in logs and error messages to prevent accidental secret leakage, improving operational security without changing behavior.
 - **Atomic Token Request Limit** ([#232](https://github.com/sofatutor/llm-proxy/pull/232)): Prevents token usage from exceeding `max_requests` by atomically guarding updates, distinguishing quota failures, aligning mock and DB semantics, and adding regression tests, while also fixing Prometheus metric writes to satisfy staticcheck.
 
 ## December 29, 2025
