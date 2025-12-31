@@ -8,10 +8,18 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ## December 31, 2025
 
+### Added
+
+- **Admin UI Workload** ([#231](https://github.com/sofatutor/llm-proxy/pull/231)): Adds an optional `admin.enabled` Helm workload with Deployment, Service, and Ingress templates so the Admin UI can be exposed through customizable ingress settings.
+
+### Changed
+
+- **Helm OCI Publishing** ([#231](https://github.com/sofatutor/llm-proxy/pull/231)): Publishes Helm charts to `oci://ghcr.io/<owner>/charts/llm-proxy` and ensures Docker smoke tests for `v*` tags pull the semver bump so release artifacts no longer collide.
+- **Helm Security Defaults** ([#231](https://github.com/sofatutor/llm-proxy/pull/231)): Aligns container and Helm security contexts with stable numeric UID/GID, executable permissions, and updated NOTES/values defaults for ingress URLs and `fsGroup` so deployments start with consistent settings.
+
 ### Fixed
 
 - **Atomic Token Request Limit** ([#232](https://github.com/sofatutor/llm-proxy/pull/232)): Prevents token usage from exceeding `max_requests` by atomically guarding updates, distinguishing quota failures, aligning mock and DB semantics, and adding regression tests, while also fixing Prometheus metric writes to satisfy staticcheck.
-
 
 ## December 29, 2025
 
