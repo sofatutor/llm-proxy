@@ -10,8 +10,8 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Fixed
 
+- **Token Logging Obfuscation** ([#236](https://github.com/sofatutor/llm-proxy/pull/236)): Masks tokens in logs and error messages to prevent accidental secret leakage, improving operational security without changing behavior.
 - **Atomic Token Request Limit** ([#232](https://github.com/sofatutor/llm-proxy/pull/232)): Prevents token usage from exceeding `max_requests` by atomically guarding updates, distinguishing quota failures, aligning mock and DB semantics, and adding regression tests, while also fixing Prometheus metric writes to satisfy staticcheck.
-
 
 ## December 29, 2025
 
