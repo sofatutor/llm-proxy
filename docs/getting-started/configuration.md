@@ -86,6 +86,7 @@ HTTP response caching improves performance by storing and reusing responses.
 | `HTTP_CACHE_MAX_OBJECT_BYTES` | int | `1048576` | Maximum cached object size (1MB) |
 | `HTTP_CACHE_DEFAULT_TTL` | int | `300` | Default TTL in seconds (5 minutes) |
 | `CACHE_STATS_BUFFER_SIZE` | int | `1000` | Buffer size for cache hit tracking |
+| `USAGE_STATS_BUFFER_SIZE` | int | `1000` | Buffer size for async unlimited-token usage tracking (falls back to `CACHE_STATS_BUFFER_SIZE`) |
 
 ### Cache Behavior
 

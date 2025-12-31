@@ -172,6 +172,12 @@ In the Admin UI tokens list, you'll see:
 - **UPSTREAM**: Number of upstream-served responses (`request_count - cache_hit_count`)
 - **LIMIT**: Remaining requests until rate limit (or ∞ for unlimited tokens)
 
+### Usage Stats Aggregation
+
+For unlimited tokens, the proxy can batch `request_count`/`last_used_at` updates asynchronously to keep DB writes off the hot path.
+
+- `USAGE_STATS_BUFFER_SIZE`: Size of the buffered channel for usage tracking events (default: `1000`). If not set, it falls back to `CACHE_STATS_BUFFER_SIZE`.
+
 ## Example Configuration
 
 See [api_providers_example.yaml](../config/api_providers_example.yaml) for a comprehensive example configuration with multiple API providers.

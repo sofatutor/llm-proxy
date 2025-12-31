@@ -138,16 +138,66 @@ func (cv *CachedValidator) ValidateToken(ctx context.Context, tokenID string) (s
 	return projectID, nil
 }
 
-// ValidateTokenWithTracking validates a token and tracks usage (bypasses cache for tracking)
+// ValidateTokenWithTracking validates a token and tracks usage.
+//
+// For cached *unlimited* tokens, we keep validation cheap by returning from the cache and enqueueing
+// async tracking (when an aggregator is configured). For cached *limited* tokens we defer to the
+// underlying validator and invalidate the cache afterwards, to avoid serving stale rate-limit state.
 func (cv *CachedValidator) ValidateTokenWithTracking(ctx context.Context, tokenID string) (string, error) {
-	// Always use the underlying validator for tracking requests
+	shouldInvalidateAfterTracking := false
+
+	cv.cacheMutex.RLock()
+	entry, found := cv.cache[tokenID]
+	cv.cacheMutex.RUnlock()
+
+	if !found {
+		cv.statsMutex.Lock()
+		cv.misses++
+		cv.statsMutex.Unlock()
+	} else {
+		now := time.Now()
+		if now.After(entry.ValidUntil) {
+			cv.invalidateCache(tokenID)
+
+			cv.statsMutex.Lock()
+			cv.misses++
+			cv.evictions++
+			cv.statsMutex.Unlock()
+		} else if entry.Data.IsValid() {
+			cv.statsMutex.Lock()
+			cv.hits++
+			cv.statsMutex.Unlock()
+
+			isUnlimited := entry.Data.MaxRequests == nil || *entry.Data.MaxRequests <= 0
+			if isUnlimited {
+				if getter, ok := cv.validator.(usageStatsAggregatorGetter); ok {
+					if agg := getter.usageStatsAggregator(); agg != nil {
+						agg.RecordTokenUsage(tokenID)
+						return entry.Data.ProjectID, nil
+					}
+				}
+			} else {
+				shouldInvalidateAfterTracking = true
+			}
+		} else {
+			// Should be unreachable (invalid tokens should never be cached), but be defensive.
+			cv.invalidateCache(tokenID)
+
+			cv.statsMutex.Lock()
+			cv.misses++
+			cv.evictions++
+			cv.statsMutex.Unlock()
+		}
+	}
+
 	projectID, err := cv.validator.ValidateTokenWithTracking(ctx, tokenID)
 	if err != nil {
 		return "", err
 	}
 
-	// Update the cache if the token is already cached
-	cv.invalidateCache(tokenID)
+	if shouldInvalidateAfterTracking {
+		cv.invalidateCache(tokenID)
+	}
 
 	return projectID, nil
 }
@@ -191,14 +241,14 @@ func (cv *CachedValidator) checkCache(tokenID string) (string, bool) {
 
 // cacheToken retrieves and caches a token
 func (cv *CachedValidator) cacheToken(ctx context.Context, tokenID string) {
-	cv.cacheMutex.Lock()
-	defer cv.cacheMutex.Unlock()
-
 	standardValidator, ok := cv.validator.(*StandardValidator)
 	if !ok {
 		return
 	}
-	tokenData, err := standardValidator.store.GetTokenByID(ctx, tokenID)
+
+	// TokenValidator receives the token *string* (sk-...) in ValidateToken/ValidateTokenWithTracking.
+	// Populate cache using token-string lookup.
+	tokenData, err := standardValidator.store.GetTokenByToken(ctx, tokenID)
 	if err != nil {
 		return
 	}
@@ -207,8 +257,13 @@ func (cv *CachedValidator) cacheToken(ctx context.Context, tokenID string) {
 	}
 
 	validUntil := time.Now().Add(cv.cacheTTL)
+
+	cv.cacheMutex.Lock()
+	defer cv.cacheMutex.Unlock()
+
 	insertedAt := cv.insertCounter
 	cv.insertCounter++
+
 	cv.cache[tokenID] = CacheEntry{
 		Data:       tokenData,
 		ValidUntil: validUntil,
