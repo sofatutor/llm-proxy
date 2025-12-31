@@ -8,10 +8,17 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ## December 31, 2025
 
+### Added
+
+- **Token Env Support** ([#237](https://github.com/sofatutor/llm-proxy/pull/237)): Benchmark mode now honors CLI token environment variables so credentials can be supplied securely and consistently like other commands.
+
+### Changed
+
+- **Pooled Benchmark Client** ([#237](https://github.com/sofatutor/llm-proxy/pull/237)): Benchmark requests now reuse a pooled HTTP client with aggressive keep-alive defaults to reduce variance and stress connection reuse across runs.
+
 ### Fixed
 
 - **Atomic Token Request Limit** ([#232](https://github.com/sofatutor/llm-proxy/pull/232)): Prevents token usage from exceeding `max_requests` by atomically guarding updates, distinguishing quota failures, aligning mock and DB semantics, and adding regression tests, while also fixing Prometheus metric writes to satisfy staticcheck.
-
 
 ## December 29, 2025
 
