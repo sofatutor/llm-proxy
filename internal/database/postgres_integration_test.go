@@ -17,7 +17,10 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,6 +29,7 @@ import (
 	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/database/migrations"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
+	tokenpkg "github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -386,6 +390,81 @@ func TestPostgresIntegration_ConcurrentOperations(t *testing.T) {
 	final, err := db.GetTokenByID(ctx, token.ID)
 	require.NoError(t, err)
 	assert.Equal(t, numGoroutines, final.RequestCount, "Request count should match number of increments")
+}
+
+func TestPostgresIntegration_ConcurrentMaxRequestsEnforcement(t *testing.T) {
+	db, cleanup := setupPostgresTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	now := time.Now().Truncate(time.Second)
+
+	project := proxy.Project{
+		ID:           uuid.NewString(),
+		Name:         "Concurrent Quota Test Project",
+		OpenAIAPIKey: "concurrent-quota-api-key",
+		IsActive:     true,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	require.NoError(t, db.CreateProject(ctx, project))
+
+	maxRequests := 25
+	tokenID := uuid.NewString()
+	tokenSecret := "tok-" + uuid.NewString()
+	tk := Token{
+		ID:           tokenID,
+		Token:        tokenSecret,
+		ProjectID:    project.ID,
+		IsActive:     true,
+		RequestCount: 0,
+		MaxRequests:  ptrInt(maxRequests),
+		CreatedAt:    now,
+	}
+	require.NoError(t, db.CreateToken(ctx, tk))
+
+	// Fan out more increments than the quota allows.
+	numGoroutines := maxRequests * 4
+
+	var successCount atomic.Int64
+	var rateLimitCount atomic.Int64
+
+	var wg sync.WaitGroup
+	wg.Add(numGoroutines)
+
+	errorsCh := make(chan error, numGoroutines)
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			defer wg.Done()
+			err := db.IncrementTokenUsage(ctx, tk.Token)
+			if err == nil {
+				successCount.Add(1)
+				return
+			}
+			if errors.Is(err, ErrTokenNotFound) {
+				errorsCh <- err
+				return
+			}
+			if errors.Is(err, tokenpkg.ErrTokenRateLimit) {
+				rateLimitCount.Add(1)
+				return
+			}
+			errorsCh <- err
+		}()
+	}
+
+	wg.Wait()
+	close(errorsCh)
+	for err := range errorsCh {
+		require.NoError(t, err)
+	}
+
+	final, err := db.GetTokenByID(ctx, tk.ID)
+	require.NoError(t, err)
+	assert.Equal(t, maxRequests, final.RequestCount)
+	assert.Equal(t, int64(maxRequests), successCount.Load())
+	assert.Equal(t, int64(numGoroutines-maxRequests), rateLimitCount.Load())
 }
 
 // TestPostgresIntegration_TransactionRollback tests that failed operations don't leave partial state.

@@ -115,6 +115,9 @@ func (m *MockTokenStore) IncrementTokenUsage(ctx context.Context, tokenID string
 	if !exists {
 		return ErrTokenNotFound
 	}
+	if t.MaxRequests != nil && *t.MaxRequests > 0 && t.RequestCount >= *t.MaxRequests {
+		return token.ErrTokenRateLimit
+	}
 
 	t.RequestCount++
 	now := time.Now()
