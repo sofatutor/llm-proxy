@@ -233,6 +233,34 @@ Dispatcher fullname
 {{- end }}
 
 {{/*
+Admin UI fullname
+*/}}
+{{- define "llm-proxy.admin.fullname" -}}
+{{- printf "%s-admin" (include "llm-proxy.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Admin UI selector labels
+*/}}
+{{- define "llm-proxy.admin.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "llm-proxy.name" . }}-admin
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: admin
+{{- end }}
+
+{{/*
+Admin UI labels
+*/}}
+{{- define "llm-proxy.admin.labels" -}}
+helm.sh/chart: {{ include "llm-proxy.chart" . }}
+{{ include "llm-proxy.admin.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+
+{{/*
 Dispatcher selector labels
 */}}
 {{- define "llm-proxy.dispatcher.selectorLabels" -}}

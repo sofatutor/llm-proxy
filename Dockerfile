@@ -41,8 +41,8 @@ FROM alpine:3.18
 # Security: Add only required runtime libraries
 RUN --mount=type=cache,target=/var/cache/apk apk add ca-certificates tzdata sqlite-libs wget
 
-# Security: Create non-root user and group
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Security: Create non-root user and group with stable IDs (matches Helm chart defaults)
+RUN addgroup -S -g 101 appgroup && adduser -S -u 100 -G appgroup appuser
 
 # Create necessary directories
 RUN mkdir -p /app/data /app/logs /app/config /app/certs && \
@@ -55,8 +55,8 @@ RUN mkdir -p /app/bin
 # Copy the binary from the builder stage
 COPY --from=builder --chown=appuser:appgroup /llm-proxy /app/bin/llm-proxy
 
-# Security: Set restrictive permissions
-RUN chmod 550 /app/bin/llm-proxy && \
+# Security: Ensure the binary is executable even when Kubernetes assigns a different non-root UID
+RUN chmod 555 /app/bin/llm-proxy && \
     chmod -R 750 /app/data /app/logs /app/config /app/certs
 
 # Copy entrypoint script

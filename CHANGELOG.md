@@ -10,6 +10,7 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Added
 
+- **Admin UI Workload** ([#231](https://github.com/sofatutor/llm-proxy/pull/231)): Adds an optional `admin.enabled` Helm workload with Deployment, Service, and Ingress templates so the Admin UI can be exposed through customizable ingress settings.
 - **Token Env Support** ([#237](https://github.com/sofatutor/llm-proxy/pull/237)): Benchmark mode now honors CLI token environment variables so credentials can be supplied securely and consistently like other commands.
 
 ### Changed
@@ -17,6 +18,8 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 - **Cache Fastpath Tuning** ([#233](https://github.com/sofatutor/llm-proxy/pull/233)): Skips token tracking and upstream API-key lookups on true cache hits while deferring key resolution until a request must go upstream, hardens POST body hashing to opted-in requests with bounded sizes, and retunes Redis cache client defaults for more reliable caching behavior.
 - **Clarify Token Counters** ([#235](https://github.com/sofatutor/llm-proxy/pull/235)): Clarifies the admin UI’s token request counter semantics, sharpens the env-file warning messaging, and trims login token input so administrators avoid confusion and stray whitespace issues.
 - **Async Unlimited Token Tracking** ([#234](https://github.com/sofatutor/llm-proxy/pull/234)): Moves unlimited-token usage tracking into an async, bounded-buffer flow while keeping limited-token tracking synchronous, preventing slowdowns under load (buffer overflows are logged at DEBUG and may drop events).
+- **Helm OCI Publishing** ([#231](https://github.com/sofatutor/llm-proxy/pull/231)): Publishes Helm charts to `oci://ghcr.io/<owner>/charts/llm-proxy` and ensures Docker smoke tests for `v*` tags pull the semver bump so release artifacts no longer collide.
+- **Helm Security Defaults** ([#231](https://github.com/sofatutor/llm-proxy/pull/231)): Aligns container and Helm security contexts with stable numeric UID/GID, executable permissions, and updated NOTES/values defaults for ingress URLs and `fsGroup` so deployments start with consistent settings.
 - **Pooled Benchmark Client** ([#237](https://github.com/sofatutor/llm-proxy/pull/237)): Benchmark requests reuse a pooled HTTP client with aggressive keep-alive defaults to reduce variance and stress connection reuse across runs.
 
 ### Fixed

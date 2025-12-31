@@ -192,11 +192,12 @@ func TestCacheStatsAggregator_BufferFull_DropsEvents_DoesNotLogRawToken(t *testi
 	}
 
 	agg := NewCacheStatsAggregator(config, store, logger)
-	agg.Start()
-
 	secretToken := "sk-THIS_SHOULD_NOT_APPEAR_IN_LOGS"
 	agg.RecordCacheHit(secretToken)
 	agg.RecordCacheHit(secretToken) // second enqueue should be dropped and logged
+
+	// Start the worker after filling the channel to make the drop deterministic.
+	agg.Start()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()

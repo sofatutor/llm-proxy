@@ -19,9 +19,13 @@ podLabels: {}
 
 podSecurityContext:
   runAsNonRoot: true
-  runAsUser: 1000
-  runAsGroup: 1000
-  fsGroup: 1000
+  # Kubelet can't verify non-root for non-numeric image users; set stable numeric IDs.
+  runAsUser: 100
+  runAsGroup: 101
+  # Rely on the container image's non-root user by default, and ensure mounted
+  # writable volumes are group-writable.
+  fsGroup: 101
+  fsGroupChangePolicy: OnRootMismatch
 
 securityContext:
   capabilities:
@@ -51,6 +55,27 @@ ingress:
   #  - secretName: chart-example-tls
   #    hosts:
   #      - chart-example.local
+
+# Optional Admin UI (separate workload)
+admin:
+  enabled: false
+  listenAddr: ":8081"
+  service:
+    type: ClusterIP
+    port: 8081
+    annotations: {}
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts:
+      - host: admin.chart-example.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+  # Optional override for the base URL the admin uses to reach the main service (e.g., https://proxy.example.com)
+  apiBaseUrl: ""
 
 autoscaling:
   enabled: false
@@ -95,6 +120,8 @@ volumes:
     emptyDir: {}
   - name: config
     emptyDir: {}
+  - name: certs
+    emptyDir: {}
 
 # Additional volumeMounts on the output Deployment definition.
 volumeMounts:
@@ -106,6 +133,8 @@ volumeMounts:
     mountPath: /app/logs
   - name: config
     mountPath: /app/config
+  - name: certs
+    mountPath: /app/certs
 
 nodeSelector: {}
 
