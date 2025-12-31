@@ -10,10 +10,12 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Changed
 
+- **Cache Fastpath Tuning** ([#233](https://github.com/sofatutor/llm-proxy/pull/233)): Skips token tracking and upstream API-key lookups on true cache hits while deferring key resolution until a request must go upstream, hardens POST body hashing to opted-in requests with bounded sizes, and retunes Redis cache client defaults for more reliable caching behavior.
 - **Clarify Token Counters** ([#235](https://github.com/sofatutor/llm-proxy/pull/235)): Clarifies the admin UI’s token request counter semantics, sharpens the env-file warning messaging, and trims login token input so administrators avoid confusion and stray whitespace issues.
 
 ### Fixed
 
+- **Token Logging Obfuscation** ([#236](https://github.com/sofatutor/llm-proxy/pull/236)): Masks tokens in logs and error messages to prevent accidental secret leakage, improving operational security without changing behavior.
 - **Atomic Token Request Limit** ([#232](https://github.com/sofatutor/llm-proxy/pull/232)): Prevents token usage from exceeding `max_requests` by atomically guarding updates, distinguishing quota failures, aligning mock and DB semantics, and adding regression tests, while also fixing Prometheus metric writes to satisfy staticcheck.
 
 ## December 29, 2025
