@@ -693,7 +693,7 @@ func (d *DB) IncrementCacheHitCountBatch(ctx context.Context, deltas map[string]
 			continue
 		}
 		if _, err := stmt.ExecContext(ctx, delta, tokenID); err != nil {
-			return fmt.Errorf("failed to increment cache hit count for token %s: %w", tokenID, err)
+			return fmt.Errorf("failed to increment cache hit count for token %s: %w", obfuscate.ObfuscateTokenGeneric(tokenID), err)
 		}
 	}
 
