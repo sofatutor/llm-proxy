@@ -43,7 +43,7 @@ spec:
             - "--listen"
             - {{ .Values.admin.listenAddr | quote }}
             - "--api-base-url"
-            - {{ printf "http://%s:%v" (include "llm-proxy.fullname" .) .Values.service.port | quote }}
+            - {{ default (printf "http://%s:%v" (include "llm-proxy.fullname" .) .Values.service.port) .Values.admin.apiBaseUrl | quote }}
           ports:
             - name: http
               containerPort: {{ $adminContainerPort }}
@@ -52,6 +52,24 @@ spec:
             httpGet:
               path: /health
               port: http
+          {{- $managementTokenSecret := include "llm-proxy.managementTokenSecretName" . }}
+          {{- $hasEnv := and (hasKey .Values "env") (gt (len .Values.env) 0) }}
+          {{- if or $hasEnv $managementTokenSecret }}
+          env:
+          {{- if $hasEnv }}
+          {{- range $key := keys .Values.env | sortAlpha }}
+            - name: {{ $key }}
+              value: {{ index $.Values.env $key | quote }}
+          {{- end }}
+          {{- end }}
+          {{- if $managementTokenSecret }}
+            - name: MANAGEMENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $managementTokenSecret }}
+                  key: {{ include "llm-proxy.managementTokenSecretKey" . }}
+          {{- end }}
+          {{- end }}
             initialDelaySeconds: 10
             periodSeconds: 30
             timeoutSeconds: 5

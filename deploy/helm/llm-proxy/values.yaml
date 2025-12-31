@@ -74,6 +74,8 @@ admin:
           - path: /
             pathType: Prefix
     tls: []
+  # Optional override for the base URL the admin uses to reach the main service (e.g., https://proxy.example.com)
+  apiBaseUrl: ""
 
 autoscaling:
   enabled: false
