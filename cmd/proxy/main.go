@@ -1276,15 +1276,19 @@ Latency breakdown:
 							} else {
 								// When upstream timing headers are missing (e.g. cache hits),
 								// fall back to proxy timing headers (RFC3339Nano) when present.
-								if lat, ok := proxyLatencyFromProxyTimingHeaders(resp.Header); ok {
-									proxyLat = lat
+								if proxyLatFromHeaders, ok := proxyLatencyFromProxyTimingHeaders(resp.Header); ok {
+									proxyLat = proxyLatFromHeaders
 								} else {
 									upstreamLat = 0
 									proxyLat = 0
 								}
 							}
 						} else {
-							errMsg = err.Error()
+							if err != nil {
+								errMsg = err.Error()
+							} else {
+								errMsg = "request failed: no response and no error returned"
+							}
 						}
 						results <- result{latency: lat, err: err, errMsg: errMsg, response: respBody, statusCode: statusCode, headers: headers, reqHeaders: sentReqHeaders, reqBody: reqBodyStr, upstreamLat: upstreamLat, proxyLat: proxyLat}
 						progressMu.Lock()

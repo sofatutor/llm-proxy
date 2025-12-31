@@ -123,6 +123,9 @@ func TestBenchmark_TokenFromEnv(t *testing.T) {
 		"--concurrency", "1",
 		"--token-env", tokenEnvVar,
 	})
+	t.Cleanup(func() {
+		benchmarkCmd.SetArgs(nil)
+	})
 
 	err := benchmarkCmd.Execute()
 	if err != nil {
