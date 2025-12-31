@@ -15,6 +15,7 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 ### Changed
 
 - **Cache Fastpath Tuning** ([#233](https://github.com/sofatutor/llm-proxy/pull/233)): Skips token tracking and upstream API-key lookups on true cache hits while deferring key resolution until a request must go upstream, hardens POST body hashing to opted-in requests with bounded sizes, and retunes Redis cache client defaults for more reliable caching behavior.
+- **Clarify Token Counters** ([#235](https://github.com/sofatutor/llm-proxy/pull/235)): Clarifies the admin UI’s token request counter semantics, sharpens the env-file warning messaging, and trims login token input so administrators avoid confusion and stray whitespace issues.
 - **Pooled Benchmark Client** ([#237](https://github.com/sofatutor/llm-proxy/pull/237)): Benchmark requests reuse a pooled HTTP client with aggressive keep-alive defaults to reduce variance and stress connection reuse across runs.
 
 ### Fixed
