@@ -308,6 +308,65 @@ func (d *DB) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	return nil
 }
 
+// IncrementTokenUsageBatch increments request_count for multiple tokens and updates last_used_at.
+// The token IDs are token strings (sk-...).
+func (d *DB) IncrementTokenUsageBatch(ctx context.Context, deltas map[string]int, lastUsedAt time.Time) error {
+	if len(deltas) == 0 {
+		return nil
+	}
+
+	tx, err := d.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback() // No-op if already committed
+	}()
+
+	query := `UPDATE tokens SET request_count = request_count + ?, last_used_at = ? WHERE token = ?`
+	stmt, err := tx.PrepareContext(ctx, d.RebindQuery(query))
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %w", err)
+	}
+	defer func() {
+		_ = stmt.Close()
+	}()
+
+	updated := int64(0)
+	missing := int64(0)
+	for tokenID, delta := range deltas {
+		if delta <= 0 {
+			continue
+		}
+		res, err := stmt.ExecContext(ctx, delta, lastUsedAt.UTC(), tokenID)
+		if err != nil {
+			return fmt.Errorf("failed to increment token usage for token %s: %w", obfuscate.ObfuscateTokenGeneric(tokenID), err)
+		}
+		rows, err := res.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to get rows affected for token %s: %w", obfuscate.ObfuscateTokenGeneric(tokenID), err)
+		}
+		if rows == 0 {
+			// Tokens can be deleted/revoked while async events are buffered.
+			// Skipping missing tokens avoids discarding successful increments for other tokens.
+			missing++
+			continue
+		}
+		updated += rows
+	}
+
+	// If *all* requested updates were for missing tokens, surface ErrTokenNotFound to catch
+	// misconfiguration/bugs (e.g. wrong identifier type) without being noisy for partial misses.
+	if updated == 0 && missing > 0 {
+		return ErrTokenNotFound
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	return nil
+}
+
 // CleanExpiredTokens deletes expired tokens from the database.
 func (d *DB) CleanExpiredTokens(ctx context.Context) (int64, error) {
 	now := time.Now().UTC()

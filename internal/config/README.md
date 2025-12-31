@@ -220,6 +220,12 @@ The `Config` struct is organized into logical sections:
 |-------|------|-------------|---------|
 | `CacheStatsBufferSize` | `int` | Buffer size for cache stats | `1000` |
 
+### Usage Stats Aggregation
+
+| Field | Type | Description | Default |
+|-------|------|-------------|---------|
+| `UsageStatsBufferSize` | `int` | Buffer size for usage stats | `1000` |
+
 ## Environment Variable Reference
 
 Complete mapping of environment variables to configuration fields:
@@ -353,6 +359,12 @@ Complete mapping of environment variables to configuration fields:
 | Variable | Type | Field | Default |
 |----------|------|-------|---------|
 | `CACHE_STATS_BUFFER_SIZE` | int | `CacheStatsBufferSize` | `1000` |
+
+### Usage Stats
+
+| Variable | Type | Field | Default |
+|----------|------|-------|---------|
+| `USAGE_STATS_BUFFER_SIZE` | int | `UsageStatsBufferSize` | `1000` (falls back to `CACHE_STATS_BUFFER_SIZE`) |
 
 ## Configuration Sources Precedence
 

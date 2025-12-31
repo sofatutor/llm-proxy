@@ -213,6 +213,70 @@ func TestTokenCRUD(t *testing.T) {
 	}
 }
 
+func TestIncrementTokenUsageBatch(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	project := proxy.Project{
+		ID:           "test-project-id",
+		Name:         "Test Project",
+		OpenAIAPIKey: "test-api-key",
+		CreatedAt:    time.Now().UTC().Truncate(time.Second),
+		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+	}
+	require.NoError(t, db.CreateProject(ctx, project))
+
+	now := time.Now().UTC().Truncate(time.Second)
+	lastUsedAt := now.Add(10 * time.Second).UTC()
+
+	token1 := Token{Token: "batch-token-1", ProjectID: project.ID, IsActive: true, CreatedAt: now}
+	token2 := Token{Token: "batch-token-2", ProjectID: project.ID, IsActive: true, CreatedAt: now}
+	token3 := Token{Token: "batch-token-3", ProjectID: project.ID, IsActive: true, CreatedAt: now}
+	require.NoError(t, db.CreateToken(ctx, token1))
+	require.NoError(t, db.CreateToken(ctx, token2))
+	require.NoError(t, db.CreateToken(ctx, token3))
+
+	// Multiple token updates.
+	require.NoError(t, db.IncrementTokenUsageBatch(ctx, map[string]int{token1.Token: 2, token2.Token: 3}, lastUsedAt))
+
+	updated1, err := db.GetTokenByToken(ctx, token1.Token)
+	require.NoError(t, err)
+	require.Equal(t, 2, updated1.RequestCount)
+	require.NotNil(t, updated1.LastUsedAt)
+	require.WithinDuration(t, lastUsedAt, *updated1.LastUsedAt, time.Second)
+
+	updated2, err := db.GetTokenByToken(ctx, token2.Token)
+	require.NoError(t, err)
+	require.Equal(t, 3, updated2.RequestCount)
+	require.NotNil(t, updated2.LastUsedAt)
+	require.WithinDuration(t, lastUsedAt, *updated2.LastUsedAt, time.Second)
+
+	// Zero/negative deltas are ignored.
+	require.NoError(t, db.IncrementTokenUsageBatch(ctx, map[string]int{token3.Token: 0, token1.Token: -5, token2.Token: 1}, lastUsedAt))
+
+	updated3, err := db.GetTokenByToken(ctx, token3.Token)
+	require.NoError(t, err)
+	require.Equal(t, 0, updated3.RequestCount)
+	require.Nil(t, updated3.LastUsedAt)
+
+	updated2, err = db.GetTokenByToken(ctx, token2.Token)
+	require.NoError(t, err)
+	require.Equal(t, 4, updated2.RequestCount)
+
+	// Missing tokens are skipped (tokens can be deleted while events are buffered).
+	require.NoError(t, db.IncrementTokenUsageBatch(ctx, map[string]int{token1.Token: 1, "missing-token": 1}, lastUsedAt))
+
+	updated1, err = db.GetTokenByToken(ctx, token1.Token)
+	require.NoError(t, err)
+	require.Equal(t, 3, updated1.RequestCount)
+
+	// But if all requested updates target missing tokens, surface ErrTokenNotFound.
+	err = db.IncrementTokenUsageBatch(ctx, map[string]int{"missing-token": 1}, lastUsedAt)
+	require.ErrorIs(t, err, ErrTokenNotFound)
+}
+
 // TestTokenExpirationAndRateLimiting tests token expiration and rate limiting.
 func TestTokenExpirationAndRateLimiting(t *testing.T) {
 	db, cleanup := testDB(t)

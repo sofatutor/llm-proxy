@@ -43,6 +43,7 @@ type Server struct {
 	auditLogger   *audit.Logger
 	db            *database.DB
 	cacheStatsAgg *proxy.CacheStatsAggregator
+	usageStatsAgg *token.UsageStatsAggregator
 }
 
 // HealthResponse is the response body for the health check endpoint.
@@ -321,6 +322,19 @@ func (s *Server) initializeAPIRoutes() error {
 	// Use the injected tokenStore and projectStore
 	// (No more creation of mock stores or test data here)
 	tokenValidator := token.NewValidator(s.tokenStore)
+
+	// Async usage tracking for unlimited tokens: keep DB writes off the hot path.
+	if s.db != nil {
+		usageCfg := token.DefaultUsageStatsAggregatorConfig()
+		if s.config.UsageStatsBufferSize > 0 {
+			usageCfg.BufferSize = s.config.UsageStatsBufferSize
+		}
+		s.usageStatsAgg = token.NewUsageStatsAggregator(usageCfg, s.db, s.logger)
+		s.usageStatsAgg.Start()
+		tokenValidator.SetUsageStatsAggregator(s.usageStatsAgg)
+		s.logger.Info("Usage stats aggregator started", zap.Int("buffer_size", usageCfg.BufferSize))
+	}
+
 	cachedValidator := token.NewCachedValidator(tokenValidator)
 
 	obsCfg := middleware.ObservabilityConfig{Enabled: s.config.ObservabilityEnabled, EventBus: s.eventBus}
@@ -364,7 +378,15 @@ func (s *Server) initializeAPIRoutes() error {
 // The context should typically include a timeout to prevent
 // the shutdown from blocking indefinitely.
 func (s *Server) Shutdown(ctx context.Context) error {
-	// Stop cache stats aggregator first to flush pending stats
+	// Stop usage stats aggregator first to flush pending usage updates
+	if s.usageStatsAgg != nil {
+		s.logger.Info("Stopping usage stats aggregator")
+		if err := s.usageStatsAgg.Stop(ctx); err != nil {
+			s.logger.Error("failed to stop usage stats aggregator during shutdown", zap.Error(err))
+		}
+	}
+
+	// Stop cache stats aggregator to flush pending stats
 	if s.cacheStatsAgg != nil {
 		s.logger.Info("Stopping cache stats aggregator")
 		if err := s.cacheStatsAgg.Stop(ctx); err != nil {

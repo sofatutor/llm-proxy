@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 )
 
@@ -73,6 +74,9 @@ func (t *TokenData) IsRateLimited() bool {
 	if t.MaxRequests == nil {
 		return false
 	}
+	if *t.MaxRequests <= 0 {
+		return false
+	}
 	return t.RequestCount >= *t.MaxRequests
 }
 
@@ -83,7 +87,12 @@ func (t *TokenData) ValidateFormat() error {
 
 // StandardValidator is a validator that uses a TokenStore for validation
 type StandardValidator struct {
-	store TokenStore
+	store         TokenStore
+	usageStatsAgg atomic.Pointer[UsageStatsAggregator]
+}
+
+type usageStatsAggregatorGetter interface {
+	usageStatsAggregator() *UsageStatsAggregator
 }
 
 // NewValidator creates a new StandardValidator with the given TokenStore
@@ -93,30 +102,51 @@ func NewValidator(store TokenStore) *StandardValidator {
 	}
 }
 
-// ValidateToken validates a token without incrementing usage
-func (v *StandardValidator) ValidateToken(ctx context.Context, tokenString string) (string, error) {
+// SetUsageStatsAggregator configures an async usage stats aggregator.
+//
+// When set, ValidateTokenWithTracking will enqueue request_count/last_used_at updates
+// for unlimited tokens (MaxRequests == nil or <= 0) instead of doing a synchronous DB write.
+func (v *StandardValidator) SetUsageStatsAggregator(agg *UsageStatsAggregator) {
+	v.usageStatsAgg.Store(agg)
+}
+
+func (v *StandardValidator) usageStatsAggregator() *UsageStatsAggregator {
+	return v.usageStatsAgg.Load()
+}
+
+func (v *StandardValidator) validateTokenData(ctx context.Context, tokenString string) (TokenData, error) {
 	// First validate the token format
 	if err := ValidateTokenFormat(tokenString); err != nil {
-		return "", fmt.Errorf("invalid token format: %w", err)
+		return TokenData{}, fmt.Errorf("invalid token format: %w", err)
 	}
 
 	// Retrieve the token from the store by token string
 	tokenData, err := v.store.GetTokenByToken(ctx, tokenString)
 	if err != nil {
 		if errors.Is(err, ErrTokenNotFound) {
-			return "", ErrTokenNotFound
+			return TokenData{}, ErrTokenNotFound
 		}
-		return "", fmt.Errorf("failed to retrieve token: %w", err)
+		return TokenData{}, fmt.Errorf("failed to retrieve token: %w", err)
 	}
 
 	// Check if the token is active
 	if !tokenData.IsActive {
-		return "", ErrTokenInactive
+		return TokenData{}, ErrTokenInactive
 	}
 
 	// Check if the token has expired
 	if IsExpired(tokenData.ExpiresAt) {
-		return "", ErrTokenExpired
+		return TokenData{}, ErrTokenExpired
+	}
+
+	return tokenData, nil
+}
+
+// ValidateToken validates a token without incrementing usage
+func (v *StandardValidator) ValidateToken(ctx context.Context, tokenString string) (string, error) {
+	tokenData, err := v.validateTokenData(ctx, tokenString)
+	if err != nil {
+		return "", err
 	}
 
 	// Check if the token has reached its rate limit
@@ -130,13 +160,26 @@ func (v *StandardValidator) ValidateToken(ctx context.Context, tokenString strin
 
 // ValidateTokenWithTracking validates a token and increments its usage count
 func (v *StandardValidator) ValidateTokenWithTracking(ctx context.Context, tokenString string) (string, error) {
-	// Validate the token first
-	projectID, err := v.ValidateToken(ctx, tokenString)
+	// Validate token and load token data once.
+	tokenData, err := v.validateTokenData(ctx, tokenString)
 	if err != nil {
 		return "", err
 	}
 
-	// Increment the token usage by token string
+	// Enforce rate limit before tracking.
+	if tokenData.IsRateLimited() {
+		return "", ErrTokenRateLimit
+	}
+
+	// For unlimited tokens, move request_count/last_used_at updates off the hot path.
+	if tokenData.MaxRequests == nil || *tokenData.MaxRequests <= 0 {
+		if agg := v.usageStatsAgg.Load(); agg != nil {
+			agg.RecordTokenUsage(tokenString)
+			return tokenData.ProjectID, nil
+		}
+	}
+
+	// Limited tokens (or no async aggregator configured): do synchronous tracking.
 	if err := v.store.IncrementTokenUsage(ctx, tokenString); err != nil {
 		if errors.Is(err, ErrTokenRateLimit) {
 			return "", ErrTokenRateLimit
@@ -144,7 +187,7 @@ func (v *StandardValidator) ValidateTokenWithTracking(ctx context.Context, token
 		return "", fmt.Errorf("failed to track token usage: %w", err)
 	}
 
-	return projectID, nil
+	return tokenData.ProjectID, nil
 }
 
 // ValidateTokenFormat checks if a token string has the correct format
