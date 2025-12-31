@@ -14,7 +14,7 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Changed
 
-- **Pooled Benchmark Client** ([#237](https://github.com/sofatutor/llm-proxy/pull/237)): Benchmark requests now reuse a pooled HTTP client with aggressive keep-alive defaults to reduce variance and stress connection reuse across runs.
+- **Pooled Benchmark Client** ([#237](https://github.com/sofatutor/llm-proxy/pull/237)): Benchmark requests reuse a pooled HTTP client with aggressive keep-alive defaults to reduce variance and stress connection reuse across runs.
 
 ### Fixed
 
