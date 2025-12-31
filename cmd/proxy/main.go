@@ -1075,27 +1075,8 @@ func init() {
 	manageCmd.AddCommand(projectCmd)
 	manageCmd.AddCommand(tokenCmd)
 	manageCmd.AddCommand(cacheCmd)
-// Register manage command with root
-cobraRoot.AddCommand(manageCmd)
-
-// proxyLatencyFromProxyTimingHeaders parses proxy timing headers and returns the proxy latency when both
-// timestamps are present and valid. Returns (0, false) when parsing fails or headers are missing.
-func proxyLatencyFromProxyTimingHeaders(h http.Header) (time.Duration, bool) {
-	receivedAtStr := h.Get("X-Proxy-Received-At")
-	finalAtStr := h.Get("X-Proxy-Final-Response-At")
-	if receivedAtStr == "" || finalAtStr == "" {
-		return 0, false
-	}
-	receivedAt, recErr := time.Parse(time.RFC3339Nano, receivedAtStr)
-	finalAt, finErr := time.Parse(time.RFC3339Nano, finalAtStr)
-	if recErr != nil || finErr != nil {
-		return 0, false
-	}
-	if receivedAt.IsZero() || finalAt.IsZero() || finalAt.Before(receivedAt) {
-		return 0, false
-	}
-	return finalAt.Sub(receivedAt), true
-}
+	// Register manage command with root
+	cobraRoot.AddCommand(manageCmd)
 
 	// In the same place where openaiCmd is assigned, assign benchmarkCmd as well
 	benchmarkCmd = &cobra.Command{
