@@ -453,7 +453,7 @@ func (s *Server) handleMetricsPrometheus(w http.ResponseWriter, r *http.Request)
 	uptimeSeconds := time.Since(s.metrics.StartTime).Seconds()
 	buf.WriteString("# HELP llm_proxy_uptime_seconds Time since the server started\n")
 	buf.WriteString("# TYPE llm_proxy_uptime_seconds gauge\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_uptime_seconds %g\n", uptimeSeconds))
+	_, _ = fmt.Fprintf(&buf, "llm_proxy_uptime_seconds %g\n", uptimeSeconds)
 
 	// Get proxy metrics or use zero values
 	var requestCount, errorCount, cacheHits, cacheMisses, cacheBypass, cacheStores int64
@@ -470,27 +470,27 @@ func (s *Server) handleMetricsPrometheus(w http.ResponseWriter, r *http.Request)
 	// Write metrics in Prometheus format
 	buf.WriteString("# HELP llm_proxy_requests_total Total number of proxy requests\n")
 	buf.WriteString("# TYPE llm_proxy_requests_total counter\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_requests_total %d\n", requestCount))
+	_, _ = fmt.Fprintf(&buf, "llm_proxy_requests_total %d\n", requestCount)
 
 	buf.WriteString("# HELP llm_proxy_errors_total Total number of proxy errors\n")
 	buf.WriteString("# TYPE llm_proxy_errors_total counter\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_errors_total %d\n", errorCount))
+	_, _ = fmt.Fprintf(&buf, "llm_proxy_errors_total %d\n", errorCount)
 
 	buf.WriteString("# HELP llm_proxy_cache_hits_total Total number of cache hits\n")
 	buf.WriteString("# TYPE llm_proxy_cache_hits_total counter\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_cache_hits_total %d\n", cacheHits))
+	_, _ = fmt.Fprintf(&buf, "llm_proxy_cache_hits_total %d\n", cacheHits)
 
 	buf.WriteString("# HELP llm_proxy_cache_misses_total Total number of cache misses\n")
 	buf.WriteString("# TYPE llm_proxy_cache_misses_total counter\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_cache_misses_total %d\n", cacheMisses))
+	_, _ = fmt.Fprintf(&buf, "llm_proxy_cache_misses_total %d\n", cacheMisses)
 
 	buf.WriteString("# HELP llm_proxy_cache_bypass_total Total number of cache bypasses\n")
 	buf.WriteString("# TYPE llm_proxy_cache_bypass_total counter\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_cache_bypass_total %d\n", cacheBypass))
+	_, _ = fmt.Fprintf(&buf, "llm_proxy_cache_bypass_total %d\n", cacheBypass)
 
 	buf.WriteString("# HELP llm_proxy_cache_stores_total Total number of cache stores\n")
 	buf.WriteString("# TYPE llm_proxy_cache_stores_total counter\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_cache_stores_total %d\n", cacheStores))
+	_, _ = fmt.Fprintf(&buf, "llm_proxy_cache_stores_total %d\n", cacheStores)
 
 	// Go runtime metrics
 	s.writeGoRuntimeMetrics(&buf)
@@ -509,57 +509,57 @@ func (s *Server) writeGoRuntimeMetrics(buf *strings.Builder) {
 	// Goroutines
 	buf.WriteString("# HELP llm_proxy_goroutines Number of goroutines currently running\n")
 	buf.WriteString("# TYPE llm_proxy_goroutines gauge\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_goroutines %d\n", runtime.NumGoroutine()))
+	_, _ = fmt.Fprintf(buf, "llm_proxy_goroutines %d\n", runtime.NumGoroutine())
 
 	// Memory metrics
 	buf.WriteString("# HELP llm_proxy_memory_heap_alloc_bytes Number of heap bytes allocated and currently in use\n")
 	buf.WriteString("# TYPE llm_proxy_memory_heap_alloc_bytes gauge\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_memory_heap_alloc_bytes %d\n", memStats.Alloc))
+	_, _ = fmt.Fprintf(buf, "llm_proxy_memory_heap_alloc_bytes %d\n", memStats.Alloc)
 
 	buf.WriteString("# HELP llm_proxy_memory_heap_sys_bytes Number of heap bytes obtained from the OS\n")
 	buf.WriteString("# TYPE llm_proxy_memory_heap_sys_bytes gauge\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_memory_heap_sys_bytes %d\n", memStats.HeapSys))
+	_, _ = fmt.Fprintf(buf, "llm_proxy_memory_heap_sys_bytes %d\n", memStats.HeapSys)
 
 	buf.WriteString("# HELP llm_proxy_memory_heap_idle_bytes Number of heap bytes waiting to be used\n")
 	buf.WriteString("# TYPE llm_proxy_memory_heap_idle_bytes gauge\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_memory_heap_idle_bytes %d\n", memStats.HeapIdle))
+	_, _ = fmt.Fprintf(buf, "llm_proxy_memory_heap_idle_bytes %d\n", memStats.HeapIdle)
 
 	buf.WriteString("# HELP llm_proxy_memory_heap_inuse_bytes Number of heap bytes that are in use\n")
 	buf.WriteString("# TYPE llm_proxy_memory_heap_inuse_bytes gauge\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_memory_heap_inuse_bytes %d\n", memStats.HeapInuse))
+	_, _ = fmt.Fprintf(buf, "llm_proxy_memory_heap_inuse_bytes %d\n", memStats.HeapInuse)
 
 	buf.WriteString("# HELP llm_proxy_memory_heap_released_bytes Number of heap bytes released to the OS\n")
 	buf.WriteString("# TYPE llm_proxy_memory_heap_released_bytes gauge\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_memory_heap_released_bytes %d\n", memStats.HeapReleased))
+	_, _ = fmt.Fprintf(buf, "llm_proxy_memory_heap_released_bytes %d\n", memStats.HeapReleased)
 
 	buf.WriteString("# HELP llm_proxy_memory_total_alloc_bytes Total number of bytes allocated (cumulative)\n")
 	buf.WriteString("# TYPE llm_proxy_memory_total_alloc_bytes counter\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_memory_total_alloc_bytes %d\n", memStats.TotalAlloc))
+	_, _ = fmt.Fprintf(buf, "llm_proxy_memory_total_alloc_bytes %d\n", memStats.TotalAlloc)
 
 	buf.WriteString("# HELP llm_proxy_memory_sys_bytes Total number of bytes obtained from the OS\n")
 	buf.WriteString("# TYPE llm_proxy_memory_sys_bytes gauge\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_memory_sys_bytes %d\n", memStats.Sys))
+	_, _ = fmt.Fprintf(buf, "llm_proxy_memory_sys_bytes %d\n", memStats.Sys)
 
 	buf.WriteString("# HELP llm_proxy_memory_mallocs_total Total number of malloc operations\n")
 	buf.WriteString("# TYPE llm_proxy_memory_mallocs_total counter\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_memory_mallocs_total %d\n", memStats.Mallocs))
+	_, _ = fmt.Fprintf(buf, "llm_proxy_memory_mallocs_total %d\n", memStats.Mallocs)
 
 	buf.WriteString("# HELP llm_proxy_memory_frees_total Total number of free operations\n")
 	buf.WriteString("# TYPE llm_proxy_memory_frees_total counter\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_memory_frees_total %d\n", memStats.Frees))
+	_, _ = fmt.Fprintf(buf, "llm_proxy_memory_frees_total %d\n", memStats.Frees)
 
 	// GC metrics
 	buf.WriteString("# HELP llm_proxy_gc_runs_total Total number of GC runs\n")
 	buf.WriteString("# TYPE llm_proxy_gc_runs_total counter\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_gc_runs_total %d\n", memStats.NumGC))
+	_, _ = fmt.Fprintf(buf, "llm_proxy_gc_runs_total %d\n", memStats.NumGC)
 
 	buf.WriteString("# HELP llm_proxy_gc_pause_total_seconds Total GC pause time in seconds\n")
 	buf.WriteString("# TYPE llm_proxy_gc_pause_total_seconds counter\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_gc_pause_total_seconds %g\n", float64(memStats.PauseTotalNs)/1e9))
+	_, _ = fmt.Fprintf(buf, "llm_proxy_gc_pause_total_seconds %g\n", float64(memStats.PauseTotalNs)/1e9)
 
 	buf.WriteString("# HELP llm_proxy_gc_next_bytes Target heap size for next GC cycle\n")
 	buf.WriteString("# TYPE llm_proxy_gc_next_bytes gauge\n")
-	buf.WriteString(fmt.Sprintf("llm_proxy_gc_next_bytes %d\n", memStats.NextGC))
+	_, _ = fmt.Fprintf(buf, "llm_proxy_gc_next_bytes %d\n", memStats.NextGC)
 }
 
 // managementAuthMiddleware checks the management token in the Authorization header
