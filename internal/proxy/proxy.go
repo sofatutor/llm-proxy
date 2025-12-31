@@ -210,14 +210,18 @@ func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator,
 				// - REDIS_CACHE_POOL_SIZE: int (e.g., 50, 100)
 				// - REDIS_CACHE_TIMEOUT: duration (Go duration string, e.g., 1s, 250ms)
 				//   Applies to dial/read/write.
-				poolSize := 50
+				envPoolSize := 0
 				if v := os.Getenv("REDIS_CACHE_POOL_SIZE"); v != "" {
 					if n, convErr := strconv.Atoi(v); convErr == nil && n > 0 {
-						poolSize = n
+						envPoolSize = n
 					}
 				}
-				if opt.PoolSize < poolSize {
-					opt.PoolSize = poolSize
+				if envPoolSize > 0 {
+					// Env explicitly wins over redis:// URL options.
+					opt.PoolSize = envPoolSize
+				} else if opt.PoolSize < 50 {
+					// Minimum default for cache workloads.
+					opt.PoolSize = 50
 				}
 
 				timeout := 1 * time.Second
@@ -782,15 +786,6 @@ func (p *TransparentProxy) Handler() http.Handler {
 		ctx = context.WithValue(ctx, ctxKeyProxyReceivedAt, receivedAt)
 		r = r.WithContext(ctx)
 
-		// Compute X-Body-Hash once for methods with bodies to support POST/PUT/PATCH caching.
-		// Do this early so we can do cache lookup decisions before token validation.
-		if r.Body != nil && (r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch) {
-			bodyBytes, _ := io.ReadAll(r.Body)
-			r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-			sum := sha256.Sum256(bodyBytes)
-			r.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
-		}
-
 		// Pre-check cache so we can avoid token usage tracking / upstream auth lookup
 		// on true cache hits. We still enforce auth and project status before serving.
 		var (
@@ -798,19 +793,15 @@ func (p *TransparentProxy) Handler() http.Handler {
 			preCacheRes cachedResponse
 			preCacheOK  bool
 		)
-		if p.cache != nil && (r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodPost) {
-			optIn := hasClientCacheOptIn(r)
-			allowedLookup := (r.Method == http.MethodGet || r.Method == http.MethodHead) || (r.Method == http.MethodPost && optIn)
-			if allowedLookup {
-				key := CacheKeyFromRequest(r)
-				if cr, ok := p.cache.Get(key); ok {
-					// Only treat as a fast-path cache hit if it is actually eligible to serve
-					// without going upstream.
-					if isVaryCompatible(r, cr, key) && canServeCachedForRequest(r, cr.headers) && !wantsRevalidation(r) {
-						preCacheKey = key
-						preCacheRes = cr
-						preCacheOK = true
-					}
+		if p.cache != nil && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+			key := CacheKeyFromRequest(r)
+			if cr, ok := p.cache.Get(key); ok {
+				// Only treat as a fast-path cache hit if it is actually eligible to serve
+				// without going upstream.
+				if isVaryCompatible(r, cr, key) && canServeCachedForRequest(r, cr.headers) && !wantsRevalidation(r) {
+					preCacheKey = key
+					preCacheRes = cr
+					preCacheOK = true
 				}
 			}
 		}
@@ -846,19 +837,30 @@ func (p *TransparentProxy) Handler() http.Handler {
 			upstreamAPIKeyErr  error
 			upstreamAPIKeyOnce sync.Once
 		)
-		ensureUpstreamAuthorization := func(req *http.Request) bool {
+		ensureUpstreamAuthorization := func(reqToAuthorize *http.Request) bool {
 			upstreamAPIKeyOnce.Do(func() {
-				upstreamAPIKey, upstreamAPIKeyErr = p.projectStore.GetAPIKeyForProject(req.Context(), projectID)
+				upstreamAPIKey, upstreamAPIKeyErr = p.projectStore.GetAPIKeyForProject(reqToAuthorize.Context(), projectID)
 				if upstreamAPIKeyErr != nil {
 					upstreamAPIKeyErr = fmt.Errorf("failed to get API key: %w", upstreamAPIKeyErr)
 					return
 				}
 			})
 			if upstreamAPIKeyErr != nil {
-				p.handleValidationError(w, r, upstreamAPIKeyErr)
+				requestID, _ := reqToAuthorize.Context().Value(ctxKeyRequestID).(string)
+				p.logger.Error(
+					"Upstream API key lookup failed",
+					zap.String("request_id", requestID),
+					zap.String("project_id", projectID),
+					zap.Error(upstreamAPIKeyErr),
+				)
+				writeErrorResponse(w, http.StatusServiceUnavailable, ErrorResponse{
+					Error:       "Upstream authentication error",
+					Code:        "upstream_auth_error",
+					Description: "failed to load upstream API key",
+				})
 				return false
 			}
-			req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", upstreamAPIKey))
+			reqToAuthorize.Header.Set("Authorization", fmt.Sprintf("Bearer %s", upstreamAPIKey))
 			return true
 		}
 
@@ -935,6 +937,30 @@ func (p *TransparentProxy) Handler() http.Handler {
 			// Require explicit client opt-in for POST lookups.
 			optIn := hasClientCacheOptIn(r)
 			allowedLookup := (r.Method == http.MethodGet || r.Method == http.MethodHead) || (r.Method == http.MethodPost && optIn)
+			if r.Method == http.MethodPost && allowedLookup {
+				// For POST caching, require a known, bounded body size.
+				maxBodyHashBytes := p.config.HTTPCacheMaxObjectBytes
+				if maxBodyHashBytes <= 0 {
+					maxBodyHashBytes = 1024 * 1024
+				}
+				if r.Body == nil || r.ContentLength < 0 || r.ContentLength > maxBodyHashBytes {
+					allowedLookup = false
+				} else {
+					bodyBytes, readErr := io.ReadAll(r.Body)
+					if readErr != nil {
+						p.logger.Warn("Failed to read request body for hashing", zap.Error(readErr))
+						writeErrorResponse(w, http.StatusBadRequest, ErrorResponse{
+							Error:       "Invalid request body",
+							Code:        "invalid_request_body",
+							Description: "failed to read request body",
+						})
+						return
+					}
+					r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+					sum := sha256.Sum256(bodyBytes)
+					r.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
+				}
+			}
 			if !allowedLookup {
 				// Cache is enabled but this request type/method is not cacheable - count as miss
 				p.recordCacheMiss()
@@ -945,11 +971,16 @@ func (p *TransparentProxy) Handler() http.Handler {
 				return
 			}
 			key := CacheKeyFromRequest(r)
-			cr, ok := p.cache.Get(key)
+			var (
+				cr cachedResponse
+				ok bool
+			)
 			if preCacheOK {
 				key = preCacheKey
 				cr = preCacheRes
 				ok = true
+			} else {
+				cr, ok = p.cache.Get(key)
 			}
 			if ok {
 				// Validate Vary compatibility using helper
@@ -1002,7 +1033,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 							}
 						}
 						// Set fresh timing headers for conditional cache hit
-						setFreshCacheTimingHeadersFromRequest(w, r, time.Now())
+						setFreshCacheTimingHeaders(w, time.Now())
 						w.Header().Set("Cache-Status", "llm-proxy; conditional-hit")
 						w.Header().Set("X-PROXY-CACHE", "conditional-hit")
 						w.Header().Set("X-PROXY-CACHE-KEY", key)
@@ -1016,8 +1047,8 @@ func (p *TransparentProxy) Handler() http.Handler {
 						w.Header().Add(hk, v)
 					}
 				}
-				// Set fresh timing headers for cache hit (for accurate latency measurement)
-				setFreshCacheTimingHeadersFromRequest(w, r, time.Now())
+				// Set fresh timing headers for cache hit
+				setFreshCacheTimingHeaders(w, time.Now())
 				w.Header().Set("Cache-Status", "llm-proxy; hit")
 				w.Header().Set("X-PROXY-CACHE", "hit")
 				w.Header().Set("X-PROXY-CACHE-KEY", key)
@@ -1096,20 +1127,12 @@ func (p *TransparentProxy) recordCacheHit(r *http.Request) {
 	}
 }
 
-func setFreshCacheTimingHeadersFromRequest(w http.ResponseWriter, r *http.Request, now time.Time) {
-	receivedAt := now
-	if v := r.Context().Value(ctxKeyProxyReceivedAt); v != nil {
-		if t, ok := v.(time.Time); ok && !t.IsZero() {
-			receivedAt = t
-		}
-	}
-
-	w.Header().Set("X-Proxy-Received-At", receivedAt.UTC().Format(time.RFC3339Nano))
-	// For cache hits/conditional-hits, the response body is served from cache,
-	// but there may still be non-trivial work before we can write the response
-	// (auth, DB lookups, cache lookup, etc.).
-	w.Header().Set("X-Proxy-First-Response-At", now.UTC().Format(time.RFC3339Nano))
-	w.Header().Set("X-Proxy-Final-Response-At", now.UTC().Format(time.RFC3339Nano))
+func setFreshCacheTimingHeaders(w http.ResponseWriter, now time.Time) {
+	formatted := now.UTC().Format(time.RFC3339Nano)
+	w.Header().Set("X-Proxy-Received-At", formatted)
+	// For cache hits/conditional-hits, the full response is served immediately from cache.
+	w.Header().Set("X-Proxy-First-Response-At", formatted)
+	w.Header().Set("X-Proxy-Final-Response-At", formatted)
 	w.Header().Set("Date", now.UTC().Format(http.TimeFormat))
 }
 
