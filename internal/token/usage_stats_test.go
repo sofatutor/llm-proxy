@@ -217,7 +217,7 @@ func TestCachedValidator_ValidateTokenWithTracking_UnlimitedCached_DoesNotInvali
 	store.tokens[tokenString] = TokenData{Token: tokenString, ProjectID: "p1", IsActive: true}
 
 	usageStore := newMockUsageStatsStore()
-	agg := NewUsageStatsAggregator(UsageStatsAggregatorConfig{BufferSize: 10, FlushInterval: 10 * time.Millisecond, BatchSize: 10}, usageStore, nil)
+	agg := NewUsageStatsAggregator(UsageStatsAggregatorConfig{BufferSize: 10, FlushInterval: 10 * time.Millisecond, BatchSize: 1}, usageStore, nil)
 	agg.Start()
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -244,6 +244,24 @@ func TestCachedValidator_ValidateTokenWithTracking_UnlimitedCached_DoesNotInvali
 		t.Fatalf("ValidateTokenWithTracking() error = %v", err)
 	}
 
+	select {
+	case <-usageStore.ch:
+		// ok
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for async usage flush")
+	}
+
+	hits, misses, evictions, _ := cv.GetCacheStats()
+	if hits != 1 {
+		t.Fatalf("cache hits = %d, want 1", hits)
+	}
+	if misses != 1 {
+		t.Fatalf("cache misses = %d, want 1", misses)
+	}
+	if evictions != 0 {
+		t.Fatalf("cache evictions = %d, want 0", evictions)
+	}
+
 	store.mu.Lock()
 	getCallsAfter := store.getByTokenCalls
 	incCalls := store.incrementUsageCalls
@@ -254,5 +272,28 @@ func TestCachedValidator_ValidateTokenWithTracking_UnlimitedCached_DoesNotInvali
 	}
 	if getCallsAfter != getCallsBefore {
 		t.Fatalf("GetTokenByToken calls increased (%d -> %d), want unchanged for cached unlimited", getCallsBefore, getCallsAfter)
+	}
+
+	// Expired cache entries should be treated as misses and evicted.
+	cv.cacheMutex.Lock()
+	entry := cv.cache[tokenString]
+	entry.ValidUntil = time.Now().Add(-time.Second)
+	cv.cache[tokenString] = entry
+	cv.cacheMutex.Unlock()
+
+	_, err = cv.ValidateTokenWithTracking(context.Background(), tokenString)
+	if err != nil {
+		t.Fatalf("ValidateTokenWithTracking() after expiry error = %v", err)
+	}
+
+	hits, misses, evictions, _ = cv.GetCacheStats()
+	if hits != 1 {
+		t.Fatalf("cache hits = %d, want 1", hits)
+	}
+	if misses != 2 {
+		t.Fatalf("cache misses = %d, want 2", misses)
+	}
+	if evictions != 1 {
+		t.Fatalf("cache evictions = %d, want 1", evictions)
 	}
 }
