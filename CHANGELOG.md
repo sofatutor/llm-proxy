@@ -8,10 +8,13 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ## December 31, 2025
 
+### Changed
+
+- **Clarify Token Counters** ([#235](https://github.com/sofatutor/llm-proxy/pull/235)): Clarifies the admin UI’s token request counter semantics, sharpens the env-file warning messaging, and trims login token input so administrators avoid confusion and stray whitespace issues.
+
 ### Fixed
 
 - **Atomic Token Request Limit** ([#232](https://github.com/sofatutor/llm-proxy/pull/232)): Prevents token usage from exceeding `max_requests` by atomically guarding updates, distinguishing quota failures, aligning mock and DB semantics, and adding regression tests, while also fixing Prometheus metric writes to satisfy staticcheck.
-
 
 ## December 29, 2025
 
