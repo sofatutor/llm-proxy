@@ -112,6 +112,8 @@ func (a *UsageStatsAggregator) RecordTokenUsage(tokenString string) {
 	}
 
 	select {
+	case <-a.stopCh:
+		return
 	case a.eventsCh <- tokenString:
 		// enqueued
 	default:
@@ -141,10 +143,11 @@ func (a *UsageStatsAggregator) run() {
 		deltas = make(map[string]int)
 		eventCount = 0
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
 		now := time.Now().UTC()
-		if err := a.store.IncrementTokenUsageBatch(ctx, snapshot, now); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := a.store.IncrementTokenUsageBatch(ctx, snapshot, now)
+		cancel()
+		if err != nil {
 			a.logger.Error("failed to flush usage stats batch", zap.Error(err))
 		}
 	}
