@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -34,9 +33,6 @@ func TestNewBenchmarkHTTPClient_ConfiguresReusableTransport(t *testing.T) {
 	if transport.DialContext == nil {
 		t.Fatal("expected DialContext to be set")
 	}
-
-	// Ensure we didn't accidentally end up with a nil transport.
-	_ = net.IPv4len
 }
 
 func TestCommandHelp(t *testing.T) {
@@ -110,9 +106,7 @@ func TestBenchmark_TokenFromEnv(t *testing.T) {
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
-	t.Cleanup(func() {
-		os.Stdout = oldStdout
-	})
+	t.Cleanup(func() { os.Stdout = oldStdout })
 
 	origExit := osExit
 	osExit = func(code int) {
@@ -138,10 +132,67 @@ func TestBenchmark_TokenFromEnv(t *testing.T) {
 	if err := w.Close(); err != nil {
 		t.Fatalf("Error closing write pipe: %v", err)
 	}
-	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
 	_, _ = buf.ReadFrom(r)
+}
+
+func TestProxyLatencyFromProxyTimingHeaders(t *testing.T) {
+	t.Parallel()
+
+	base := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	cases := []struct {
+		name      string
+		received  string
+		final     string
+		want      time.Duration
+		wantFound bool
+	}{
+		{
+			name:      "missing headers",
+			wantFound: false,
+		},
+		{
+			name:      "invalid timestamps",
+			received:  "not-a-timestamp",
+			final:     "also-not-a-timestamp",
+			wantFound: false,
+		},
+		{
+			name:      "final before received",
+			received:  base.Add(2 * time.Second).Format(time.RFC3339Nano),
+			final:     base.Add(1 * time.Second).Format(time.RFC3339Nano),
+			wantFound: false,
+		},
+		{
+			name:      "valid latency",
+			received:  base.Format(time.RFC3339Nano),
+			final:     base.Add(1500 * time.Millisecond).Format(time.RFC3339Nano),
+			want:      1500 * time.Millisecond,
+			wantFound: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			headers := make(http.Header)
+			if tc.received != "" {
+				headers.Set("X-Proxy-Received-At", tc.received)
+			}
+			if tc.final != "" {
+				headers.Set("X-Proxy-Final-Response-At", tc.final)
+			}
+
+			got, ok := proxyLatencyFromProxyTimingHeaders(headers)
+			if ok != tc.wantFound {
+				t.Fatalf("expected found=%v, got %v", tc.wantFound, ok)
+			}
+			if ok && got != tc.want {
+				t.Fatalf("expected latency %s, got %s", tc.want, got)
+			}
+		})
+	}
 }
 
 func TestChatCommandArgs(t *testing.T) {

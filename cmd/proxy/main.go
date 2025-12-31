@@ -57,6 +57,24 @@ var (
 	osExit = os.Exit
 )
 
+func proxyLatencyFromProxyTimingHeaders(headers http.Header) (time.Duration, bool) {
+	receivedAtStr := headers.Get("X-Proxy-Received-At")
+	finalAtStr := headers.Get("X-Proxy-Final-Response-At")
+	if receivedAtStr == "" || finalAtStr == "" {
+		return 0, false
+	}
+
+	receivedAt, recErr := time.Parse(time.RFC3339Nano, receivedAtStr)
+	finalAt, finErr := time.Parse(time.RFC3339Nano, finalAtStr)
+	if recErr != nil || finErr != nil {
+		return 0, false
+	}
+	if receivedAt.IsZero() || finalAt.IsZero() || finalAt.Before(receivedAt) {
+		return 0, false
+	}
+	return finalAt.Sub(receivedAt), true
+}
+
 func newBenchmarkHTTPClient(timeout time.Duration) *http.Client {
 	// NOTE: We intentionally reuse a single client+transport for all requests so we
 	// get connection pooling/keep-alives. Creating a new client per request
@@ -1256,14 +1274,10 @@ Latency breakdown:
 								upstreamLat = time.Duration(upStop - upStart)
 								proxyLat = time.Duration((upStart - reqStart) + (responseEnd.UnixNano() - upStop))
 							} else {
-								// Cache hits usually don't include upstream timing headers.
-								// Fall back to proxy timing headers (RFC3339Nano) when present.
-								receivedAtStr := resp.Header.Get("X-Proxy-Received-At")
-								finalAtStr := resp.Header.Get("X-Proxy-Final-Response-At")
-								receivedAt, recErr := time.Parse(time.RFC3339Nano, receivedAtStr)
-								finalAt, finErr := time.Parse(time.RFC3339Nano, finalAtStr)
-								if recErr == nil && finErr == nil && !receivedAt.IsZero() && !finalAt.IsZero() && !finalAt.Before(receivedAt) {
-									proxyLat = finalAt.Sub(receivedAt)
+								// When upstream timing headers are missing (e.g. cache hits),
+								// fall back to proxy timing headers (RFC3339Nano) when present.
+								if lat, ok := proxyLatencyFromProxyTimingHeaders(resp.Header); ok {
+									proxyLat = lat
 								} else {
 									upstreamLat = 0
 									proxyLat = 0
