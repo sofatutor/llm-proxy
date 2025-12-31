@@ -100,6 +100,9 @@ type Config struct {
 
 	// Cache stats aggregation
 	CacheStatsBufferSize int // Buffer size for async cache stats aggregation (default: 1000)
+
+	// Usage stats aggregation
+	UsageStatsBufferSize int // Buffer size for async usage stats aggregation (default: 1000)
 }
 
 // AdminUIConfig holds configuration for the Admin UI server
@@ -211,6 +214,10 @@ func New() (*Config, error) {
 
 		// Cache stats aggregation
 		CacheStatsBufferSize: getEnvInt("CACHE_STATS_BUFFER_SIZE", 1000),
+
+		// Usage stats aggregation
+		// Backwards-compatible: if USAGE_STATS_BUFFER_SIZE is not set, re-use CACHE_STATS_BUFFER_SIZE.
+		UsageStatsBufferSize: getEnvInt("USAGE_STATS_BUFFER_SIZE", getEnvInt("CACHE_STATS_BUFFER_SIZE", 1000)),
 	}
 
 	// Validate required settings
@@ -388,5 +395,8 @@ func DefaultConfig() *Config {
 
 		// Cache stats aggregation
 		CacheStatsBufferSize: 1000,
+
+		// Usage stats aggregation
+		UsageStatsBufferSize: 1000,
 	}
 }

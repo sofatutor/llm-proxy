@@ -67,8 +67,8 @@
                                     {{ end }}
                                 </td>
                                 <td>
-                                    {{/* Requests: COUNT / MAX | Cache: CACHED | UPSTREAM */}}
-                                    <span class="badge bg-secondary" title="Total requests made" data-bs-toggle="tooltip">
+                                    {{/* Upstream: COUNT / MAX | Cache: CACHED | Total: UPSTREAM + CACHED */}}
+                                    <span class="badge bg-secondary" title="Upstream requests (quota)" data-bs-toggle="tooltip">
                                         {{ .RequestCount }}
                                     </span>
                                     / {{ formatMaxRequests .MaxRequests }}
@@ -77,8 +77,8 @@
                                         <i class="bi bi-hdd"></i> {{ .CacheHitCount }}
                                     </span>
                                     <span class="text-muted">|</span>
-                                    <span class="badge bg-primary" title="Responses fetched from upstream" data-bs-toggle="tooltip">
-                                        <i class="bi bi-cloud-arrow-up"></i> {{ safeSub .RequestCount .CacheHitCount }}
+                                    <span class="badge bg-primary" title="Total responses served" data-bs-toggle="tooltip">
+                                        <i class="bi bi-cloud-arrow-up"></i> {{ .RequestCount }}
                                     </span>
                                 </td>
                                 <td>

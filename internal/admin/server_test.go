@@ -2004,6 +2004,16 @@ func TestServer_HandleLogin(t *testing.T) {
 		t.Errorf("expected 303 for valid login, got %d", w.Code)
 	}
 
+	// Valid login with trailing newline (common copy/paste issue)
+	formTrim := strings.NewReader("management_token=valid-token%0A")
+	reqTrim, _ := http.NewRequest("POST", "/auth/login", formTrim)
+	reqTrim.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	wTrim := httptest.NewRecorder()
+	s.engine.ServeHTTP(wTrim, reqTrim)
+	if wTrim.Code != http.StatusSeeOther {
+		t.Errorf("expected 303 for valid login with trailing newline, got %d", wTrim.Code)
+	}
+
 	// Missing token
 	form2 := strings.NewReader("")
 	req2, _ := http.NewRequest("POST", "/auth/login", form2)

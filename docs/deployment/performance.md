@@ -105,6 +105,17 @@ CACHE_STATS_BUFFER_SIZE=5000
 
 Stats are flushed to the database every 5 seconds or when 100 events accumulate.
 
+### Usage Stats Aggregation
+
+For unlimited tokens, the proxy can batch `request_count`/`last_used_at` updates asynchronously.
+
+```bash
+# Buffer size for unlimited-token usage tracking events
+USAGE_STATS_BUFFER_SIZE=1000  # Default
+
+# Backwards-compatible: if not set, falls back to CACHE_STATS_BUFFER_SIZE
+```
+
 ## Database Connection Pool
 
 Properly sized connection pools prevent bottlenecks and connection exhaustion.
