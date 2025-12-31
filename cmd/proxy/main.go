@@ -1075,8 +1075,27 @@ func init() {
 	manageCmd.AddCommand(projectCmd)
 	manageCmd.AddCommand(tokenCmd)
 	manageCmd.AddCommand(cacheCmd)
-	// Register manage command with root
-	cobraRoot.AddCommand(manageCmd)
+// Register manage command with root
+cobraRoot.AddCommand(manageCmd)
+
+// proxyLatencyFromProxyTimingHeaders parses proxy timing headers and returns the proxy latency when both
+// timestamps are present and valid. Returns (0, false) when parsing fails or headers are missing.
+func proxyLatencyFromProxyTimingHeaders(h http.Header) (time.Duration, bool) {
+	receivedAtStr := h.Get("X-Proxy-Received-At")
+	finalAtStr := h.Get("X-Proxy-Final-Response-At")
+	if receivedAtStr == "" || finalAtStr == "" {
+		return 0, false
+	}
+	receivedAt, recErr := time.Parse(time.RFC3339Nano, receivedAtStr)
+	finalAt, finErr := time.Parse(time.RFC3339Nano, finalAtStr)
+	if recErr != nil || finErr != nil {
+		return 0, false
+	}
+	if receivedAt.IsZero() || finalAt.IsZero() || finalAt.Before(receivedAt) {
+		return 0, false
+	}
+	return finalAt.Sub(receivedAt), true
+}
 
 	// In the same place where openaiCmd is assigned, assign benchmarkCmd as well
 	benchmarkCmd = &cobra.Command{
@@ -1087,8 +1106,8 @@ func init() {
 Required flags:
   --base-url        Base URL of the target (e.g., http://localhost:8080 or https://api.openai.com/v1)
   --endpoint        API path to hit (e.g., /v1/chat/completions or /chat/completions for OpenAI)
-	--token           Bearer token (proxy token or OpenAI API key). Prefer --token-env to avoid putting secrets in shell history.
-	--token-env       Environment variable name containing the token (default: PROXY_TOKEN)
+  --token           Bearer token (proxy token or OpenAI API key). Prefer --token-env to avoid putting secrets in shell history.
+  --token-env       Environment variable name containing the token (default: PROXY_TOKEN)
   --requests, -r    Total number of requests to send
   --concurrency, -c Number of concurrent workers
 

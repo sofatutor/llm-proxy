@@ -196,6 +196,7 @@ func TestHTTPCache_BasicHitOnSecondGET(t *testing.T) {
 	mockValidator := new(MockTokenValidator)
 	mockStore := new(MockProjectStore)
 	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
+	mockValidator.On("ValidateToken", mock.Anything, "test_token").Return("project123", nil)
 	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
 	mockStore.On("GetProjectActive", mock.Anything, "project123").Return(true, nil)
 
@@ -241,6 +242,41 @@ func TestHTTPCache_BasicHitOnSecondGET(t *testing.T) {
 	assert.Equal(t, 1, hitCount)
 }
 
+func TestTransparentProxy_UpstreamAPIKeyLookupFailureReturns503(t *testing.T) {
+	upstreamCalled := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	validator := new(MockTokenValidator)
+	store := new(MockProjectStore)
+	validator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
+	store.On("GetAPIKeyForProject", mock.Anything, "project123").Return("", errors.New("db down"))
+
+	p, err := NewTransparentProxyWithLogger(ProxyConfig{
+		TargetBaseURL:    server.URL,
+		AllowedEndpoints: []string{"/v1/test"},
+		AllowedMethods:   []string{http.MethodGet},
+	}, validator, store, zap.NewNop())
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/test", nil)
+	req.Header.Set("Authorization", "Bearer test_token")
+	rr := httptest.NewRecorder()
+	p.Handler().ServeHTTP(rr, req)
+
+	res := rr.Result()
+	defer func() { _ = res.Body.Close() }()
+	require.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
+
+	var body ErrorResponse
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	require.Equal(t, "upstream_auth_error", body.Code)
+	require.False(t, upstreamCalled, "expected no upstream call")
+}
+
 func TestHTTPCache_VaryAcceptSeparatesEntries(t *testing.T) {
 	// Upstream returns different payload for different Accept
 	hits := 0
@@ -260,6 +296,7 @@ func TestHTTPCache_VaryAcceptSeparatesEntries(t *testing.T) {
 	mockValidator := new(MockTokenValidator)
 	mockStore := new(MockProjectStore)
 	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
+	mockValidator.On("ValidateToken", mock.Anything, "test_token").Return("project123", nil)
 	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
 	mockStore.On("GetProjectActive", mock.Anything, "project123").Return(true, nil)
 
@@ -1449,8 +1486,8 @@ func TestTransparentProxy_Handler_ErrorAndEdgeCases(t *testing.T) {
 				AllowedEndpoints: []string{"/v1/completions"},
 				AllowedMethods:   []string{"POST"},
 			},
-			wantStatus: http.StatusUnauthorized,
-			wantBody:   "\"Invalid token\"",
+			wantStatus: http.StatusServiceUnavailable,
+			wantBody:   "upstream_auth_error",
 		},
 		{
 			name:      "Disallowed method",
@@ -1687,7 +1724,6 @@ func TestProjectActiveEnforcement_DBErrorReturns503(t *testing.T) {
 	v := new(MockTokenValidator)
 	s := new(MockProjectStore)
 	v.On("ValidateTokenWithTracking", mock.Anything, "tok").Return("p1", nil).Once()
-	s.On("GetAPIKeyForProject", mock.Anything, "p1").Return("sk", nil).Once()
 	s.On("GetProjectActive", mock.Anything, "p1").Return(false, errors.New("db down")).Once()
 
 	p, err := NewTransparentProxyWithLogger(ProxyConfig{
@@ -1799,7 +1835,6 @@ func TestTransparentProxyWithAudit_InactiveProject(t *testing.T) {
 
 	// Set up expected calls - token validation succeeds, project is inactive
 	validator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("inactive-project", nil)
-	store.On("GetAPIKeyForProject", mock.Anything, "inactive-project").Return("api_key_123", nil)
 	store.On("GetProjectActive", mock.Anything, "inactive-project").Return(false, nil)
 
 	// Create proxy with audit and project enforcement enabled

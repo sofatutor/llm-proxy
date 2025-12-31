@@ -14,10 +14,12 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Changed
 
+- **Cache Fastpath Tuning** ([#233](https://github.com/sofatutor/llm-proxy/pull/233)): Skips token tracking and upstream API-key lookups on true cache hits while deferring key resolution until a request must go upstream, hardens POST body hashing to opted-in requests with bounded sizes, and retunes Redis cache client defaults for more reliable caching behavior.
 - **Pooled Benchmark Client** ([#237](https://github.com/sofatutor/llm-proxy/pull/237)): Benchmark requests reuse a pooled HTTP client with aggressive keep-alive defaults to reduce variance and stress connection reuse across runs.
 
 ### Fixed
 
+- **Token Logging Obfuscation** ([#236](https://github.com/sofatutor/llm-proxy/pull/236)): Masks tokens in logs and error messages to prevent accidental secret leakage, improving operational security without changing behavior.
 - **Atomic Token Request Limit** ([#232](https://github.com/sofatutor/llm-proxy/pull/232)): Prevents token usage from exceeding `max_requests` by atomically guarding updates, distinguishing quota failures, aligning mock and DB semantics, and adding regression tests, while also fixing Prometheus metric writes to satisfy staticcheck.
 
 ## December 29, 2025
