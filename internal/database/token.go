@@ -332,6 +332,8 @@ func (d *DB) IncrementTokenUsageBatch(ctx context.Context, deltas map[string]int
 		_ = stmt.Close()
 	}()
 
+	updated := int64(0)
+	missing := int64(0)
 	for tokenID, delta := range deltas {
 		if delta <= 0 {
 			continue
@@ -345,8 +347,18 @@ func (d *DB) IncrementTokenUsageBatch(ctx context.Context, deltas map[string]int
 			return fmt.Errorf("failed to get rows affected for token %s: %w", obfuscate.ObfuscateTokenGeneric(tokenID), err)
 		}
 		if rows == 0 {
-			return fmt.Errorf("failed to increment token usage for token %s: %w", obfuscate.ObfuscateTokenGeneric(tokenID), ErrTokenNotFound)
+			// Tokens can be deleted/revoked while async events are buffered.
+			// Skipping missing tokens avoids discarding successful increments for other tokens.
+			missing++
+			continue
 		}
+		updated += rows
+	}
+
+	// If *all* requested updates were for missing tokens, surface ErrTokenNotFound to catch
+	// misconfiguration/bugs (e.g. wrong identifier type) without being noisy for partial misses.
+	if updated == 0 && missing > 0 {
+		return ErrTokenNotFound
 	}
 
 	if err := tx.Commit(); err != nil {

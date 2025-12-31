@@ -138,41 +138,63 @@ func (cv *CachedValidator) ValidateToken(ctx context.Context, tokenID string) (s
 	return projectID, nil
 }
 
-// ValidateTokenWithTracking validates a token and tracks usage (bypasses cache for tracking)
+// ValidateTokenWithTracking validates a token and tracks usage.
+//
+// For cached *unlimited* tokens, we keep validation cheap by returning from the cache and enqueueing
+// async tracking (when an aggregator is configured). For cached *limited* tokens we defer to the
+// underlying validator and invalidate the cache afterwards, to avoid serving stale rate-limit state.
 func (cv *CachedValidator) ValidateTokenWithTracking(ctx context.Context, tokenID string) (string, error) {
 	shouldInvalidateAfterTracking := false
 
-	// If the token is cached and unlimited, we can avoid bypassing the cache.
-	// This keeps validation cheap while still tracking usage asynchronously.
 	cv.cacheMutex.RLock()
 	entry, found := cv.cache[tokenID]
 	cv.cacheMutex.RUnlock()
-	if found {
+
+	if !found {
+		cv.statsMutex.Lock()
+		cv.misses++
+		cv.statsMutex.Unlock()
+	} else {
 		now := time.Now()
 		if now.After(entry.ValidUntil) {
 			cv.invalidateCache(tokenID)
+
+			cv.statsMutex.Lock()
+			cv.misses++
+			cv.evictions++
+			cv.statsMutex.Unlock()
 		} else if entry.Data.IsValid() {
-			if entry.Data.MaxRequests != nil && *entry.Data.MaxRequests > 0 {
-				shouldInvalidateAfterTracking = true
-			}
-			if entry.Data.MaxRequests == nil || *entry.Data.MaxRequests <= 0 {
+			cv.statsMutex.Lock()
+			cv.hits++
+			cv.statsMutex.Unlock()
+
+			isUnlimited := entry.Data.MaxRequests == nil || *entry.Data.MaxRequests <= 0
+			if isUnlimited {
 				if getter, ok := cv.validator.(usageStatsAggregatorGetter); ok {
 					if agg := getter.usageStatsAggregator(); agg != nil {
 						agg.RecordTokenUsage(tokenID)
 						return entry.Data.ProjectID, nil
 					}
 				}
+			} else {
+				shouldInvalidateAfterTracking = true
 			}
+		} else {
+			// Should be unreachable (invalid tokens should never be cached), but be defensive.
+			cv.invalidateCache(tokenID)
+
+			cv.statsMutex.Lock()
+			cv.misses++
+			cv.evictions++
+			cv.statsMutex.Unlock()
 		}
 	}
 
-	// Default behavior: use the underlying validator for tracking requests.
 	projectID, err := cv.validator.ValidateTokenWithTracking(ctx, tokenID)
 	if err != nil {
 		return "", err
 	}
 
-	// Invalidate cache to avoid serving stale rate-limit state for limited tokens.
 	if shouldInvalidateAfterTracking {
 		cv.invalidateCache(tokenID)
 	}

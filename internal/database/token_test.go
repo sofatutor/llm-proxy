@@ -265,13 +265,16 @@ func TestIncrementTokenUsageBatch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 4, updated2.RequestCount)
 
-	// Any missing token should cause a rollback.
-	err = db.IncrementTokenUsageBatch(ctx, map[string]int{token1.Token: 1, "missing-token": 1}, lastUsedAt)
-	require.ErrorIs(t, err, ErrTokenNotFound)
+	// Missing tokens are skipped (tokens can be deleted while events are buffered).
+	require.NoError(t, db.IncrementTokenUsageBatch(ctx, map[string]int{token1.Token: 1, "missing-token": 1}, lastUsedAt))
 
 	updated1, err = db.GetTokenByToken(ctx, token1.Token)
 	require.NoError(t, err)
-	require.Equal(t, 2, updated1.RequestCount)
+	require.Equal(t, 3, updated1.RequestCount)
+
+	// But if all requested updates target missing tokens, surface ErrTokenNotFound.
+	err = db.IncrementTokenUsageBatch(ctx, map[string]int{"missing-token": 1}, lastUsedAt)
+	require.ErrorIs(t, err, ErrTokenNotFound)
 }
 
 // TestTokenExpirationAndRateLimiting tests token expiration and rate limiting.
