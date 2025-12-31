@@ -326,8 +326,8 @@ func (s *Server) initializeAPIRoutes() error {
 	// Async usage tracking for unlimited tokens: keep DB writes off the hot path.
 	if s.db != nil {
 		usageCfg := token.DefaultUsageStatsAggregatorConfig()
-		if s.config.CacheStatsBufferSize > 0 {
-			usageCfg.BufferSize = s.config.CacheStatsBufferSize
+		if s.config.UsageStatsBufferSize > 0 {
+			usageCfg.BufferSize = s.config.UsageStatsBufferSize
 		}
 		s.usageStatsAgg = token.NewUsageStatsAggregator(usageCfg, s.db, s.logger)
 		s.usageStatsAgg.Start()

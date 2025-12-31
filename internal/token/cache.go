@@ -140,6 +140,8 @@ func (cv *CachedValidator) ValidateToken(ctx context.Context, tokenID string) (s
 
 // ValidateTokenWithTracking validates a token and tracks usage (bypasses cache for tracking)
 func (cv *CachedValidator) ValidateTokenWithTracking(ctx context.Context, tokenID string) (string, error) {
+	shouldInvalidateAfterTracking := false
+
 	// If the token is cached and unlimited, we can avoid bypassing the cache.
 	// This keeps validation cheap while still tracking usage asynchronously.
 	cv.cacheMutex.RLock()
@@ -150,9 +152,12 @@ func (cv *CachedValidator) ValidateTokenWithTracking(ctx context.Context, tokenI
 		if now.After(entry.ValidUntil) {
 			cv.invalidateCache(tokenID)
 		} else if entry.Data.IsValid() {
+			if entry.Data.MaxRequests != nil && *entry.Data.MaxRequests > 0 {
+				shouldInvalidateAfterTracking = true
+			}
 			if entry.Data.MaxRequests == nil || *entry.Data.MaxRequests <= 0 {
-				if sv, ok := cv.validator.(*StandardValidator); ok {
-					if agg := sv.usageStatsAgg.Load(); agg != nil {
+				if getter, ok := cv.validator.(usageStatsAggregatorGetter); ok {
+					if agg := getter.usageStatsAggregator(); agg != nil {
 						agg.RecordTokenUsage(tokenID)
 						return entry.Data.ProjectID, nil
 					}
@@ -168,7 +173,9 @@ func (cv *CachedValidator) ValidateTokenWithTracking(ctx context.Context, tokenI
 	}
 
 	// Invalidate cache to avoid serving stale rate-limit state for limited tokens.
-	cv.invalidateCache(tokenID)
+	if shouldInvalidateAfterTracking {
+		cv.invalidateCache(tokenID)
+	}
 
 	return projectID, nil
 }

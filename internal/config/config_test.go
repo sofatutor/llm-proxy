@@ -153,6 +153,12 @@ func TestNew(t *testing.T) {
 		if config.ManagementToken != "test-token" {
 			t.Errorf("Expected ManagementToken to be test-token, got %s", config.ManagementToken)
 		}
+		if config.CacheStatsBufferSize != 1000 {
+			t.Errorf("Expected CacheStatsBufferSize to be 1000, got %d", config.CacheStatsBufferSize)
+		}
+		if config.UsageStatsBufferSize != 1000 {
+			t.Errorf("Expected UsageStatsBufferSize to be 1000, got %d", config.UsageStatsBufferSize)
+		}
 	})
 
 	t.Run("CustomValues", func(t *testing.T) {
@@ -208,6 +214,72 @@ func TestNew(t *testing.T) {
 		}
 		if config.EnableMetrics != false {
 			t.Errorf("Expected EnableMetrics to be false, got %v", config.EnableMetrics)
+		}
+	})
+
+	t.Run("UsageStatsBufferSizeFallback", func(t *testing.T) {
+		os.Clearenv()
+		if err := os.Setenv("MANAGEMENT_TOKEN", "test-token"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		if err := os.Setenv("CACHE_STATS_BUFFER_SIZE", "2000"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+
+		config, err := New()
+		if err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+		if config.CacheStatsBufferSize != 2000 {
+			t.Errorf("Expected CacheStatsBufferSize to be 2000, got %d", config.CacheStatsBufferSize)
+		}
+		if config.UsageStatsBufferSize != 2000 {
+			t.Errorf("Expected UsageStatsBufferSize to fall back to 2000, got %d", config.UsageStatsBufferSize)
+		}
+	})
+
+	t.Run("UsageStatsBufferSizeOverride", func(t *testing.T) {
+		os.Clearenv()
+		if err := os.Setenv("MANAGEMENT_TOKEN", "test-token"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		if err := os.Setenv("CACHE_STATS_BUFFER_SIZE", "2000"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		if err := os.Setenv("USAGE_STATS_BUFFER_SIZE", "3000"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+
+		config, err := New()
+		if err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+		if config.CacheStatsBufferSize != 2000 {
+			t.Errorf("Expected CacheStatsBufferSize to be 2000, got %d", config.CacheStatsBufferSize)
+		}
+		if config.UsageStatsBufferSize != 3000 {
+			t.Errorf("Expected UsageStatsBufferSize to be 3000, got %d", config.UsageStatsBufferSize)
+		}
+	})
+
+	t.Run("UsageStatsBufferSizeInvalidFallsBack", func(t *testing.T) {
+		os.Clearenv()
+		if err := os.Setenv("MANAGEMENT_TOKEN", "test-token"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		if err := os.Setenv("CACHE_STATS_BUFFER_SIZE", "2000"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		if err := os.Setenv("USAGE_STATS_BUFFER_SIZE", "not-an-int"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+
+		config, err := New()
+		if err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+		if config.UsageStatsBufferSize != 2000 {
+			t.Errorf("Expected UsageStatsBufferSize to fall back to 2000 for invalid input, got %d", config.UsageStatsBufferSize)
 		}
 	})
 

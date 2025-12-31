@@ -91,6 +91,10 @@ type StandardValidator struct {
 	usageStatsAgg atomic.Pointer[UsageStatsAggregator]
 }
 
+type usageStatsAggregatorGetter interface {
+	usageStatsAggregator() *UsageStatsAggregator
+}
+
 // NewValidator creates a new StandardValidator with the given TokenStore
 func NewValidator(store TokenStore) *StandardValidator {
 	return &StandardValidator{
@@ -104,6 +108,10 @@ func NewValidator(store TokenStore) *StandardValidator {
 // for unlimited tokens (MaxRequests == nil or <= 0) instead of doing a synchronous DB write.
 func (v *StandardValidator) SetUsageStatsAggregator(agg *UsageStatsAggregator) {
 	v.usageStatsAgg.Store(agg)
+}
+
+func (v *StandardValidator) usageStatsAggregator() *UsageStatsAggregator {
+	return v.usageStatsAgg.Load()
 }
 
 func (v *StandardValidator) validateTokenData(ctx context.Context, tokenString string) (TokenData, error) {
