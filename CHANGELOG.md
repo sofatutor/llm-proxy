@@ -8,10 +8,14 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ## December 31, 2025
 
+### Changed
+
+- **Async Unlimited Token Tracking** ([#234](https://github.com/sofatutor/llm-proxy/pull/234)): Moves unlimited-token usage tracking into an async, bounded-buffer flow while keeping limited-token tracking synchronous, preventing slowdowns under load even though buffer overflows (logged at DEBUG) can drop events.
+
 ### Fixed
 
+- **Consistent Validator Cache** ([#234](https://github.com/sofatutor/llm-proxy/pull/234)): Ensures the cached validator population is always consistently updated with regression coverage to prevent missed validators.
 - **Atomic Token Request Limit** ([#232](https://github.com/sofatutor/llm-proxy/pull/232)): Prevents token usage from exceeding `max_requests` by atomically guarding updates, distinguishing quota failures, aligning mock and DB semantics, and adding regression tests, while also fixing Prometheus metric writes to satisfy staticcheck.
-
 
 ## December 29, 2025
 
