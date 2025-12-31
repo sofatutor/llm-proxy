@@ -49,9 +49,11 @@ spec:
               containerPort: {{ $adminContainerPort }}
               protocol: TCP
           livenessProbe:
-            httpGet:
-              path: /health
-              port: http
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
           {{- $managementTokenSecret := include "llm-proxy.managementTokenSecretName" . }}
           {{- $hasEnv := and (hasKey .Values "env") (gt (len .Values.env) 0) }}
           {{- if or $hasEnv $managementTokenSecret }}
@@ -69,29 +71,6 @@ spec:
                   name: {{ $managementTokenSecret }}
                   key: {{ include "llm-proxy.managementTokenSecretKey" . }}
           {{- end }}
-          {{- end }}
-            initialDelaySeconds: 10
-            periodSeconds: 30
-            timeoutSeconds: 5
-            failureThreshold: 3
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: http
-            initialDelaySeconds: 5
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
-          resources:
-            {{- toYaml .Values.resources | nindent 12 }}
-          {{- $managementTokenSecret := include "llm-proxy.managementTokenSecretName" . }}
-          {{- if $managementTokenSecret }}
-          env:
-            - name: MANAGEMENT_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $managementTokenSecret }}
-                  key: {{ include "llm-proxy.managementTokenSecretKey" . }}
           {{- end }}
           {{- if .Values.volumeMounts }}
           volumeMounts:
