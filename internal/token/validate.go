@@ -138,6 +138,9 @@ func (v *StandardValidator) ValidateTokenWithTracking(ctx context.Context, token
 
 	// Increment the token usage by token string
 	if err := v.store.IncrementTokenUsage(ctx, tokenString); err != nil {
+		if errors.Is(err, ErrTokenRateLimit) {
+			return "", ErrTokenRateLimit
+		}
 		return "", fmt.Errorf("failed to track token usage: %w", err)
 	}
 

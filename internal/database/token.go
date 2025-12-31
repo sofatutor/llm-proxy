@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sofatutor/llm-proxy/internal/obfuscate"
 	"github.com/sofatutor/llm-proxy/internal/token"
 )
 
@@ -253,11 +254,20 @@ func (d *DB) GetTokensByProjectID(ctx context.Context, projectID string) ([]Toke
 
 // IncrementTokenUsage increments the request count and updates the last_used_at timestamp.
 func (d *DB) IncrementTokenUsage(ctx context.Context, tokenID string) error {
+	if tokenID == "" {
+		return fmt.Errorf("token string is required")
+	}
+
 	now := time.Now().UTC()
 	query := `
 	UPDATE tokens
 	SET request_count = request_count + 1, last_used_at = ?
 	WHERE token = ?
+	  AND (
+		max_requests IS NULL
+		OR max_requests <= 0
+		OR request_count < max_requests
+	  )
 	`
 
 	result, err := d.ExecContextRebound(ctx, query, now, tokenID)
@@ -271,7 +281,23 @@ func (d *DB) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	}
 
 	if rowsAffected == 0 {
-		return ErrTokenNotFound
+		// Distinguish between non-existent token and rate-limited token.
+		var requestCount int
+		var maxRequests sql.NullInt32
+		checkQuery := `SELECT request_count, max_requests FROM tokens WHERE token = ?`
+		err := d.QueryRowContextRebound(ctx, checkQuery, tokenID).Scan(&requestCount, &maxRequests)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrTokenNotFound
+			}
+			return fmt.Errorf("failed to check token usage for %s: %w", obfuscate.ObfuscateTokenGeneric(tokenID), err)
+		}
+		if maxRequests.Valid && maxRequests.Int32 > 0 {
+			if requestCount >= int(maxRequests.Int32) {
+				return token.ErrTokenRateLimit
+			}
+		}
+		return fmt.Errorf("failed to increment token usage for %s: no rows updated", obfuscate.ObfuscateTokenGeneric(tokenID))
 	}
 
 	return nil

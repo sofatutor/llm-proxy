@@ -97,6 +97,18 @@ func TestMockTokenStore_IncrementTokenUsage(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestMockTokenStore_IncrementTokenUsage_EnforcesMaxRequests(t *testing.T) {
+	store := NewMockTokenStore()
+	ctx := context.Background()
+	maxRequests := 1
+	tk := Token{Token: "t1", ProjectID: "p1", IsActive: true, CreatedAt: time.Now(), MaxRequests: &maxRequests}
+	assert.NoError(t, store.CreateToken(ctx, tk))
+
+	assert.NoError(t, store.IncrementTokenUsage(ctx, "t1"))
+	err := store.IncrementTokenUsage(ctx, "t1")
+	assert.ErrorIs(t, err, token.ErrTokenRateLimit)
+}
+
 func TestMockTokenStore_CleanExpiredTokens(t *testing.T) {
 	store := NewMockTokenStore()
 	ctx := context.Background()
