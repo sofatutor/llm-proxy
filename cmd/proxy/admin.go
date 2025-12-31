@@ -42,7 +42,12 @@ func init() {
 func runAdmin(cmd *cobra.Command, args []string) {
 	// Load environment variables from file if specified
 	if adminEnvFile != "" {
-		if err := godotenv.Load(adminEnvFile); err != nil {
+		envFlagChanged := cmd.Flags().Changed("env")
+		if _, err := os.Stat(adminEnvFile); err == nil {
+			if err := godotenv.Load(adminEnvFile); err != nil {
+				log.Printf("Warning: Could not load env file %s: %v", adminEnvFile, err)
+			}
+		} else if envFlagChanged {
 			log.Printf("Warning: Could not load env file %s: %v", adminEnvFile, err)
 		}
 	}
