@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -55,6 +56,45 @@ var (
 var (
 	osExit = os.Exit
 )
+
+func proxyLatencyFromProxyTimingHeaders(headers http.Header) (time.Duration, bool) {
+	receivedAtStr := headers.Get("X-Proxy-Received-At")
+	finalAtStr := headers.Get("X-Proxy-Final-Response-At")
+	if receivedAtStr == "" || finalAtStr == "" {
+		return 0, false
+	}
+
+	receivedAt, recErr := time.Parse(time.RFC3339Nano, receivedAtStr)
+	finalAt, finErr := time.Parse(time.RFC3339Nano, finalAtStr)
+	if recErr != nil || finErr != nil {
+		return 0, false
+	}
+	if receivedAt.IsZero() || finalAt.IsZero() || finalAt.Before(receivedAt) {
+		return 0, false
+	}
+	return finalAt.Sub(receivedAt), true
+}
+
+func newBenchmarkHTTPClient(timeout time.Duration) *http.Client {
+	// NOTE: We intentionally reuse a single client+transport for all requests so we
+	// get connection pooling/keep-alives. Creating a new client per request
+	// amplifies latency variance and can overwhelm conntrack/ephemeral ports.
+	// MaxIdleConns{,PerHost} are set high on purpose to support high benchmark
+	// concurrency; adjust them if you benchmark with very high --concurrency.
+	dialer := &net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}
+	transport := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		DialContext:           dialer.DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          1024,
+		MaxIdleConnsPerHost:   1024,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
+
+	return &http.Client{Timeout: timeout, Transport: transport}
+}
 
 // Global flag for management API base URL
 var manageAPIBaseURL string
@@ -1049,9 +1089,12 @@ func init() {
 Required flags:
   --base-url        Base URL of the target (e.g., http://localhost:8080 or https://api.openai.com/v1)
   --endpoint        API path to hit (e.g., /v1/chat/completions or /chat/completions for OpenAI)
-  --token           Bearer token (proxy token or OpenAI API key)
+  --token           Bearer token (proxy token or OpenAI API key). Prefer --token-env to avoid putting secrets in shell history.
   --requests, -r    Total number of requests to send
   --concurrency, -c Number of concurrent workers
+
+Authentication:
+  Provide --token OR set the token in an env var and use --token-env (default: PROXY_TOKEN, matching llm-proxy openai chat).
 
 Optional flags:
   --json            JSON request body for POST requests
@@ -1089,6 +1132,7 @@ Latency breakdown:
 			baseURL, _ := cmd.Flags().GetString("base-url")
 			endpoint, _ := cmd.Flags().GetString("endpoint")
 			token, _ := cmd.Flags().GetString("token")
+			tokenEnv, _ := cmd.Flags().GetString("token-env")
 			totalRequests, _ := cmd.Flags().GetInt("requests")
 			concurrency, _ := cmd.Flags().GetInt("concurrency")
 			jsonBody, _ := cmd.Flags().GetString("json")
@@ -1096,6 +1140,14 @@ Latency breakdown:
 			cacheMode, _ := cmd.Flags().GetBool("cache")
 			cacheTTL, _ := cmd.Flags().GetInt("cache-ttl")
 			method, _ := cmd.Flags().GetString("method")
+
+			// Resolve token from environment to avoid leaking secrets via shell history.
+			if token == "" {
+				if tokenEnv == "" {
+					tokenEnv = "PROXY_TOKEN"
+				}
+				token = os.Getenv(tokenEnv)
+			}
 
 			if baseURL == "" || endpoint == "" || token == "" || totalRequests <= 0 || concurrency <= 0 {
 				fmt.Fprintln(os.Stderr, "Missing required flags or invalid values.")
@@ -1139,6 +1191,8 @@ Latency breakdown:
 			var latencies []time.Duration
 			var upstreamLatencies []time.Duration
 			var proxyLatencies []time.Duration
+
+			client := newBenchmarkHTTPClient(10 * time.Second)
 
 			for i := 0; i < concurrency; i++ {
 				wg.Add(1)
@@ -1189,7 +1243,6 @@ Latency breakdown:
 							sentReqHeaders.Set("Authorization", "Bearer <redacted>")
 						}
 
-						client := &http.Client{Timeout: 10 * time.Second}
 						resp, err := client.Do(req)
 						responseEnd := time.Now()
 						lat := responseEnd.Sub(requestStart)
@@ -1225,11 +1278,21 @@ Latency breakdown:
 								upstreamLat = time.Duration(upStop - upStart)
 								proxyLat = time.Duration((upStart - reqStart) + (responseEnd.UnixNano() - upStop))
 							} else {
-								upstreamLat = 0
-								proxyLat = 0
+								// When upstream timing headers are missing (e.g. cache hits),
+								// fall back to proxy timing headers (RFC3339Nano) when present.
+								if proxyLatFromHeaders, ok := proxyLatencyFromProxyTimingHeaders(resp.Header); ok {
+									proxyLat = proxyLatFromHeaders
+								} else {
+									upstreamLat = 0
+									proxyLat = 0
+								}
 							}
 						} else {
-							errMsg = err.Error()
+							if err != nil {
+								errMsg = err.Error()
+							} else {
+								errMsg = "request failed: no response and no error returned"
+							}
 						}
 						results <- result{latency: lat, err: err, errMsg: errMsg, response: respBody, statusCode: statusCode, headers: headers, reqHeaders: sentReqHeaders, reqBody: reqBodyStr, upstreamLat: upstreamLat, proxyLat: proxyLat}
 						progressMu.Lock()
@@ -1239,15 +1302,6 @@ Latency breakdown:
 						completed++
 						fmt.Printf("\rRequests sent: %d, completed: %d, failed: %d", sent, completed, failed)
 						progressMu.Unlock()
-						if err == nil && statusCode >= 200 && statusCode < 300 {
-							latencies = append(latencies, lat)
-							if upstreamLat > 0 {
-								upstreamLatencies = append(upstreamLatencies, upstreamLat)
-							}
-							if proxyLat > 0 {
-								proxyLatencies = append(proxyLatencies, proxyLat)
-							}
-						}
 					}
 				}(workerID, count)
 			}
@@ -1292,6 +1346,7 @@ Latency breakdown:
 				if isSuccess {
 					success++
 					totalLatency += r.latency
+					latencies = append(latencies, r.latency)
 					if first || r.latency < minLatency {
 						minLatency = r.latency
 					}
@@ -1300,6 +1355,7 @@ Latency breakdown:
 					}
 					if r.upstreamLat > 0 {
 						totalUpstreamLat += r.upstreamLat
+						upstreamLatencies = append(upstreamLatencies, r.upstreamLat)
 						if upstreamLatCount == 0 || r.upstreamLat < minUpstreamLat {
 							minUpstreamLat = r.upstreamLat
 						}
@@ -1310,6 +1366,7 @@ Latency breakdown:
 					}
 					if r.proxyLat > 0 {
 						totalProxyLat += r.proxyLat
+						proxyLatencies = append(proxyLatencies, r.proxyLat)
 						if proxyLatCount == 0 || r.proxyLat < minProxyLat {
 							minProxyLat = r.proxyLat
 						}
@@ -1322,12 +1379,6 @@ Latency breakdown:
 						sampleResponse = r.response
 					}
 					first = false
-					if r.upstreamLat > 0 {
-						upstreamLatencies = append(upstreamLatencies, r.upstreamLat)
-					}
-					if r.proxyLat > 0 {
-						proxyLatencies = append(proxyLatencies, r.proxyLat)
-					}
 				}
 			}
 			avgLatency := time.Duration(0)
@@ -1522,7 +1573,10 @@ Latency breakdown:
 	}
 	benchmarkCmd.Flags().String("base-url", "", "Base URL of the LLM Proxy (required)")
 	benchmarkCmd.Flags().String("endpoint", "", "API endpoint to benchmark (required)")
-	benchmarkCmd.Flags().String("token", "", "Token for authentication (required)")
+	benchmarkCmd.Flags().String("token", "", "Token for authentication (prefer --token-env)")
+	// --token-env keeps secrets out of shell history while still allowing users to pick their own env var name.
+	// Default matches other commands (e.g. llm-proxy openai chat).
+	benchmarkCmd.Flags().String("token-env", "PROXY_TOKEN", "Environment variable name containing the token (default: PROXY_TOKEN; matches llm-proxy openai chat)")
 	benchmarkCmd.Flags().IntP("requests", "r", 1, "Total number of requests to send (required)")
 	benchmarkCmd.Flags().IntP("concurrency", "c", 1, "Number of concurrent workers (required)")
 	benchmarkCmd.Flags().String("json", "", "Optional JSON string to use as the POST body for each request")
