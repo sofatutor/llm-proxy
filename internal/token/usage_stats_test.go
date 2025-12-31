@@ -123,6 +123,57 @@ func TestStandardValidator_ValidateTokenWithTracking_Unlimited_UsesAsyncAggregat
 	}
 }
 
+func TestStandardValidator_ValidateTokenWithTracking_MaxRequestsZero_UsesAsyncAggregator(t *testing.T) {
+	store := newCountingTokenStore()
+	tokenString, err := GenerateToken()
+	if err != nil {
+		t.Fatalf("GenerateToken() error = %v", err)
+	}
+	max := 0
+	store.tokens[tokenString] = TokenData{Token: tokenString, ProjectID: "p1", IsActive: true, MaxRequests: &max}
+
+	usageStore := newMockUsageStatsStore()
+	agg := NewUsageStatsAggregator(UsageStatsAggregatorConfig{BufferSize: 10, FlushInterval: 10 * time.Millisecond, BatchSize: 1}, usageStore, nil)
+	agg.Start()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = agg.Stop(ctx)
+	})
+
+	validator := NewValidator(store)
+	validator.SetUsageStatsAggregator(agg)
+
+	projectID, err := validator.ValidateTokenWithTracking(context.Background(), tokenString)
+	if err != nil {
+		t.Fatalf("ValidateTokenWithTracking() error = %v", err)
+	}
+	if projectID != "p1" {
+		t.Fatalf("projectID = %q, want %q", projectID, "p1")
+	}
+
+	select {
+	case <-usageStore.ch:
+		// ok
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for async usage flush")
+	}
+
+	store.mu.Lock()
+	incCalls := store.incrementUsageCalls
+	store.mu.Unlock()
+	if incCalls != 0 {
+		t.Fatalf("IncrementTokenUsage calls = %d, want 0 (async)", incCalls)
+	}
+
+	usageStore.mu.Lock()
+	delta := usageStore.lastDeltas[tokenString]
+	usageStore.mu.Unlock()
+	if delta != 1 {
+		t.Fatalf("usage delta = %d, want 1", delta)
+	}
+}
+
 func TestStandardValidator_ValidateTokenWithTracking_Limited_IsSynchronous(t *testing.T) {
 	store := newCountingTokenStore()
 	tokenString, err := GenerateToken()

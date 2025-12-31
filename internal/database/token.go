@@ -336,8 +336,16 @@ func (d *DB) IncrementTokenUsageBatch(ctx context.Context, deltas map[string]int
 		if delta <= 0 {
 			continue
 		}
-		if _, err := stmt.ExecContext(ctx, delta, lastUsedAt.UTC(), tokenID); err != nil {
+		res, err := stmt.ExecContext(ctx, delta, lastUsedAt.UTC(), tokenID)
+		if err != nil {
 			return fmt.Errorf("failed to increment token usage for token %s: %w", obfuscate.ObfuscateTokenGeneric(tokenID), err)
+		}
+		rows, err := res.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to get rows affected for token %s: %w", obfuscate.ObfuscateTokenGeneric(tokenID), err)
+		}
+		if rows == 0 {
+			return fmt.Errorf("failed to increment token usage for token %s: %w", obfuscate.ObfuscateTokenGeneric(tokenID), ErrTokenNotFound)
 		}
 	}
 

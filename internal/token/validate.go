@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 )
 
@@ -73,6 +74,9 @@ func (t *TokenData) IsRateLimited() bool {
 	if t.MaxRequests == nil {
 		return false
 	}
+	if *t.MaxRequests <= 0 {
+		return false
+	}
 	return t.RequestCount >= *t.MaxRequests
 }
 
@@ -84,7 +88,7 @@ func (t *TokenData) ValidateFormat() error {
 // StandardValidator is a validator that uses a TokenStore for validation
 type StandardValidator struct {
 	store         TokenStore
-	usageStatsAgg *UsageStatsAggregator
+	usageStatsAgg atomic.Pointer[UsageStatsAggregator]
 }
 
 // NewValidator creates a new StandardValidator with the given TokenStore
@@ -99,7 +103,7 @@ func NewValidator(store TokenStore) *StandardValidator {
 // When set, ValidateTokenWithTracking will enqueue request_count/last_used_at updates
 // for unlimited tokens (MaxRequests == nil or <= 0) instead of doing a synchronous DB write.
 func (v *StandardValidator) SetUsageStatsAggregator(agg *UsageStatsAggregator) {
-	v.usageStatsAgg = agg
+	v.usageStatsAgg.Store(agg)
 }
 
 func (v *StandardValidator) validateTokenData(ctx context.Context, tokenString string) (TokenData, error) {
@@ -160,9 +164,9 @@ func (v *StandardValidator) ValidateTokenWithTracking(ctx context.Context, token
 	}
 
 	// For unlimited tokens, move request_count/last_used_at updates off the hot path.
-	if tokenData.MaxRequests == nil || (tokenData.MaxRequests != nil && *tokenData.MaxRequests <= 0) {
-		if v.usageStatsAgg != nil {
-			v.usageStatsAgg.RecordTokenUsage(tokenString)
+	if tokenData.MaxRequests == nil || *tokenData.MaxRequests <= 0 {
+		if agg := v.usageStatsAgg.Load(); agg != nil {
+			agg.RecordTokenUsage(tokenString)
 			return tokenData.ProjectID, nil
 		}
 	}

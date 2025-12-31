@@ -150,10 +150,10 @@ func (cv *CachedValidator) ValidateTokenWithTracking(ctx context.Context, tokenI
 		if now.After(entry.ValidUntil) {
 			cv.invalidateCache(tokenID)
 		} else if entry.Data.IsValid() {
-			if entry.Data.MaxRequests == nil || (entry.Data.MaxRequests != nil && *entry.Data.MaxRequests <= 0) {
+			if entry.Data.MaxRequests == nil || *entry.Data.MaxRequests <= 0 {
 				if sv, ok := cv.validator.(*StandardValidator); ok {
-					if sv.usageStatsAgg != nil {
-						sv.usageStatsAgg.RecordTokenUsage(tokenID)
+					if agg := sv.usageStatsAgg.Load(); agg != nil {
+						agg.RecordTokenUsage(tokenID)
 						return entry.Data.ProjectID, nil
 					}
 				}

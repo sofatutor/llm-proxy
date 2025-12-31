@@ -386,7 +386,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		}
 	}
 
-	// Stop cache stats aggregator first to flush pending stats
+	// Stop cache stats aggregator to flush pending stats
 	if s.cacheStatsAgg != nil {
 		s.logger.Info("Stopping cache stats aggregator")
 		if err := s.cacheStatsAgg.Stop(ctx); err != nil {

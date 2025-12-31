@@ -152,8 +152,18 @@ func (a *UsageStatsAggregator) run() {
 	for {
 		select {
 		case <-a.stopCh:
-			flush()
-			return
+			// Drain any queued events before the final flush so we don't lose
+			// events that were successfully enqueued but not yet processed.
+			for {
+				select {
+				case tokenID := <-a.eventsCh:
+					deltas[tokenID]++
+					eventCount++
+				default:
+					flush()
+					return
+				}
+			}
 		case <-ticker.C:
 			flush()
 		case tokenID := <-a.eventsCh:
