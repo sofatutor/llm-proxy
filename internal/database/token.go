@@ -259,6 +259,8 @@ func (d *DB) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	}
 
 	now := time.Now().UTC()
+	// Enforce max_requests atomically. max_requests is treated as unlimited when NULL/<=0
+	// (the API layer should normalize 0 to NULL, but we keep DB logic defensive).
 	query := `
 	UPDATE tokens
 	SET request_count = request_count + 1, last_used_at = ?
@@ -281,7 +283,10 @@ func (d *DB) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	}
 
 	if rowsAffected == 0 {
-		// Distinguish between non-existent token and rate-limited token.
+		// No rows updated means either the token doesn't exist, or it exists but is already
+		// at quota. We do a follow-up SELECT to return the correct, semantically meaningful
+		// error (404 vs 429). If this becomes a hot path, we can explore dialect-specific
+		// optimizations like UPDATE ... RETURNING.
 		var requestCount int
 		var maxRequests sql.NullInt32
 		checkQuery := `SELECT request_count, max_requests FROM tokens WHERE token = ?`
