@@ -79,6 +79,8 @@ func newBenchmarkHTTPClient(timeout time.Duration) *http.Client {
 	// NOTE: We intentionally reuse a single client+transport for all requests so we
 	// get connection pooling/keep-alives. Creating a new client per request
 	// amplifies latency variance and can overwhelm conntrack/ephemeral ports.
+	// MaxIdleConns{,PerHost} are set high on purpose to support high benchmark
+	// concurrency; adjust them if you benchmark with very high --concurrency.
 	dialer := &net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}
 	transport := &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
