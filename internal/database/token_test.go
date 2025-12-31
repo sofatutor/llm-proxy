@@ -338,6 +338,46 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 	}
 }
 
+func TestIncrementTokenUsage_EnforcesMaxRequests(t *testing.T) {
+	db, cleanup := testDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	project := proxy.Project{
+		ID:           "proj-quota-1",
+		Name:         "Quota Test",
+		OpenAIAPIKey: "test-api-key",
+		IsActive:     true,
+		CreatedAt:    time.Now().UTC().Truncate(time.Second),
+		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+	}
+	require.NoError(t, db.CreateProject(ctx, project))
+
+	maxRequests := 3
+	tk := Token{
+		Token:        "token-quota-1",
+		ProjectID:    project.ID,
+		IsActive:     true,
+		RequestCount: 2,
+		MaxRequests:  &maxRequests,
+		CreatedAt:    time.Now().UTC().Truncate(time.Second),
+	}
+	require.NoError(t, db.CreateToken(ctx, tk))
+
+	// One increment should succeed and reach the quota.
+	require.NoError(t, db.IncrementTokenUsage(ctx, tk.Token))
+	got, err := db.GetTokenByToken(ctx, tk.Token)
+	require.NoError(t, err)
+	require.Equal(t, 3, got.RequestCount)
+
+	// Next increment should fail and must not overshoot.
+	require.ErrorIs(t, db.IncrementTokenUsage(ctx, tk.Token), token.ErrTokenRateLimit)
+	got, err = db.GetTokenByToken(ctx, tk.Token)
+	require.NoError(t, err)
+	require.Equal(t, 3, got.RequestCount)
+}
+
 func TestGetTokenByID_NotFound(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
