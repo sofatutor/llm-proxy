@@ -1088,9 +1088,11 @@ Required flags:
   --base-url        Base URL of the target (e.g., http://localhost:8080 or https://api.openai.com/v1)
   --endpoint        API path to hit (e.g., /v1/chat/completions or /chat/completions for OpenAI)
   --token           Bearer token (proxy token or OpenAI API key). Prefer --token-env to avoid putting secrets in shell history.
-  --token-env       Environment variable name containing the token (default: PROXY_TOKEN)
   --requests, -r    Total number of requests to send
   --concurrency, -c Number of concurrent workers
+
+Authentication:
+  Provide --token OR set the token in an env var and use --token-env (default: PROXY_TOKEN, matching llm-proxy openai chat).
 
 Optional flags:
   --json            JSON request body for POST requests
@@ -1570,7 +1572,9 @@ Latency breakdown:
 	benchmarkCmd.Flags().String("base-url", "", "Base URL of the LLM Proxy (required)")
 	benchmarkCmd.Flags().String("endpoint", "", "API endpoint to benchmark (required)")
 	benchmarkCmd.Flags().String("token", "", "Token for authentication (prefer --token-env)")
-	benchmarkCmd.Flags().String("token-env", "PROXY_TOKEN", "Environment variable name containing the token (default: PROXY_TOKEN)")
+	// --token-env keeps secrets out of shell history while still allowing users to pick their own env var name.
+	// Default matches other commands (e.g. llm-proxy openai chat).
+	benchmarkCmd.Flags().String("token-env", "PROXY_TOKEN", "Environment variable name containing the token (default: PROXY_TOKEN; matches llm-proxy openai chat)")
 	benchmarkCmd.Flags().IntP("requests", "r", 1, "Total number of requests to send (required)")
 	benchmarkCmd.Flags().IntP("concurrency", "c", 1, "Number of concurrent workers (required)")
 	benchmarkCmd.Flags().String("json", "", "Optional JSON string to use as the POST body for each request")

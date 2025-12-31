@@ -550,7 +550,7 @@ llm-proxy benchmark [flags]
 **Optional Flags:**
 - `--json string`: JSON request body for POST requests
 - `--method string`: HTTP method to use (GET, POST, PUT, PATCH) (default: "POST")
-- `--token-env string`: Environment variable name containing the token (default: "PROXY_TOKEN")
+- `--token-env string`: Environment variable name containing the token (default: "PROXY_TOKEN"; matches `llm-proxy openai chat`)
 - `--cache`: Set `Cache-Control: public` with high TTL for benchmarking cache behavior
 - `--cache-ttl int`: TTL seconds to use with `--cache` (default: 86400)
 - `--debug`: Print sample responses and headers by status code
