@@ -184,7 +184,7 @@ const (
 type Project struct {
 	ID            string     `json:"id"`
 	Name          string     `json:"name"`
-	OpenAIAPIKey  string     `json:"openai_api_key"`
+	APIKey        string     `json:"api_key"` // Provider-agnostic API key. Encrypted when ENCRYPTION_KEY is set.
 	IsActive      bool       `json:"is_active"`
 	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`

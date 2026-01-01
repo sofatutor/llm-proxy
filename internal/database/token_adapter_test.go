@@ -26,12 +26,12 @@ func TestDBTokenStoreAdapter_UpdateToken_Integration(t *testing.T) {
 
 	// Create a test project first (required for foreign key constraint)
 	project := Project{
-		ID:           "proj-test",
-		Name:         "Test Project",
-		OpenAIAPIKey: "sk-test-api-key",
-		IsActive:     true,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:        "proj-test",
+		Name:      "Test Project",
+		APIKey:    "sk-test-api-key",
+		IsActive:  true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	err = db.DBCreateProject(context.Background(), project)
 	require.NoError(t, err)

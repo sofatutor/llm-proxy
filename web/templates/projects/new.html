@@ -40,28 +40,26 @@
                     </div>
 
                     <div class="mb-3">
-                        <label for="openai_api_key" class="form-label">
-                            OpenAI API Key <span class="text-danger">*</span>
+                        <label for="api_key" class="form-label">
+                            API Key <span class="text-danger">*</span>
                         </label>
                         <div class="input-group">
                             <input type="password" 
                                    class="form-control" 
-                                   id="openai_api_key" 
-                                   name="openai_api_key" 
+                                   id="api_key" 
+                                   name="api_key" 
                                    required 
                                    placeholder="sk-..."
-                                   value="{{ .openai_api_key }}">
+                                   value="{{ .api_key }}">
                             <button class="btn btn-outline-secondary" 
                                     type="button" 
-                                    onclick="togglePassword('openai_api_key')">
-                                <i class="bi bi-eye" id="openai_api_key_icon"></i>
+                                    onclick="togglePassword('api_key')">
+                                <i class="bi bi-eye" id="api_key_icon"></i>
                             </button>
                         </div>
                         <div class="form-text">
-                            Your OpenAI API key will be used for this project. 
-                            <a href="https://platform.openai.com/api-keys" target="_blank" class="text-decoration-none">
-                                Get your API key here <i class="bi bi-box-arrow-up-right"></i>
-                            </a>
+                            Your upstream API key will be used for this project.
+                            Get your API key from your provider (e.g., OpenAI, Anthropic, etc.).
                         </div>
                     </div>
 

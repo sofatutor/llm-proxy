@@ -665,12 +665,12 @@ func TestSQLiteRegressionAfterPostgresSupport(t *testing.T) {
 	projectID := "test-project-1"
 	now := time.Now()
 	err = db.DBCreateProject(ctx, Project{
-		ID:           projectID,
-		Name:         "Test Project",
-		OpenAIAPIKey: "sk-test-key",
-		IsActive:     true,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:        projectID,
+		Name:      "Test Project",
+		APIKey:    "sk-test-key",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
 	require.NoError(t, err)
 
@@ -732,12 +732,12 @@ func TestDB_ExecContextRebound(t *testing.T) {
 	now := time.Now()
 	projectID := "test-project"
 	err = db.DBCreateProject(ctx, Project{
-		ID:           projectID,
-		Name:         "Test",
-		OpenAIAPIKey: "key",
-		IsActive:     true,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:        projectID,
+		Name:      "Test",
+		APIKey:    "key",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
 	require.NoError(t, err)
 
@@ -781,12 +781,12 @@ func TestDB_QueryRowContextRebound(t *testing.T) {
 
 	projectID := "test-project"
 	err = db.DBCreateProject(ctx, Project{
-		ID:           projectID,
-		Name:         "TestQuery",
-		OpenAIAPIKey: "key",
-		IsActive:     true,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:        projectID,
+		Name:      "TestQuery",
+		APIKey:    "key",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
 	require.NoError(t, err)
 
@@ -825,12 +825,12 @@ func TestDB_QueryContextRebound(t *testing.T) {
 
 	projectID := "test-project"
 	err = db.DBCreateProject(ctx, Project{
-		ID:           projectID,
-		Name:         "TestQueryMulti",
-		OpenAIAPIKey: "key",
-		IsActive:     true,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:        projectID,
+		Name:      "TestQueryMulti",
+		APIKey:    "key",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
 	require.NoError(t, err)
 

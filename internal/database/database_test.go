@@ -56,11 +56,11 @@ func TestSQLite_TimestampsRoundTripAsUTC(t *testing.T) {
 
 			ctx := context.Background()
 			project := proxy.Project{
-				ID:           "test-project-utc-roundtrip",
-				Name:         "Test Project",
-				OpenAIAPIKey: "test-api-key",
-				CreatedAt:    fixedUTC,
-				UpdatedAt:    fixedUTC,
+				ID:        "test-project-utc-roundtrip",
+				Name:      "Test Project",
+				APIKey:    "test-api-key",
+				CreatedAt: fixedUTC,
+				UpdatedAt: fixedUTC,
 			}
 
 			if err := db.CreateProject(ctx, project); err != nil {
@@ -100,11 +100,11 @@ func TestSQLite_TokenLastUsedAt_NotShiftedByLocalTimezone(t *testing.T) {
 	ctx := context.Background()
 	fixedUTC := time.Date(2025, 12, 14, 13, 38, 0, 0, time.UTC).Truncate(time.Second)
 	project := proxy.Project{
-		ID:           "test-project-token-last-used-at",
-		Name:         "Test Project",
-		OpenAIAPIKey: "test-api-key",
-		CreatedAt:    fixedUTC,
-		UpdatedAt:    fixedUTC,
+		ID:        "test-project-token-last-used-at",
+		Name:      "Test Project",
+		APIKey:    "test-api-key",
+		CreatedAt: fixedUTC,
+		UpdatedAt: fixedUTC,
 	}
 	if err := db.CreateProject(ctx, project); err != nil {
 		t.Fatalf("CreateProject failed: %v", err)
@@ -246,7 +246,7 @@ func TestTransaction(t *testing.T) {
 
 	// Test successful transaction
 	err := db.Transaction(ctx, func(tx *sql.Tx) error {
-		_, err := tx.Exec("INSERT INTO projects (id, name, openai_api_key) VALUES (?, ?, ?)", "test-id", "test-project", "test-key")
+		_, err := tx.Exec("INSERT INTO projects (id, name, api_key) VALUES (?, ?, ?)", "test-id", "test-project", "test-key")
 		return err
 	})
 	if err != nil {
@@ -265,7 +265,7 @@ func TestTransaction(t *testing.T) {
 
 	// Test failed transaction
 	err = db.Transaction(ctx, func(tx *sql.Tx) error {
-		_, err := tx.Exec("INSERT INTO projects (id, name, openai_api_key) VALUES (?, ?, ?)", "test-id2", "test-project2", "test-key2")
+		_, err := tx.Exec("INSERT INTO projects (id, name, api_key) VALUES (?, ?, ?)", "test-id2", "test-project2", "test-key2")
 		if err != nil {
 			return err
 		}
@@ -415,7 +415,7 @@ func TestCRUD_ClosedDB(t *testing.T) {
 	db, cleanup := testDB(t)
 	cleanup()
 	ctx := context.Background()
-	p := proxy.Project{ID: "x", Name: "x", OpenAIAPIKey: "x", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	p := proxy.Project{ID: "x", Name: "x", APIKey: "x", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	if err := db.CreateProject(ctx, p); err == nil {
 		t.Error("expected error for CreateProject on closed DB")
 	}

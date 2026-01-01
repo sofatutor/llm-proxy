@@ -33,7 +33,7 @@ func (m *MockProjectStore) DBCreateProject(ctx context.Context, project Project)
 	}
 
 	m.projects[project.ID] = project
-	m.apiKeys[project.ID] = project.OpenAIAPIKey
+	m.apiKeys[project.ID] = project.APIKey
 	return nil
 }
 
@@ -60,7 +60,7 @@ func (m *MockProjectStore) DBUpdateProject(ctx context.Context, project Project)
 	}
 
 	m.projects[project.ID] = project
-	m.apiKeys[project.ID] = project.OpenAIAPIKey
+	m.apiKeys[project.ID] = project.APIKey
 	return nil
 }
 
@@ -103,9 +103,9 @@ func (m *MockProjectStore) CreateMockProject(projectID, name, apiKey string) (Pr
 	}
 
 	project := Project{
-		ID:           projectID,
-		Name:         name,
-		OpenAIAPIKey: apiKey,
+		ID:     projectID,
+		Name:   name,
+		APIKey: apiKey,
 	}
 
 	err := m.DBCreateProject(context.Background(), project)

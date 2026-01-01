@@ -20,7 +20,7 @@ var (
 // GetProjectByName retrieves a project by name.
 func (d *DB) GetProjectByName(ctx context.Context, name string) (Project, error) {
 	query := `
-	SELECT id, name, openai_api_key, is_active, deactivated_at, created_at, updated_at
+	SELECT id, name, api_key, is_active, deactivated_at, created_at, updated_at
 	FROM projects
 	WHERE name = ?
 	`
@@ -30,7 +30,7 @@ func (d *DB) GetProjectByName(ctx context.Context, name string) (Project, error)
 	err := d.QueryRowContextRebound(ctx, query, name).Scan(
 		&project.ID,
 		&project.Name,
-		&project.OpenAIAPIKey,
+		&project.APIKey,
 		&project.IsActive,
 		&deactivatedAt,
 		&project.CreatedAt,
@@ -55,7 +55,7 @@ func ToProxyProject(dbProject Project) proxy.Project {
 	return proxy.Project{
 		ID:            dbProject.ID,
 		Name:          dbProject.Name,
-		OpenAIAPIKey:  dbProject.OpenAIAPIKey,
+		APIKey:        dbProject.APIKey,
 		IsActive:      dbProject.IsActive,
 		DeactivatedAt: dbProject.DeactivatedAt,
 		CreatedAt:     dbProject.CreatedAt,
@@ -68,7 +68,7 @@ func ToDBProject(proxyProject proxy.Project) Project {
 	return Project{
 		ID:            proxyProject.ID,
 		Name:          proxyProject.Name,
-		OpenAIAPIKey:  proxyProject.OpenAIAPIKey,
+		APIKey:        proxyProject.APIKey,
 		IsActive:      proxyProject.IsActive,
 		DeactivatedAt: proxyProject.DeactivatedAt,
 		CreatedAt:     proxyProject.CreatedAt,
@@ -79,7 +79,7 @@ func ToDBProject(proxyProject proxy.Project) Project {
 // Rename CRUD methods for DB store
 func (d *DB) DBListProjects(ctx context.Context) ([]Project, error) {
 	query := `
-	SELECT id, name, openai_api_key, is_active, deactivated_at, created_at, updated_at
+	SELECT id, name, api_key, is_active, deactivated_at, created_at, updated_at
 	FROM projects
 	ORDER BY name ASC
 	`
@@ -99,7 +99,7 @@ func (d *DB) DBListProjects(ctx context.Context) ([]Project, error) {
 		if err := rows.Scan(
 			&project.ID,
 			&project.Name,
-			&project.OpenAIAPIKey,
+			&project.APIKey,
 			&project.IsActive,
 			&deactivatedAt,
 			&project.CreatedAt,
@@ -122,7 +122,7 @@ func (d *DB) DBListProjects(ctx context.Context) ([]Project, error) {
 
 func (d *DB) DBCreateProject(ctx context.Context, project Project) error {
 	query := `
-	INSERT INTO projects (id, name, openai_api_key, is_active, deactivated_at, created_at, updated_at)
+	INSERT INTO projects (id, name, api_key, is_active, deactivated_at, created_at, updated_at)
 	VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
@@ -131,7 +131,7 @@ func (d *DB) DBCreateProject(ctx context.Context, project Project) error {
 		query,
 		project.ID,
 		project.Name,
-		project.OpenAIAPIKey,
+		project.APIKey,
 		project.IsActive,
 		project.DeactivatedAt,
 		project.CreatedAt,
@@ -146,7 +146,7 @@ func (d *DB) DBCreateProject(ctx context.Context, project Project) error {
 
 func (d *DB) DBGetProjectByID(ctx context.Context, projectID string) (Project, error) {
 	query := `
-	SELECT id, name, openai_api_key, is_active, deactivated_at, created_at, updated_at
+	SELECT id, name, api_key, is_active, deactivated_at, created_at, updated_at
 	FROM projects
 	WHERE id = ?
 	`
@@ -156,7 +156,7 @@ func (d *DB) DBGetProjectByID(ctx context.Context, projectID string) (Project, e
 	err := d.QueryRowContextRebound(ctx, query, projectID).Scan(
 		&project.ID,
 		&project.Name,
-		&project.OpenAIAPIKey,
+		&project.APIKey,
 		&project.IsActive,
 		&deactivatedAt,
 		&project.CreatedAt,
@@ -181,7 +181,7 @@ func (d *DB) DBUpdateProject(ctx context.Context, project Project) error {
 
 	query := `
 	UPDATE projects
-	SET name = ?, openai_api_key = ?, is_active = ?, deactivated_at = ?, updated_at = ?
+	SET name = ?, api_key = ?, is_active = ?, deactivated_at = ?, updated_at = ?
 	WHERE id = ?
 	`
 
@@ -189,7 +189,7 @@ func (d *DB) DBUpdateProject(ctx context.Context, project Project) error {
 		ctx,
 		query,
 		project.Name,
-		project.OpenAIAPIKey,
+		project.APIKey,
 		project.IsActive,
 		project.DeactivatedAt,
 		project.UpdatedAt,
@@ -267,9 +267,9 @@ func (d *DB) DeleteProject(ctx context.Context, id string) error {
 	return d.DBDeleteProject(ctx, id)
 }
 
-// GetAPIKeyForProject retrieves the OpenAI API key for a project by ID
+// GetAPIKeyForProject retrieves the API key for a project by ID
 func (d *DB) GetAPIKeyForProject(ctx context.Context, projectID string) (string, error) {
-	query := `SELECT openai_api_key FROM projects WHERE id = ?`
+	query := `SELECT api_key FROM projects WHERE id = ?`
 	var apiKey string
 	err := d.QueryRowContextRebound(ctx, query, projectID).Scan(&apiKey)
 	if err != nil {

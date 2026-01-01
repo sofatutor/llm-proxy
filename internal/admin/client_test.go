@@ -400,10 +400,10 @@ func TestAPIClient_CreateProject(t *testing.T) {
 		}
 
 		project := Project{
-			ID:           "new-id",
-			Name:         req["name"],
-			OpenAIAPIKey: req["openai_api_key"],
-			CreatedAt:    time.Now(),
+			ID:        "new-id",
+			Name:      req["name"],
+			APIKey:    req["api_key"],
+			CreatedAt: time.Now(),
 		}
 		if err := json.NewEncoder(w).Encode(project); err != nil {
 			t.Errorf("failed to encode project: %v", err)
@@ -422,8 +422,8 @@ func TestAPIClient_CreateProject(t *testing.T) {
 	if project.Name != "New Project" {
 		t.Errorf("Name = %q, want %q", project.Name, "New Project")
 	}
-	if project.OpenAIAPIKey != "sk-test-key" {
-		t.Errorf("OpenAIAPIKey = %q, want %q", project.OpenAIAPIKey, "sk-test-key")
+	if project.APIKey != "sk-test-key" {
+		t.Errorf("APIKey = %q, want %q", project.APIKey, "sk-test-key")
 	}
 }
 
@@ -441,10 +441,10 @@ func TestAPIClient_UpdateProject(t *testing.T) {
 		}
 
 		project := Project{
-			ID:           "1",
-			Name:         req["name"],
-			OpenAIAPIKey: req["openai_api_key"],
-			UpdatedAt:    time.Now(),
+			ID:        "1",
+			Name:      req["name"],
+			APIKey:    req["api_key"],
+			UpdatedAt: time.Now(),
 		}
 		if err := json.NewEncoder(w).Encode(project); err != nil {
 			t.Errorf("failed to encode project: %v", err)
@@ -463,8 +463,8 @@ func TestAPIClient_UpdateProject(t *testing.T) {
 	if project.Name != "Updated Name" {
 		t.Errorf("Name = %q, want %q", project.Name, "Updated Name")
 	}
-	if project.OpenAIAPIKey != "sk-updated-key" {
-		t.Errorf("OpenAIAPIKey = %q, want %q", project.OpenAIAPIKey, "sk-updated-key")
+	if project.APIKey != "sk-updated-key" {
+		t.Errorf("APIKey = %q, want %q", project.APIKey, "sk-updated-key")
 	}
 }
 
@@ -732,8 +732,8 @@ func TestAPIClient_UpdateProjectPartial(t *testing.T) {
 		if name, ok := req["name"]; ok {
 			project.Name = name
 		}
-		if key, ok := req["openai_api_key"]; ok {
-			project.OpenAIAPIKey = key
+		if key, ok := req["api_key"]; ok {
+			project.APIKey = key
 		}
 		if err := json.NewEncoder(w).Encode(project); err != nil {
 			t.Errorf("failed to encode project: %v", err)
@@ -752,8 +752,8 @@ func TestAPIClient_UpdateProjectPartial(t *testing.T) {
 	if project.Name != "New Name" {
 		t.Errorf("Name = %q, want %q", project.Name, "New Name")
 	}
-	if project.OpenAIAPIKey != "" {
-		t.Errorf("OpenAIAPIKey should be empty, got %q", project.OpenAIAPIKey)
+	if project.APIKey != "" {
+		t.Errorf("APIKey should be empty, got %q", project.APIKey)
 	}
 }
 
