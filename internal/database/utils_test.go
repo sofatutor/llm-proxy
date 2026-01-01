@@ -20,7 +20,7 @@ func TestDatabaseUtils(t *testing.T) {
 	project := proxy.Project{
 		ID:           "test-project-id",
 		Name:         "Test Project",
-		OpenAIAPIKey: "test-api-key",
+		APIKey: "test-api-key",
 		CreatedAt:    time.Now().UTC().Truncate(time.Second),
 		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
 	}
@@ -141,7 +141,7 @@ func TestIsTokenValid_EdgeCases(t *testing.T) {
 	defer cleanup()
 	ctx := context.Background()
 	// Create a project and token
-	project := proxy.Project{ID: "p", Name: "P", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	project := proxy.Project{ID: "p", Name: "P", APIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	_ = db.CreateProject(ctx, project)
 	max := 1
 	expired := time.Now().Add(-time.Hour)

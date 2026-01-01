@@ -665,7 +665,7 @@ func TestSQLiteRegressionAfterPostgresSupport(t *testing.T) {
 	err = db.DBCreateProject(ctx, Project{
 		ID:           projectID,
 		Name:         "Test Project",
-		OpenAIAPIKey: "sk-test-key",
+		APIKey: "sk-test-key",
 		IsActive:     true,
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -732,7 +732,7 @@ func TestDB_ExecContextRebound(t *testing.T) {
 	err = db.DBCreateProject(ctx, Project{
 		ID:           projectID,
 		Name:         "Test",
-		OpenAIAPIKey: "key",
+		APIKey: "key",
 		IsActive:     true,
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -781,7 +781,7 @@ func TestDB_QueryRowContextRebound(t *testing.T) {
 	err = db.DBCreateProject(ctx, Project{
 		ID:           projectID,
 		Name:         "TestQuery",
-		OpenAIAPIKey: "key",
+		APIKey: "key",
 		IsActive:     true,
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -825,7 +825,7 @@ func TestDB_QueryContextRebound(t *testing.T) {
 	err = db.DBCreateProject(ctx, Project{
 		ID:           projectID,
 		Name:         "TestQueryMulti",
-		OpenAIAPIKey: "key",
+		APIKey: "key",
 		IsActive:     true,
 		CreatedAt:    now,
 		UpdatedAt:    now,

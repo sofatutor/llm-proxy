@@ -24,7 +24,7 @@ func TestTokenCRUD(t *testing.T) {
 	project := proxy.Project{
 		ID:           "test-project-id",
 		Name:         "Test Project",
-		OpenAIAPIKey: "test-api-key",
+		APIKey: "test-api-key",
 		CreatedAt:    time.Now().UTC().Truncate(time.Second),
 		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
 	}
@@ -222,7 +222,7 @@ func TestIncrementTokenUsageBatch(t *testing.T) {
 	project := proxy.Project{
 		ID:           "test-project-id",
 		Name:         "Test Project",
-		OpenAIAPIKey: "test-api-key",
+		APIKey: "test-api-key",
 		CreatedAt:    time.Now().UTC().Truncate(time.Second),
 		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
 	}
@@ -288,7 +288,7 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 	project := proxy.Project{
 		ID:           "test-project-id",
 		Name:         "Test Project",
-		OpenAIAPIKey: "test-api-key",
+		APIKey: "test-api-key",
 		CreatedAt:    time.Now().UTC().Truncate(time.Second),
 		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
 	}
@@ -413,7 +413,7 @@ func TestIncrementTokenUsage_EnforcesMaxRequests(t *testing.T) {
 	project := proxy.Project{
 		ID:           "proj-quota-1",
 		Name:         "Quota Test",
-		OpenAIAPIKey: "test-api-key",
+		APIKey: "test-api-key",
 		IsActive:     true,
 		CreatedAt:    time.Now().UTC().Truncate(time.Second),
 		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
@@ -458,7 +458,7 @@ func TestListTokens_Multiple(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
 	ctx := context.Background()
-	project := proxy.Project{ID: "p", Name: "P", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	project := proxy.Project{ID: "p", Name: "P", APIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	_ = db.CreateProject(ctx, project)
 	for i := 0; i < 5; i++ {
 		tk := Token{
@@ -575,7 +575,7 @@ func TestQueryTokens_LongToken(t *testing.T) {
 		longToken[i] = 'x'
 	}
 	tk := Token{Token: string(longToken), ProjectID: "p", IsActive: true, CreatedAt: time.Now()}
-	_ = db.CreateProject(ctx, proxy.Project{ID: "p", Name: "P", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()})
+	_ = db.CreateProject(ctx, proxy.Project{ID: "p", Name: "P", APIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()})
 	_ = db.CreateToken(ctx, tk)
 	tokens, err := db.ListTokens(ctx)
 	if err != nil {
@@ -599,7 +599,7 @@ func TestDBTokenStoreAdapter_GetTokenByID(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert required project
-	proj := Project{ID: "pid", Name: "test", OpenAIAPIKey: "sk-test", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	proj := Project{ID: "pid", Name: "test", APIKey: "sk-test", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, db.DBCreateProject(ctx, proj))
 
 	// Insert a token
@@ -632,7 +632,7 @@ func TestDBTokenStoreAdapter_IncrementTokenUsage(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert required project
-	proj := Project{ID: "pid", Name: "test", OpenAIAPIKey: "sk-test", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	proj := Project{ID: "pid", Name: "test", APIKey: "sk-test", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, db.DBCreateProject(ctx, proj))
 
 	tok := Token{
@@ -657,7 +657,7 @@ func TestDBTokenStoreAdapter_CreateToken(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert required project
-	proj := Project{ID: "pid", Name: "test", OpenAIAPIKey: "sk-test", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	proj := Project{ID: "pid", Name: "test", APIKey: "sk-test", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, db.DBCreateProject(ctx, proj))
 
 	td := token.TokenData{
@@ -680,7 +680,7 @@ func TestDBTokenStoreAdapter_ListTokens(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert required project
-	proj := Project{ID: "pid", Name: "test", OpenAIAPIKey: "sk-test", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	proj := Project{ID: "pid", Name: "test", APIKey: "sk-test", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, db.DBCreateProject(ctx, proj))
 
 	// Insert tokens
@@ -701,8 +701,8 @@ func TestDBTokenStoreAdapter_GetTokensByProjectID(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert required projects
-	projA := Project{ID: "pidA", Name: "A", OpenAIAPIKey: "sk-a", CreatedAt: time.Now(), UpdatedAt: time.Now()}
-	projB := Project{ID: "pidB", Name: "B", OpenAIAPIKey: "sk-b", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	projA := Project{ID: "pidA", Name: "A", APIKey: "sk-a", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	projB := Project{ID: "pidB", Name: "B", APIKey: "sk-b", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, db.DBCreateProject(ctx, projA))
 	require.NoError(t, db.DBCreateProject(ctx, projB))
 
@@ -728,7 +728,7 @@ func TestDeleteToken_UpdateToken_IncrementTokenUsage_EdgeCases(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert a project and token for happy path
-	p := proxy.Project{ID: "p1", Name: "P1", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	p := proxy.Project{ID: "p1", Name: "P1", APIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, db.CreateProject(ctx, p))
 	tk := Token{Token: "tok1", ProjectID: p.ID, IsActive: true, CreatedAt: time.Now()}
 	require.NoError(t, db.CreateToken(ctx, tk))
@@ -825,7 +825,7 @@ func TestIncrementCacheHitCount(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a project and token
-	p := proxy.Project{ID: "proj-cache-1", Name: "Cache Test", OpenAIAPIKey: "key", IsActive: true, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	p := proxy.Project{ID: "proj-cache-1", Name: "Cache Test", APIKey: "key", IsActive: true, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, db.CreateProject(ctx, p))
 
 	tk := Token{Token: "token-cache-1", ProjectID: p.ID, IsActive: true, RequestCount: 0, CacheHitCount: 0, CreatedAt: time.Now()}
@@ -879,7 +879,7 @@ func TestIncrementCacheHitCountBatch(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a project and multiple tokens
-	p := proxy.Project{ID: "proj-cache-batch", Name: "Cache Batch Test", OpenAIAPIKey: "key", IsActive: true, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	p := proxy.Project{ID: "proj-cache-batch", Name: "Cache Batch Test", APIKey: "key", IsActive: true, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, db.CreateProject(ctx, p))
 
 	tk1 := Token{Token: "token-batch-1", ProjectID: p.ID, IsActive: true, CacheHitCount: 0, CreatedAt: time.Now()}
@@ -946,7 +946,7 @@ func TestIncrementCacheHitCountBatch_ErrorDoesNotLeakToken(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a project and a token (token value is a secret in production).
-	p := proxy.Project{ID: "proj-cache-batch-redact", Name: "Cache Batch Redact Test", OpenAIAPIKey: "key", IsActive: true, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	p := proxy.Project{ID: "proj-cache-batch-redact", Name: "Cache Batch Redact Test", APIKey: "key", IsActive: true, CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, db.CreateProject(ctx, p))
 
 	secretToken := "sk-THIS_IS_A_SECRET_TOKEN"

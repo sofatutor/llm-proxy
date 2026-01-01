@@ -28,7 +28,7 @@ func TestDBTokenStoreAdapter_UpdateToken_Integration(t *testing.T) {
 	project := Project{
 		ID:           "proj-test",
 		Name:         "Test Project",
-		OpenAIAPIKey: "sk-test-api-key",
+		APIKey: "sk-test-api-key",
 		IsActive:     true,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),

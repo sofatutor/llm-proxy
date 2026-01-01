@@ -304,7 +304,7 @@ func TestHandleProjects(t *testing.T) {
 	t.Run("POST_Project_Success", func(t *testing.T) {
 		reqBody := map[string]string{
 			"name":           "New Project",
-			"openai_api_key": "key123",
+			"api_key": "key123",
 		}
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest("POST", "/manage/projects", bytes.NewReader(body))
@@ -321,7 +321,7 @@ func TestHandleProjects(t *testing.T) {
 		err := json.NewDecoder(w.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, "New Project", response.Name)
-		assert.Equal(t, "key123", response.OpenAIAPIKey)
+		assert.Equal(t, "key123", response.APIKey)
 		assert.NotEmpty(t, response.ID)
 	})
 
@@ -343,7 +343,7 @@ func TestHandleProjectByID(t *testing.T) {
 	testProject := proxy.Project{
 		ID:           "test-project-id",
 		Name:         "Test Project",
-		OpenAIAPIKey: "secret-key",
+		APIKey: "secret-key",
 		CreatedAt:    time.Now().UTC(),
 		UpdatedAt:    time.Now().UTC(),
 	}
@@ -764,7 +764,7 @@ func TestHandleCreateProject_MissingFields(t *testing.T) {
 func TestHandleCreateProject_StoreError(t *testing.T) {
 	server, _, projectStore := setupServerAndMocks(t)
 	projectStore.On("CreateProject", mock.Anything, mock.AnythingOfType("proxy.Project")).Return(errors.New("db error"))
-	body, _ := json.Marshal(map[string]string{"name": "foo", "openai_api_key": "bar"})
+	body, _ := json.Marshal(map[string]string{"name": "foo", "api_key": "bar"})
 	req := httptest.NewRequest("POST", "/manage/projects", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer test_management_token")
 	w := httptest.NewRecorder()

@@ -35,7 +35,7 @@ func (m *mockProjectStore) GetAPIKeyForProject(ctx context.Context, projectID st
 	if !ok {
 		return "", errors.New("project not found")
 	}
-	return p.OpenAIAPIKey, nil
+	return p.APIKey, nil
 }
 
 func (m *mockProjectStore) GetProjectActive(ctx context.Context, projectID string) (bool, error) {
@@ -120,7 +120,7 @@ func TestNewSecureProjectStore(t *testing.T) {
 		project := proxy.Project{
 			ID:           "proj-1",
 			Name:         "Test Project",
-			OpenAIAPIKey: apiKey,
+			APIKey: apiKey,
 			IsActive:     true,
 			CreatedAt:    time.Now(),
 			UpdatedAt:    time.Now(),
@@ -130,7 +130,7 @@ func TestNewSecureProjectStore(t *testing.T) {
 			t.Fatalf("create failed: %v", err)
 		}
 		// API key should not be encrypted (NullEncryptor)
-		if mock.projects["proj-1"].OpenAIAPIKey != apiKey {
+		if mock.projects["proj-1"].APIKey != apiKey {
 			t.Errorf("API key should not be encrypted with NullEncryptor")
 		}
 	})
@@ -147,7 +147,7 @@ func TestSecureProjectStore_CreateAndGetProject(t *testing.T) {
 	project := proxy.Project{
 		ID:           "proj-1",
 		Name:         "Test Project",
-		OpenAIAPIKey: originalAPIKey,
+		APIKey: originalAPIKey,
 		IsActive:     true,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
@@ -160,10 +160,10 @@ func TestSecureProjectStore_CreateAndGetProject(t *testing.T) {
 
 	// Verify stored API key is encrypted
 	storedProject := mock.projects["proj-1"]
-	if storedProject.OpenAIAPIKey == originalAPIKey {
+	if storedProject.APIKey == originalAPIKey {
 		t.Error("API key should be encrypted in storage")
 	}
-	if !IsEncrypted(storedProject.OpenAIAPIKey) {
+	if !IsEncrypted(storedProject.APIKey) {
 		t.Error("stored API key should have encryption prefix")
 	}
 
@@ -172,8 +172,8 @@ func TestSecureProjectStore_CreateAndGetProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get failed: %v", err)
 	}
-	if retrieved.OpenAIAPIKey != originalAPIKey {
-		t.Errorf("GetProjectByID returned wrong API key: got %q, want %q", retrieved.OpenAIAPIKey, originalAPIKey)
+	if retrieved.APIKey != originalAPIKey {
+		t.Errorf("GetProjectByID returned wrong API key: got %q, want %q", retrieved.APIKey, originalAPIKey)
 	}
 
 	// GetAPIKeyForProject should also decrypt
@@ -199,7 +199,7 @@ func TestSecureProjectStore_ListProjects(t *testing.T) {
 		project := proxy.Project{
 			ID:           fmt.Sprintf("proj-%d", i+1),
 			Name:         fmt.Sprintf("Project %d", i+1),
-			OpenAIAPIKey: apiKey,
+			APIKey: apiKey,
 			IsActive:     true,
 			CreatedAt:    time.Now(),
 			UpdatedAt:    time.Now(),
@@ -223,13 +223,13 @@ func TestSecureProjectStore_ListProjects(t *testing.T) {
 	for _, p := range projects {
 		found := false
 		for _, key := range apiKeys {
-			if p.OpenAIAPIKey == key {
+			if p.APIKey == key {
 				found = true
 				break
 			}
 		}
 		if !found {
-			t.Errorf("project %s has encrypted API key: %s", p.ID, p.OpenAIAPIKey)
+			t.Errorf("project %s has encrypted API key: %s", p.ID, p.APIKey)
 		}
 	}
 }
@@ -245,7 +245,7 @@ func TestSecureProjectStore_UpdateProject(t *testing.T) {
 	project := proxy.Project{
 		ID:           "proj-1",
 		Name:         "Test Project",
-		OpenAIAPIKey: "old-key",
+		APIKey: "old-key",
 		IsActive:     true,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
@@ -255,17 +255,17 @@ func TestSecureProjectStore_UpdateProject(t *testing.T) {
 	}
 
 	// Update with new plaintext key
-	project.OpenAIAPIKey = "new-key"
+	project.APIKey = "new-key"
 	if err := store.UpdateProject(ctx, project); err != nil {
 		t.Fatalf("update failed: %v", err)
 	}
 
 	// Verify new key is encrypted in storage
 	storedProject := mock.projects["proj-1"]
-	if storedProject.OpenAIAPIKey == "new-key" {
+	if storedProject.APIKey == "new-key" {
 		t.Error("API key should be encrypted in storage after update")
 	}
-	if !IsEncrypted(storedProject.OpenAIAPIKey) {
+	if !IsEncrypted(storedProject.APIKey) {
 		t.Error("stored API key should have encryption prefix after update")
 	}
 
@@ -274,8 +274,8 @@ func TestSecureProjectStore_UpdateProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get failed: %v", err)
 	}
-	if retrieved.OpenAIAPIKey != "new-key" {
-		t.Errorf("GetProjectByID returned wrong API key after update: got %q, want %q", retrieved.OpenAIAPIKey, "new-key")
+	if retrieved.APIKey != "new-key" {
+		t.Errorf("GetProjectByID returned wrong API key after update: got %q, want %q", retrieved.APIKey, "new-key")
 	}
 }
 
@@ -290,7 +290,7 @@ func TestSecureProjectStore_DeleteProject(t *testing.T) {
 	project := proxy.Project{
 		ID:           "proj-1",
 		Name:         "Test Project",
-		OpenAIAPIKey: "test-key",
+		APIKey: "test-key",
 		IsActive:     true,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
@@ -319,7 +319,7 @@ func TestSecureProjectStore_GetProjectActive(t *testing.T) {
 	project := proxy.Project{
 		ID:           "proj-1",
 		Name:         "Test Project",
-		OpenAIAPIKey: "test-key",
+		APIKey: "test-key",
 		IsActive:     true,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
@@ -369,7 +369,7 @@ func TestSecureProjectStore_ErrorHandling(t *testing.T) {
 		mock.createError = errors.New("db error")
 		store := NewSecureProjectStore(mock, enc)
 
-		err := store.CreateProject(ctx, proxy.Project{OpenAIAPIKey: "key"})
+		err := store.CreateProject(ctx, proxy.Project{APIKey: "key"})
 		if err == nil {
 			t.Error("expected error, got nil")
 		}
@@ -390,10 +390,10 @@ func TestSecureProjectStore_ErrorHandling(t *testing.T) {
 		mock := newMockProjectStore()
 		mock.updateError = errors.New("db error")
 		// Need to add project first since update checks existence
-		mock.projects["proj-1"] = proxy.Project{ID: "proj-1", OpenAIAPIKey: "old-key"}
+		mock.projects["proj-1"] = proxy.Project{ID: "proj-1", APIKey: "old-key"}
 		store := NewSecureProjectStore(mock, enc)
 
-		err := store.UpdateProject(ctx, proxy.Project{ID: "proj-1", OpenAIAPIKey: "new-key"})
+		err := store.UpdateProject(ctx, proxy.Project{ID: "proj-1", APIKey: "new-key"})
 		if err == nil {
 			t.Error("expected error, got nil")
 		}
@@ -424,7 +424,7 @@ func TestSecureProjectStore_BackwardCompatibility(t *testing.T) {
 	mock.projects["proj-legacy"] = proxy.Project{
 		ID:           "proj-legacy",
 		Name:         "Legacy Project",
-		OpenAIAPIKey: legacyAPIKey, // Stored in plaintext (legacy)
+		APIKey: legacyAPIKey, // Stored in plaintext (legacy)
 		IsActive:     true,
 	}
 
@@ -433,8 +433,8 @@ func TestSecureProjectStore_BackwardCompatibility(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetProjectByID failed: %v", err)
 	}
-	if project.OpenAIAPIKey != legacyAPIKey {
-		t.Errorf("GetProjectByID should return unencrypted key as-is: got %q, want %q", project.OpenAIAPIKey, legacyAPIKey)
+	if project.APIKey != legacyAPIKey {
+		t.Errorf("GetProjectByID should return unencrypted key as-is: got %q, want %q", project.APIKey, legacyAPIKey)
 	}
 
 	// GetAPIKeyForProject should also handle unencrypted data
@@ -452,7 +452,7 @@ func TestSecureProjectStore_BackwardCompatibility(t *testing.T) {
 		t.Fatalf("ListProjects failed: %v", err)
 	}
 	for _, p := range projects {
-		if p.ID == "proj-legacy" && p.OpenAIAPIKey != legacyAPIKey {
+		if p.ID == "proj-legacy" && p.APIKey != legacyAPIKey {
 			t.Errorf("ListProjects should return unencrypted key as-is")
 		}
 	}
@@ -470,7 +470,7 @@ func TestSecureProjectStore_UpdateAlreadyEncrypted(t *testing.T) {
 	project := proxy.Project{
 		ID:           "proj-1",
 		Name:         "Test Project",
-		OpenAIAPIKey: originalAPIKey,
+		APIKey: originalAPIKey,
 		IsActive:     true,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
@@ -480,10 +480,10 @@ func TestSecureProjectStore_UpdateAlreadyEncrypted(t *testing.T) {
 	}
 
 	// Get the encrypted version
-	encryptedKey := mock.projects["proj-1"].OpenAIAPIKey
+	encryptedKey := mock.projects["proj-1"].APIKey
 
 	// Update with already encrypted key (should not double-encrypt)
-	project.OpenAIAPIKey = encryptedKey
+	project.APIKey = encryptedKey
 	if err := store.UpdateProject(ctx, project); err != nil {
 		t.Fatalf("update failed: %v", err)
 	}
@@ -493,7 +493,7 @@ func TestSecureProjectStore_UpdateAlreadyEncrypted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get failed: %v", err)
 	}
-	if retrieved.OpenAIAPIKey != originalAPIKey {
-		t.Errorf("GetProjectByID returned wrong API key: got %q, want %q", retrieved.OpenAIAPIKey, originalAPIKey)
+	if retrieved.APIKey != originalAPIKey {
+		t.Errorf("GetProjectByID returned wrong API key: got %q, want %q", retrieved.APIKey, originalAPIKey)
 	}
 }

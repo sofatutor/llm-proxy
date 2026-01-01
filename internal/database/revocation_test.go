@@ -20,7 +20,7 @@ func TestDBTokenStoreAdapter_RevokeToken(t *testing.T) {
 	project := proxy.Project{
 		ID:           "test-project-456",
 		Name:         "Test Project",
-		OpenAIAPIKey: "test-api-key",
+		APIKey: "test-api-key",
 		CreatedAt:    time.Now().UTC().Truncate(time.Second),
 		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
 	}
@@ -86,14 +86,14 @@ func TestDBTokenStoreAdapter_RevokeBatchTokens(t *testing.T) {
 		{
 			ID:           "project-1",
 			Name:         "Test Project 1",
-			OpenAIAPIKey: "test-api-key-1",
+			APIKey: "test-api-key-1",
 			CreatedAt:    time.Now().UTC().Truncate(time.Second),
 			UpdatedAt:    time.Now().UTC().Truncate(time.Second),
 		},
 		{
 			ID:           "project-2",
 			Name:         "Test Project 2",
-			OpenAIAPIKey: "test-api-key-2",
+			APIKey: "test-api-key-2",
 			CreatedAt:    time.Now().UTC().Truncate(time.Second),
 			UpdatedAt:    time.Now().UTC().Truncate(time.Second),
 		},
@@ -158,14 +158,14 @@ func TestDBTokenStoreAdapter_RevokeProjectTokens(t *testing.T) {
 		{
 			ID:           "project-1",
 			Name:         "Test Project 1",
-			OpenAIAPIKey: "test-api-key-1",
+			APIKey: "test-api-key-1",
 			CreatedAt:    time.Now().UTC().Truncate(time.Second),
 			UpdatedAt:    time.Now().UTC().Truncate(time.Second),
 		},
 		{
 			ID:           "project-2",
 			Name:         "Test Project 2",
-			OpenAIAPIKey: "test-api-key-2",
+			APIKey: "test-api-key-2",
 			CreatedAt:    time.Now().UTC().Truncate(time.Second),
 			UpdatedAt:    time.Now().UTC().Truncate(time.Second),
 		},
@@ -228,7 +228,7 @@ func TestDBTokenStoreAdapter_RevokeExpiredTokens(t *testing.T) {
 	project := proxy.Project{
 		ID:           "project-1",
 		Name:         "Test Project",
-		OpenAIAPIKey: "test-api-key",
+		APIKey: "test-api-key",
 		CreatedAt:    time.Now().UTC().Truncate(time.Second),
 		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
 	}
@@ -301,7 +301,7 @@ func TestDBTokenStoreAdapter_RevokeToken_Idempotency(t *testing.T) {
 	project := proxy.Project{
 		ID:           "test-project",
 		Name:         "Test Project",
-		OpenAIAPIKey: "test-api-key",
+		APIKey: "test-api-key",
 		CreatedAt:    time.Now().UTC().Truncate(time.Second),
 		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
 	}
@@ -365,7 +365,7 @@ func TestDBTokenStoreAdapter_DeleteToken(t *testing.T) {
 	project := proxy.Project{
 		ID:           "test-project-delete",
 		Name:         "Test Project",
-		OpenAIAPIKey: "test-api-key",
+		APIKey: "test-api-key",
 		CreatedAt:    time.Now().UTC().Truncate(time.Second),
 		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
 	}
@@ -428,14 +428,14 @@ func TestDBTokenStoreAdapter_DeleteToken_Comprehensive(t *testing.T) {
 		{
 			ID:           "project-del-1",
 			Name:         "Test Project 1",
-			OpenAIAPIKey: "test-api-key-1",
+			APIKey: "test-api-key-1",
 			CreatedAt:    time.Now().UTC().Truncate(time.Second),
 			UpdatedAt:    time.Now().UTC().Truncate(time.Second),
 		},
 		{
 			ID:           "project-del-2",
 			Name:         "Test Project 2",
-			OpenAIAPIKey: "test-api-key-2",
+			APIKey: "test-api-key-2",
 			CreatedAt:    time.Now().UTC().Truncate(time.Second),
 			UpdatedAt:    time.Now().UTC().Truncate(time.Second),
 		},
@@ -542,7 +542,7 @@ func TestDBTokenStoreAdapter_RevokeExpiredTokens_EdgeCases(t *testing.T) {
 	project := proxy.Project{
 		ID:           "project-edge",
 		Name:         "Test Project",
-		OpenAIAPIKey: "test-api-key",
+		APIKey: "test-api-key",
 		CreatedAt:    time.Now().UTC().Truncate(time.Second),
 		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
 	}
@@ -620,7 +620,7 @@ func TestDBTokenStoreAdapter_RevokeBatchTokens_EmptyAndDuplicates(t *testing.T) 
 	project := proxy.Project{
 		ID:           "project-dup",
 		Name:         "Test Project",
-		OpenAIAPIKey: "test-api-key",
+		APIKey: "test-api-key",
 		CreatedAt:    time.Now().UTC().Truncate(time.Second),
 		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
 	}
