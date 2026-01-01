@@ -20,7 +20,7 @@ type TokenListResponse struct {
 type ProjectResponse struct {
 	ID            string     `json:"id"`
 	Name          string     `json:"name"`
-	OpenAIAPIKey  string     `json:"openai_api_key"` // Obfuscated for security
+	APIKey        string     `json:"api_key"` // Obfuscated for security
 	IsActive      bool       `json:"is_active"`
 	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`

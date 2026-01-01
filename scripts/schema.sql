@@ -7,7 +7,7 @@
 CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
-    openai_api_key TEXT NOT NULL,
+    api_key TEXT NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT 1,
     deactivated_at DATETIME,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

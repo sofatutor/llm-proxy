@@ -19,11 +19,11 @@ func TestProjectCRUD(t *testing.T) {
 
 	// Create a test project
 	project := proxy.Project{
-		ID:           "test-project-id",
-		Name:         "Test Project",
-		OpenAIAPIKey: "test-api-key",
-		CreatedAt:    time.Now().UTC().Truncate(time.Second),
-		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		ID:        "test-project-id",
+		Name:      "Test Project",
+		APIKey:    "test-api-key",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 
 	// Test CreateProject
@@ -43,8 +43,8 @@ func TestProjectCRUD(t *testing.T) {
 	if retrievedProject.Name != project.Name {
 		t.Fatalf("Expected project name %s, got %s", project.Name, retrievedProject.Name)
 	}
-	if retrievedProject.OpenAIAPIKey != project.OpenAIAPIKey {
-		t.Fatalf("Expected project API key %s, got %s", project.OpenAIAPIKey, retrievedProject.OpenAIAPIKey)
+	if retrievedProject.APIKey != project.APIKey {
+		t.Fatalf("Expected project API key %s, got %s", project.APIKey, retrievedProject.APIKey)
 	}
 
 	// Test GetProjectByName
@@ -65,7 +65,7 @@ func TestProjectCRUD(t *testing.T) {
 	// Test UpdateProject
 	updatedProject := retrievedProject
 	updatedProject.Name = "Updated Project"
-	updatedProject.OpenAIAPIKey = "updated-api-key"
+	updatedProject.APIKey = "updated-api-key"
 
 	err = db.UpdateProject(ctx, updatedProject)
 	if err != nil {
@@ -79,16 +79,16 @@ func TestProjectCRUD(t *testing.T) {
 	if retrievedAfterUpdate.Name != updatedProject.Name {
 		t.Fatalf("Expected updated name %s, got %s", updatedProject.Name, retrievedAfterUpdate.Name)
 	}
-	if retrievedAfterUpdate.OpenAIAPIKey != updatedProject.OpenAIAPIKey {
-		t.Fatalf("Expected updated API key %s, got %s", updatedProject.OpenAIAPIKey, retrievedAfterUpdate.OpenAIAPIKey)
+	if retrievedAfterUpdate.APIKey != updatedProject.APIKey {
+		t.Fatalf("Expected updated API key %s, got %s", updatedProject.APIKey, retrievedAfterUpdate.APIKey)
 	}
 
 	// Test UpdateProject with non-existent ID
 	nonExistentProject := proxy.Project{
-		ID:           "non-existent",
-		Name:         "Non-existent Project",
-		OpenAIAPIKey: "test-api-key",
-		UpdatedAt:    time.Now(),
+		ID:        "non-existent",
+		Name:      "Non-existent Project",
+		APIKey:    "test-api-key",
+		UpdatedAt: time.Now(),
 	}
 	err = db.UpdateProject(ctx, nonExistentProject)
 	if err != ErrProjectNotFound {
@@ -97,11 +97,11 @@ func TestProjectCRUD(t *testing.T) {
 
 	// Create a second project for ListProjects test
 	project2 := proxy.Project{
-		ID:           "test-project-id-2",
-		Name:         "Test Project 2",
-		OpenAIAPIKey: "test-api-key-2",
-		CreatedAt:    time.Now().UTC().Truncate(time.Second),
-		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		ID:        "test-project-id-2",
+		Name:      "Test Project 2",
+		APIKey:    "test-api-key-2",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 	err = db.CreateProject(ctx, project2)
 	if err != nil {
@@ -142,11 +142,11 @@ func TestProjectCRUD_Errors(t *testing.T) {
 	ctx := context.Background()
 
 	project := proxy.Project{
-		ID:           "dup-id",
-		Name:         "Dup Project",
-		OpenAIAPIKey: "key",
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:        "dup-id",
+		Name:      "Dup Project",
+		APIKey:    "key",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	if err := db.CreateProject(ctx, project); err != nil {
 		t.Fatalf("Failed to create project: %v", err)
@@ -159,11 +159,11 @@ func TestProjectCRUD_Errors(t *testing.T) {
 	}
 	// Duplicate Name
 	project2 := proxy.Project{
-		ID:           "other-id",
-		Name:         project.Name,
-		OpenAIAPIKey: "key2",
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:        "other-id",
+		Name:      project.Name,
+		APIKey:    "key2",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	if err := db.CreateProject(ctx, project2); err == nil {
 		t.Error("expected error for duplicate project Name")
@@ -179,7 +179,7 @@ func TestProjectCRUD_Errors(t *testing.T) {
 		t.Errorf("expected 0 projects, got %d", len(projects))
 	}
 	// Update non-existent project
-	p := proxy.Project{ID: "nope", Name: "nope", OpenAIAPIKey: "k", UpdatedAt: time.Now()}
+	p := proxy.Project{ID: "nope", Name: "nope", APIKey: "k", UpdatedAt: time.Now()}
 	if err := db.UpdateProject(ctx, p); err != ErrProjectNotFound {
 		t.Errorf("expected ErrProjectNotFound, got %v", err)
 	}
@@ -205,11 +205,11 @@ func TestListProjects_Multiple(t *testing.T) {
 	ctx := context.Background()
 	for i := 0; i < 5; i++ {
 		p := proxy.Project{
-			ID:           "id-" + strconv.Itoa(i),
-			Name:         "Project-" + strconv.Itoa(i),
-			OpenAIAPIKey: "key",
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
+			ID:        "id-" + strconv.Itoa(i),
+			Name:      "Project-" + strconv.Itoa(i),
+			APIKey:    "key",
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 		if err := db.CreateProject(ctx, p); err != nil {
 			t.Fatalf("Failed to create project: %v", err)
@@ -228,7 +228,7 @@ func TestUpdateProject_InvalidInput(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
 	ctx := context.Background()
-	p := proxy.Project{ID: "", Name: "", OpenAIAPIKey: "", UpdatedAt: time.Now()}
+	p := proxy.Project{ID: "", Name: "", APIKey: "", UpdatedAt: time.Now()}
 	if err := db.UpdateProject(ctx, p); err == nil {
 		t.Error("expected error for empty ID in UpdateProject")
 	}
@@ -270,7 +270,7 @@ func TestUpdateProject_EmptyID(t *testing.T) {
 	db, cleanup := testDB(t)
 	defer cleanup()
 	ctx := context.Background()
-	p := proxy.Project{ID: "", Name: "Name", OpenAIAPIKey: "key", UpdatedAt: time.Now()}
+	p := proxy.Project{ID: "", Name: "Name", APIKey: "key", UpdatedAt: time.Now()}
 	if err := db.UpdateProject(ctx, p); err == nil {
 		t.Error("expected error for empty ID in UpdateProject")
 	}
@@ -293,7 +293,7 @@ func TestListProjects_LongNames(t *testing.T) {
 	for i := range longName {
 		longName[i] = 'a'
 	}
-	p := proxy.Project{ID: "long", Name: string(longName), OpenAIAPIKey: "key", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	p := proxy.Project{ID: "long", Name: string(longName), APIKey: "key", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	_ = db.CreateProject(ctx, p)
 	projects, err := db.ListProjects(ctx)
 	if err != nil {
@@ -317,11 +317,11 @@ func TestGetAPIKeyForProject(t *testing.T) {
 
 	// Insert a project
 	project := Project{
-		ID:           "pid",
-		Name:         "test",
-		OpenAIAPIKey: "sk-test-key",
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:        "pid",
+		Name:      "test",
+		APIKey:    "sk-test-key",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	if err := db.DBCreateProject(ctx, project); err != nil {
 		t.Fatalf("failed to create project: %v", err)
@@ -349,7 +349,7 @@ func TestDBDeleteProject_And_DBUpdateProject_EdgeCases(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert a project for happy path
-	p := Project{ID: "p1", Name: "P1", OpenAIAPIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	p := Project{ID: "p1", Name: "P1", APIKey: "k", CreatedAt: time.Now(), UpdatedAt: time.Now()}
 	require.NoError(t, db.DBCreateProject(ctx, p))
 
 	t.Run("delete happy path", func(t *testing.T) {
@@ -383,13 +383,13 @@ func TestDBDeleteProject_And_DBUpdateProject_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("update non-existent", func(t *testing.T) {
-		p2 := Project{ID: "notfound", Name: "N", OpenAIAPIKey: "k"}
+		p2 := Project{ID: "notfound", Name: "N", APIKey: "k"}
 		err := db.DBUpdateProject(ctx, p2)
 		require.ErrorIs(t, err, ErrProjectNotFound)
 	})
 
 	t.Run("update empty ID", func(t *testing.T) {
-		p3 := Project{ID: "", Name: "N", OpenAIAPIKey: "k"}
+		p3 := Project{ID: "", Name: "N", APIKey: "k"}
 		err := db.DBUpdateProject(ctx, p3)
 		require.Error(t, err)
 	})
@@ -404,12 +404,12 @@ func TestGetProjectActive(t *testing.T) {
 
 	// Create a test project
 	project := proxy.Project{
-		ID:           "test-project-id",
-		Name:         "test-project",
-		OpenAIAPIKey: "test-api-key",
-		IsActive:     true,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:        "test-project-id",
+		Name:      "test-project",
+		APIKey:    "test-api-key",
+		IsActive:  true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	// Insert the project

@@ -112,7 +112,7 @@ paths:
           $ref: '#/components/responses/InternalServerError'
     patch:
       summary: Update project
-      description: Updates an existing project (partial update; name and/or openai_api_key)
+      description: Updates an existing project (partial update; name and/or api_key)
       operationId: updateProject
       tags:
         - Projects
@@ -541,13 +541,13 @@ components:
           type: string
           description: Name of the project
           example: "My AI Project"
-        openai_api_key:
+        api_key:
           type: string
-          description: OpenAI API key (will be encrypted at rest)
+          description: Upstream API key (will be encrypted at rest)
           example: "sk-abcdefghijklmnopqrstuvwxyz1234567890ABCDEFG"
       required:
         - name
-        - openai_api_key
+        - api_key
 
     ProjectUpdateRequest:
       type: object
@@ -555,9 +555,9 @@ components:
         name:
           type: string
           description: New project name
-        openai_api_key:
+        api_key:
           type: string
-          description: New OpenAI API key
+          description: New upstream API key
         is_active:
           type: boolean
           description: Whether the project is active

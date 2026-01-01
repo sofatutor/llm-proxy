@@ -27,7 +27,7 @@ export class SeedFixture {
   /**
    * Create a test project
    */
-  async createProject(name: string, openaiApiKey: string = 'sk-test-key-for-e2e'): Promise<string> {
+  async createProject(name: string, apiKey: string = 'sk-test-key-for-e2e'): Promise<string> {
     // Ensure unique name per test run to avoid UNIQUE constraints in DB
     const uniqueName = `${name} ${Date.now()}-${Math.floor(Math.random()*1000)}`;
     const response = await fetch(`${this.baseUrl}/manage/projects`, {
@@ -38,7 +38,7 @@ export class SeedFixture {
       },
       body: JSON.stringify({
         name: uniqueName,
-        openai_api_key: openaiApiKey,
+        api_key: apiKey,
       }),
     });
 
@@ -92,7 +92,7 @@ export class SeedFixture {
   /**
    * Update a project's status
    */
-  async updateProject(projectId: string, updates: { name?: string; openai_api_key?: string; is_active?: boolean }): Promise<void> {
+  async updateProject(projectId: string, updates: { name?: string; api_key?: string; is_active?: boolean }): Promise<void> {
     const response = await fetch(`${this.baseUrl}/manage/projects/${projectId}`, {
       method: 'PATCH',
       headers: {

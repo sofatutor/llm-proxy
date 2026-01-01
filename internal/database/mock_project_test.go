@@ -11,7 +11,7 @@ import (
 func TestMockProjectStore_BasicCRUD(t *testing.T) {
 	store := NewMockProjectStore()
 	ctx := context.Background()
-	project := proxy.Project{ID: "p1", Name: "Test Project", OpenAIAPIKey: "key1"}
+	project := proxy.Project{ID: "p1", Name: "Test Project", APIKey: "key1"}
 
 	// CreateProject
 	err := store.CreateProject(ctx, project)
@@ -58,9 +58,9 @@ func TestMockProjectStore_ListProjects(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, projects, 0)
 	// Add projects
-	err = store.CreateProject(ctx, proxy.Project{ID: "p1", Name: "A", OpenAIAPIKey: "k1"})
+	err = store.CreateProject(ctx, proxy.Project{ID: "p1", Name: "A", APIKey: "k1"})
 	assert.NoError(t, err)
-	err = store.CreateProject(ctx, proxy.Project{ID: "p2", Name: "B", OpenAIAPIKey: "k2"})
+	err = store.CreateProject(ctx, proxy.Project{ID: "p2", Name: "B", APIKey: "k2"})
 	assert.NoError(t, err)
 	projects, err = store.ListProjects(ctx)
 	assert.NoError(t, err)
@@ -81,13 +81,13 @@ func TestMockProjectStore_CreateMockProject(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "id", p.ID)
 	assert.Equal(t, "n", p.Name)
-	assert.Equal(t, "k", p.OpenAIAPIKey)
+	assert.Equal(t, "k", p.APIKey)
 }
 
 func TestMockProjectStore_GetAPIKeyForProject(t *testing.T) {
 	store := NewMockProjectStore()
 	ctx := context.Background()
-	err := store.CreateProject(ctx, proxy.Project{ID: "p1", Name: "N", OpenAIAPIKey: "k1"})
+	err := store.CreateProject(ctx, proxy.Project{ID: "p1", Name: "N", APIKey: "k1"})
 	assert.NoError(t, err)
 	key, err := store.GetAPIKeyForProject(ctx, "p1")
 	assert.NoError(t, err)
@@ -101,11 +101,11 @@ func TestMockProjectStore_GetProjectActive(t *testing.T) {
 	ctx := context.Background()
 
 	// Create an active project
-	err := store.CreateProject(ctx, proxy.Project{ID: "p1", Name: "Active Project", OpenAIAPIKey: "k1", IsActive: true})
+	err := store.CreateProject(ctx, proxy.Project{ID: "p1", Name: "Active Project", APIKey: "k1", IsActive: true})
 	assert.NoError(t, err)
 
 	// Create an inactive project
-	err = store.CreateProject(ctx, proxy.Project{ID: "p2", Name: "Inactive Project", OpenAIAPIKey: "k2", IsActive: false})
+	err = store.CreateProject(ctx, proxy.Project{ID: "p2", Name: "Inactive Project", APIKey: "k2", IsActive: false})
 	assert.NoError(t, err)
 
 	// Test GetProjectActive for active project

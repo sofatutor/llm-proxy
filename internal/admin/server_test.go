@@ -318,7 +318,7 @@ func (m *mockAPIClient) UpdateProject(ctx context.Context, id, name, apiKey stri
 	if m.DashboardErr != nil {
 		return nil, m.DashboardErr
 	}
-	project := &Project{ID: id, Name: name, OpenAIAPIKey: apiKey}
+	project := &Project{ID: id, Name: name, APIKey: apiKey}
 	if isActive != nil {
 		project.IsActive = *isActive
 	}
@@ -333,7 +333,7 @@ func (m *mockAPIClient) CreateProject(ctx context.Context, name, apiKey string) 
 	if m.DashboardErr != nil {
 		return nil, m.DashboardErr
 	}
-	return &Project{ID: "new-id", Name: name, OpenAIAPIKey: apiKey}, nil
+	return &Project{ID: "new-id", Name: name, APIKey: apiKey}, nil
 }
 
 // Implement audit methods to satisfy APIClientInterface
@@ -878,7 +878,7 @@ func TestServer_HandleProjectsUpdate(t *testing.T) {
 		s.handleProjectsUpdate(c)
 	})
 
-	form := strings.NewReader("name=Updated+Project&openai_api_key=key-1234")
+	form := strings.NewReader("name=Updated+Project&api_key=key-1234")
 	req, _ := http.NewRequest("PUT", "/projects/1", form)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
@@ -919,7 +919,7 @@ func TestServer_HandleProjectsUpdate_Errors(t *testing.T) {
 		t.Errorf("expected 400 for missing fields, got %d", w.Code)
 	}
 
-	form2 := strings.NewReader("name=Updated&openai_api_key=key-1234")
+	form2 := strings.NewReader("name=Updated&api_key=key-1234")
 	req2, _ := http.NewRequest("PUT", "/projects/1", form2)
 	req2.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w2 := httptest.NewRecorder()
@@ -1052,7 +1052,7 @@ func TestServer_HandleProjectsCreate(t *testing.T) {
 		s.handleProjectsCreate(c)
 	})
 
-	form := strings.NewReader("name=New+Project&openai_api_key=key-1234")
+	form := strings.NewReader("name=New+Project&api_key=key-1234")
 	req, _ := http.NewRequest("POST", "/projects", form)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	// Add headers to exercise forwarding logic
@@ -1088,7 +1088,7 @@ func TestServer_HandleProjectsCreate_APIError(t *testing.T) {
 		s.handleProjectsCreate(c)
 	})
 
-	form := strings.NewReader("name=Test+Project&openai_api_key=key-1234")
+	form := strings.NewReader("name=Test+Project&api_key=key-1234")
 	req, _ := http.NewRequest("POST", "/projects", form)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
@@ -1245,7 +1245,7 @@ func TestServer_HandleProjectsPostOverride(t *testing.T) {
 	})
 
 	// 1) PUT override → delegates to update → 303
-	form := strings.NewReader("_method=PUT&name=Proj&openai_api_key=sk-test")
+	form := strings.NewReader("_method=PUT&name=Proj&api_key=sk-test")
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("POST", "/projects/p1", form)
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")

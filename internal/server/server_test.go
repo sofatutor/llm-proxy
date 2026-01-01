@@ -859,7 +859,7 @@ func TestHandleProjects_And_CreateProject_EdgeCases(t *testing.T) {
 	t.Run("POST store error", func(t *testing.T) {
 		tps := &testProjectStore{mockProjectStore: &mockProjectStore{}, createProjectFunc: func(ctx context.Context, p proxy.Project) error { return errors.New("fail") }}
 		srv.projectStore = tps
-		body := `{"name":"foo","openai_api_key":"bar"}`
+		body := `{"name":"foo","api_key":"bar"}`
 		r := httptest.NewRequest(http.MethodPost, "/manage/projects", strings.NewReader(body))
 		setAuth(r, "testtoken")
 		w := httptest.NewRecorder()
@@ -871,7 +871,7 @@ func TestHandleProjects_And_CreateProject_EdgeCases(t *testing.T) {
 	t.Run("POST happy path", func(t *testing.T) {
 		tps := &testProjectStore{mockProjectStore: &mockProjectStore{}, createProjectFunc: func(ctx context.Context, p proxy.Project) error { return nil }}
 		srv.projectStore = tps
-		body := `{"name":"foo","openai_api_key":"bar"}`
+		body := `{"name":"foo","api_key":"bar"}`
 		r := httptest.NewRequest(http.MethodPost, "/manage/projects", strings.NewReader(body))
 		setAuth(r, "testtoken")
 		w := httptest.NewRecorder()
