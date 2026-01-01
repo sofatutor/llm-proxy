@@ -146,6 +146,71 @@ else
 fi
 echo ""
 
+# Test ENCRYPTION_KEY configuration
+echo "Running helm template with ENCRYPTION_KEY..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set secrets.encryptionKey.existingSecret.name=test-encryption-secret 2>&1); then
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'name: ENCRYPTION_KEY'; then
+        echo "✗ ENCRYPTION_KEY environment variable should be present" >&2
+        exit 1
+    fi
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'name: test-encryption-secret'; then
+        echo "✗ Secret reference should be included for ENCRYPTION_KEY" >&2
+        exit 1
+    fi
+    echo "✓ helm template with ENCRYPTION_KEY rendered successfully"
+else
+    echo "✗ helm template with ENCRYPTION_KEY failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
+# Test ENCRYPTION_KEY with custom key name
+echo "Running helm template with ENCRYPTION_KEY (custom key)..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set secrets.encryptionKey.existingSecret.name=test-encryption-secret \
+    --set secrets.encryptionKey.existingSecret.key=CUSTOM_KEY 2>&1); then
+    if ! echo "$TEMPLATE_OUTPUT" | grep -q 'key: CUSTOM_KEY'; then
+        echo "✗ Custom key name should be present" >&2
+        exit 1
+    fi
+    echo "✓ helm template with ENCRYPTION_KEY (custom key) rendered successfully"
+else
+    echo "✗ helm template with ENCRYPTION_KEY (custom key) failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
+# Test admin deployment with ENCRYPTION_KEY
+echo "Running helm template with admin enabled and ENCRYPTION_KEY..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set secrets.encryptionKey.existingSecret.name=test-encryption-secret \
+    --set admin.enabled=true 2>&1); then
+    # Count occurrences of ENCRYPTION_KEY in admin deployment (should be at least 1)
+    ADMIN_ENCRYPTION_COUNT=$(echo "$TEMPLATE_OUTPUT" | grep -c 'name: ENCRYPTION_KEY' || true)
+    if [ "$ADMIN_ENCRYPTION_COUNT" -lt 1 ]; then
+        echo "✗ Admin deployment should have ENCRYPTION_KEY environment variable" >&2
+        exit 1
+    fi
+    echo "✓ helm template with admin enabled and ENCRYPTION_KEY rendered successfully"
+else
+    echo "✗ helm template with admin enabled and ENCRYPTION_KEY failed" >&2
+    echo "$TEMPLATE_OUTPUT" >&2
+    exit 1
+fi
+echo ""
+
 # Test in-cluster PostgreSQL configuration
 echo "Running helm template with in-cluster PostgreSQL..."
 if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
