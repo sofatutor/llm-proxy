@@ -95,10 +95,10 @@ func TestObfuscation_TokenResponses(t *testing.T) {
 
 	t.Run("POST_TokenCreate_ReturnsFullToken", func(t *testing.T) {
 		projectStore.On("GetProjectByID", mock.Anything, "project-1").Return(proxy.Project{
-			ID:           "project-1",
-			Name:         "Test Project",
-			APIKey: "sk-test-key",
-			IsActive:     true,
+			ID:       "project-1",
+			Name:     "Test Project",
+			APIKey:   "sk-test-key",
+			IsActive: true,
 		}, nil)
 		tokenStore.On("CreateToken", mock.Anything, mock.AnythingOfType("token.TokenData")).Return(nil)
 
@@ -153,12 +153,12 @@ func TestObfuscation_ProjectResponses(t *testing.T) {
 	t.Run("GET_ProjectList_ReturnsObfuscatedAPIKeys", func(t *testing.T) {
 		projectStore.On("ListProjects", mock.Anything).Return([]proxy.Project{
 			{
-				ID:           "project-1",
-				Name:         "Test Project",
-				APIKey: fullAPIKey,
-				IsActive:     true,
-				CreatedAt:    time.Now(),
-				UpdatedAt:    time.Now(),
+				ID:        "project-1",
+				Name:      "Test Project",
+				APIKey:    fullAPIKey,
+				IsActive:  true,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
 			},
 		}, nil)
 
@@ -182,12 +182,12 @@ func TestObfuscation_ProjectResponses(t *testing.T) {
 
 	t.Run("GET_ProjectByID_ReturnsObfuscatedAPIKey", func(t *testing.T) {
 		projectStore.On("GetProjectByID", mock.Anything, "project-1").Return(proxy.Project{
-			ID:           "project-1",
-			Name:         "Test Project",
-			APIKey: fullAPIKey,
-			IsActive:     true,
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
+			ID:        "project-1",
+			Name:      "Test Project",
+			APIKey:    fullAPIKey,
+			IsActive:  true,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}, nil)
 
 		req := httptest.NewRequest("GET", "/manage/projects/project-1", nil)
@@ -209,12 +209,12 @@ func TestObfuscation_ProjectResponses(t *testing.T) {
 
 	t.Run("PATCH_Project_EmptyAPIKey_DoesNotUpdate", func(t *testing.T) {
 		existingProject := proxy.Project{
-			ID:           "project-1",
-			Name:         "Test Project",
-			APIKey: fullAPIKey,
-			IsActive:     true,
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
+			ID:        "project-1",
+			Name:      "Test Project",
+			APIKey:    fullAPIKey,
+			IsActive:  true,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 
 		projectStore.On("GetProjectByID", mock.Anything, "project-1").Return(existingProject, nil)
@@ -224,7 +224,7 @@ func TestObfuscation_ProjectResponses(t *testing.T) {
 		})).Return(nil)
 
 		reqBody := map[string]interface{}{
-			"name":           "Updated Name",
+			"name":    "Updated Name",
 			"api_key": "", // Empty string should not update
 		}
 		body, _ := json.Marshal(reqBody)
@@ -245,12 +245,12 @@ func TestObfuscation_ProjectResponses(t *testing.T) {
 
 	t.Run("PATCH_Project_WithAPIKey_DoesUpdate", func(t *testing.T) {
 		existingProject := proxy.Project{
-			ID:           "project-1",
-			Name:         "Test Project",
-			APIKey: fullAPIKey,
-			IsActive:     true,
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
+			ID:        "project-1",
+			Name:      "Test Project",
+			APIKey:    fullAPIKey,
+			IsActive:  true,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 
 		newAPIKey := "sk-proj-newkey9876543210"
@@ -286,12 +286,12 @@ func TestObfuscation_ProjectResponses(t *testing.T) {
 		require.NoError(t, err)
 
 		existingProject := proxy.Project{
-			ID:           "project-3",
-			Name:         "Test Project",
-			APIKey: fullAPIKey,
-			IsActive:     true,
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
+			ID:        "project-3",
+			Name:      "Test Project",
+			APIKey:    fullAPIKey,
+			IsActive:  true,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 
 		freshProjectStore.On("GetProjectByID", mock.Anything, "project-3").Return(existingProject, nil).Once()
@@ -319,7 +319,7 @@ func TestObfuscation_ProjectResponses(t *testing.T) {
 	t.Run("POST_Project_RejectsObfuscatedKey", func(t *testing.T) {
 		// Try to create project with obfuscated key
 		reqBody := map[string]interface{}{
-			"name":           "New Project",
+			"name":    "New Project",
 			"api_key": "sk-proj-****xyz", // Obfuscated format
 		}
 		body, _ := json.Marshal(reqBody)

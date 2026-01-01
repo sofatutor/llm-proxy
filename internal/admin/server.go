@@ -462,9 +462,9 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 	id := c.Param("id")
 
 	var req struct {
-		Name   string `form:"name" binding:"required"`
-		APIKey string `form:"api_key"` // Optional - empty means keep existing
-		IsActive *bool `form:"is_active"`
+		Name     string `form:"name" binding:"required"`
+		APIKey   string `form:"api_key"` // Optional - empty means keep existing
+		IsActive *bool  `form:"is_active"`
 	}
 
 	if err := c.ShouldBind(&req); err != nil {

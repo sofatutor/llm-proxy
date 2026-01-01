@@ -400,10 +400,10 @@ func TestAPIClient_CreateProject(t *testing.T) {
 		}
 
 		project := Project{
-			ID:           "new-id",
-			Name:         req["name"],
-			APIKey: req["api_key"],
-			CreatedAt:    time.Now(),
+			ID:        "new-id",
+			Name:      req["name"],
+			APIKey:    req["api_key"],
+			CreatedAt: time.Now(),
 		}
 		if err := json.NewEncoder(w).Encode(project); err != nil {
 			t.Errorf("failed to encode project: %v", err)
@@ -441,10 +441,10 @@ func TestAPIClient_UpdateProject(t *testing.T) {
 		}
 
 		project := Project{
-			ID:           "1",
-			Name:         req["name"],
-			APIKey: req["api_key"],
-			UpdatedAt:    time.Now(),
+			ID:        "1",
+			Name:      req["name"],
+			APIKey:    req["api_key"],
+			UpdatedAt: time.Now(),
 		}
 		if err := json.NewEncoder(w).Encode(project); err != nil {
 			t.Errorf("failed to encode project: %v", err)

@@ -18,11 +18,11 @@ func TestDatabaseUtils(t *testing.T) {
 
 	// Create a test project
 	project := proxy.Project{
-		ID:           "test-project-id",
-		Name:         "Test Project",
-		APIKey: "test-api-key",
-		CreatedAt:    time.Now().UTC().Truncate(time.Second),
-		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		ID:        "test-project-id",
+		Name:      "Test Project",
+		APIKey:    "test-api-key",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 	err := db.CreateProject(ctx, project)
 	if err != nil {

@@ -140,12 +140,12 @@ func TestPostgresIntegration_ProjectCRUD(t *testing.T) {
 
 	// Create project using proxy.Project (what the interface expects)
 	project := proxy.Project{
-		ID:           "test-project-pg-" + time.Now().Format("20060102150405"),
-		Name:         "PostgreSQL Test Project",
-		APIKey: "test-api-key-12345",
-		IsActive:     true,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:        "test-project-pg-" + time.Now().Format("20060102150405"),
+		Name:      "PostgreSQL Test Project",
+		APIKey:    "test-api-key-12345",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 
 	err := db.CreateProject(ctx, project)
@@ -194,12 +194,12 @@ func TestPostgresIntegration_TokenCRUD(t *testing.T) {
 
 	// First create a project (required for token foreign key)
 	project := proxy.Project{
-		ID:           uuid.NewString(),
-		Name:         "Token Test Project",
-		APIKey: "test-api-key-tokens",
-		IsActive:     true,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:        uuid.NewString(),
+		Name:      "Token Test Project",
+		APIKey:    "test-api-key-tokens",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 	err := db.CreateProject(ctx, project)
 	require.NoError(t, err, "Failed to create project for token test")
@@ -318,12 +318,12 @@ func TestPostgresIntegration_PlaceholderRebinding(t *testing.T) {
 
 	// Create a project using the rebinding helper
 	project := proxy.Project{
-		ID:           "rebind-test-" + time.Now().Format("20060102150405"),
-		Name:         "Rebind Test",
-		APIKey: "rebind-api-key",
-		IsActive:     true,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:        "rebind-test-" + time.Now().Format("20060102150405"),
+		Name:      "Rebind Test",
+		APIKey:    "rebind-api-key",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 
 	err := db.CreateProject(ctx, project)
@@ -346,12 +346,12 @@ func TestPostgresIntegration_ConcurrentOperations(t *testing.T) {
 
 	// Create a project for concurrent token operations
 	project := proxy.Project{
-		ID:           uuid.NewString(),
-		Name:         "Concurrent Test Project",
-		APIKey: "concurrent-api-key",
-		IsActive:     true,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:        uuid.NewString(),
+		Name:      "Concurrent Test Project",
+		APIKey:    "concurrent-api-key",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 	err := db.CreateProject(ctx, project)
 	require.NoError(t, err)
@@ -401,12 +401,12 @@ func TestPostgresIntegration_ConcurrentMaxRequestsEnforcement(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 
 	project := proxy.Project{
-		ID:           uuid.NewString(),
-		Name:         "Concurrent Quota Test Project",
-		APIKey: "concurrent-quota-api-key",
-		IsActive:     true,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:        uuid.NewString(),
+		Name:      "Concurrent Quota Test Project",
+		APIKey:    "concurrent-quota-api-key",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 	require.NoError(t, db.CreateProject(ctx, project))
 

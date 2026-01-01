@@ -118,12 +118,12 @@ func TestNewSecureProjectStore(t *testing.T) {
 		// Verify it behaves like NullEncryptor
 		apiKey := "test-api-key"
 		project := proxy.Project{
-			ID:           "proj-1",
-			Name:         "Test Project",
-			APIKey: apiKey,
-			IsActive:     true,
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
+			ID:        "proj-1",
+			Name:      "Test Project",
+			APIKey:    apiKey,
+			IsActive:  true,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 		ctx := context.Background()
 		if err := store.CreateProject(ctx, project); err != nil {
@@ -145,12 +145,12 @@ func TestSecureProjectStore_CreateAndGetProject(t *testing.T) {
 
 	originalAPIKey := "sk-test-api-key-12345"
 	project := proxy.Project{
-		ID:           "proj-1",
-		Name:         "Test Project",
-		APIKey: originalAPIKey,
-		IsActive:     true,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:        "proj-1",
+		Name:      "Test Project",
+		APIKey:    originalAPIKey,
+		IsActive:  true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	// Create project
@@ -197,12 +197,12 @@ func TestSecureProjectStore_ListProjects(t *testing.T) {
 	apiKeys := []string{"key-1", "key-2", "key-3"}
 	for i, apiKey := range apiKeys {
 		project := proxy.Project{
-			ID:           fmt.Sprintf("proj-%d", i+1),
-			Name:         fmt.Sprintf("Project %d", i+1),
-			APIKey: apiKey,
-			IsActive:     true,
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
+			ID:        fmt.Sprintf("proj-%d", i+1),
+			Name:      fmt.Sprintf("Project %d", i+1),
+			APIKey:    apiKey,
+			IsActive:  true,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 		if err := store.CreateProject(ctx, project); err != nil {
 			t.Fatalf("create failed: %v", err)
@@ -243,12 +243,12 @@ func TestSecureProjectStore_UpdateProject(t *testing.T) {
 
 	// Create project
 	project := proxy.Project{
-		ID:           "proj-1",
-		Name:         "Test Project",
-		APIKey: "old-key",
-		IsActive:     true,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:        "proj-1",
+		Name:      "Test Project",
+		APIKey:    "old-key",
+		IsActive:  true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	if err := store.CreateProject(ctx, project); err != nil {
 		t.Fatalf("create failed: %v", err)
@@ -288,12 +288,12 @@ func TestSecureProjectStore_DeleteProject(t *testing.T) {
 
 	// Create and delete
 	project := proxy.Project{
-		ID:           "proj-1",
-		Name:         "Test Project",
-		APIKey: "test-key",
-		IsActive:     true,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:        "proj-1",
+		Name:      "Test Project",
+		APIKey:    "test-key",
+		IsActive:  true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	if err := store.CreateProject(ctx, project); err != nil {
 		t.Fatalf("create failed: %v", err)
@@ -317,12 +317,12 @@ func TestSecureProjectStore_GetProjectActive(t *testing.T) {
 
 	// Create active project
 	project := proxy.Project{
-		ID:           "proj-1",
-		Name:         "Test Project",
-		APIKey: "test-key",
-		IsActive:     true,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:        "proj-1",
+		Name:      "Test Project",
+		APIKey:    "test-key",
+		IsActive:  true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	if err := store.CreateProject(ctx, project); err != nil {
 		t.Fatalf("create failed: %v", err)
@@ -422,10 +422,10 @@ func TestSecureProjectStore_BackwardCompatibility(t *testing.T) {
 	// Simulate existing unencrypted data (legacy)
 	legacyAPIKey := "sk-legacy-unencrypted-key"
 	mock.projects["proj-legacy"] = proxy.Project{
-		ID:           "proj-legacy",
-		Name:         "Legacy Project",
-		APIKey: legacyAPIKey, // Stored in plaintext (legacy)
-		IsActive:     true,
+		ID:       "proj-legacy",
+		Name:     "Legacy Project",
+		APIKey:   legacyAPIKey, // Stored in plaintext (legacy)
+		IsActive: true,
 	}
 
 	// GetProjectByID should handle unencrypted data
@@ -468,12 +468,12 @@ func TestSecureProjectStore_UpdateAlreadyEncrypted(t *testing.T) {
 	// Create project
 	originalAPIKey := "test-api-key"
 	project := proxy.Project{
-		ID:           "proj-1",
-		Name:         "Test Project",
-		APIKey: originalAPIKey,
-		IsActive:     true,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:        "proj-1",
+		Name:      "Test Project",
+		APIKey:    originalAPIKey,
+		IsActive:  true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	if err := store.CreateProject(ctx, project); err != nil {
 		t.Fatalf("create failed: %v", err)

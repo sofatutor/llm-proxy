@@ -303,7 +303,7 @@ func TestHandleProjects(t *testing.T) {
 
 	t.Run("POST_Project_Success", func(t *testing.T) {
 		reqBody := map[string]string{
-			"name":           "New Project",
+			"name":    "New Project",
 			"api_key": "key123",
 		}
 		body, _ := json.Marshal(reqBody)
@@ -341,11 +341,11 @@ func TestHandleProjectByID(t *testing.T) {
 	server, _, projectStore := setupServerAndMocks(t)
 
 	testProject := proxy.Project{
-		ID:           "test-project-id",
-		Name:         "Test Project",
-		APIKey: "secret-key",
-		CreatedAt:    time.Now().UTC(),
-		UpdatedAt:    time.Now().UTC(),
+		ID:        "test-project-id",
+		Name:      "Test Project",
+		APIKey:    "secret-key",
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
 	}
 
 	// Setup mock for get project

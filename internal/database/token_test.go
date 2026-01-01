@@ -22,11 +22,11 @@ func TestTokenCRUD(t *testing.T) {
 
 	// Create a test project first
 	project := proxy.Project{
-		ID:           "test-project-id",
-		Name:         "Test Project",
-		APIKey: "test-api-key",
-		CreatedAt:    time.Now().UTC().Truncate(time.Second),
-		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		ID:        "test-project-id",
+		Name:      "Test Project",
+		APIKey:    "test-api-key",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 	err := db.CreateProject(ctx, project)
 	if err != nil {
@@ -220,11 +220,11 @@ func TestIncrementTokenUsageBatch(t *testing.T) {
 	ctx := context.Background()
 
 	project := proxy.Project{
-		ID:           "test-project-id",
-		Name:         "Test Project",
-		APIKey: "test-api-key",
-		CreatedAt:    time.Now().UTC().Truncate(time.Second),
-		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		ID:        "test-project-id",
+		Name:      "Test Project",
+		APIKey:    "test-api-key",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 	require.NoError(t, db.CreateProject(ctx, project))
 
@@ -286,11 +286,11 @@ func TestTokenExpirationAndRateLimiting(t *testing.T) {
 
 	// Create a test project
 	project := proxy.Project{
-		ID:           "test-project-id",
-		Name:         "Test Project",
-		APIKey: "test-api-key",
-		CreatedAt:    time.Now().UTC().Truncate(time.Second),
-		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		ID:        "test-project-id",
+		Name:      "Test Project",
+		APIKey:    "test-api-key",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 	err := db.CreateProject(ctx, project)
 	if err != nil {
@@ -411,12 +411,12 @@ func TestIncrementTokenUsage_EnforcesMaxRequests(t *testing.T) {
 	ctx := context.Background()
 
 	project := proxy.Project{
-		ID:           "proj-quota-1",
-		Name:         "Quota Test",
-		APIKey: "test-api-key",
-		IsActive:     true,
-		CreatedAt:    time.Now().UTC().Truncate(time.Second),
-		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		ID:        "proj-quota-1",
+		Name:      "Quota Test",
+		APIKey:    "test-api-key",
+		IsActive:  true,
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 	require.NoError(t, db.CreateProject(ctx, project))
 

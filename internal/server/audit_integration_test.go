@@ -54,7 +54,7 @@ func TestAuditLogging_Integration(t *testing.T) {
 
 	// Test project creation - this should generate audit events
 	projectReq := map[string]string{
-		"name":           "Test Project",
+		"name":    "Test Project",
 		"api_key": "sk-test1234567890abcdef",
 	}
 	projectBody, _ := json.Marshal(projectReq)
@@ -166,7 +166,7 @@ func TestAuditLogging_Disabled(t *testing.T) {
 
 	// Test should still work but no audit events should be generated
 	projectReq := map[string]string{
-		"name":           "Test Project",
+		"name":    "Test Project",
 		"api_key": "sk-test1234567890abcdef",
 	}
 	projectBody, _ := json.Marshal(projectReq)

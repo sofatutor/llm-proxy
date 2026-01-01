@@ -19,11 +19,11 @@ func TestProjectCRUD(t *testing.T) {
 
 	// Create a test project
 	project := proxy.Project{
-		ID:           "test-project-id",
-		Name:         "Test Project",
-		APIKey: "test-api-key",
-		CreatedAt:    time.Now().UTC().Truncate(time.Second),
-		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		ID:        "test-project-id",
+		Name:      "Test Project",
+		APIKey:    "test-api-key",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 
 	// Test CreateProject
@@ -85,10 +85,10 @@ func TestProjectCRUD(t *testing.T) {
 
 	// Test UpdateProject with non-existent ID
 	nonExistentProject := proxy.Project{
-		ID:           "non-existent",
-		Name:         "Non-existent Project",
-		APIKey: "test-api-key",
-		UpdatedAt:    time.Now(),
+		ID:        "non-existent",
+		Name:      "Non-existent Project",
+		APIKey:    "test-api-key",
+		UpdatedAt: time.Now(),
 	}
 	err = db.UpdateProject(ctx, nonExistentProject)
 	if err != ErrProjectNotFound {
@@ -97,11 +97,11 @@ func TestProjectCRUD(t *testing.T) {
 
 	// Create a second project for ListProjects test
 	project2 := proxy.Project{
-		ID:           "test-project-id-2",
-		Name:         "Test Project 2",
-		APIKey: "test-api-key-2",
-		CreatedAt:    time.Now().UTC().Truncate(time.Second),
-		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		ID:        "test-project-id-2",
+		Name:      "Test Project 2",
+		APIKey:    "test-api-key-2",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 	err = db.CreateProject(ctx, project2)
 	if err != nil {
@@ -142,11 +142,11 @@ func TestProjectCRUD_Errors(t *testing.T) {
 	ctx := context.Background()
 
 	project := proxy.Project{
-		ID:           "dup-id",
-		Name:         "Dup Project",
-		APIKey: "key",
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:        "dup-id",
+		Name:      "Dup Project",
+		APIKey:    "key",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	if err := db.CreateProject(ctx, project); err != nil {
 		t.Fatalf("Failed to create project: %v", err)
@@ -159,11 +159,11 @@ func TestProjectCRUD_Errors(t *testing.T) {
 	}
 	// Duplicate Name
 	project2 := proxy.Project{
-		ID:           "other-id",
-		Name:         project.Name,
-		APIKey: "key2",
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:        "other-id",
+		Name:      project.Name,
+		APIKey:    "key2",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	if err := db.CreateProject(ctx, project2); err == nil {
 		t.Error("expected error for duplicate project Name")
@@ -205,11 +205,11 @@ func TestListProjects_Multiple(t *testing.T) {
 	ctx := context.Background()
 	for i := 0; i < 5; i++ {
 		p := proxy.Project{
-			ID:           "id-" + strconv.Itoa(i),
-			Name:         "Project-" + strconv.Itoa(i),
-			APIKey: "key",
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
+			ID:        "id-" + strconv.Itoa(i),
+			Name:      "Project-" + strconv.Itoa(i),
+			APIKey:    "key",
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 		if err := db.CreateProject(ctx, p); err != nil {
 			t.Fatalf("Failed to create project: %v", err)
@@ -317,11 +317,11 @@ func TestGetAPIKeyForProject(t *testing.T) {
 
 	// Insert a project
 	project := Project{
-		ID:           "pid",
-		Name:         "test",
-		APIKey: "sk-test-key",
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:        "pid",
+		Name:      "test",
+		APIKey:    "sk-test-key",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 	if err := db.DBCreateProject(ctx, project); err != nil {
 		t.Fatalf("failed to create project: %v", err)
@@ -404,12 +404,12 @@ func TestGetProjectActive(t *testing.T) {
 
 	// Create a test project
 	project := proxy.Project{
-		ID:           "test-project-id",
-		Name:         "test-project",
-		APIKey: "test-api-key",
-		IsActive:     true,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:        "test-project-id",
+		Name:      "test-project",
+		APIKey:    "test-api-key",
+		IsActive:  true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	// Insert the project

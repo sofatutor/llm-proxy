@@ -49,5 +49,3 @@ llm-proxy migrate encrypt
 ```bash
 llm-proxy migrate encrypt-status
 ```
-
-See [docs/security/encryption.md](encryption.md) for full documentation.

@@ -18,11 +18,11 @@ func TestDBTokenStoreAdapter_RevokeToken(t *testing.T) {
 
 	// Create a test project first
 	project := proxy.Project{
-		ID:           "test-project-456",
-		Name:         "Test Project",
-		APIKey: "test-api-key",
-		CreatedAt:    time.Now().UTC().Truncate(time.Second),
-		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		ID:        "test-project-456",
+		Name:      "Test Project",
+		APIKey:    "test-api-key",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 	err := db.CreateProject(ctx, project)
 	if err != nil {
@@ -84,18 +84,18 @@ func TestDBTokenStoreAdapter_RevokeBatchTokens(t *testing.T) {
 	// Create test projects first
 	projects := []proxy.Project{
 		{
-			ID:           "project-1",
-			Name:         "Test Project 1",
-			APIKey: "test-api-key-1",
-			CreatedAt:    time.Now().UTC().Truncate(time.Second),
-			UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+			ID:        "project-1",
+			Name:      "Test Project 1",
+			APIKey:    "test-api-key-1",
+			CreatedAt: time.Now().UTC().Truncate(time.Second),
+			UpdatedAt: time.Now().UTC().Truncate(time.Second),
 		},
 		{
-			ID:           "project-2",
-			Name:         "Test Project 2",
-			APIKey: "test-api-key-2",
-			CreatedAt:    time.Now().UTC().Truncate(time.Second),
-			UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+			ID:        "project-2",
+			Name:      "Test Project 2",
+			APIKey:    "test-api-key-2",
+			CreatedAt: time.Now().UTC().Truncate(time.Second),
+			UpdatedAt: time.Now().UTC().Truncate(time.Second),
 		},
 	}
 
@@ -156,18 +156,18 @@ func TestDBTokenStoreAdapter_RevokeProjectTokens(t *testing.T) {
 	// Create test projects first
 	projects := []proxy.Project{
 		{
-			ID:           "project-1",
-			Name:         "Test Project 1",
-			APIKey: "test-api-key-1",
-			CreatedAt:    time.Now().UTC().Truncate(time.Second),
-			UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+			ID:        "project-1",
+			Name:      "Test Project 1",
+			APIKey:    "test-api-key-1",
+			CreatedAt: time.Now().UTC().Truncate(time.Second),
+			UpdatedAt: time.Now().UTC().Truncate(time.Second),
 		},
 		{
-			ID:           "project-2",
-			Name:         "Test Project 2",
-			APIKey: "test-api-key-2",
-			CreatedAt:    time.Now().UTC().Truncate(time.Second),
-			UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+			ID:        "project-2",
+			Name:      "Test Project 2",
+			APIKey:    "test-api-key-2",
+			CreatedAt: time.Now().UTC().Truncate(time.Second),
+			UpdatedAt: time.Now().UTC().Truncate(time.Second),
 		},
 	}
 
@@ -226,11 +226,11 @@ func TestDBTokenStoreAdapter_RevokeExpiredTokens(t *testing.T) {
 
 	// Create a test project first
 	project := proxy.Project{
-		ID:           "project-1",
-		Name:         "Test Project",
-		APIKey: "test-api-key",
-		CreatedAt:    time.Now().UTC().Truncate(time.Second),
-		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		ID:        "project-1",
+		Name:      "Test Project",
+		APIKey:    "test-api-key",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 	err := db.CreateProject(ctx, project)
 	if err != nil {
@@ -299,11 +299,11 @@ func TestDBTokenStoreAdapter_RevokeToken_Idempotency(t *testing.T) {
 
 	// Create a test project first
 	project := proxy.Project{
-		ID:           "test-project",
-		Name:         "Test Project",
-		APIKey: "test-api-key",
-		CreatedAt:    time.Now().UTC().Truncate(time.Second),
-		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		ID:        "test-project",
+		Name:      "Test Project",
+		APIKey:    "test-api-key",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 	err := db.CreateProject(ctx, project)
 	if err != nil {
@@ -363,11 +363,11 @@ func TestDBTokenStoreAdapter_DeleteToken(t *testing.T) {
 
 	// Create a test project first
 	project := proxy.Project{
-		ID:           "test-project-delete",
-		Name:         "Test Project",
-		APIKey: "test-api-key",
-		CreatedAt:    time.Now().UTC().Truncate(time.Second),
-		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		ID:        "test-project-delete",
+		Name:      "Test Project",
+		APIKey:    "test-api-key",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 	err := db.CreateProject(ctx, project)
 	if err != nil {
@@ -426,18 +426,18 @@ func TestDBTokenStoreAdapter_DeleteToken_Comprehensive(t *testing.T) {
 	// Create test projects
 	projects := []proxy.Project{
 		{
-			ID:           "project-del-1",
-			Name:         "Test Project 1",
-			APIKey: "test-api-key-1",
-			CreatedAt:    time.Now().UTC().Truncate(time.Second),
-			UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+			ID:        "project-del-1",
+			Name:      "Test Project 1",
+			APIKey:    "test-api-key-1",
+			CreatedAt: time.Now().UTC().Truncate(time.Second),
+			UpdatedAt: time.Now().UTC().Truncate(time.Second),
 		},
 		{
-			ID:           "project-del-2",
-			Name:         "Test Project 2",
-			APIKey: "test-api-key-2",
-			CreatedAt:    time.Now().UTC().Truncate(time.Second),
-			UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+			ID:        "project-del-2",
+			Name:      "Test Project 2",
+			APIKey:    "test-api-key-2",
+			CreatedAt: time.Now().UTC().Truncate(time.Second),
+			UpdatedAt: time.Now().UTC().Truncate(time.Second),
 		},
 	}
 
@@ -540,11 +540,11 @@ func TestDBTokenStoreAdapter_RevokeExpiredTokens_EdgeCases(t *testing.T) {
 
 	// Create a test project first
 	project := proxy.Project{
-		ID:           "project-edge",
-		Name:         "Test Project",
-		APIKey: "test-api-key",
-		CreatedAt:    time.Now().UTC().Truncate(time.Second),
-		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		ID:        "project-edge",
+		Name:      "Test Project",
+		APIKey:    "test-api-key",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 	err := db.CreateProject(ctx, project)
 	if err != nil {
@@ -618,11 +618,11 @@ func TestDBTokenStoreAdapter_RevokeBatchTokens_EmptyAndDuplicates(t *testing.T) 
 
 	// Create a test project and token
 	project := proxy.Project{
-		ID:           "project-dup",
-		Name:         "Test Project",
-		APIKey: "test-api-key",
-		CreatedAt:    time.Now().UTC().Truncate(time.Second),
-		UpdatedAt:    time.Now().UTC().Truncate(time.Second),
+		ID:        "project-dup",
+		Name:      "Test Project",
+		APIKey:    "test-api-key",
+		CreatedAt: time.Now().UTC().Truncate(time.Second),
+		UpdatedAt: time.Now().UTC().Truncate(time.Second),
 	}
 	err = db.CreateProject(ctx, project)
 	if err != nil {

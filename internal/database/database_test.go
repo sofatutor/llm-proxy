@@ -56,11 +56,11 @@ func TestSQLite_TimestampsRoundTripAsUTC(t *testing.T) {
 
 			ctx := context.Background()
 			project := proxy.Project{
-				ID:           "test-project-utc-roundtrip",
-				Name:         "Test Project",
-				APIKey: "test-api-key",
-				CreatedAt:    fixedUTC,
-				UpdatedAt:    fixedUTC,
+				ID:        "test-project-utc-roundtrip",
+				Name:      "Test Project",
+				APIKey:    "test-api-key",
+				CreatedAt: fixedUTC,
+				UpdatedAt: fixedUTC,
 			}
 
 			if err := db.CreateProject(ctx, project); err != nil {
@@ -100,11 +100,11 @@ func TestSQLite_TokenLastUsedAt_NotShiftedByLocalTimezone(t *testing.T) {
 	ctx := context.Background()
 	fixedUTC := time.Date(2025, 12, 14, 13, 38, 0, 0, time.UTC).Truncate(time.Second)
 	project := proxy.Project{
-		ID:           "test-project-token-last-used-at",
-		Name:         "Test Project",
-		APIKey: "test-api-key",
-		CreatedAt:    fixedUTC,
-		UpdatedAt:    fixedUTC,
+		ID:        "test-project-token-last-used-at",
+		Name:      "Test Project",
+		APIKey:    "test-api-key",
+		CreatedAt: fixedUTC,
+		UpdatedAt: fixedUTC,
 	}
 	if err := db.CreateProject(ctx, project); err != nil {
 		t.Fatalf("CreateProject failed: %v", err)
