@@ -119,9 +119,10 @@ func (d *DB) MaintainDatabase(ctx context.Context) error {
 	}
 
 	if d.driver == DriverMySQL {
-		// MySQL uses OPTIMIZE TABLE
-		// Note: This is a simplified version. In production, you would need to
-		// iterate over all tables and run OPTIMIZE TABLE for each one.
+		// MySQL maintenance: Run ANALYZE on core tables to update optimizer statistics.
+		// Note: This is a simplified version with hardcoded core tables.
+		// TODO: In production, query information_schema to get all tables dynamically
+		// or accept table names as a parameter for better maintainability.
 		_, err := d.db.ExecContext(ctx, "ANALYZE TABLE tokens, projects, audit_logs")
 		if err != nil {
 			return fmt.Errorf("failed to analyze tables: %w", err)
