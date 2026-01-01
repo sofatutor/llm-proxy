@@ -4,6 +4,7 @@
 
 -- Step 1: Rename the column (idempotent).
 -- Some environments may already have `api_key` (e.g., when the base schema was updated).
+-- +goose StatementBegin
 DO $$
 BEGIN
   IF EXISTS (
@@ -25,10 +26,12 @@ BEGIN
   END IF;
 END
 $$;
+-- +goose StatementEnd
 
 -- +goose Down
 -- Rollback: Rename api_key back to openai_api_key (PostgreSQL)
 
+-- +goose StatementBegin
 DO $$
 BEGIN
   IF EXISTS (
@@ -50,3 +53,4 @@ BEGIN
   END IF;
 END
 $$;
+-- +goose StatementEnd
