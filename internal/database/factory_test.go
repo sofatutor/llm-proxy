@@ -22,6 +22,7 @@ func TestDriverType_Constants(t *testing.T) {
 	// Verify constants are correctly defined
 	assert.Equal(t, DriverType("sqlite"), DriverSQLite)
 	assert.Equal(t, DriverType("postgres"), DriverPostgres)
+	assert.Equal(t, DriverType("mysql"), DriverMySQL)
 }
 
 func TestDefaultFullConfig(t *testing.T) {
@@ -104,6 +105,21 @@ func TestConfigFromEnv(t *testing.T) {
 			},
 		},
 		{
+			name: "mysql driver",
+			envVars: map[string]string{
+				"DB_DRIVER":    "mysql",
+				"DATABASE_URL": "user:password@tcp(localhost:3306)/dbname?parseTime=true",
+			},
+			expected: FullConfig{
+				Driver:          DriverMySQL,
+				Path:            "data/llm-proxy.db",
+				DatabaseURL:     "user:password@tcp(localhost:3306)/dbname?parseTime=true",
+				MaxOpenConns:    10,
+				MaxIdleConns:    5,
+				ConnMaxLifetime: time.Hour,
+			},
+		},
+		{
 			name: "uppercase driver",
 			envVars: map[string]string{
 				"DB_DRIVER": "POSTGRES",
@@ -148,7 +164,7 @@ func TestConfigFromEnv(t *testing.T) {
 		{
 			name: "invalid driver (defaults to sqlite)",
 			envVars: map[string]string{
-				"DB_DRIVER": "mysql",
+				"DB_DRIVER": "oracle",
 			},
 			expected: FullConfig{
 				Driver:          DriverSQLite, // default preserved for invalid driver
@@ -278,7 +294,7 @@ func TestNewFromConfig_SQLiteInMemory(t *testing.T) {
 
 func TestNewFromConfig_UnsupportedDriver(t *testing.T) {
 	config := FullConfig{
-		Driver: DriverType("mysql"),
+		Driver: DriverType("oracle"),
 	}
 
 	db, err := NewFromConfig(config)
@@ -358,7 +374,7 @@ func TestRunMigrationsForDriver_SQLiteError(t *testing.T) {
 func TestRunMigrationsForDriver_UnknownDialect(t *testing.T) {
 	err := runMigrationsForDriver(nil, "oracle")
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "database connection is nil")
+	assert.Contains(t, err.Error(), "migrations directory not found")
 }
 
 func TestRunMigrationsForDriver_PostgresNilDB(t *testing.T) {
