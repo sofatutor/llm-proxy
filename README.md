@@ -86,6 +86,7 @@ MANAGEMENT_TOKEN=your-secure-management-token ./bin/llm-proxy
 
 ## Configuration (Essentials)
 - `MANAGEMENT_TOKEN` (required): Admin API access
+- `ENCRYPTION_KEY`: Base64-encoded 32-byte key for encrypting API keys (AES-256-GCM) and hashing tokens (SHA-256). Strongly recommended for production. Generate with: `openssl rand -base64 32`
 - `LISTEN_ADDR`: Default `:8080`
 - `LOG_LEVEL`: Default `info`
 - `LOG_FILE`: Path to log file (stdout if empty)
@@ -351,6 +352,7 @@ Redis Streams provides at-least-once delivery, consumer groups, and automatic cr
 ## Security & Production Notes
 - Tokens support expiration, revocation, and rate limits
 - Management API protected by `MANAGEMENT_TOKEN`
+- **Enable encryption at rest** with `ENCRYPTION_KEY` to protect API keys and tokens in the database. See [Encryption Guide](docs/security/encryption.md)
 - Admin UI uses basic auth (`ADMIN_USER`, `ADMIN_PASSWORD`)
 - Logs stored locally and/or sent to external backends
 - Use HTTPS in production (via reverse proxy)
