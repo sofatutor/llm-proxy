@@ -63,6 +63,19 @@ CREATE INDEX idx_audit_ip_action ON audit_events(client_ip, action);
 
 -- +goose Down
 -- Rollback: Drop all tables and indexes
+DROP INDEX IF EXISTS idx_audit_ip_action ON audit_events;
+DROP INDEX IF EXISTS idx_audit_outcome ON audit_events;
+DROP INDEX IF EXISTS idx_audit_request_id ON audit_events;
+DROP INDEX IF EXISTS idx_audit_client_ip ON audit_events;
+DROP INDEX IF EXISTS idx_audit_project_id ON audit_events;
+DROP INDEX IF EXISTS idx_audit_action ON audit_events;
+DROP INDEX IF EXISTS idx_audit_timestamp ON audit_events;
 DROP TABLE IF EXISTS audit_events;
+
+DROP INDEX IF EXISTS idx_tokens_is_active ON tokens;
+DROP INDEX IF EXISTS idx_tokens_expires_at ON tokens;
+DROP INDEX IF EXISTS idx_tokens_project_id ON tokens;
 DROP TABLE IF EXISTS tokens;
+
+DROP INDEX IF EXISTS idx_projects_name ON projects;
 DROP TABLE IF EXISTS projects;

@@ -52,7 +52,16 @@ func (m *MigrationRunner) acquireMySQLLock() (func(), error) {
 			return release, nil
 		}
 
-		// Lock not acquired (timeout or already held), wait and retry
+		// Log the specific reason for failure for better debuggability
+		if result.Int64 == 0 {
+			// Timeout acquiring the lock for this attempt; will wait and retry
+			log.Printf("MySQL GET_LOCK timeout for lock %q after %d seconds (attempt %d/%d); retrying", lockName, lockTimeout, i+1, maxRetries)
+		} else {
+			// Unexpected non-success, non-timeout value; log for observability and retry
+			log.Printf("MySQL GET_LOCK returned unexpected value %d for lock %q (attempt %d/%d); retrying", result.Int64, lockName, i+1, maxRetries)
+		}
+
+		// Lock not acquired, wait and retry
 		if i < maxRetries-1 {
 			time.Sleep(retryDelay)
 		}

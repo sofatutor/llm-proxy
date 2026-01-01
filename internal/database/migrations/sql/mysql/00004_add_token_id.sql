@@ -18,17 +18,14 @@ ALTER TABLE tokens DROP PRIMARY KEY;
 ALTER TABLE tokens ADD PRIMARY KEY (id);
 
 -- Step 6: Add UNIQUE constraint on token (it's still unique, just not PK)
+-- Note: UNIQUE constraint automatically creates an index for authentication lookups
 ALTER TABLE tokens ADD CONSTRAINT tokens_token_unique UNIQUE (token);
-
--- Step 7: Add index on token for fast authentication lookups
-CREATE INDEX idx_tokens_token ON tokens(token);
 
 -- +goose Down
 -- Rollback: Revert to token as PRIMARY KEY (MySQL)
 -- WARNING: This reverts to the security-problematic design where secrets are in URLs
 
 -- Drop new constraints and indexes
-DROP INDEX idx_tokens_token ON tokens;
 ALTER TABLE tokens DROP INDEX tokens_token_unique;
 ALTER TABLE tokens DROP PRIMARY KEY;
 
