@@ -209,6 +209,17 @@ secrets:
       name: ""
       # Key within the Secret that contains the database URL
       key: "DATABASE_URL"
+  
+  # ENCRYPTION_KEY: Strongly recommended for production
+  # Encrypts API keys (AES-256-GCM) and hashes tokens (SHA-256)
+  # Generate with: openssl rand -base64 32
+  # Reference an existing Kubernetes Secret containing the encryption key
+  encryptionKey:
+    existingSecret:
+      # Name of the existing Kubernetes Secret
+      name: ""
+      # Key within the Secret that contains the encryption key
+      key: "ENCRYPTION_KEY"
 
 # PostgreSQL configuration
 # IMPORTANT: When using PostgreSQL (either in-cluster or external), ensure your Docker image

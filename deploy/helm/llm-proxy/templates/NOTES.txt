@@ -1,4 +1,5 @@
 {{- $managementTokenSecret := include "llm-proxy.managementTokenSecretName" . }}
+{{- $encryptionKeySecret := include "llm-proxy.encryptionKeySecretName" . }}
 {{- $dbDriver := .Values.env.DB_DRIVER | default "sqlite" }}
 {{- $postgresqlEnabled := .Values.postgresql.enabled }}
 {{- if not $managementTokenSecret }}
@@ -20,6 +21,30 @@ Please configure one of the following:
    helm upgrade {{ .Release.Name }} {{ .Chart.Name }} \
      --set secrets.create=true \
      --set-string secrets.data.managementToken="your-token"
+
+For more information, see the README.md in the chart directory.
+
+********************************************************************************
+{{- end }}
+
+{{- if not $encryptionKeySecret }}
+********************************************************************************
+****                       SECURITY WARNING                                 ****
+********************************************************************************
+
+ENCRYPTION_KEY is not configured!
+
+API keys and tokens will be stored in PLAINTEXT in the database.
+
+For production deployments, strongly consider enabling encryption:
+
+1. Create a secret with an encryption key:
+   kubectl create secret generic llm-proxy-encryption \
+     --from-literal=ENCRYPTION_KEY=$(openssl rand -base64 32)
+
+2. Configure the chart to use it:
+   helm upgrade {{ .Release.Name }} {{ .Chart.Name }} \
+     --set secrets.encryptionKey.existingSecret.name=llm-proxy-encryption
 
 For more information, see the README.md in the chart directory.
 

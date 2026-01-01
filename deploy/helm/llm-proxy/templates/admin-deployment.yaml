@@ -55,8 +55,9 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           {{- $managementTokenSecret := include "llm-proxy.managementTokenSecretName" . }}
+          {{- $encryptionKeySecret := include "llm-proxy.encryptionKeySecretName" . }}
           {{- $hasEnv := and (hasKey .Values "env") (gt (len .Values.env) 0) }}
-          {{- if or $hasEnv $managementTokenSecret }}
+          {{- if or $hasEnv $managementTokenSecret $encryptionKeySecret }}
           env:
           {{- if $hasEnv }}
           {{- range $key := keys .Values.env | sortAlpha }}
@@ -70,6 +71,13 @@ spec:
                 secretKeyRef:
                   name: {{ $managementTokenSecret }}
                   key: {{ include "llm-proxy.managementTokenSecretKey" . }}
+          {{- end }}
+          {{- if $encryptionKeySecret }}
+            - name: ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $encryptionKeySecret }}
+                  key: {{ include "llm-proxy.encryptionKeySecretKey" . }}
           {{- end }}
           {{- end }}
           {{- if .Values.volumeMounts }}

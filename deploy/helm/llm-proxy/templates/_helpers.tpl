@@ -111,6 +111,22 @@ Get the key within the secret for REDIS_PASSWORD
 {{- end }}
 
 {{/*
+Get the name of the secret containing ENCRYPTION_KEY
+*/}}
+{{- define "llm-proxy.encryptionKeySecretName" -}}
+{{- if .Values.secrets.encryptionKey.existingSecret.name }}
+{{- .Values.secrets.encryptionKey.existingSecret.name }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get the key within the secret for ENCRYPTION_KEY
+*/}}
+{{- define "llm-proxy.encryptionKeySecretKey" -}}
+{{- .Values.secrets.encryptionKey.existingSecret.key | default "ENCRYPTION_KEY" }}
+{{- end }}
+
+{{/*
 Get PostgreSQL hostname
 */}}
 {{- define "llm-proxy.postgresql.host" -}}
