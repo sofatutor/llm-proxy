@@ -10,11 +10,13 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Added
 
+- **Encryption Security Docs** ([#250](https://github.com/sofatutor/llm-proxy/pull/250)): Added comprehensive security guidance covering encryption, `.env` examples, AGENTS documentation, and troubleshooting so operators understand how to configure `ENCRYPTION_KEY` and migrate securely.
 - **MySQL Driver Integration** ([#247](https://github.com/sofatutor/llm-proxy/pull/247)): Introduces a build-tag gated MySQL driver with connection pooling, health checks, dynamic table discovery, and stub fallback so the proxy can optionally compile with MySQL support while maintaining PostgreSQL parity.
 - **Redis Dashboard Config** ([#239](https://github.com/sofatutor/llm-proxy/pull/239)): Added optional Redis metrics dashboard ConfigMap for Grafana sidecar discovery so the upstream Helm chart can ship the Redis exporter dashboard via `metrics.redisDashboard`.
 
 ### Changed
 
+- **Provider-Agnostic API Keys** ([#250](https://github.com/sofatutor/llm-proxy/pull/250)): Renamed `openai_api_key` to `api_key` across schema, migrations, CLI, API, admin UI, and tests while maintaining encryption, migration, and backward-compatibility behaviors so deployments remain provider-neutral without breaking existing installations.
 - **Admin Probe Defaults** ([#239](https://github.com/sofatutor/llm-proxy/pull/239)): Admin deployment now uses dedicated liveness/readiness probes targeting `/auth/login`, avoiding Helm rollout failures caused by reusing the main service probes.
 
 ## December 31, 2025
