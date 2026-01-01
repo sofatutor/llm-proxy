@@ -172,25 +172,25 @@ func encryptProjectAPIKeys(ctx context.Context, db *database.DB, encryptor *encr
 
 	for _, project := range projects {
 		// Skip if already encrypted
-		if encryption.IsEncrypted(project.OpenAIAPIKey) {
+		if encryption.IsEncrypted(project.APIKey) {
 			skipped++
 			continue
 		}
 
 		// Skip empty API keys
-		if project.OpenAIAPIKey == "" {
+		if project.APIKey == "" {
 			skipped++
 			continue
 		}
 
 		// Encrypt the API key
-		encryptedKey, err := encryptor.Encrypt(project.OpenAIAPIKey)
+		encryptedKey, err := encryptor.Encrypt(project.APIKey)
 		if err != nil {
 			return encrypted, skipped, fmt.Errorf("failed to encrypt API key for project %s: %w", project.ID, err)
 		}
 
 		// Update the project with encrypted key
-		project.OpenAIAPIKey = encryptedKey
+		project.APIKey = encryptedKey
 		if err := db.UpdateProject(ctx, project); err != nil {
 			return encrypted, skipped, fmt.Errorf("failed to update project %s: %w", project.ID, err)
 		}
@@ -264,9 +264,9 @@ func countProjectEncryptionStatus(ctx context.Context, db *database.DB) (encrypt
 	}
 
 	for _, project := range projects {
-		if encryption.IsEncrypted(project.OpenAIAPIKey) {
+		if encryption.IsEncrypted(project.APIKey) {
 			encrypted++
-		} else if project.OpenAIAPIKey != "" {
+		} else if project.APIKey != "" {
 			plaintext++
 		}
 	}

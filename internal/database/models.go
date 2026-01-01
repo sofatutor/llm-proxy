@@ -8,7 +8,7 @@ import (
 type Project struct {
 	ID            string     `json:"id"`
 	Name          string     `json:"name"`
-	OpenAIAPIKey  string     `json:"-"` // Sensitive data, not included in JSON
+	APIKey        string     `json:"-"` // Sensitive data, not included in JSON. Encrypted when ENCRYPTION_KEY is set.
 	IsActive      bool       `json:"is_active"`
 	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`

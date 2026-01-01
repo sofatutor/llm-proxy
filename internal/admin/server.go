@@ -360,8 +360,8 @@ func (s *Server) handleProjectsCreate(c *gin.Context) {
 	apiClient := c.MustGet("apiClient").(APIClientInterface)
 
 	var req struct {
-		Name         string `form:"name" binding:"required"`
-		OpenAIAPIKey string `form:"openai_api_key" binding:"required"`
+		Name   string `form:"name" binding:"required"`
+		APIKey string `form:"api_key" binding:"required"`
 	}
 
 	if err := c.ShouldBind(&req); err != nil {
@@ -382,7 +382,7 @@ func (s *Server) handleProjectsCreate(c *gin.Context) {
 	if ref := c.Request.Referer(); ref != "" {
 		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
 	}
-	project, err := apiClient.CreateProject(ctx, req.Name, req.OpenAIAPIKey)
+	project, err := apiClient.CreateProject(ctx, req.Name, req.APIKey)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "projects/new.html", gin.H{
 			"title":  "Create Project",
@@ -462,9 +462,9 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 	id := c.Param("id")
 
 	var req struct {
-		Name         string `form:"name" binding:"required"`
-		OpenAIAPIKey string `form:"openai_api_key"` // Optional - empty means keep existing
-		IsActive     *bool  `form:"is_active"`
+		Name   string `form:"name" binding:"required"`
+		APIKey string `form:"api_key"` // Optional - empty means keep existing
+		IsActive *bool `form:"is_active"`
 	}
 
 	if err := c.ShouldBind(&req); err != nil {
@@ -487,7 +487,7 @@ func (s *Server) handleProjectsUpdate(c *gin.Context) {
 	if ref := c.Request.Referer(); ref != "" {
 		ctx = context.WithValue(ctx, ctxKeyForwardedReferer, ref)
 	}
-	project, err := apiClient.UpdateProject(ctx, id, req.Name, req.OpenAIAPIKey, isActivePtr)
+	project, err := apiClient.UpdateProject(ctx, id, req.Name, req.APIKey, isActivePtr)
 	if err != nil {
 		c.HTML(http.StatusInternalServerError, "error.html", gin.H{
 			"error": fmt.Sprintf("Failed to update project: %v", err),

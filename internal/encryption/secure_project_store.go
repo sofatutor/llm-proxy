@@ -57,11 +57,11 @@ func (s *SecureProjectStore) ListProjects(ctx context.Context) ([]proxy.Project,
 
 	// Decrypt API keys for each project
 	for i := range projects {
-		decryptedKey, err := s.encryptor.Decrypt(projects[i].OpenAIAPIKey)
+		decryptedKey, err := s.encryptor.Decrypt(projects[i].APIKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decrypt API key for project %s: %w", projects[i].ID, err)
 		}
-		projects[i].OpenAIAPIKey = decryptedKey
+		projects[i].APIKey = decryptedKey
 	}
 
 	return projects, nil
@@ -70,12 +70,12 @@ func (s *SecureProjectStore) ListProjects(ctx context.Context) ([]proxy.Project,
 // CreateProject encrypts the API key and creates the project.
 func (s *SecureProjectStore) CreateProject(ctx context.Context, project proxy.Project) error {
 	// Encrypt the API key before storing
-	encryptedKey, err := s.encryptor.Encrypt(project.OpenAIAPIKey)
+	encryptedKey, err := s.encryptor.Encrypt(project.APIKey)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt API key: %w", err)
 	}
 
-	project.OpenAIAPIKey = encryptedKey
+	project.APIKey = encryptedKey
 	return s.store.CreateProject(ctx, project)
 }
 
@@ -87,24 +87,24 @@ func (s *SecureProjectStore) GetProjectByID(ctx context.Context, projectID strin
 	}
 
 	// Decrypt the API key
-	decryptedKey, err := s.encryptor.Decrypt(project.OpenAIAPIKey)
+	decryptedKey, err := s.encryptor.Decrypt(project.APIKey)
 	if err != nil {
 		return proxy.Project{}, fmt.Errorf("failed to decrypt API key: %w", err)
 	}
 
-	project.OpenAIAPIKey = decryptedKey
+	project.APIKey = decryptedKey
 	return project, nil
 }
 
 // UpdateProject encrypts the API key and updates the project.
 func (s *SecureProjectStore) UpdateProject(ctx context.Context, project proxy.Project) error {
 	// Only encrypt if the API key is not already encrypted
-	if !IsEncrypted(project.OpenAIAPIKey) {
-		encryptedKey, err := s.encryptor.Encrypt(project.OpenAIAPIKey)
+	if !IsEncrypted(project.APIKey) {
+		encryptedKey, err := s.encryptor.Encrypt(project.APIKey)
 		if err != nil {
 			return fmt.Errorf("failed to encrypt API key: %w", err)
 		}
-		project.OpenAIAPIKey = encryptedKey
+		project.APIKey = encryptedKey
 	}
 
 	return s.store.UpdateProject(ctx, project)
