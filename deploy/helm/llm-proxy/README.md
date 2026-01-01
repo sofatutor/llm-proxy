@@ -639,6 +639,49 @@ env:
 | `secrets.managementToken.existingSecret.key` | Key within the Secret for management token | `"MANAGEMENT_TOKEN"` |
 | `secrets.databaseUrl.existingSecret.name` | Name of existing Secret containing DATABASE_URL (for external PostgreSQL) | `""` |
 | `secrets.databaseUrl.existingSecret.key` | Key within the Secret for database URL | `"DATABASE_URL"` |
+| `secrets.encryptionKey.existingSecret.name` | Name of existing Secret containing ENCRYPTION_KEY (strongly recommended for production) | `""` |
+| `secrets.encryptionKey.existingSecret.key` | Key within the Secret for encryption key | `"ENCRYPTION_KEY"` |
+
+#### Encryption Key Configuration (Recommended for Production)
+
+The `ENCRYPTION_KEY` is used to encrypt API keys (AES-256-GCM) and hash tokens (SHA-256) stored in the database. Without this key, sensitive data is stored in plaintext.
+
+**To enable encryption:**
+
+1. Generate a secure encryption key:
+```bash
+openssl rand -base64 32
+```
+
+2. Create a Kubernetes Secret:
+```bash
+kubectl create secret generic llm-proxy-encryption \
+  --from-literal=ENCRYPTION_KEY=$(openssl rand -base64 32)
+```
+
+3. Configure the chart to use it:
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set secrets.encryptionKey.existingSecret.name=llm-proxy-encryption
+```
+
+Or via values.yaml:
+```yaml
+secrets:
+  managementToken:
+    existingSecret:
+      name: llm-proxy-secrets
+  encryptionKey:
+    existingSecret:
+      name: llm-proxy-encryption
+      key: ENCRYPTION_KEY
+```
+
+**Important:** Without `ENCRYPTION_KEY`, the application will still function but will store API keys and tokens in plaintext. A warning will be displayed during installation.
+
 
 ### Dispatcher Configuration
 

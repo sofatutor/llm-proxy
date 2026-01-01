@@ -52,8 +52,9 @@ spec:
         {{- $managementTokenSecret := include "llm-proxy.managementTokenSecretName" . }}
         {{- $databaseUrlSecret := include "llm-proxy.databaseUrlSecretName" . }}
         {{- $redisPasswordSecret := include "llm-proxy.redisPasswordSecretName" . }}
+        {{- $encryptionKeySecret := include "llm-proxy.encryptionKeySecretName" . }}
         {{- $postgresqlEnabled := .Values.postgresql.enabled }}
-        {{- if or .Values.env $managementTokenSecret $databaseUrlSecret $postgresqlEnabled .Values.redis.external.addr $redisPasswordSecret }}
+        {{- if or .Values.env $managementTokenSecret $databaseUrlSecret $postgresqlEnabled .Values.redis.external.addr $redisPasswordSecret $encryptionKeySecret }}
         env:
         {{- if .Values.env }}
         {{- range $key := keys .Values.env | sortAlpha }}
@@ -67,6 +68,13 @@ spec:
             secretKeyRef:
               name: {{ $managementTokenSecret }}
               key: {{ include "llm-proxy.managementTokenSecretKey" . }}
+        {{- end }}
+        {{- if $encryptionKeySecret }}
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ $encryptionKeySecret }}
+              key: {{ include "llm-proxy.encryptionKeySecretKey" . }}
         {{- end }}
         {{- if $postgresqlEnabled }}
         - name: PGPASSWORD
