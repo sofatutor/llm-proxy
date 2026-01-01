@@ -48,28 +48,26 @@
                     </div>
 
                     <div class="mb-3">
-                        <label for="openai_api_key" class="form-label">
-                            OpenAI API Key <span class="text-muted">(optional)</span>
+                        <label for="api_key" class="form-label">
+                            API Key <span class="text-muted">(optional)</span>
                         </label>
                         <div class="input-group">
                             <input type="password" 
                                    class="form-control" 
-                                   id="openai_api_key" 
-                                   name="openai_api_key" 
+                                   id="api_key" 
+                                   name="api_key" 
                                    placeholder="sk-... (leave empty to keep existing)"
                                    value="">
                             <button class="btn btn-outline-secondary" 
                                     type="button" 
-                                    onclick="togglePassword('openai_api_key')">
-                                <i class="bi bi-eye" id="openai_api_key_icon"></i>
+                                    onclick="togglePassword('api_key')">
+                                <i class="bi bi-eye" id="api_key_icon"></i>
                             </button>
                         </div>
                         <div class="form-text">
                             <i class="bi bi-shield-lock"></i>
                             Leave empty to keep the existing API key. Only enter a new key if you want to update it.
-                            <a href="https://platform.openai.com/api-keys" target="_blank" class="text-decoration-none">
-                                Get your API key here <i class="bi bi-box-arrow-up-right"></i>
-                            </a>
+                            Get your API key from your provider (e.g., OpenAI, Anthropic, etc.).
                         </div>
                     </div>
 

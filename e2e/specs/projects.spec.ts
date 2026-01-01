@@ -95,7 +95,7 @@ test.describe('Projects Management', () => {
     if (currentUrl.includes('/projects/new')) {
       // HTML5 validation prevented submission
       const nameInput = page.locator('#name');
-      const apiKeyInput = page.locator('#openai_api_key');
+      const apiKeyInput = page.locator('#api_key');
       
       // Check for HTML5 validation messages
       const nameValidation = await nameInput.evaluate((el: HTMLInputElement) => el.validationMessage);
@@ -113,7 +113,7 @@ test.describe('Projects Management', () => {
     await page.goto('/projects/new');
     
     // Leave name empty and fill other fields
-    await page.fill('#openai_api_key', 'sk-test-key');
+    await page.fill('#api_key', 'sk-test-key');
     await page.click('button:has-text("Create Project")');
     
     // Should either prevent submission or show error
@@ -132,7 +132,7 @@ test.describe('Projects Management', () => {
     
     // Fill with invalid API key format
     await page.fill('#name', 'Test Project');
-    await page.fill('#openai_api_key', 'invalid-key-format');
+    await page.fill('#api_key', 'invalid-key-format');
     await page.click('button:has-text("Create Project")');
     
     // Should either stay on form or redirect (depending on validation implementation)
@@ -165,7 +165,7 @@ test.describe('Projects Management', () => {
     
     // Update with valid data to avoid logout issues
     await page.fill('#name', 'Updated Project');
-    await page.fill('#openai_api_key', 'sk-test-valid-key');
+    await page.fill('#api_key', 'sk-test-valid-key');
     await page.click('button:has-text("Update Project")');
     
     // Should redirect to the project page
@@ -177,7 +177,7 @@ test.describe('Projects Management', () => {
     
     // Fill form with valid data
     await page.fill('#name', 'New Test Project');
-    await page.fill('#openai_api_key', 'sk-test-valid-key');
+    await page.fill('#api_key', 'sk-test-valid-key');
     
     // Submit form (be specific to avoid logout button)
     const submitButton = page.locator('button:has-text("Create Project")');

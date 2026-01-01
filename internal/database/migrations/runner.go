@@ -132,7 +132,7 @@ func (m *MigrationRunner) Version() (int64, error) {
 }
 
 // detectDriver detects the database driver from the connection.
-// Returns the goose dialect name: "sqlite3" or "postgres".
+// Returns the goose dialect name: "sqlite3", "postgres", or "mysql".
 func (m *MigrationRunner) detectDriver() (string, error) {
 	if m.db == nil {
 		return "", fmt.Errorf("database connection is nil")
@@ -158,6 +158,11 @@ func (m *MigrationRunner) detectDriver() (string, error) {
 		return "postgres", nil
 	}
 
+	// Detect MySQL (common driver: go-sql-driver/mysql)
+	if driverType == "*mysql.MySQLDriver" {
+		return "mysql", nil
+	}
+
 	// Try to detect via database-specific queries
 	// First, try PostgreSQL-specific query
 	var version string
@@ -165,6 +170,14 @@ func (m *MigrationRunner) detectDriver() (string, error) {
 	if pgErr == nil && strings.HasPrefix(version, "PostgreSQL") {
 		// version() is PostgreSQL-specific and returns something like "PostgreSQL 15.x ..."
 		return "postgres", nil
+	}
+
+	// Try MySQL-specific query
+	var mysqlVersion string
+	mysqlErr := m.db.QueryRow("SELECT VERSION()").Scan(&mysqlVersion)
+	if mysqlErr == nil && (strings.Contains(mysqlVersion, "MySQL") || strings.Contains(mysqlVersion, "MariaDB")) {
+		// MySQL and MariaDB return version strings containing "MySQL" or "MariaDB"
+		return "mysql", nil
 	}
 
 	// Try SQLite-specific pragma
@@ -191,6 +204,8 @@ func (m *MigrationRunner) acquireMigrationLock() (func(), error) {
 		return m.acquireSQLiteLock()
 	case "postgres":
 		return m.acquirePostgresLock()
+	case "mysql":
+		return m.acquireMySQLLock()
 	default:
 		return m.acquireSQLiteLock() // Default to SQLite lock for backward compatibility
 	}

@@ -52,12 +52,12 @@ func ObfuscateToken(token string) string { return obfuscate.ObfuscateTokenGeneri
 
 // Project represents a project from the Management API
 type Project struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	OpenAIAPIKey string    `json:"openai_api_key"`
-	IsActive     bool      `json:"is_active"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	APIKey    string    `json:"api_key"`
+	IsActive  bool      `json:"is_active"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // Token represents a token from the Management API (sanitized)
@@ -231,10 +231,10 @@ func (c *APIClient) GetProject(ctx context.Context, id string) (*Project, error)
 }
 
 // CreateProject creates a new project
-func (c *APIClient) CreateProject(ctx context.Context, name, openaiAPIKey string) (*Project, error) {
+func (c *APIClient) CreateProject(ctx context.Context, name, apiKey string) (*Project, error) {
 	payload := map[string]string{
-		"name":           name,
-		"openai_api_key": openaiAPIKey,
+		"name":    name,
+		"api_key": apiKey,
 	}
 
 	req, err := c.newRequest(ctx, "POST", "/manage/projects", payload)
@@ -251,13 +251,13 @@ func (c *APIClient) CreateProject(ctx context.Context, name, openaiAPIKey string
 }
 
 // UpdateProject updates an existing project
-func (c *APIClient) UpdateProject(ctx context.Context, id, name, openaiAPIKey string, isActive *bool) (*Project, error) {
+func (c *APIClient) UpdateProject(ctx context.Context, id, name, apiKey string, isActive *bool) (*Project, error) {
 	payload := map[string]interface{}{}
 	if name != "" {
 		payload["name"] = name
 	}
-	if openaiAPIKey != "" {
-		payload["openai_api_key"] = openaiAPIKey
+	if apiKey != "" {
+		payload["api_key"] = apiKey
 	}
 	if isActive != nil {
 		payload["is_active"] = *isActive

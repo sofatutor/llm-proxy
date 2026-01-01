@@ -104,6 +104,35 @@ LOG_LEVEL=info                 → Logging verbosity
 OBSERVABILITY_BUFFER_SIZE=1000 → Event bus buffer size
 ```
 
+### **Encryption at Rest (CRITICAL for Production)**
+
+```bash
+ENCRYPTION_KEY=<base64-encoded-32-bytes>
+```
+
+**Purpose**: Protects sensitive data in the database
+- **API Keys**: Encrypted with AES-256-GCM (reversible for upstream calls)
+- **Tokens**: Hashed with SHA-256 (irreversible, secure lookups)
+
+**Setup**:
+```bash
+# Generate a secure key
+export ENCRYPTION_KEY=$(openssl rand -base64 32)
+
+# Encrypt existing plaintext data (idempotent)
+llm-proxy migrate encrypt
+
+# Verify encryption status
+llm-proxy migrate encrypt-status
+```
+
+**⚠️ Security Notes**:
+- **REQUIRED** for production deployments
+- Store key securely (KMS/Vault recommended)
+- Never commit to version control
+- Backup separately from database backups
+- See `docs/security/encryption.md` for full details
+
 ---
 
 ## 🏗️ Repository Structure & Focus

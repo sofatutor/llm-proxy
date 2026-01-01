@@ -628,9 +628,9 @@ func init() {
 				out, _ := json.MarshalIndent(projects, "", "  ")
 				fmt.Println(string(out))
 			} else {
-				fmt.Printf("%-36s  %-20s  %-32s  %-20s  %-20s\n", "ID", "Name", "OpenAI Key", "Created", "Updated")
+				fmt.Printf("%-36s  %-20s  %-32s  %-20s  %-20s\n", "ID", "Name", "API Key", "Created", "Updated")
 				for _, p := range projects {
-					fmt.Printf("%-36s  %-20s  %-32s  %-20s  %-20s\n", p.ID, p.Name, api.ObfuscateKey(p.OpenAIAPIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
+					fmt.Printf("%-36s  %-20s  %-32s  %-20s  %-20s\n", p.ID, p.Name, api.ObfuscateKey(p.APIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
 				}
 			}
 			return nil
@@ -678,7 +678,7 @@ func init() {
 				out, _ := json.MarshalIndent(p, "", "  ")
 				fmt.Println(string(out))
 			} else {
-				fmt.Printf("ID: %s\nName: %s\nOpenAI Key: %s\nCreated: %s\nUpdated: %s\n", p.ID, p.Name, api.ObfuscateKey(p.OpenAIAPIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
+				fmt.Printf("ID: %s\nName: %s\nAPI Key: %s\nCreated: %s\nUpdated: %s\n", p.ID, p.Name, api.ObfuscateKey(p.APIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
 			}
 			return nil
 		},
@@ -700,7 +700,7 @@ func init() {
 			if name == "" || openaiKey == "" {
 				return fmt.Errorf("--name and --openai-key are required")
 			}
-			body := api.ProjectCreateRequest{Name: name, OpenAIAPIKey: openaiKey}
+			body := api.ProjectCreateRequest{Name: name, APIKey: openaiKey}
 			jsonBody, _ := json.Marshal(body)
 			url := manageAPIBaseURL + "/manage/projects"
 			req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
@@ -731,7 +731,7 @@ func init() {
 				out, _ := json.MarshalIndent(p, "", "  ")
 				fmt.Println(string(out))
 			} else {
-				fmt.Printf("ID: %s\nName: %s\nOpenAI Key: %s\nCreated: %s\nUpdated: %s\n", p.ID, p.Name, api.ObfuscateKey(p.OpenAIAPIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
+				fmt.Printf("ID: %s\nName: %s\nAPI Key: %s\nCreated: %s\nUpdated: %s\n", p.ID, p.Name, api.ObfuscateKey(p.APIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
 			}
 			return nil
 		},
@@ -762,7 +762,7 @@ func init() {
 				body["name"] = name
 			}
 			if openaiKey != "" {
-				body["openai_api_key"] = openaiKey
+				body["api_key"] = openaiKey
 			}
 			jsonBody, _ := json.Marshal(body)
 			url := fmt.Sprintf("%s/manage/projects/%s", manageAPIBaseURL, id)
@@ -794,7 +794,7 @@ func init() {
 				out, _ := json.MarshalIndent(p, "", "  ")
 				fmt.Println(string(out))
 			} else {
-				fmt.Printf("ID: %s\nName: %s\nOpenAI Key: %s\nCreated: %s\nUpdated: %s\n", p.ID, p.Name, api.ObfuscateKey(p.OpenAIAPIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
+				fmt.Printf("ID: %s\nName: %s\nAPI Key: %s\nCreated: %s\nUpdated: %s\n", p.ID, p.Name, api.ObfuscateKey(p.APIKey), p.CreatedAt.Format("2006-01-02 15:04"), p.UpdatedAt.Format("2006-01-02 15:04"))
 			}
 			return nil
 		},

@@ -65,7 +65,7 @@ func TestManagementAPI_Integration(t *testing.T) {
 	}
 
 	// 1. Create Project
-	projReq := map[string]string{"name": "Integration Project", "openai_api_key": "sk-test"}
+	projReq := map[string]string{"name": "Integration Project", "api_key": "sk-test"}
 	projBody, _ := json.Marshal(projReq)
 	req, _ := http.NewRequest("POST", ts.URL+"/manage/projects", bytes.NewReader(projBody))
 	for k, v := range headers {

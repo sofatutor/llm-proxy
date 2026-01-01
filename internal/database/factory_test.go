@@ -247,11 +247,13 @@ func TestMigrationsPathForDriver(t *testing.T) {
 		assert.Equal(t, "migrations", filepath.Base(filepath.Dir(filepath.Dir(path))))
 	})
 
-	t.Run("mysql_returns_error_until_mysql_migrations_exist", func(t *testing.T) {
+	t.Run("mysql_returns_mysql_migrations_dir", func(t *testing.T) {
 		path, err := MigrationsPathForDriver(DriverMySQL)
-		require.Error(t, err)
-		assert.Empty(t, path)
-		assert.Contains(t, err.Error(), "migrations directory not found")
+		require.NoError(t, err)
+		require.NotEmpty(t, path)
+		assert.Equal(t, "mysql", filepath.Base(path))
+		assert.Equal(t, "sql", filepath.Base(filepath.Dir(path)))
+		assert.Equal(t, "migrations", filepath.Base(filepath.Dir(filepath.Dir(path))))
 	})
 }
 
@@ -663,12 +665,12 @@ func TestSQLiteRegressionAfterPostgresSupport(t *testing.T) {
 	projectID := "test-project-1"
 	now := time.Now()
 	err = db.DBCreateProject(ctx, Project{
-		ID:           projectID,
-		Name:         "Test Project",
-		OpenAIAPIKey: "sk-test-key",
-		IsActive:     true,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:        projectID,
+		Name:      "Test Project",
+		APIKey:    "sk-test-key",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
 	require.NoError(t, err)
 
@@ -730,12 +732,12 @@ func TestDB_ExecContextRebound(t *testing.T) {
 	now := time.Now()
 	projectID := "test-project"
 	err = db.DBCreateProject(ctx, Project{
-		ID:           projectID,
-		Name:         "Test",
-		OpenAIAPIKey: "key",
-		IsActive:     true,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:        projectID,
+		Name:      "Test",
+		APIKey:    "key",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
 	require.NoError(t, err)
 
@@ -779,12 +781,12 @@ func TestDB_QueryRowContextRebound(t *testing.T) {
 
 	projectID := "test-project"
 	err = db.DBCreateProject(ctx, Project{
-		ID:           projectID,
-		Name:         "TestQuery",
-		OpenAIAPIKey: "key",
-		IsActive:     true,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:        projectID,
+		Name:      "TestQuery",
+		APIKey:    "key",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
 	require.NoError(t, err)
 
@@ -823,12 +825,12 @@ func TestDB_QueryContextRebound(t *testing.T) {
 
 	projectID := "test-project"
 	err = db.DBCreateProject(ctx, Project{
-		ID:           projectID,
-		Name:         "TestQueryMulti",
-		OpenAIAPIKey: "key",
-		IsActive:     true,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:        projectID,
+		Name:      "TestQueryMulti",
+		APIKey:    "key",
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
 	})
 	require.NoError(t, err)
 

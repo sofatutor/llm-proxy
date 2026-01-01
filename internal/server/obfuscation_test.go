@@ -95,10 +95,10 @@ func TestObfuscation_TokenResponses(t *testing.T) {
 
 	t.Run("POST_TokenCreate_ReturnsFullToken", func(t *testing.T) {
 		projectStore.On("GetProjectByID", mock.Anything, "project-1").Return(proxy.Project{
-			ID:           "project-1",
-			Name:         "Test Project",
-			OpenAIAPIKey: "sk-test-key",
-			IsActive:     true,
+			ID:       "project-1",
+			Name:     "Test Project",
+			APIKey:   "sk-test-key",
+			IsActive: true,
 		}, nil)
 		tokenStore.On("CreateToken", mock.Anything, mock.AnythingOfType("token.TokenData")).Return(nil)
 
@@ -153,12 +153,12 @@ func TestObfuscation_ProjectResponses(t *testing.T) {
 	t.Run("GET_ProjectList_ReturnsObfuscatedAPIKeys", func(t *testing.T) {
 		projectStore.On("ListProjects", mock.Anything).Return([]proxy.Project{
 			{
-				ID:           "project-1",
-				Name:         "Test Project",
-				OpenAIAPIKey: fullAPIKey,
-				IsActive:     true,
-				CreatedAt:    time.Now(),
-				UpdatedAt:    time.Now(),
+				ID:        "project-1",
+				Name:      "Test Project",
+				APIKey:    fullAPIKey,
+				IsActive:  true,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
 			},
 		}, nil)
 
@@ -176,18 +176,18 @@ func TestObfuscation_ProjectResponses(t *testing.T) {
 		require.Len(t, response, 1)
 
 		// API key should be obfuscated
-		assert.NotEqual(t, fullAPIKey, response[0].OpenAIAPIKey, "API key should be obfuscated")
-		assert.Contains(t, response[0].OpenAIAPIKey, "...", "Obfuscated API key should contain ellipsis")
+		assert.NotEqual(t, fullAPIKey, response[0].APIKey, "API key should be obfuscated")
+		assert.Contains(t, response[0].APIKey, "...", "Obfuscated API key should contain ellipsis")
 	})
 
 	t.Run("GET_ProjectByID_ReturnsObfuscatedAPIKey", func(t *testing.T) {
 		projectStore.On("GetProjectByID", mock.Anything, "project-1").Return(proxy.Project{
-			ID:           "project-1",
-			Name:         "Test Project",
-			OpenAIAPIKey: fullAPIKey,
-			IsActive:     true,
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
+			ID:        "project-1",
+			Name:      "Test Project",
+			APIKey:    fullAPIKey,
+			IsActive:  true,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}, nil)
 
 		req := httptest.NewRequest("GET", "/manage/projects/project-1", nil)
@@ -203,29 +203,29 @@ func TestObfuscation_ProjectResponses(t *testing.T) {
 		require.NoError(t, err)
 
 		// API key should be obfuscated
-		assert.NotEqual(t, fullAPIKey, response.OpenAIAPIKey, "API key should be obfuscated")
-		assert.Contains(t, response.OpenAIAPIKey, "...", "Obfuscated API key should contain ellipsis")
+		assert.NotEqual(t, fullAPIKey, response.APIKey, "API key should be obfuscated")
+		assert.Contains(t, response.APIKey, "...", "Obfuscated API key should contain ellipsis")
 	})
 
 	t.Run("PATCH_Project_EmptyAPIKey_DoesNotUpdate", func(t *testing.T) {
 		existingProject := proxy.Project{
-			ID:           "project-1",
-			Name:         "Test Project",
-			OpenAIAPIKey: fullAPIKey,
-			IsActive:     true,
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
+			ID:        "project-1",
+			Name:      "Test Project",
+			APIKey:    fullAPIKey,
+			IsActive:  true,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 
 		projectStore.On("GetProjectByID", mock.Anything, "project-1").Return(existingProject, nil)
 		projectStore.On("UpdateProject", mock.Anything, mock.MatchedBy(func(p proxy.Project) bool {
 			// Verify that API key was NOT changed when empty string is sent
-			return p.OpenAIAPIKey == fullAPIKey
+			return p.APIKey == fullAPIKey
 		})).Return(nil)
 
 		reqBody := map[string]interface{}{
-			"name":           "Updated Name",
-			"openai_api_key": "", // Empty string should not update
+			"name":    "Updated Name",
+			"api_key": "", // Empty string should not update
 		}
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest("PATCH", "/manage/projects/project-1", bytes.NewReader(body))
@@ -239,29 +239,29 @@ func TestObfuscation_ProjectResponses(t *testing.T) {
 
 		// Verify UpdateProject was called
 		projectStore.AssertCalled(t, "UpdateProject", mock.Anything, mock.MatchedBy(func(p proxy.Project) bool {
-			return p.OpenAIAPIKey == fullAPIKey // Should still have original key
+			return p.APIKey == fullAPIKey // Should still have original key
 		}))
 	})
 
 	t.Run("PATCH_Project_WithAPIKey_DoesUpdate", func(t *testing.T) {
 		existingProject := proxy.Project{
-			ID:           "project-1",
-			Name:         "Test Project",
-			OpenAIAPIKey: fullAPIKey,
-			IsActive:     true,
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
+			ID:        "project-1",
+			Name:      "Test Project",
+			APIKey:    fullAPIKey,
+			IsActive:  true,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 
 		newAPIKey := "sk-proj-newkey9876543210"
 		projectStore.On("GetProjectByID", mock.Anything, "project-2").Return(existingProject, nil)
 		projectStore.On("UpdateProject", mock.Anything, mock.MatchedBy(func(p proxy.Project) bool {
 			// Verify that API key WAS changed when non-empty string is sent
-			return p.OpenAIAPIKey == newAPIKey
+			return p.APIKey == newAPIKey
 		})).Return(nil)
 
 		reqBody := map[string]interface{}{
-			"openai_api_key": newAPIKey,
+			"api_key": newAPIKey,
 		}
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest("PATCH", "/manage/projects/project-2", bytes.NewReader(body))
@@ -275,7 +275,7 @@ func TestObfuscation_ProjectResponses(t *testing.T) {
 
 		// Verify UpdateProject was called with new key
 		projectStore.AssertCalled(t, "UpdateProject", mock.Anything, mock.MatchedBy(func(p proxy.Project) bool {
-			return p.OpenAIAPIKey == newAPIKey
+			return p.APIKey == newAPIKey
 		}))
 	})
 
@@ -286,19 +286,19 @@ func TestObfuscation_ProjectResponses(t *testing.T) {
 		require.NoError(t, err)
 
 		existingProject := proxy.Project{
-			ID:           "project-3",
-			Name:         "Test Project",
-			OpenAIAPIKey: fullAPIKey,
-			IsActive:     true,
-			CreatedAt:    time.Now(),
-			UpdatedAt:    time.Now(),
+			ID:        "project-3",
+			Name:      "Test Project",
+			APIKey:    fullAPIKey,
+			IsActive:  true,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 
 		freshProjectStore.On("GetProjectByID", mock.Anything, "project-3").Return(existingProject, nil).Once()
 
 		// Try to update with obfuscated key
 		reqBody := map[string]interface{}{
-			"openai_api_key": "sk-proj-...xyz", // Obfuscated format
+			"api_key": "sk-proj-...xyz", // Obfuscated format
 		}
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest("PATCH", "/manage/projects/project-3", bytes.NewReader(body))
@@ -319,8 +319,8 @@ func TestObfuscation_ProjectResponses(t *testing.T) {
 	t.Run("POST_Project_RejectsObfuscatedKey", func(t *testing.T) {
 		// Try to create project with obfuscated key
 		reqBody := map[string]interface{}{
-			"name":           "New Project",
-			"openai_api_key": "sk-proj-****xyz", // Obfuscated format
+			"name":    "New Project",
+			"api_key": "sk-proj-****xyz", // Obfuscated format
 		}
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest("POST", "/manage/projects", bytes.NewReader(body))

@@ -671,7 +671,7 @@ func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request) {
 		sanitizedProjects[i] = ProjectResponse{
 			ID:            p.ID,
 			Name:          p.Name,
-			OpenAIAPIKey:  obfuscate.ObfuscateTokenGeneric(p.OpenAIAPIKey),
+			APIKey:        obfuscate.ObfuscateTokenGeneric(p.APIKey),
 			IsActive:      p.IsActive,
 			DeactivatedAt: p.DeactivatedAt,
 			CreatedAt:     p.CreatedAt,
@@ -693,8 +693,8 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	requestID := getRequestID(ctx)
 	var req struct {
-		Name         string `json:"name"`
-		OpenAIAPIKey string `json:"openai_api_key"`
+		Name   string `json:"name"`
+		APIKey string `json:"api_key"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.logger.Error("invalid request body", zap.Error(err), zap.String("request_id", requestID))
@@ -707,11 +707,11 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"invalid request body"}`, http.StatusBadRequest)
 		return
 	}
-	if req.Name == "" || req.OpenAIAPIKey == "" {
+	if req.Name == "" || req.APIKey == "" {
 		s.logger.Error(
 			"missing required fields",
 			zap.String("name", req.Name),
-			zap.Bool("api_key_provided", req.OpenAIAPIKey != ""),
+			zap.Bool("api_key_provided", req.APIKey != ""),
 			zap.String("request_id", requestID),
 		)
 
@@ -719,14 +719,14 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		_ = s.auditLogger.Log(s.auditEvent(audit.ActionProjectCreate, audit.ActorManagement, audit.ResultFailure, r, requestID).
 			WithDetail("validation_error", "missing required fields").
 			WithDetail("name_provided", req.Name != "").
-			WithDetail("api_key_provided", req.OpenAIAPIKey != ""))
+			WithDetail("api_key_provided", req.APIKey != ""))
 
-		http.Error(w, `{"error":"name and openai_api_key are required"}`, http.StatusBadRequest)
+		http.Error(w, `{"error":"name and api_key are required"}`, http.StatusBadRequest)
 		return
 	}
 
 	// Reject obfuscated keys to prevent data corruption
-	if strings.Contains(req.OpenAIAPIKey, "...") || strings.Contains(req.OpenAIAPIKey, "****") {
+	if strings.Contains(req.APIKey, "...") || strings.Contains(req.APIKey, "****") {
 		s.logger.Error("attempted to create project with obfuscated API key", zap.String("request_id", requestID))
 
 		// Audit: project creation failure - obfuscated key
@@ -739,12 +739,12 @@ func (s *Server) handleCreateProject(w http.ResponseWriter, r *http.Request) {
 	id := uuid.NewString()
 	now := time.Now().UTC()
 	project := proxy.Project{
-		ID:           id,
-		Name:         req.Name,
-		OpenAIAPIKey: req.OpenAIAPIKey,
-		IsActive:     true, // Projects are active by default
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		ID:        id,
+		Name:      req.Name,
+		APIKey:    req.APIKey,
+		IsActive:  true, // Projects are active by default
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 	if err := s.projectStore.CreateProject(ctx, project); err != nil {
 		s.logger.Error("failed to create project", zap.Error(err), zap.String("name", req.Name), zap.String("request_id", requestID))
@@ -792,7 +792,7 @@ func (s *Server) handleGetProject(w http.ResponseWriter, r *http.Request) {
 	response := ProjectResponse{
 		ID:            project.ID,
 		Name:          project.Name,
-		OpenAIAPIKey:  obfuscate.ObfuscateTokenGeneric(project.OpenAIAPIKey),
+		APIKey:        obfuscate.ObfuscateTokenGeneric(project.APIKey),
 		IsActive:      project.IsActive,
 		DeactivatedAt: project.DeactivatedAt,
 		CreatedAt:     project.CreatedAt,
@@ -823,7 +823,7 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Name         *string `json:"name,omitempty"`
-		OpenAIAPIKey *string `json:"openai_api_key,omitempty"`
+		APIKey       *string `json:"api_key,omitempty"`
 		IsActive     *bool   `json:"is_active,omitempty"`
 		RevokeTokens *bool   `json:"revoke_tokens,omitempty"`
 	}
@@ -872,9 +872,9 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 		project.Name = *req.Name
 		updatedFields = append(updatedFields, "name")
 	}
-	if req.OpenAIAPIKey != nil && *req.OpenAIAPIKey != "" {
+	if req.APIKey != nil && *req.APIKey != "" {
 		// Reject obfuscated keys to prevent data corruption
-		if strings.Contains(*req.OpenAIAPIKey, "...") || strings.Contains(*req.OpenAIAPIKey, "****") {
+		if strings.Contains(*req.APIKey, "...") || strings.Contains(*req.APIKey, "****") {
 			s.logger.Error("attempted to save obfuscated API key", zap.String("project_id", id))
 
 			// Audit: project update failure - obfuscated key
@@ -885,8 +885,8 @@ func (s *Server) handleUpdateProject(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"error":"cannot save obfuscated API key - please provide the full API key"}`, http.StatusBadRequest)
 			return
 		}
-		project.OpenAIAPIKey = *req.OpenAIAPIKey
-		updatedFields = append(updatedFields, "openai_api_key")
+		project.APIKey = *req.APIKey
+		updatedFields = append(updatedFields, "api_key")
 	}
 
 	// Handle project activation/deactivation

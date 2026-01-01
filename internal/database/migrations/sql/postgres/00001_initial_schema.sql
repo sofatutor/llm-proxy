@@ -6,7 +6,7 @@
 CREATE TABLE IF NOT EXISTS projects (
 	id TEXT PRIMARY KEY, -- Using TEXT for compatibility with SQLite; consider UUID type for PostgreSQL optimization
 	name TEXT NOT NULL UNIQUE,
-	openai_api_key TEXT NOT NULL, -- NOTE: Stored as plaintext. For production, consider encryption at rest or secret manager integration (see review comment #2580739426)
+	api_key TEXT NOT NULL, -- NOTE: Encrypted when ENCRYPTION_KEY is set (AES-256-GCM). Provider-agnostic naming.
 	is_active BOOLEAN NOT NULL DEFAULT TRUE,
 	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

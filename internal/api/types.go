@@ -5,17 +5,17 @@ import "time"
 
 // ProjectCreateRequest is the request body for creating a project.
 type ProjectCreateRequest struct {
-	Name         string `json:"name"`
-	OpenAIAPIKey string `json:"openai_api_key"`
+	Name   string `json:"name"`
+	APIKey string `json:"api_key"`
 }
 
 // ProjectCreateResponse is the response body for a created project.
 type ProjectCreateResponse struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	OpenAIAPIKey string    `json:"openai_api_key"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	APIKey    string    `json:"api_key"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // TokenCreateRequest is the request body for creating a token.
