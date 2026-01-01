@@ -1,0 +1,18 @@
+{{- if and .Values.metrics.enabled .Values.metrics.redisDashboard.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "llm-proxy.fullname" . }}-redis-dashboard
+  labels:
+    {{- include "llm-proxy.labels" . | nindent 4 }}
+    {{- with .Values.metrics.redisDashboard.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.metrics.redisDashboard.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  llm-proxy-redis.json: |-
+{{ .Files.Get "dashboards/llm-proxy-redis.json" | indent 4 }}
+{{- end }}

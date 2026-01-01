@@ -32,6 +32,21 @@ Operational dashboard for LLM Proxy metrics, designed for use with a Prometheus 
    - GC pause time rate
    - Memory allocation rate
 
+### llm-proxy-redis.json
+
+Redis exporter dashboard for monitoring Redis used by LLM Proxy (e.g., event bus + HTTP cache).
+
+**Panels include:**
+- Redis Up
+- Connected Clients
+- Memory Used
+- Commands Processed (ops/s)
+- Keyspace Hit Ratio
+
+**Assumptions:**
+- Uses a Prometheus datasource variable `DS_PROMETHEUS`.
+- Expects Prometheus job labels matching `llm-proxy-redis-(cache|events)-metrics`.
+
 ## Prerequisites
 
 - Grafana instance (version 8.0 or later recommended)
@@ -95,6 +110,14 @@ metrics:
 ```
 
 This creates a ConfigMap with the dashboard JSON and the `grafana_dashboard: "1"` label, which the Grafana sidecar will automatically discover and import.
+
+To also provision the Redis dashboard:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set metrics.enabled=true \
+  --set metrics.redisDashboard.enabled=true
+```
 
 **Manual ConfigMap creation:**
 
