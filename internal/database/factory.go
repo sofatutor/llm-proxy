@@ -30,15 +30,15 @@ const (
 
 // FullConfig contains the complete database configuration for all drivers.
 type FullConfig struct {
-	// Driver specifies which database driver to use (sqlite, postgres).
+	// Driver specifies which database driver to use (sqlite, postgres, mysql).
 	Driver DriverType
 	// SQLite-specific configuration
 	// Path is the path to the SQLite database file.
 	Path string
-	// PostgreSQL-specific configuration
-	// DatabaseURL is the PostgreSQL connection string.
+	// PostgreSQL and MySQL-specific configuration
+	// DatabaseURL is the PostgreSQL or MySQL connection string.
 	DatabaseURL string
-	// Connection pool settings (used by both drivers)
+	// Connection pool settings (used by all drivers)
 	// MaxOpenConns is the maximum number of open connections.
 	MaxOpenConns int
 	// MaxIdleConns is the maximum number of idle connections.
