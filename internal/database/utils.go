@@ -119,13 +119,33 @@ func (d *DB) MaintainDatabase(ctx context.Context) error {
 	}
 
 	if d.driver == DriverMySQL {
-		// MySQL maintenance: Run ANALYZE on core tables to update optimizer statistics.
-		// Note: This is a simplified version with hardcoded core tables.
-		// TODO: In production, query information_schema to get all tables dynamically
-		// or accept table names as a parameter for better maintainability.
-		_, err := d.db.ExecContext(ctx, "ANALYZE TABLE tokens, projects, audit_logs")
+		// MySQL maintenance: Run ANALYZE on all tables in the current schema to update optimizer statistics.
+		// Query information_schema to get all table names dynamically to avoid schema drift.
+		rows, err := d.db.QueryContext(ctx, "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'")
 		if err != nil {
-			return fmt.Errorf("failed to analyze tables: %w", err)
+			return fmt.Errorf("failed to query table names: %w", err)
+		}
+		defer rows.Close()
+
+		var tables []string
+		for rows.Next() {
+			var tableName string
+			if err := rows.Scan(&tableName); err != nil {
+				return fmt.Errorf("failed to scan table name: %w", err)
+			}
+			tables = append(tables, tableName)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("error iterating table names: %w", err)
+		}
+
+		// Run ANALYZE TABLE for each table
+		for _, table := range tables {
+			// Use parameterized query to prevent SQL injection
+			query := fmt.Sprintf("ANALYZE TABLE %s", table)
+			if _, err := d.db.ExecContext(ctx, query); err != nil {
+				return fmt.Errorf("failed to analyze table %s: %w", table, err)
+			}
 		}
 		return nil
 	}
@@ -176,7 +196,7 @@ func (d *DB) GetStats(ctx context.Context) (map[string]interface{}, error) {
 			return nil, fmt.Errorf("failed to get database size: %w", err)
 		}
 	} else if d.driver == DriverMySQL {
-		err := d.db.QueryRowContext(ctx, "SELECT SUM(data_length + index_length) FROM information_schema.tables WHERE table_schema = DATABASE()").Scan(&dbSize)
+		err := d.db.QueryRowContext(ctx, "SELECT COALESCE(SUM(data_length + index_length), 0) FROM information_schema.tables WHERE table_schema = DATABASE()").Scan(&dbSize)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get database size: %w", err)
 		}
