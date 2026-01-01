@@ -246,6 +246,13 @@ func TestMigrationsPathForDriver(t *testing.T) {
 		assert.Equal(t, "sql", filepath.Base(filepath.Dir(path)))
 		assert.Equal(t, "migrations", filepath.Base(filepath.Dir(filepath.Dir(path))))
 	})
+
+	t.Run("mysql_returns_error_until_mysql_migrations_exist", func(t *testing.T) {
+		path, err := MigrationsPathForDriver(DriverMySQL)
+		require.Error(t, err)
+		assert.Empty(t, path)
+		assert.Contains(t, err.Error(), "migrations directory not found")
+	})
 }
 
 func TestNewFromConfig_SQLite(t *testing.T) {
