@@ -10,11 +10,13 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Added
 
+- **Encryption Key Secret** ([#252](https://github.com/sofatutor/llm-proxy/pull/252)): Helm chart deployments can now inject `ENCRYPTION_KEY` from configured Kubernetes secrets across both main and admin pods, with new values and helper templates so encryption-at-rest can be enabled without manual environment overrides.
 - **MySQL Driver Integration** ([#247](https://github.com/sofatutor/llm-proxy/pull/247)): Introduces a build-tag gated MySQL driver with connection pooling, health checks, dynamic table discovery, and stub fallback so the proxy can optionally compile with MySQL support while maintaining PostgreSQL parity.
 - **Redis Dashboard Config** ([#239](https://github.com/sofatutor/llm-proxy/pull/239)): Added optional Redis metrics dashboard ConfigMap for Grafana sidecar discovery so the upstream Helm chart can ship the Redis exporter dashboard via `metrics.redisDashboard`.
 
 ### Changed
 
+- **Encryption Key Guidance** ([#252](https://github.com/sofatutor/llm-proxy/pull/252)): README, NOTES, and validation scripts now document the ENCRYPTION_KEY secret setup, warn when it is absent, and ensure both deployments honor custom key names so operators can follow secure defaults and verify the injection path.
 - **Admin Probe Defaults** ([#239](https://github.com/sofatutor/llm-proxy/pull/239)): Admin deployment now uses dedicated liveness/readiness probes targeting `/auth/login`, avoiding Helm rollout failures caused by reusing the main service probes.
 
 ## December 31, 2025
