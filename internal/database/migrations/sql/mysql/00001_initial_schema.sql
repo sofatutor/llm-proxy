@@ -6,7 +6,7 @@
 CREATE TABLE IF NOT EXISTS projects (
 	id VARCHAR(191) PRIMARY KEY, -- VARCHAR for compatibility; 191 chars max for utf8mb4 indexes
 	name VARCHAR(255) NOT NULL UNIQUE,
-	openai_api_key TEXT NOT NULL, -- NOTE: Stored as plaintext. For production, consider encryption at rest or secret manager integration (see review comment #2580739426)
+	api_key TEXT NOT NULL, -- NOTE: Encrypted when ENCRYPTION_KEY is set (AES-256-GCM). Provider-agnostic naming.
 	is_active BOOLEAN NOT NULL DEFAULT TRUE,
 	created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
 	updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
