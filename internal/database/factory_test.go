@@ -444,6 +444,12 @@ func TestDB_RebindQuery(t *testing.T) {
 			expected: "SELECT * FROM tokens WHERE token = ?",
 		},
 		{
+			name:     "MySQL no change",
+			driver:   DriverMySQL,
+			query:    "SELECT * FROM tokens WHERE token = ?",
+			expected: "SELECT * FROM tokens WHERE token = ?",
+		},
+		{
 			name:     "PostgreSQL single placeholder",
 			driver:   DriverPostgres,
 			query:    "SELECT * FROM tokens WHERE token = ?",
@@ -475,9 +481,13 @@ func TestDB_RebindQuery(t *testing.T) {
 func TestDB_Placeholder(t *testing.T) {
 	sqliteDB := &DB{driver: DriverSQLite}
 	postgresDB := &DB{driver: DriverPostgres}
+	mysqlDB := &DB{driver: DriverMySQL}
 
 	assert.Equal(t, "?", sqliteDB.Placeholder(1))
 	assert.Equal(t, "?", sqliteDB.Placeholder(2))
+
+	assert.Equal(t, "?", mysqlDB.Placeholder(1))
+	assert.Equal(t, "?", mysqlDB.Placeholder(2))
 
 	assert.Equal(t, "$1", postgresDB.Placeholder(1))
 	assert.Equal(t, "$2", postgresDB.Placeholder(2))
@@ -487,16 +497,20 @@ func TestDB_Placeholder(t *testing.T) {
 func TestDB_Placeholders(t *testing.T) {
 	sqliteDB := &DB{driver: DriverSQLite}
 	postgresDB := &DB{driver: DriverPostgres}
+	mysqlDB := &DB{driver: DriverMySQL}
 
 	assert.Equal(t, []string{"?", "?", "?"}, sqliteDB.Placeholders(3))
+	assert.Equal(t, []string{"?", "?", "?"}, mysqlDB.Placeholders(3))
 	assert.Equal(t, []string{"$1", "$2", "$3"}, postgresDB.Placeholders(3))
 }
 
 func TestDB_PlaceholderList(t *testing.T) {
 	sqliteDB := &DB{driver: DriverSQLite}
 	postgresDB := &DB{driver: DriverPostgres}
+	mysqlDB := &DB{driver: DriverMySQL}
 
 	assert.Equal(t, "?, ?, ?", sqliteDB.PlaceholderList(3))
+	assert.Equal(t, "?, ?, ?", mysqlDB.PlaceholderList(3))
 	assert.Equal(t, "$1, $2, $3", postgresDB.PlaceholderList(3))
 }
 
@@ -602,6 +616,16 @@ func TestBackupDatabase_PostgresNotSupported(t *testing.T) {
 	err := db.BackupDatabase(context.Background(), "/tmp/backup.db")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "backup not supported for PostgreSQL")
+}
+
+// TestBackupDatabase_MySQLNotSupported tests that MySQL backup returns an error
+func TestBackupDatabase_MySQLNotSupported(t *testing.T) {
+	// Create a mock mysql DB (just set the driver, no actual connection)
+	db := &DB{driver: DriverMySQL}
+
+	err := db.BackupDatabase(context.Background(), "/tmp/backup.db")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "backup not supported for MySQL")
 }
 
 // TestSQLiteRegressionAfterPostgresSupport tests that SQLite still works after PostgreSQL changes
