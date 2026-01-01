@@ -255,6 +255,7 @@ func TestGetStats_DBError(t *testing.T) {
 func TestBoolValue(t *testing.T) {
 	sqliteDB := &DB{driver: DriverSQLite}
 	postgresDB := &DB{driver: DriverPostgres}
+	mysqlDB := &DB{driver: DriverMySQL}
 
 	// SQLite uses 1/0 for boolean values
 	if sqliteDB.boolValue(true) != 1 {
@@ -270,5 +271,13 @@ func TestBoolValue(t *testing.T) {
 	}
 	if postgresDB.boolValue(false) != false {
 		t.Errorf("PostgreSQL boolValue(false) = %v, want false", postgresDB.boolValue(false))
+	}
+
+	// MySQL uses true/false for boolean values
+	if mysqlDB.boolValue(true) != true {
+		t.Errorf("MySQL boolValue(true) = %v, want true", mysqlDB.boolValue(true))
+	}
+	if mysqlDB.boolValue(false) != false {
+		t.Errorf("MySQL boolValue(false) = %v, want false", mysqlDB.boolValue(false))
 	}
 }

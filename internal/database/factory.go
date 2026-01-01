@@ -24,19 +24,21 @@ const (
 	DriverSQLite DriverType = "sqlite"
 	// DriverPostgres represents the PostgreSQL database driver.
 	DriverPostgres DriverType = "postgres"
+	// DriverMySQL represents the MySQL database driver.
+	DriverMySQL DriverType = "mysql"
 )
 
 // FullConfig contains the complete database configuration for all drivers.
 type FullConfig struct {
-	// Driver specifies which database driver to use (sqlite, postgres).
+	// Driver specifies which database driver to use (sqlite, postgres, mysql).
 	Driver DriverType
 	// SQLite-specific configuration
 	// Path is the path to the SQLite database file.
 	Path string
-	// PostgreSQL-specific configuration
-	// DatabaseURL is the PostgreSQL connection string.
+	// PostgreSQL and MySQL-specific configuration
+	// DatabaseURL is the PostgreSQL or MySQL connection string.
 	DatabaseURL string
-	// Connection pool settings (used by both drivers)
+	// Connection pool settings (used by all drivers)
 	// MaxOpenConns is the maximum number of open connections.
 	MaxOpenConns int
 	// MaxIdleConns is the maximum number of idle connections.
@@ -64,7 +66,7 @@ func ConfigFromEnv() FullConfig {
 
 	if driver := os.Getenv("DB_DRIVER"); driver != "" {
 		driverType := DriverType(strings.ToLower(driver))
-		if driverType != DriverSQLite && driverType != DriverPostgres {
+		if driverType != DriverSQLite && driverType != DriverPostgres && driverType != DriverMySQL {
 			log.Printf("Warning: unsupported DB_DRIVER '%s', defaulting to sqlite", driver)
 		} else {
 			config.Driver = driverType
@@ -123,6 +125,8 @@ func NewFromConfig(config FullConfig) (*DB, error) {
 		return newSQLiteDB(config)
 	case DriverPostgres:
 		return newPostgresDB(config)
+	case DriverMySQL:
+		return newMySQLDB(config)
 	default:
 		return nil, fmt.Errorf("unsupported database driver: %s", config.Driver)
 	}
@@ -173,7 +177,7 @@ func newSQLiteDB(config FullConfig) (*DB, error) {
 }
 
 // runMigrationsForDriver runs database migrations for the specified driver.
-// Note: Only PostgreSQL uses migrations. SQLite uses schema.sql directly.
+// Note: Only PostgreSQL and MySQL use migrations. SQLite uses schema.sql directly.
 func runMigrationsForDriver(db *sql.DB, dialect string) error {
 	if dialect == "sqlite3" || dialect == "sqlite" {
 		// SQLite does NOT use migrations - it uses schema.sql directly
@@ -194,7 +198,7 @@ func runMigrationsForDriver(db *sql.DB, dialect string) error {
 }
 
 // getMigrationsPathForDialect returns the path to migrations for the specified dialect.
-// Note: Only PostgreSQL uses migrations. SQLite uses schema.sql directly.
+// Note: Only PostgreSQL and MySQL use migrations. SQLite uses schema.sql directly.
 func getMigrationsPathForDialect(dialect string) (string, error) {
 	// SQLite does not use migrations
 	if dialect == "sqlite3" || dialect == "sqlite" {
@@ -221,12 +225,12 @@ func getMigrationsPathForDialect(dialect string) (string, error) {
 		basePaths = append(basePaths, filepath.Join(filepath.Dir(execDir), "internal/database/migrations"))
 	}
 
-	// Try each base path for PostgreSQL
+	// Try each base path for the specified dialect
 	for _, basePath := range basePaths {
-		// PostgreSQL migrations are in sql/postgres/
-		postgresPath := filepath.Join(basePath, "sql", "postgres")
-		if _, err := os.Stat(postgresPath); err == nil {
-			return postgresPath, nil
+		// PostgreSQL and MySQL migrations are in sql/{dialect}/
+		dialectPath := filepath.Join(basePath, "sql", dialect)
+		if _, err := os.Stat(dialectPath); err == nil {
+			return dialectPath, nil
 		}
 	}
 
@@ -234,7 +238,7 @@ func getMigrationsPathForDialect(dialect string) (string, error) {
 }
 
 // MigrationsPathForDriver returns the migrations directory for the given driver type.
-// Note: Only PostgreSQL uses migrations. SQLite uses schema.sql directly.
+// Note: Only PostgreSQL and MySQL use migrations. SQLite uses schema.sql directly.
 // This ensures CLI and server code share the same dialect-aware lookup logic.
 func MigrationsPathForDriver(driver DriverType) (string, error) {
 	switch driver {
@@ -242,6 +246,8 @@ func MigrationsPathForDriver(driver DriverType) (string, error) {
 		return "", fmt.Errorf("SQLite does not use migrations; use schema.sql instead")
 	case DriverPostgres:
 		return getMigrationsPathForDialect("postgres")
+	case DriverMySQL:
+		return getMigrationsPathForDialect("mysql")
 	default:
 		return getMigrationsPathForDialect(string(driver))
 	}

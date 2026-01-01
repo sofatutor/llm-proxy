@@ -10,12 +10,12 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Added
 
+- **MySQL Driver Integration** ([#247](https://github.com/sofatutor/llm-proxy/pull/247)): Introduces a build-tag gated MySQL driver with connection pooling, health checks, dynamic table discovery, and stub fallback so the proxy can optionally compile with MySQL support while maintaining PostgreSQL parity.
 - **Redis Dashboard Config** ([#239](https://github.com/sofatutor/llm-proxy/pull/239)): Added optional Redis metrics dashboard ConfigMap for Grafana sidecar discovery so the upstream Helm chart can ship the Redis exporter dashboard via `metrics.redisDashboard`.
 
 ### Changed
 
 - **Admin Probe Defaults** ([#239](https://github.com/sofatutor/llm-proxy/pull/239)): Admin deployment now uses dedicated liveness/readiness probes targeting `/auth/login`, avoiding Helm rollout failures caused by reusing the main service probes.
-
 
 ## December 31, 2025
 

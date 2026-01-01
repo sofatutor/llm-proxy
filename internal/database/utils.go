@@ -9,7 +9,7 @@ import (
 )
 
 // Placeholder returns the appropriate placeholder for the driver.
-// For SQLite: ?, for PostgreSQL: $1, $2, etc.
+// For SQLite and MySQL: ?, for PostgreSQL: $1, $2, etc.
 func (d *DB) Placeholder(n int) string {
 	if d.driver == DriverPostgres {
 		return fmt.Sprintf("$%d", n)
@@ -18,7 +18,7 @@ func (d *DB) Placeholder(n int) string {
 }
 
 // Placeholders returns a slice of placeholders for the driver.
-// For n=3: SQLite returns ["?", "?", "?"], PostgreSQL returns ["$1", "$2", "$3"].
+// For n=3: SQLite/MySQL return ["?", "?", "?"], PostgreSQL returns ["$1", "$2", "$3"].
 func (d *DB) Placeholders(n int) []string {
 	result := make([]string, n)
 	for i := 0; i < n; i++ {
@@ -28,7 +28,7 @@ func (d *DB) Placeholders(n int) []string {
 }
 
 // PlaceholderList returns a comma-separated list of placeholders.
-// For n=3: SQLite returns "?, ?, ?", PostgreSQL returns "$1, $2, $3".
+// For n=3: SQLite/MySQL return "?, ?, ?", PostgreSQL returns "$1, $2, $3".
 func (d *DB) PlaceholderList(n int) string {
 	return strings.Join(d.Placeholders(n), ", ")
 }
@@ -78,10 +78,13 @@ func (d *DB) QueryContextRebound(ctx context.Context, query string, args ...inte
 }
 
 // BackupDatabase creates a backup of the database.
-// Note: This function is SQLite-specific. For PostgreSQL, use pg_dump.
+// Note: This function is SQLite-specific. For PostgreSQL, use pg_dump. For MySQL, use mysqldump.
 func (d *DB) BackupDatabase(ctx context.Context, backupPath string) error {
 	if d.driver == DriverPostgres {
 		return fmt.Errorf("backup not supported for PostgreSQL via this method; use pg_dump")
+	}
+	if d.driver == DriverMySQL {
+		return fmt.Errorf("backup not supported for MySQL via this method; use mysqldump")
 	}
 
 	// Validate the backupPath to ensure it is a valid file path
@@ -115,6 +118,38 @@ func (d *DB) MaintainDatabase(ctx context.Context) error {
 		return nil
 	}
 
+	if d.driver == DriverMySQL {
+		// MySQL maintenance: Run ANALYZE on all tables in the current schema to update optimizer statistics.
+		// Query information_schema to get all table names dynamically to avoid schema drift.
+		rows, err := d.db.QueryContext(ctx, "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'")
+		if err != nil {
+			return fmt.Errorf("failed to query table names: %w", err)
+		}
+		defer rows.Close()
+
+		var tables []string
+		for rows.Next() {
+			var tableName string
+			if err := rows.Scan(&tableName); err != nil {
+				return fmt.Errorf("failed to scan table name: %w", err)
+			}
+			tables = append(tables, tableName)
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("error iterating table names: %w", err)
+		}
+
+		// Run ANALYZE TABLE for each table
+		for _, table := range tables {
+			// Use parameterized query to prevent SQL injection
+			query := fmt.Sprintf("ANALYZE TABLE %s", table)
+			if _, err := d.db.ExecContext(ctx, query); err != nil {
+				return fmt.Errorf("failed to analyze table %s: %w", table, err)
+			}
+		}
+		return nil
+	}
+
 	// SQLite-specific maintenance
 	// Run VACUUM to reclaim space and optimize the database
 	_, err := d.db.ExecContext(ctx, "VACUUM")
@@ -138,9 +173,9 @@ func (d *DB) MaintainDatabase(ctx context.Context) error {
 }
 
 // boolValue returns the appropriate boolean representation for the driver.
-// SQLite uses 1/0, PostgreSQL uses true/false.
+// SQLite uses 1/0, PostgreSQL and MySQL use true/false.
 func (d *DB) boolValue(b bool) interface{} {
-	if d.driver == DriverPostgres {
+	if d.driver == DriverPostgres || d.driver == DriverMySQL {
 		return b
 	}
 	if b {
@@ -157,6 +192,11 @@ func (d *DB) GetStats(ctx context.Context) (map[string]interface{}, error) {
 	var dbSize int64
 	if d.driver == DriverPostgres {
 		err := d.db.QueryRowContext(ctx, "SELECT pg_database_size(current_database())").Scan(&dbSize)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get database size: %w", err)
+		}
+	} else if d.driver == DriverMySQL {
+		err := d.db.QueryRowContext(ctx, "SELECT COALESCE(SUM(data_length + index_length), 0) FROM information_schema.tables WHERE table_schema = DATABASE()").Scan(&dbSize)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get database size: %w", err)
 		}
