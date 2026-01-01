@@ -49,9 +49,9 @@ spec:
               containerPort: {{ $adminContainerPort }}
               protocol: TCP
           livenessProbe:
-            {{- toYaml .Values.livenessProbe | nindent 12 }}
+            {{- toYaml (default .Values.livenessProbe .Values.admin.livenessProbe) | nindent 12 }}
           readinessProbe:
-            {{- toYaml .Values.readinessProbe | nindent 12 }}
+            {{- toYaml (default .Values.readinessProbe .Values.admin.readinessProbe) | nindent 12 }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           {{- $managementTokenSecret := include "llm-proxy.managementTokenSecretName" . }}

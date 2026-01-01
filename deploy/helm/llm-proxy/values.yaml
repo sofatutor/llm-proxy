@@ -60,6 +60,22 @@ ingress:
 admin:
   enabled: false
   listenAddr: ":8081"
+  livenessProbe:
+    httpGet:
+      path: /auth/login
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /auth/login
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
   service:
     type: ClusterIP
     port: 8081
@@ -382,4 +398,13 @@ metrics:
       grafana_dashboard: "1"
     
     # Annotations for ConfigMap
+    annotations: {}
+
+  # Redis Grafana dashboard configuration
+  # Creates a ConfigMap with a Redis metrics dashboard JSON for Grafana sidecar discovery.
+  # NOTE: This dashboard assumes Prometheus job labels like: llm-proxy-redis-(cache|events)-metrics
+  redisDashboard:
+    enabled: false
+    labels:
+      grafana_dashboard: "1"
     annotations: {}
