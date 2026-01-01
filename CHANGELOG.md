@@ -10,11 +10,13 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ### Added
 
+- **MySQL Schema Migrations** ([#248](https://github.com/sofatutor/llm-proxy/pull/248)): Adds MySQL-specific goose migrations that translate the existing PostgreSQL schema into MySQL 8.0+ syntax with dialect-aware type mappings, index-friendly length limits, and four incremental scripts covering core tables, deactivation tracking, cache hit counts, and token identifiers.
 - **MySQL Driver Integration** ([#247](https://github.com/sofatutor/llm-proxy/pull/247)): Introduces a build-tag gated MySQL driver with connection pooling, health checks, dynamic table discovery, and stub fallback so the proxy can optionally compile with MySQL support while maintaining PostgreSQL parity.
 - **Redis Dashboard Config** ([#239](https://github.com/sofatutor/llm-proxy/pull/239)): Added optional Redis metrics dashboard ConfigMap for Grafana sidecar discovery so the upstream Helm chart can ship the Redis exporter dashboard via `metrics.redisDashboard`.
 
 ### Changed
 
+- **MySQL Migration Runner** ([#248](https://github.com/sofatutor/llm-proxy/pull/248)): Extends migration detection to recognize MySQL drivers, resolves mysql-specific migration paths, and introduces named-lock helpers mirroring PostgreSQL advisory locks so schema updates run safely across dialects.
 - **Admin Probe Defaults** ([#239](https://github.com/sofatutor/llm-proxy/pull/239)): Admin deployment now uses dedicated liveness/readiness probes targeting `/auth/login`, avoiding Helm rollout failures caused by reusing the main service probes.
 
 ## December 31, 2025
