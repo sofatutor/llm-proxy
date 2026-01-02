@@ -12,6 +12,13 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 - **MySQL Helm Chart Support** ([#255](https://github.com/sofatutor/llm-proxy/pull/255)): Adds comprehensive MySQL support to the Helm chart with values, templates, helper functions, deployment integration, and updated docs so users can deploy llm-proxy with MySQL alongside SQLite and PostgreSQL.
 - **MySQL Compose Profile** ([#253](https://github.com/sofatutor/llm-proxy/pull/253)): Added optional MySQL backend with dedicated Docker Compose services, build flags, docs, and environment vars so teams can run isolated dev and test stacks alongside existing databases.
+- **MySQL Integration Suite** ([#256](https://github.com/sofatutor/llm-proxy/pull/256)): Introduced comprehensive MySQL integration tests and helpers covering connections, migrations, CRUD operations, concurrency, transactions, and stats so the suite can be exercised locally and validated in CI.
+- **MySQL CI Pipeline** ([#256](https://github.com/sofatutor/llm-proxy/pull/256)): Added a dedicated GitHub Actions job with MySQL 8.0 services, health checks, environment configuration, a Makefile target, and a helper script so integration suites run reliably and contribute coverage in CI.
+- **MySQL Compose Profile** ([#253](https://github.com/sofatutor/llm-proxy/pull/253)): Added optional MySQL backend with dedicated Docker Compose services, build flags, docs, and environment vars so teams can run isolated dev and test stacks alongside existing databases.
+
+### Fixed
+
+- **Coverage Merge Logic** ([#256](https://github.com/sofatutor/llm-proxy/pull/256)): Ensured duplicate coverage entries from multiple suites are merged by taking the maximum count per line so the combined report stays accurate.
 
 ## January 01, 2026
 

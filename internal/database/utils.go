@@ -125,7 +125,7 @@ func (d *DB) MaintainDatabase(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to query table names: %w", err)
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		var tables []string
 		for rows.Next() {
@@ -190,17 +190,18 @@ func (d *DB) GetStats(ctx context.Context) (map[string]interface{}, error) {
 
 	// Get database size (driver-specific - these queries are fundamentally different)
 	var dbSize int64
-	if d.driver == DriverPostgres {
+	switch d.driver {
+	case DriverPostgres:
 		err := d.db.QueryRowContext(ctx, "SELECT pg_database_size(current_database())").Scan(&dbSize)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get database size: %w", err)
 		}
-	} else if d.driver == DriverMySQL {
+	case DriverMySQL:
 		err := d.db.QueryRowContext(ctx, "SELECT COALESCE(SUM(data_length + index_length), 0) FROM information_schema.tables WHERE table_schema = DATABASE()").Scan(&dbSize)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get database size: %w", err)
 		}
-	} else {
+	default:
 		err := d.db.QueryRowContext(ctx, "SELECT (SELECT page_count FROM pragma_page_count) * (SELECT page_size FROM pragma_page_size)").Scan(&dbSize)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get database size: %w", err)
