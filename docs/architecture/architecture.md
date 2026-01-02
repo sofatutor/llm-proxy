@@ -365,9 +365,11 @@ The proxy implementation is based on Go's `httputil.ReverseProxy` with customiza
   - Tokens table: Stores tokens with expiration and usage limits
 - **Implementation**: `internal/database/*`
 - **Technology**: 
-  - **SQLite** is used for MVP, local development, and small-scale/self-hosted deployments for its simplicity and zero-dependency deployment.
-  - **PostgreSQL** is recommended for production deployments requiring high concurrency, advanced features, or distributed/cloud-native scaling.
-  - The codebase and schema/migrations are designed to support both SQLite and PostgreSQL, enabling a smooth migration path as needed.
+  - **SQLite** (default): Zero-dependency option for local development, MVP, and small-scale/self-hosted deployments
+  - **PostgreSQL**: Recommended for production deployments requiring high concurrency, advanced features, or distributed/cloud-native scaling
+  - **MySQL**: Recommended for production deployments, especially for teams with existing MySQL infrastructure or expertise
+  - The codebase and schema/migrations are designed to support all three databases, enabling a smooth migration path as needed
+  - Build tags (`-tags postgres` or `-tags mysql`) control which database drivers are compiled into the binary
 
 ### Token Management
 
@@ -570,7 +572,8 @@ sequenceDiagram
 The application is designed for flexible deployment:
 
 - For MVP, local, and small-scale deployments, a single container with SQLite is recommended for simplicity.
-- For production or scaling needs, PostgreSQL can be used as the backing database, either in a container or as a managed service. The application should be configured to connect to PostgreSQL as needed.
+- For production or scaling needs, PostgreSQL or MySQL can be used as the backing database, either in a container or as a managed service. The application should be configured to connect to the chosen database as needed.
+- Build tags must be used when compiling with PostgreSQL (`-tags postgres`) or MySQL (`-tags mysql`) support.
 
 ### Single Container Deployment
 
@@ -615,9 +618,9 @@ flowchart TD
     Proxy2 --> Redis
     Proxy3 --> Redis
     
-    Proxy1 --> Postgres[("PostgreSQL")]
-    Proxy2 --> Postgres
-    Proxy3 --> Postgres
+    Proxy1 --> Database[("PostgreSQL/MySQL")]
+    Proxy2 --> Database
+    Proxy3 --> Database
     
     Proxy1 --> API["Target API"]
     Proxy2 --> API
