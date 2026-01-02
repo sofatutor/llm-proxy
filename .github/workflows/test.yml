@@ -197,18 +197,28 @@ jobs:
       
       - name: Merge coverage profiles
         run: |
-          # Merge coverage files using shell (no external dependency)
+          # Merge coverage files properly handling duplicate entries
           echo "Merging coverage profiles..."
           
-          # Get the mode line from first file
-          head -1 coverage-unit.txt > coverage-combined.txt
-          
-          # Append all coverage data (skip mode lines)
-          for f in coverage-*.txt; do
-            if [ "$f" != "coverage-combined.txt" ]; then
-              tail -n +2 "$f" >> coverage-combined.txt
-            fi
-          done
+          # Use awk to merge coverage by taking maximum count for duplicate entries
+          {
+            echo "mode: atomic"
+            for f in coverage-*.txt; do
+              tail -n +2 "$f"
+            done | awk '{
+              key = $1":"$2
+              count = $NF
+              if (!(key in coverage) || count > coverage[key]) {
+                coverage[key] = count
+                lines[key] = $0
+              }
+            }
+            END {
+              for (key in lines) {
+                print lines[key]
+              }
+            }' | sort
+          } > coverage-combined.txt
           
           echo "Combined coverage generated ($(wc -l < coverage-combined.txt) lines)"
       
