@@ -271,8 +271,18 @@ cd llm-proxy
 # Install dependencies
 make dev-setup
 
-# Build the binary
+# Build the binary (SQLite only)
 make build
+
+# Or build with database support
+# With PostgreSQL support
+go build -tags postgres -o bin/llm-proxy ./cmd/proxy
+
+# With MySQL support
+go build -tags mysql -o bin/llm-proxy ./cmd/proxy
+
+# With both PostgreSQL and MySQL support
+go build -tags "postgres,mysql" -o bin/llm-proxy ./cmd/proxy
 
 # The binary is created at ./bin/llm-proxy
 ```
@@ -283,8 +293,14 @@ make build
 # Set required environment variables
 export MANAGEMENT_TOKEN=$(openssl rand -base64 32)
 
-# Start the server
+# Start the server with SQLite (default)
 ./bin/llm-proxy server
+
+# Or start with PostgreSQL (requires -tags postgres build)
+DB_DRIVER=postgres DATABASE_URL=postgres://... ./bin/llm-proxy server
+
+# Or start with MySQL (requires -tags mysql build)
+DB_DRIVER=mysql DATABASE_URL=user:pass@tcp(host:port)/db?parseTime=true ./bin/llm-proxy server
 
 # Or start with custom options
 ./bin/llm-proxy server --addr :9000 --db ./custom/path/db.sqlite
