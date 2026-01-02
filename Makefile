@@ -1,4 +1,4 @@
-.PHONY: all build test test-coverage test-coverage-ci test-watch test-coverage-watch test-dev lint clean tools dev-setup db-setup run docker docker-build docker-run docker-smoke docker-stop swag test-benchmark coverage postgres-integration-test
+.PHONY: all build test test-coverage test-coverage-ci test-watch test-coverage-watch test-dev lint clean tools dev-setup db-setup run docker docker-build docker-run docker-smoke docker-stop swag test-benchmark coverage postgres-integration-test mysql-integration-test
 
 # Go parameters
 GOCMD=go
@@ -38,6 +38,11 @@ integration-test:
 # Usage: make postgres-integration-test
 postgres-integration-test:
 	@./scripts/run-postgres-integration.sh
+
+# MySQL integration tests (requires Docker)
+# Usage: make mysql-integration-test
+mysql-integration-test:
+	@./scripts/run-mysql-integration.sh
 
 test-coverage:
 	$(TEST_CMD) -v -race -coverprofile=coverage.out -covermode=atomic ./...

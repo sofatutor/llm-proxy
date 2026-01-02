@@ -115,9 +115,67 @@ jobs:
           path: coverage-postgres.txt
           retention-days: 1
 
+  mysql-integration-tests:
+    name: MySQL Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: llmproxy
+          MYSQL_USER: llmproxy
+          MYSQL_PASSWORD: test
+        options: >-
+          --health-cmd "mysqladmin ping -h localhost"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 3306:3306
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.23'
+          cache: true
+      
+      - name: Install dependencies
+        run: go mod download
+      
+      - name: Wait for MySQL
+        run: |
+          echo "Waiting for MySQL to be ready..."
+          for i in {1..30}; do
+            if mysqladmin ping -h 127.0.0.1 -u llmproxy -ptest --silent; then
+              echo "MySQL is ready!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+      
+      - name: Run MySQL integration tests with coverage
+        run: go test -v -race -tags=mysql,integration -timeout=5m -coverprofile=coverage-mysql.txt -covermode=atomic -coverpkg=./internal/... ./internal/database/...
+        env:
+          CGO_ENABLED: 1
+          TEST_MYSQL_URL: llmproxy:test@tcp(127.0.0.1:3306)/llmproxy?parseTime=true
+          DATABASE_URL: llmproxy:test@tcp(127.0.0.1:3306)/llmproxy?parseTime=true
+          DB_DRIVER: mysql
+      
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-mysql
+          path: coverage-mysql.txt
+          retention-days: 1
+
   coverage:
     name: Combined Coverage
-    needs: [unit-tests, integration-tests, postgres-integration-tests]
+    needs: [unit-tests, integration-tests, postgres-integration-tests, mysql-integration-tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -139,18 +197,28 @@ jobs:
       
       - name: Merge coverage profiles
         run: |
-          # Merge coverage files using shell (no external dependency)
+          # Merge coverage files properly handling duplicate entries
           echo "Merging coverage profiles..."
           
-          # Get the mode line from first file
-          head -1 coverage-unit.txt > coverage-combined.txt
-          
-          # Append all coverage data (skip mode lines)
-          for f in coverage-*.txt; do
-            if [ "$f" != "coverage-combined.txt" ]; then
-              tail -n +2 "$f" >> coverage-combined.txt
-            fi
-          done
+          # Use awk to merge coverage by taking maximum count for duplicate entries
+          {
+            echo "mode: atomic"
+            for f in coverage-*.txt; do
+              tail -n +2 "$f"
+            done | awk '{
+              key = $1":"$2
+              count = $NF
+              if (!(key in coverage) || count > coverage[key]) {
+                coverage[key] = count
+                lines[key] = $0
+              }
+            }
+            END {
+              for (key in lines) {
+                print lines[key]
+              }
+            }' | sort
+          } > coverage-combined.txt
           
           echo "Combined coverage generated ($(wc -l < coverage-combined.txt) lines)"
       
@@ -190,3 +258,4 @@ jobs:
           echo "- ✅ Unit Tests" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Integration Tests" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ PostgreSQL Integration Tests" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ MySQL Integration Tests" >> $GITHUB_STEP_SUMMARY

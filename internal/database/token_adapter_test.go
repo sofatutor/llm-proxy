@@ -77,8 +77,48 @@ func TestDBTokenStoreAdapter_UpdateToken_Integration(t *testing.T) {
 	assert.Equal(t, 100, verifyToken.RequestCount)
 }
 
-func TestDBTokenStoreAdapter_Coverage(t *testing.T) {
-	t.Skip("DBTokenStoreAdapter methods require a real database connection; skipping until integration test is implemented.")
+func TestDBTokenStoreAdapter_GetTokenByToken_NotFound(t *testing.T) {
+	// Create a temporary SQLite database for testing
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// Initialize database
+	db, err := New(Config{Path: dbPath})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cerr := db.Close()
+		require.NoError(t, cerr)
+	})
+
+	// Create adapter
+	adapter := NewDBTokenStoreAdapter(db)
+
+	// Try to get a non-existent token - should return token.ErrTokenNotFound
+	_, err = adapter.GetTokenByToken(context.Background(), "non-existent-token")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, token.ErrTokenNotFound)
+}
+
+func TestDBTokenStoreAdapter_GetTokenByID_NotFound(t *testing.T) {
+	// Create a temporary SQLite database for testing
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+
+	// Initialize database
+	db, err := New(Config{Path: dbPath})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cerr := db.Close()
+		require.NoError(t, cerr)
+	})
+
+	// Create adapter
+	adapter := NewDBTokenStoreAdapter(db)
+
+	// Try to get a non-existent token by ID - should return token.ErrTokenNotFound
+	_, err = adapter.GetTokenByID(context.Background(), "non-existent-id")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, token.ErrTokenNotFound)
 }
 
 // Helper function to create int pointer
