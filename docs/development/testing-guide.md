@@ -165,6 +165,61 @@ PostgreSQL integration tests cover:
 - Connection pool behavior
 - Transaction rollback on failure
 
+### 2b. MySQL Integration Tests
+
+**Purpose**: Test database operations against a real MySQL instance
+
+**Location**: `internal/database/*_integration_test.go` with build tags `//go:build mysql && integration`
+
+**Prerequisites**:
+- Docker and Docker Compose installed
+- MySQL container running
+
+**Running MySQL Tests**:
+```bash
+# Full integration test run (starts MySQL, runs tests, stops)
+./scripts/run-mysql-integration.sh
+
+# Start MySQL and keep running
+./scripts/run-mysql-integration.sh start
+
+# Run tests only (assumes MySQL is running)
+./scripts/run-mysql-integration.sh test
+
+# Stop and clean up
+./scripts/run-mysql-integration.sh teardown
+
+# Using make target
+make mysql-integration-test
+```
+
+**Manual Test Run**:
+```bash
+# Start MySQL with Docker Compose
+docker compose --profile mysql-test up -d mysql-test
+
+# Wait for MySQL to be ready
+docker compose --profile mysql-test exec mysql-test mysqladmin ping -h localhost
+
+# Run tests with mysql and integration tags
+export TEST_MYSQL_URL="llmproxy:secret@tcp(localhost:33306)/llmproxy?parseTime=true"
+go test -v -race -tags=mysql,integration ./internal/database/...
+
+# Clean up
+docker compose --profile mysql-test down -v
+```
+
+**Test Coverage**:
+MySQL integration tests cover:
+- Migration application and rollback
+- Project CRUD operations
+- Token CRUD operations with rate limiting enforcement
+- Audit event storage and retrieval
+- Concurrent database operations
+- Connection pool behavior
+- Transaction rollback on failure
+- Placeholder rebinding for MySQL syntax
+
 ### 3. End-to-End (E2E) Tests
 
 **Purpose**: Test complete user flows and system behavior
@@ -266,8 +321,11 @@ make test-coverage-html
 **GitHub Actions Workflow** (`.github/workflows/test.yml`):
 - **Unit Tests**: Fast tests on multiple Go versions
 - **Integration Tests**: Tests with real database
+- **PostgreSQL Integration Tests**: Tests against PostgreSQL 15 service container
+- **MySQL Integration Tests**: Tests against MySQL 8.0 service container
 - **Race Detection**: All tests run with `-race` flag
 - **Coverage Reporting**: Upload coverage to artifacts
+- **Combined Coverage**: Merge coverage from all test jobs and enforce 90%+ threshold
 - **Benchmark Testing**: Performance regression detection
 
 ## Test Data Management
@@ -568,6 +626,12 @@ make test-coverage
 
 # Integration tests
 make integration-test
+
+# PostgreSQL integration tests
+make postgres-integration-test
+
+# MySQL integration tests  
+make mysql-integration-test
 ```
 
 ### CI Pipeline
