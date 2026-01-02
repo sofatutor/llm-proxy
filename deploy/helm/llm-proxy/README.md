@@ -202,7 +202,13 @@ helm install llm-proxy deploy/helm/llm-proxy \
 ```
 
 **IMPORTANT:**
-- In-cluster PostgreSQL is for development/testing only, NOT recommended for production
+- **⚠️ For production high-availability (HA) deployments, use an external managed PostgreSQL service:**
+  - Amazon Aurora PostgreSQL / Amazon RDS for PostgreSQL
+  - Google Cloud SQL for PostgreSQL
+  - Azure Database for PostgreSQL
+  - Self-managed PostgreSQL with replication
+- The in-cluster PostgreSQL StatefulSet is hardcoded to `replicas: 1` and is suitable for **development/testing only**
+- It does not provide high availability or automatic failover
 - Ensure your Docker image is built with PostgreSQL support using the `postgres` build tag
 - Default images are built with: `docker build --build-arg POSTGRES_SUPPORT=true`
 - You cannot use both in-cluster and external PostgreSQL simultaneously
@@ -261,7 +267,13 @@ helm install llm-proxy deploy/helm/llm-proxy \
 ```
 
 **IMPORTANT:**
-- In-cluster MySQL is for development/testing only, NOT recommended for production
+- **⚠️ For production high-availability (HA) deployments, use an external managed MySQL service:**
+  - Amazon Aurora MySQL / Amazon RDS for MySQL
+  - Google Cloud SQL for MySQL
+  - Azure Database for MySQL
+  - Self-managed MySQL Group Replication or InnoDB Cluster
+- The in-cluster MySQL StatefulSet is hardcoded to `replicas: 1` and is suitable for **development/testing only**
+- It does not provide high availability or automatic failover
 - Ensure your Docker image is built with MySQL support using the `mysql` build tag
 - Build command: `docker build --build-arg MYSQL_SUPPORT=true -t llm-proxy:mysql .`
 - You cannot use both in-cluster and external MySQL simultaneously
