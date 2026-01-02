@@ -28,6 +28,10 @@ annotations:
   "llm-proxy.io/supports-postgresql": "true"
   # When using PostgreSQL, ensure the Docker image is built with the postgres build tag
   "llm-proxy.io/postgres-build-tag-required": "true"
+  # Indicates that the chart supports MySQL as an optional database backend
+  "llm-proxy.io/supports-mysql": "true"
+  # When using MySQL, ensure the Docker image is built with the mysql build tag
+  "llm-proxy.io/mysql-build-tag-required": "true"
 
 # Optional dependencies (disabled by default)
 # Run 'helm dependency update' before installing with postgresql.enabled=true

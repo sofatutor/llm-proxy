@@ -1,0 +1,119 @@
+{{- if .Values.mysql.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "llm-proxy.fullname" . }}-mysql
+  labels:
+    {{- include "llm-proxy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  serviceName: {{ include "llm-proxy.fullname" . }}-mysql
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "llm-proxy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        {{- include "llm-proxy.labels" . | nindent 8 }}
+        app.kubernetes.io/component: database
+    spec:
+      containers:
+      - name: mysql
+        image: "{{ .Values.mysql.image.repository }}:{{ .Values.mysql.image.tag }}"
+        imagePullPolicy: {{ .Values.mysql.image.pullPolicy }}
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "llm-proxy.mysql.secretName" . }}
+              key: {{ include "llm-proxy.mysql.rootSecretKey" . }}
+        - name: MYSQL_DATABASE
+          value: {{ include "llm-proxy.mysql.database" . | quote }}
+        - name: MYSQL_USER
+          value: {{ include "llm-proxy.mysql.username" . | quote }}
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "llm-proxy.mysql.secretName" . }}
+              key: {{ include "llm-proxy.mysql.secretKey" . }}
+        {{- if .Values.mysql.extraConfig.maxConnections }}
+        - name: MYSQL_MAX_CONNECTIONS
+          value: {{ .Values.mysql.extraConfig.maxConnections | quote }}
+        {{- end }}
+        {{- if .Values.mysql.extraConfig.characterSet }}
+        - name: MYSQL_CHARACTER_SET_SERVER
+          value: {{ .Values.mysql.extraConfig.characterSet | quote }}
+        {{- end }}
+        {{- if .Values.mysql.extraConfig.collation }}
+        - name: MYSQL_COLLATION_SERVER
+          value: {{ .Values.mysql.extraConfig.collation | quote }}
+        {{- end }}
+        args:
+        {{- if .Values.mysql.extraConfig.maxConnections }}
+        - --max-connections={{ .Values.mysql.extraConfig.maxConnections }}
+        {{- end }}
+        {{- if .Values.mysql.extraConfig.characterSet }}
+        - --character-set-server={{ .Values.mysql.extraConfig.characterSet }}
+        {{- end }}
+        {{- if .Values.mysql.extraConfig.collation }}
+        - --collation-server={{ .Values.mysql.extraConfig.collation }}
+        {{- end }}
+        ports:
+        - name: mysql
+          containerPort: 3306
+          protocol: TCP
+        livenessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          {{- toYaml .Values.mysql.resources | nindent 10 }}
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/mysql
+  {{- if .Values.mysql.persistence.enabled }}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        {{- include "llm-proxy.labels" . | nindent 8 }}
+        app.kubernetes.io/component: database
+    spec:
+      accessModes:
+      - {{ .Values.mysql.persistence.accessMode | quote }}
+      {{- if .Values.mysql.persistence.storageClass }}
+      {{- if (eq "-" .Values.mysql.persistence.storageClass) }}
+      storageClassName: ""
+      {{- else }}
+      storageClassName: {{ .Values.mysql.persistence.storageClass | quote }}
+      {{- end }}
+      {{- end }}
+      resources:
+        requests:
+          storage: {{ .Values.mysql.persistence.size | quote }}
+  {{- else }}
+  volumes:
+  - name: data
+    emptyDir: {}
+  {{- end }}
+{{- end }}

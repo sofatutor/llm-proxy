@@ -1,5 +1,6 @@
 {{- include "llm-proxy.validateRedisConfig" . }}
 {{- include "llm-proxy.validatePostgresConfig" . }}
+{{- include "llm-proxy.validateMysqlConfig" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -54,7 +55,8 @@ spec:
         {{- $redisPasswordSecret := include "llm-proxy.redisPasswordSecretName" . }}
         {{- $encryptionKeySecret := include "llm-proxy.encryptionKeySecretName" . }}
         {{- $postgresqlEnabled := .Values.postgresql.enabled }}
-        {{- if or .Values.env $managementTokenSecret $databaseUrlSecret $postgresqlEnabled .Values.redis.external.addr $redisPasswordSecret $encryptionKeySecret }}
+        {{- $mysqlEnabled := .Values.mysql.enabled }}
+        {{- if or .Values.env $managementTokenSecret $databaseUrlSecret $postgresqlEnabled $mysqlEnabled .Values.redis.external.addr $redisPasswordSecret $encryptionKeySecret }}
         env:
         {{- if .Values.env }}
         {{- range $key := keys .Values.env | sortAlpha }}
@@ -84,6 +86,14 @@ spec:
               key: {{ include "llm-proxy.postgresql.secretKey" . }}
         - name: DATABASE_URL
           value: {{ include "llm-proxy.postgresql.url" . | quote }}
+        {{- else if $mysqlEnabled }}
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "llm-proxy.mysql.secretName" . }}
+              key: {{ include "llm-proxy.mysql.secretKey" . }}
+        - name: DATABASE_URL
+          value: {{ include "llm-proxy.mysql.url" . | quote }}
         {{- else if $databaseUrlSecret }}
         - name: DATABASE_URL
           valueFrom:
