@@ -208,6 +208,67 @@ helm install llm-proxy deploy/helm/llm-proxy \
 - You cannot use both in-cluster and external PostgreSQL simultaneously
 - When using in-cluster PostgreSQL, data persists via a PersistentVolumeClaim (default 8Gi)
 
+#### MySQL
+
+MySQL is also supported for production and multi-replica deployments. Two modes are supported:
+
+##### Option 1: External MySQL (RECOMMENDED for production)
+
+Use an existing MySQL database:
+
+1. Create a secret with your database connection string:
+
+```bash
+kubectl create secret generic llm-proxy-db \
+  --from-literal=DATABASE_URL="user:password@tcp(host:3306)/dbname?parseTime=true&tls=true"
+```
+
+2. Install the chart with MySQL configuration:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set secrets.databaseUrl.existingSecret.name=llm-proxy-db \
+  --set env.DB_DRIVER=mysql
+```
+
+##### Option 2: In-Cluster MySQL (Development/Testing Only)
+
+Deploy MySQL as part of the Helm release:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set env.DB_DRIVER=mysql \
+  --set mysql.enabled=true \
+  --set-string mysql.auth.rootPassword="$(openssl rand -base64 32)" \
+  --set-string mysql.auth.password="$(openssl rand -base64 32)"
+```
+
+Or using the example values file:
+
+```bash
+helm install llm-proxy deploy/helm/llm-proxy \
+  -f deploy/helm/llm-proxy/examples/values-mysql.yaml \
+  --set image.repository=ghcr.io/sofatutor/llm-proxy \
+  --set image.tag=latest \
+  --set-string mysql.auth.rootPassword="$(openssl rand -base64 32)" \
+  --set-string mysql.auth.password="$(openssl rand -base64 32)"
+```
+
+**IMPORTANT:**
+- In-cluster MySQL is for development/testing only, NOT recommended for production
+- Ensure your Docker image is built with MySQL support using the `mysql` build tag
+- Build command: `docker build --build-arg MYSQL_SUPPORT=true -t llm-proxy:mysql .`
+- You cannot use both in-cluster and external MySQL simultaneously
+- When using in-cluster MySQL, data persists via a PersistentVolumeClaim (default 10Gi)
+- MySQL connection string format: `user:password@tcp(host:port)/database?parseTime=true`
+- For production, enable TLS with `tls=true` or `tls=skip-verify` (not recommended)
+
 ### Using External Redis
 
 LLM Proxy uses Redis for:

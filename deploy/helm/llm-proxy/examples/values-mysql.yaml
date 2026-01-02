@@ -1,0 +1,128 @@
+# Example values for deploying LLM Proxy with in-cluster MySQL
+# This configuration is suitable for development and testing environments.
+# For production, use an external MySQL database with secrets.databaseUrl.existingSecret
+
+# Database driver configuration
+env:
+  # Set database driver to MySQL
+  DB_DRIVER: mysql
+  # Event bus configuration (required for multi-instance deployments)
+  LLM_PROXY_EVENT_BUS: in-memory
+
+# Secrets configuration
+secrets:
+  # Enable creation of secrets from values (not recommended for production)
+  create: true
+  data:
+    # Generate with: openssl rand -base64 32
+    managementToken: "CHANGE-ME-management-token"
+    # Encryption key for API keys (recommended for production)
+    # Generate with: openssl rand -base64 32
+    encryptionKey: "CHANGE-ME-encryption-key"
+
+# MySQL configuration
+mysql:
+  # Enable in-cluster MySQL deployment
+  enabled: true
+  
+  # MySQL image configuration
+  image:
+    repository: mysql
+    tag: "8.0"
+    pullPolicy: IfNotPresent
+  
+  # MySQL authentication
+  auth:
+    # MySQL root password (override with --set-string for security)
+    # Example: --set-string mysql.auth.rootPassword="$(openssl rand -base64 32)"
+    rootPassword: "CHANGE-ME-root-password"
+    # MySQL database name
+    database: llmproxy
+    # MySQL application username
+    username: llmproxy
+    # MySQL application password (override with --set-string for security)
+    # Example: --set-string mysql.auth.password="$(openssl rand -base64 32)"
+    password: "CHANGE-ME-app-password"
+  
+  # Persistence configuration
+  persistence:
+    enabled: true
+    size: 10Gi
+    # Uncomment to use a specific storage class
+    # storageClass: "standard"
+  
+  # Resource limits
+  resources:
+    limits:
+      memory: 1Gi
+      cpu: 1000m
+    requests:
+      memory: 256Mi
+      cpu: 100m
+  
+  # MySQL-specific configuration
+  extraConfig:
+    maxConnections: 200
+    characterSet: utf8mb4
+    collation: utf8mb4_unicode_ci
+  
+  # TLS configuration (recommended for production)
+  tls:
+    enabled: false
+    skipVerify: false
+
+# LLM Proxy configuration
+image:
+  # Use an image built with MySQL support
+  # docker build --build-arg MYSQL_SUPPORT=true -t llm-proxy:mysql .
+  repository: ghcr.io/sofatutor/llm-proxy
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 8080
+
+# Resource limits for the proxy
+resources:
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Health check configuration
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Optional: Enable autoscaling
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+
+# Optional: Admin UI
+admin:
+  enabled: false
+
+# Optional: Dispatcher for event forwarding
+dispatcher:
+  enabled: false

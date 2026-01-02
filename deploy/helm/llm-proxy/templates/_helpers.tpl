@@ -356,3 +356,129 @@ Validate autoscaling configuration
   {{- end }}
 {{- end }}
 {{- end }}
+
+{{/*
+MySQL helper functions
+*/}}
+
+{{/*
+Get MySQL hostname
+*/}}
+{{- define "llm-proxy.mysql.host" -}}
+{{- if .Values.mysql.enabled }}
+{{- printf "%s-mysql" (include "llm-proxy.fullname" .) }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get MySQL port
+*/}}
+{{- define "llm-proxy.mysql.port" -}}
+{{- if .Values.mysql.enabled }}
+{{- printf "3306" }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get MySQL database name
+*/}}
+{{- define "llm-proxy.mysql.database" -}}
+{{- if .Values.mysql.enabled }}
+{{- .Values.mysql.auth.database | default "llmproxy" }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get MySQL username
+*/}}
+{{- define "llm-proxy.mysql.username" -}}
+{{- if .Values.mysql.enabled }}
+{{- .Values.mysql.auth.username | default "llmproxy" }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get MySQL password secret name
+*/}}
+{{- define "llm-proxy.mysql.secretName" -}}
+{{- if .Values.mysql.enabled }}
+{{- if .Values.mysql.auth.existingSecret }}
+{{- .Values.mysql.auth.existingSecret }}
+{{- else }}
+{{- printf "%s-mysql" (include "llm-proxy.fullname" .) }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get MySQL password secret key
+*/}}
+{{- define "llm-proxy.mysql.secretKey" -}}
+{{- if .Values.mysql.enabled }}
+{{- if .Values.mysql.auth.existingSecret }}
+{{- .Values.mysql.auth.secretKeys.userPasswordKey | default "mysql-password" }}
+{{- else }}
+{{- printf "mysql-password" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get MySQL root password secret key
+*/}}
+{{- define "llm-proxy.mysql.rootSecretKey" -}}
+{{- if .Values.mysql.enabled }}
+{{- if .Values.mysql.auth.existingSecret }}
+{{- .Values.mysql.auth.secretKeys.rootPasswordKey | default "mysql-root-password" }}
+{{- else }}
+{{- printf "mysql-root-password" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Construct MySQL connection URL for in-cluster MySQL
+*/}}
+{{- define "llm-proxy.mysql.url" -}}
+{{- if .Values.mysql.enabled }}
+{{- $host := include "llm-proxy.mysql.host" . }}
+{{- $port := include "llm-proxy.mysql.port" . }}
+{{- $database := include "llm-proxy.mysql.database" . }}
+{{- $username := include "llm-proxy.mysql.username" . }}
+{{- $tls := "" }}
+{{- if .Values.mysql.tls.enabled }}
+{{- if .Values.mysql.tls.skipVerify }}
+{{- $tls = "&tls=skip-verify" }}
+{{- else }}
+{{- $tls = "&tls=true" }}
+{{- end }}
+{{- end }}
+{{- printf "%s:$(MYSQL_PASSWORD)@tcp(%s:%s)/%s?parseTime=true%s" $username $host $port $database $tls }}
+{{- end }}
+{{- end }}
+
+{{/*
+Validate MySQL configuration
+*/}}
+{{- define "llm-proxy.validateMysqlConfig" -}}
+{{- $dbDriver := .Values.env.DB_DRIVER | default "sqlite" }}
+{{- if eq $dbDriver "mysql" }}
+  {{- $hasInCluster := .Values.mysql.enabled }}
+  {{- $hasExternal := or (and .Values.secrets.create .Values.secrets.data.databaseUrl) .Values.secrets.databaseUrl.existingSecret.name }}
+  {{- if and $hasInCluster $hasExternal }}
+    {{- fail "Configuration error: Cannot use both in-cluster MySQL (mysql.enabled=true) and external MySQL (secrets.databaseUrl) at the same time. Please choose one approach." }}
+  {{- end }}
+  {{- if not (or $hasInCluster $hasExternal) }}
+    {{- fail (printf "Configuration error: DB_DRIVER is set to 'mysql' but no database configuration found. Please either:\n  1. Enable in-cluster MySQL with mysql.enabled=true (development/testing only)\n  2. Configure external MySQL with secrets.databaseUrl.existingSecret.name (recommended for production)\n  3. Change DB_DRIVER to 'sqlite' for single-instance deployments") }}
+  {{- end }}
+  {{- if and $hasInCluster (not .Values.mysql.auth.password) (not .Values.mysql.auth.existingSecret) }}
+    {{- fail "Configuration error: mysql.enabled=true but no password configured. Please set mysql.auth.password and mysql.auth.rootPassword or mysql.auth.existingSecret" }}
+  {{- end }}
+  {{- if and $hasInCluster (not .Values.mysql.auth.rootPassword) (not .Values.mysql.auth.existingSecret) }}
+    {{- fail "Configuration error: mysql.enabled=true but no root password configured. Please set mysql.auth.rootPassword or mysql.auth.existingSecret" }}
+  {{- end }}
+{{- end }}
+{{- if and .Values.mysql.enabled (ne $dbDriver "mysql") }}
+  {{- fail (printf "Configuration error: mysql.enabled=true but DB_DRIVER is set to '%s'. When using in-cluster MySQL, DB_DRIVER must be set to 'mysql'." $dbDriver) }}
+{{- end }}
+{{- end }}

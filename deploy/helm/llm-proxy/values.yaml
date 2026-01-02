@@ -267,6 +267,86 @@ postgresql:
   # Only use 'disable' in trusted development environments
   sslMode: "require"
 
+# MySQL configuration
+# IMPORTANT: When using MySQL (either in-cluster or external), ensure your Docker image
+# is built with MySQL support using the 'mysql' build tag.
+# Default images built with: docker build --build-arg MYSQL_SUPPORT=true
+mysql:
+  # Enable in-cluster MySQL (development/testing only)
+  # When true, deploys a MySQL database as part of this chart
+  # For production, use external MySQL with secrets.databaseUrl.existingSecret
+  enabled: false
+  
+  # MySQL image configuration
+  image:
+    # MySQL Docker image repository
+    repository: mysql
+    # MySQL version tag
+    tag: "8.0"
+    # Image pull policy
+    pullPolicy: IfNotPresent
+  
+  # MySQL authentication configuration
+  auth:
+    # MySQL root password (override with --set-string for security)
+    # Example: --set-string mysql.auth.rootPassword="$(openssl rand -base64 32)"
+    rootPassword: ""
+    # MySQL database name
+    database: llmproxy
+    # MySQL application username
+    username: llmproxy
+    # MySQL application password (override with --set-string for security)
+    # Example: --set-string mysql.auth.password="$(openssl rand -base64 32)"
+    password: ""
+    # Use existing secret for MySQL passwords (recommended)
+    # When set, overrides mysql.auth.rootPassword and mysql.auth.password
+    existingSecret: ""
+    secretKeys:
+      rootPasswordKey: mysql-root-password
+      userPasswordKey: mysql-password
+  
+  # MySQL persistence configuration
+  persistence:
+    # Enable persistence using PVC
+    enabled: true
+    # Storage class for PVC
+    # If undefined (the default) or set to null, no storageClassName spec is set
+    # choosing the default provisioner (gp2 on AWS, standard on GKE, AWS & OpenStack)
+    storageClass: ""
+    # Size of the PVC
+    size: 10Gi
+    # Access mode for the PVC
+    accessMode: ReadWriteOnce
+  
+  # MySQL resource limits and requests
+  resources:
+    limits:
+      memory: 1Gi
+      cpu: 1000m
+    requests:
+      memory: 256Mi
+      cpu: 100m
+  
+  # MySQL-specific configuration options
+  # These are passed as command-line arguments to mysqld
+  extraConfig:
+    # Maximum number of connections (default: 151)
+    maxConnections: 200
+    # Character set (default: utf8mb4)
+    characterSet: utf8mb4
+    # Collation (default: utf8mb4_unicode_ci)
+    collation: utf8mb4_unicode_ci
+  
+  # TLS/SSL configuration for MySQL connections
+  # SECURITY: Use 'true' for production environments
+  # Only use 'false' in trusted development environments
+  tls:
+    # Enable TLS for MySQL connections
+    enabled: false
+    # Skip TLS certificate verification (not recommended for production)
+    # Only applicable when tls.enabled=true
+    skipVerify: false
+
 # Redis configuration
 # Used for event bus, optional HTTP cache, and optional distributed rate limiting
 redis:
