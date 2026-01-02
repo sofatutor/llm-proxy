@@ -38,18 +38,6 @@ spec:
             secretKeyRef:
               name: {{ include "llm-proxy.mysql.secretName" . }}
               key: {{ include "llm-proxy.mysql.secretKey" . }}
-        {{- if .Values.mysql.extraConfig.maxConnections }}
-        - name: MYSQL_MAX_CONNECTIONS
-          value: {{ .Values.mysql.extraConfig.maxConnections | quote }}
-        {{- end }}
-        {{- if .Values.mysql.extraConfig.characterSet }}
-        - name: MYSQL_CHARACTER_SET_SERVER
-          value: {{ .Values.mysql.extraConfig.characterSet | quote }}
-        {{- end }}
-        {{- if .Values.mysql.extraConfig.collation }}
-        - name: MYSQL_COLLATION_SERVER
-          value: {{ .Values.mysql.extraConfig.collation | quote }}
-        {{- end }}
         args:
         {{- if .Values.mysql.extraConfig.maxConnections }}
         - --max-connections={{ .Values.mysql.extraConfig.maxConnections }}
@@ -67,10 +55,9 @@ spec:
         livenessProbe:
           exec:
             command:
-            - mysqladmin
-            - ping
-            - -h
-            - localhost
+            - sh
+            - -c
+            - mysqladmin ping -h localhost -u root -p${MYSQL_ROOT_PASSWORD}
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
@@ -78,10 +65,9 @@ spec:
         readinessProbe:
           exec:
             command:
-            - mysqladmin
-            - ping
-            - -h
-            - localhost
+            - sh
+            - -c
+            - mysqladmin ping -h localhost -u root -p${MYSQL_ROOT_PASSWORD}
           initialDelaySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 5

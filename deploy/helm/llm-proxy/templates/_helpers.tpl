@@ -452,8 +452,6 @@ Construct MySQL connection URL for in-cluster MySQL
 {{- else }}
 {{- $tls = "&tls=true" }}
 {{- end }}
-{{- else }}
-{{- $tls = "&tls=false" }}
 {{- end }}
 {{- printf "%s:$(MYSQL_PASSWORD)@tcp(%s:%s)/%s?parseTime=true%s" $username $host $port $database $tls }}
 {{- end }}
