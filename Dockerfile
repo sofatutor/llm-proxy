@@ -8,6 +8,11 @@ FROM --platform=$TARGETPLATFORM golang:1.23-alpine AS builder
 # Build with PostgreSQL:    docker build --build-arg POSTGRES_SUPPORT=true .
 ARG POSTGRES_SUPPORT=true
 
+# Build argument for MySQL support (default: disabled)
+# Build without MySQL: docker build --build-arg MYSQL_SUPPORT=false .
+# Build with MySQL:    docker build --build-arg MYSQL_SUPPORT=true .
+ARG MYSQL_SUPPORT=false
+
 WORKDIR /app
 
 # Copy go.mod and go.sum files first for better caching
@@ -22,16 +27,29 @@ COPY . .
 RUN --mount=type=cache,target=/var/cache/apk apk add gcc musl-dev sqlite-dev
 
 # Build the application with CGO enabled for go-sqlite3
-# Include postgres build tag only if POSTGRES_SUPPORT is true
+# Include postgres and/or mysql build tags based on build arguments
 ENV CGO_ENABLED=1
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     export GOMODCACHE=/go/pkg/mod && \
+    BUILD_TAGS="" && \
     if [ "$POSTGRES_SUPPORT" = "true" ]; then \
-        echo "Building with PostgreSQL support..." && \
-        go build -tags=postgres -ldflags "-w" -trimpath -o /llm-proxy ./cmd/proxy; \
+        echo "Enabling PostgreSQL support..." && \
+        BUILD_TAGS="postgres"; \
+    fi && \
+    if [ "$MYSQL_SUPPORT" = "true" ]; then \
+        echo "Enabling MySQL support..." && \
+        if [ -n "$BUILD_TAGS" ]; then \
+            BUILD_TAGS="$BUILD_TAGS,mysql"; \
+        else \
+            BUILD_TAGS="mysql"; \
+        fi; \
+    fi && \
+    if [ -n "$BUILD_TAGS" ]; then \
+        echo "Building with tags: $BUILD_TAGS" && \
+        go build -tags="$BUILD_TAGS" -ldflags "-w" -trimpath -o /llm-proxy ./cmd/proxy; \
     else \
-        echo "Building without PostgreSQL support..." && \
+        echo "Building without database driver tags..." && \
         go build -ldflags "-w" -trimpath -o /llm-proxy ./cmd/proxy; \
     fi
 

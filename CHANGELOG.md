@@ -6,6 +6,13 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ---
 
+## January 02, 2026
+
+### Added
+
+- **MySQL Compose Profile** ([#253](https://github.com/sofatutor/llm-proxy/pull/253)): Added optional MySQL backend with dedicated Docker Compose services, build flags, docs, and environment vars so teams can run isolated dev and test stacks alongside existing databases.
+
+
 ## January 01, 2026
 
 ### Added
