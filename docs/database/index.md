@@ -24,7 +24,7 @@ Database configuration, migrations, and troubleshooting.
 | Development/Testing | SQLite (default) |
 | Single instance production | SQLite or PostgreSQL |
 | Multi-instance production | PostgreSQL or MySQL |
-| AWS ECS deployment | Aurora PostgreSQL Serverless v2 |
+| AWS ECS deployment | Aurora PostgreSQL Serverless v2 or Aurora MySQL |
 | AWS RDS MySQL | MySQL 8.0+ |
 
 For production deployments, see the [Database Selection Guide](database-selection.md).
