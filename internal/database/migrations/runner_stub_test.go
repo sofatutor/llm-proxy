@@ -1,4 +1,4 @@
-//go:build !postgres
+//go:build !postgres && !mysql
 
 package migrations
 
@@ -26,6 +26,23 @@ func TestMigrationRunner_AcquirePostgresLock_Stub(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, release)
 	assert.Contains(t, err.Error(), "postgres")
+}
+
+// TestMigrationRunner_AcquireMySQLLock_Stub tests the MySQL lock stub
+// which is used when the mysql build tag is not set.
+// The real MySQL locking is tested via Docker Compose integration tests (issue #245).
+func TestMigrationRunner_AcquireMySQLLock_Stub(t *testing.T) {
+	db, err := setupTestDBForStub()
+	require.NoError(t, err, "failed to setup test database")
+	defer func() { _ = db.Close() }()
+
+	runner := NewMigrationRunner(db, "")
+
+	// The stub should return an error indicating MySQL build tag is required
+	release, err := runner.acquireMySQLLock()
+	assert.Error(t, err)
+	assert.Nil(t, release)
+	assert.Contains(t, err.Error(), "mysql")
 }
 
 // setupTestDBForStub creates a test database for stub tests
