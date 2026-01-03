@@ -793,7 +793,29 @@ func (p *TransparentProxy) Handler() http.Handler {
 			preCacheRes cachedResponse
 			preCacheOK  bool
 		)
-		if p.cache != nil && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		if p.cache != nil && (r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodPost) {
+			// For POST, we need to check cache opt-in and prepare body hash early
+			if r.Method == http.MethodPost {
+				if !hasClientCacheOptIn(r) {
+					goto skipPreCache
+				}
+				maxBodyHashBytes := p.config.HTTPCacheMaxObjectBytes
+				if maxBodyHashBytes <= 0 {
+					maxBodyHashBytes = 1024 * 1024
+				}
+				if r.Body == nil || r.ContentLength < 0 || r.ContentLength > maxBodyHashBytes {
+					goto skipPreCache
+				}
+				bodyBytes, readErr := io.ReadAll(r.Body)
+				if readErr != nil {
+					p.logger.Warn("Failed to read request body for pre-cache check", zap.Error(readErr))
+					goto skipPreCache
+				}
+				r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+				sum := sha256.Sum256(bodyBytes)
+				r.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
+			}
+			
 			key := CacheKeyFromRequest(r)
 			if cr, ok := p.cache.Get(key); ok {
 				// Only treat as a fast-path cache hit if it is actually eligible to serve
@@ -805,6 +827,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 				}
 			}
 		}
+	skipPreCache:
 
 		// --- Token extraction and validation (moved from director) ---
 		authHeader := r.Header.Get("Authorization")
@@ -938,27 +961,30 @@ func (p *TransparentProxy) Handler() http.Handler {
 			optIn := hasClientCacheOptIn(r)
 			allowedLookup := (r.Method == http.MethodGet || r.Method == http.MethodHead) || (r.Method == http.MethodPost && optIn)
 			if r.Method == http.MethodPost && allowedLookup {
-				// For POST caching, require a known, bounded body size.
-				maxBodyHashBytes := p.config.HTTPCacheMaxObjectBytes
-				if maxBodyHashBytes <= 0 {
-					maxBodyHashBytes = 1024 * 1024
-				}
-				if r.Body == nil || r.ContentLength < 0 || r.ContentLength > maxBodyHashBytes {
-					allowedLookup = false
-				} else {
-					bodyBytes, readErr := io.ReadAll(r.Body)
-					if readErr != nil {
-						p.logger.Warn("Failed to read request body for hashing", zap.Error(readErr))
-						writeErrorResponse(w, http.StatusBadRequest, ErrorResponse{
-							Error:       "Invalid request body",
-							Code:        "invalid_request_body",
-							Description: "failed to read request body",
-						})
-						return
+				// Body already read and hashed in pre-cache check if we got here.
+				// If X-Body-Hash is not set, it means pre-cache was skipped, so read it now.
+				if r.Header.Get("X-Body-Hash") == "" {
+					maxBodyHashBytes := p.config.HTTPCacheMaxObjectBytes
+					if maxBodyHashBytes <= 0 {
+						maxBodyHashBytes = 1024 * 1024
 					}
-					r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-					sum := sha256.Sum256(bodyBytes)
-					r.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
+					if r.Body == nil || r.ContentLength < 0 || r.ContentLength > maxBodyHashBytes {
+						allowedLookup = false
+					} else {
+						bodyBytes, readErr := io.ReadAll(r.Body)
+						if readErr != nil {
+							p.logger.Warn("Failed to read request body for hashing", zap.Error(readErr))
+							writeErrorResponse(w, http.StatusBadRequest, ErrorResponse{
+								Error:       "Invalid request body",
+								Code:        "invalid_request_body",
+								Description: "failed to read request body",
+							})
+							return
+						}
+						r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+						sum := sha256.Sum256(bodyBytes)
+						r.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
+					}
 				}
 			}
 			if !allowedLookup {
