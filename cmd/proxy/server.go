@@ -10,8 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -45,6 +43,19 @@ var osExec = func(name string, args ...string) *execCommand {
 		args: args,
 	}
 	return cmd
+}
+
+var newDatabaseFromConfig = database.NewFromConfig
+
+func buildDatabaseConfig(appConfig *config.Config) database.FullConfig {
+	dbConfig := database.ConfigFromEnv()
+	if dbConfig.Driver == database.DriverSQLite {
+		// Preserve backward compatibility: if DATABASE_PATH is not set, use config.DatabasePath.
+		if os.Getenv("DATABASE_PATH") == "" && appConfig != nil && appConfig.DatabasePath != "" {
+			dbConfig.Path = appConfig.DatabasePath
+		}
+	}
+	return dbConfig
 }
 
 // Server command flags
@@ -270,62 +281,31 @@ func runServerForeground() {
 		_ = ln.Close()
 	}
 
-	// Determine database driver from environment
-	dbDriver := os.Getenv("DB_DRIVER")
-	if dbDriver == "" {
-		dbDriver = "sqlite" // Default to SQLite for backward compatibility
-	}
+	// Database configuration
+	dbConfig := buildDatabaseConfig(cfg)
 
-	// Read database pool configuration from environment with defaults
-	maxOpenConns := getEnvInt("DATABASE_POOL_SIZE", 10)
-	maxIdleConns := getEnvInt("DATABASE_MAX_IDLE_CONNS", 5)
-	connMaxLifetime := getEnvDuration("DATABASE_CONN_MAX_LIFETIME", time.Hour)
-
-	var db *database.DB
-	var dbErr error
-
-	if dbDriver == "postgres" {
-		// PostgreSQL configuration
-		databaseURL := os.Getenv("DATABASE_URL")
-		if databaseURL == "" {
-			zapLogger.Fatal("DATABASE_URL is required when DB_DRIVER=postgres")
-		}
-
-		dbConfig := database.FullConfig{
-			Driver:          database.DriverPostgres,
-			DatabaseURL:     databaseURL,
-			MaxOpenConns:    maxOpenConns,
-			MaxIdleConns:    maxIdleConns,
-			ConnMaxLifetime: connMaxLifetime,
-		}
-		db, dbErr = database.NewFromConfig(dbConfig)
-		if dbErr != nil {
+	db, dbErr := newDatabaseFromConfig(dbConfig)
+	if dbErr != nil {
+		switch dbConfig.Driver {
+		case database.DriverPostgres:
 			zapLogger.Fatal("Failed to connect to PostgreSQL database", zap.Error(dbErr))
-		}
-		zapLogger.Info("Connected to PostgreSQL database")
-	} else {
-		// SQLite configuration (default)
-		dbDir := filepath.Dir(cfg.DatabasePath)
-		if err := os.MkdirAll(dbDir, 0755); err != nil {
-			zapLogger.Fatal("Failed to create database directory", zap.Error(err))
-		}
-
-		dbConfig := database.FullConfig{
-			Driver:          database.DriverSQLite,
-			Path:            cfg.DatabasePath,
-			MaxOpenConns:    maxOpenConns,
-			MaxIdleConns:    maxIdleConns,
-			ConnMaxLifetime: connMaxLifetime,
-		}
-		db, dbErr = database.NewFromConfig(dbConfig)
-		if dbErr != nil {
+		case database.DriverMySQL:
+			zapLogger.Fatal("Failed to connect to MySQL database", zap.Error(dbErr))
+		default:
 			zapLogger.Fatal("Failed to connect to SQLite database", zap.Error(dbErr))
 		}
-		if cfg.DatabasePath == ":memory:" {
+	}
+	switch dbConfig.Driver {
+	case database.DriverSQLite:
+		if dbConfig.Path == ":memory:" {
 			zapLogger.Info("Connected to in-memory SQLite database")
 		} else {
-			zapLogger.Info("Connected to SQLite database", zap.String("path", cfg.DatabasePath))
+			zapLogger.Info("Connected to SQLite database", zap.String("path", dbConfig.Path))
 		}
+	case database.DriverPostgres:
+		zapLogger.Info("Connected to PostgreSQL database")
+	case database.DriverMySQL:
+		zapLogger.Info("Connected to MySQL database")
 	}
 
 	// Create base stores
@@ -337,6 +317,10 @@ func runServerForeground() {
 	projectStore := baseProjectStore
 
 	encryptionKey := os.Getenv("ENCRYPTION_KEY")
+	if os.Getenv("REQUIRE_ENCRYPTION_KEY") == "true" && encryptionKey == "" {
+		zapLogger.Fatal("ENCRYPTION_KEY is required but not set",
+			zap.String("hint", "Generate a valid key with: openssl rand -base64 32"))
+	}
 	if encryptionKey != "" {
 		// Create encryptor for API keys
 		encryptor, err := encryption.NewEncryptorFromBase64Key(encryptionKey)
@@ -447,29 +431,4 @@ func runServerForeground() {
 	}
 
 	zapLogger.Info("Server exited gracefully")
-}
-
-// getEnvInt reads an integer from an environment variable with a default value.
-// Logs a warning if the value exists but is invalid.
-func getEnvInt(key string, defaultVal int) int {
-	if val := os.Getenv(key); val != "" {
-		if i, err := strconv.Atoi(val); err == nil {
-			return i
-		}
-		log.Printf("Warning: invalid integer value for %s: %q, using default: %d", key, val, defaultVal)
-	}
-	return defaultVal
-}
-
-// getEnvDuration reads a duration from an environment variable with a default value.
-// Accepts formats like "1h", "30m", "1h30m", etc.
-// Logs a warning if the value exists but is invalid.
-func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
-	if val := os.Getenv(key); val != "" {
-		if d, err := time.ParseDuration(val); err == nil {
-			return d
-		}
-		log.Printf("Warning: invalid duration value for %s: %q, using default: %v", key, val, defaultVal)
-	}
-	return defaultVal
 }
