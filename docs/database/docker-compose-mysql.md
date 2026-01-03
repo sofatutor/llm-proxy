@@ -161,9 +161,9 @@ The MySQL profile adds these services:
 
 ### mysql
 
-The MySQL 8.0 database server.
+The MySQL 8.4 database server.
 
-- **Image:** `mysql:8.0`
+- **Image:** `mysql:8.4.5`
 - **Port:** `3306`
 - **Healthcheck:** `mysqladmin ping`
 - **Volume:** `mysql_data` (persistent)
@@ -173,7 +173,7 @@ The MySQL 8.0 database server.
 
 The MySQL test instance (with `mysql-test` profile).
 
-- **Image:** `mysql:8.0`
+- **Image:** `mysql:8.4.5`
 - **Port:** `33306` (to avoid conflict with development instance)
 - **Healthcheck:** `mysqladmin ping`
 - **Volume:** `mysql_test_data` (persistent)
@@ -364,7 +364,7 @@ The default MySQL configuration is suitable for development. For production:
 | Feature | MySQL | PostgreSQL |
 |---------|-------|------------|
 | Port | 3306 | 5432 |
-| Image | mysql:8.0 | postgres:15 |
+| Image | mysql:8.4.5 | postgres:15 |
 | Health Check | mysqladmin ping | pg_isready |
 | Lock Mechanism | Named locks | Advisory locks |
 | Build Tag | mysql | postgres |

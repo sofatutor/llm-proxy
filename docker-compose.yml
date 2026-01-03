@@ -75,7 +75,7 @@ services:
 
   # MySQL database service
   mysql:
-    image: mysql:8.0
+    image: mysql:8.4.5
     container_name: llm-proxy-mysql-db
     profiles: ["mysql"]
     environment:
@@ -96,7 +96,7 @@ services:
     restart: unless-stopped
 
   mysql-test:
-    image: mysql:8.0
+    image: mysql:8.4.5
     container_name: llm-proxy-mysql-test
     profiles: ["mysql-test"]
     environment:

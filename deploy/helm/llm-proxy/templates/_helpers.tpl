@@ -114,7 +114,9 @@ Get the key within the secret for REDIS_PASSWORD
 Get the name of the secret containing ENCRYPTION_KEY
 */}}
 {{- define "llm-proxy.encryptionKeySecretName" -}}
-{{- if .Values.secrets.encryptionKey.existingSecret.name }}
+{{- if and .Values.secrets.create .Values.secrets.data.encryptionKey }}
+{{- include "llm-proxy.fullname" . }}
+{{- else if .Values.secrets.encryptionKey.existingSecret.name }}
 {{- .Values.secrets.encryptionKey.existingSecret.name }}
 {{- end }}
 {{- end }}
@@ -123,7 +125,37 @@ Get the name of the secret containing ENCRYPTION_KEY
 Get the key within the secret for ENCRYPTION_KEY
 */}}
 {{- define "llm-proxy.encryptionKeySecretKey" -}}
+{{- if .Values.secrets.create }}
+{{- printf "ENCRYPTION_KEY" }}
+{{- else }}
 {{- .Values.secrets.encryptionKey.existingSecret.key | default "ENCRYPTION_KEY" }}
+{{- end }}
+{{- end }}
+
+{{/*
+Validate SQLite configuration
+*/}}
+{{- define "llm-proxy.validateSqliteConfig" -}}
+{{- $dbDriver := .Values.env.DB_DRIVER | default "sqlite" }}
+{{- $maxReplicas := .Values.replicaCount | default 1 }}
+{{- if .Values.autoscaling.enabled }}
+  {{- $maxReplicas = .Values.autoscaling.maxReplicas | default 1 }}
+{{- end }}
+{{- if and (eq $dbDriver "sqlite") (gt (int $maxReplicas) 1) }}
+  {{- fail (printf "Configuration error: DB_DRIVER is 'sqlite' but the deployment can scale to %v replicas. SQLite is not supported for multi-pod deployments. Set env.DB_DRIVER to 'mysql' or 'postgres' and configure secrets.databaseUrl / mysql.enabled / postgresql.enabled." $maxReplicas) }}
+{{- end }}
+{{- end }}
+
+{{/*
+Validate ENCRYPTION_KEY configuration
+*/}}
+{{- define "llm-proxy.validateEncryptionKeyConfig" -}}
+{{- if .Values.secrets.encryptionKey.required }}
+  {{- $hasKey := or (and .Values.secrets.create .Values.secrets.data.encryptionKey) .Values.secrets.encryptionKey.existingSecret.name }}
+  {{- if not $hasKey }}
+    {{- fail "Configuration error: ENCRYPTION_KEY is required but not configured. Provide secrets.encryptionKey.existingSecret.name (recommended) or set secrets.create=true and secrets.data.encryptionKey (development only)." }}
+  {{- end }}
+{{- end }}
 {{- end }}
 
 {{/*
