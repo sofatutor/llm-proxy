@@ -815,7 +815,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 				sum := sha256.Sum256(bodyBytes)
 				r.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
 			}
-			
+
 			key := CacheKeyFromRequest(r)
 			if cr, ok := p.cache.Get(key); ok {
 				// Only treat as a fast-path cache hit if it is actually eligible to serve

@@ -129,7 +129,7 @@ func TestProxy_POSTCacheHitAvoidsTracking(t *testing.T) {
 	require.Equal(t, http.StatusOK, rr.Code)
 	require.Equal(t, "llm-proxy; hit", rr.Header().Get("Cache-Status"))
 	require.Contains(t, rr.Body.String(), "cached")
-	
+
 	// Verify mock expectations were met (ValidateToken called once, ValidateTokenWithTracking never called)
 	validator.AssertExpectations(t)
 }
