@@ -19,6 +19,7 @@ import (
 	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/sofatutor/llm-proxy/internal/database"
+	"github.com/sofatutor/llm-proxy/internal/encryption"
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/middleware"
@@ -27,12 +28,6 @@ import (
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"go.uber.org/zap"
 )
-
-// TokenHasher defines the interface for token hashing operations used by the server.
-// It allows hashing tokens before database operations when encryption is enabled.
-type TokenHasher interface {
-	CreateLookupKey(token string) string
-}
 
 // Server represents the HTTP server for the LLM Proxy.
 // It encapsulates the underlying http.Server along with application configuration
@@ -50,7 +45,7 @@ type Server struct {
 	db            *database.DB
 	cacheStatsAgg *proxy.CacheStatsAggregator
 	usageStatsAgg *token.UsageStatsAggregator
-	tokenHasher   TokenHasher // Optional hasher for encryption support
+	tokenHasher   encryption.TokenHasherInterface // Optional hasher for encryption support
 }
 
 // ServerOption is a functional option for configuring the server.
@@ -58,32 +53,10 @@ type ServerOption func(*Server)
 
 // WithTokenHasher sets the token hasher for usage stats encryption.
 // When encryption is enabled, this hasher is used to hash tokens before batch updates.
-func WithTokenHasher(hasher TokenHasher) ServerOption {
+func WithTokenHasher(hasher encryption.TokenHasherInterface) ServerOption {
 	return func(s *Server) {
 		s.tokenHasher = hasher
 	}
-}
-
-// secureUsageStatsStoreAdapter wraps a UsageStatsStore and hashes tokens before batch operations.
-// This is used internally when encryption is enabled.
-type secureUsageStatsStoreAdapter struct {
-	store  token.UsageStatsStore
-	hasher TokenHasher
-}
-
-// IncrementTokenUsageBatch hashes token strings before calling the underlying store.
-func (s *secureUsageStatsStoreAdapter) IncrementTokenUsageBatch(ctx context.Context, deltas map[string]int, lastUsedAt time.Time) error {
-	if len(deltas) == 0 {
-		return nil
-	}
-
-	hashedDeltas := make(map[string]int, len(deltas))
-	for tokenString, delta := range deltas {
-		hashedToken := s.hasher.CreateLookupKey(tokenString)
-		hashedDeltas[hashedToken] = delta
-	}
-
-	return s.store.IncrementTokenUsageBatch(ctx, hashedDeltas, lastUsedAt)
 }
 
 // HealthResponse is the response body for the health check endpoint.
@@ -379,10 +352,7 @@ func (s *Server) initializeAPIRoutes() error {
 		// Use the raw DB store, but wrap with secure store if encryption is enabled
 		var usageStore token.UsageStatsStore = s.db
 		if s.tokenHasher != nil {
-			usageStore = &secureUsageStatsStoreAdapter{
-				store:  s.db,
-				hasher: s.tokenHasher,
-			}
+			usageStore = encryption.NewSecureUsageStatsStore(s.db, s.tokenHasher)
 			s.logger.Debug("Using secure usage stats store with token hashing")
 		}
 

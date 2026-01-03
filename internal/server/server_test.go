@@ -16,6 +16,7 @@ import (
 	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/sofatutor/llm-proxy/internal/database"
+	"github.com/sofatutor/llm-proxy/internal/encryption"
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/sofatutor/llm-proxy/internal/token"
@@ -1704,9 +1705,20 @@ func TestInitializeAPIRoutes_RedisCacheURLConstruction(t *testing.T) {
 
 // ========== Token Hasher and Secure Usage Stats Tests ==========
 
-// mockTokenHasher implements TokenHasher for testing
+// mockTokenHasher implements encryption.TokenHasherInterface for testing
 type mockTokenHasher struct {
 	prefix string
+}
+
+func (m *mockTokenHasher) HashToken(token string) (string, error) {
+	return m.CreateLookupKey(token), nil
+}
+
+func (m *mockTokenHasher) VerifyToken(token, hashedToken string) error {
+	if m.CreateLookupKey(token) == hashedToken {
+		return nil
+	}
+	return errors.New("hash mismatch")
 }
 
 func (m *mockTokenHasher) CreateLookupKey(token string) string {
@@ -1715,6 +1727,9 @@ func (m *mockTokenHasher) CreateLookupKey(token string) string {
 	}
 	return m.prefix + token
 }
+
+// Compile-time check that mockTokenHasher implements encryption.TokenHasherInterface
+var _ encryption.TokenHasherInterface = (*mockTokenHasher)(nil)
 
 func TestWithTokenHasher(t *testing.T) {
 	cfg := &config.Config{
@@ -1764,14 +1779,12 @@ func (m *mockUsageStatsStore) IncrementTokenUsageBatch(ctx context.Context, delt
 	return m.batchError
 }
 
-func TestSecureUsageStatsStoreAdapter_HashesTokens(t *testing.T) {
+func TestSecureUsageStatsStore_HashesTokens(t *testing.T) {
 	hasher := &mockTokenHasher{}
 	mockStore := &mockUsageStatsStore{}
 
-	adapter := &secureUsageStatsStoreAdapter{
-		store:  mockStore,
-		hasher: hasher,
-	}
+	// Use the encryption package's SecureUsageStatsStore (eliminates code duplication)
+	adapter := encryption.NewSecureUsageStatsStore(mockStore, hasher)
 
 	ctx := context.Background()
 	deltas := map[string]int{
@@ -1797,14 +1810,11 @@ func TestSecureUsageStatsStoreAdapter_HashesTokens(t *testing.T) {
 	assert.False(t, hasOriginal2)
 }
 
-func TestSecureUsageStatsStoreAdapter_EmptyDeltas(t *testing.T) {
+func TestSecureUsageStatsStore_EmptyDeltas(t *testing.T) {
 	hasher := &mockTokenHasher{}
 	mockStore := &mockUsageStatsStore{}
 
-	adapter := &secureUsageStatsStoreAdapter{
-		store:  mockStore,
-		hasher: hasher,
-	}
+	adapter := encryption.NewSecureUsageStatsStore(mockStore, hasher)
 
 	ctx := context.Background()
 	err := adapter.IncrementTokenUsageBatch(ctx, map[string]int{}, time.Now())
@@ -1814,16 +1824,13 @@ func TestSecureUsageStatsStoreAdapter_EmptyDeltas(t *testing.T) {
 	assert.Len(t, mockStore.batchCalls, 0)
 }
 
-func TestSecureUsageStatsStoreAdapter_PropagatesError(t *testing.T) {
+func TestSecureUsageStatsStore_PropagatesError(t *testing.T) {
 	hasher := &mockTokenHasher{}
 	mockStore := &mockUsageStatsStore{
 		batchError: errors.New("db error"),
 	}
 
-	adapter := &secureUsageStatsStoreAdapter{
-		store:  mockStore,
-		hasher: hasher,
-	}
+	adapter := encryption.NewSecureUsageStatsStore(mockStore, hasher)
 
 	ctx := context.Background()
 	err := adapter.IncrementTokenUsageBatch(ctx, map[string]int{"token": 1}, time.Now())

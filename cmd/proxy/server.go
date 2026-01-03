@@ -329,6 +329,10 @@ func runServerForeground() {
 	tokenStore := token.TokenStore(baseTokenStore)
 	projectStore := baseProjectStore
 
+	// Create server with database support for audit logging
+	// Pass the hasher if encryption is enabled so usage stats can hash tokens
+	var serverOpts []server.ServerOption
+
 	encryptionKey := os.Getenv("ENCRYPTION_KEY")
 	if encryptionKey != "" {
 		// Create encryptor for API keys
@@ -346,18 +350,12 @@ func runServerForeground() {
 		projectStore = encryption.NewSecureProjectStore(baseProjectStore, encryptor)
 		tokenStore = encryption.NewSecureTokenStore(baseTokenStore, hasher)
 
+		// Pass hasher to server for usage stats encryption
+		serverOpts = append(serverOpts, server.WithTokenHasher(hasher))
+
 		zapLogger.Info("Encryption enabled for sensitive data at rest",
 			zap.Bool("api_keys_encrypted", true),
 			zap.Bool("tokens_hashed", true))
-	}
-
-	// Create server with database support for audit logging
-	// Pass the hasher if encryption is enabled so usage stats can hash tokens
-	var serverOpts []server.ServerOption
-	if encryptionKey != "" {
-		// Re-create hasher for the server (lightweight, no state)
-		serverHasher := encryption.NewTokenHasher()
-		serverOpts = append(serverOpts, server.WithTokenHasher(serverHasher))
 	} else {
 		zapLogger.Warn("ENCRYPTION_KEY not set - sensitive data will be stored in plaintext",
 			zap.String("hint", "Set ENCRYPTION_KEY for production use: openssl rand -base64 32"))
