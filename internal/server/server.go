@@ -382,7 +382,15 @@ func (s *Server) initializeAPIRoutes() error {
 			FlushInterval: 5 * time.Second,
 			BatchSize:     100,
 		}
-		s.cacheStatsAgg = proxy.NewCacheStatsAggregator(aggConfig, s.db, s.logger)
+
+		// Use the raw DB store, but wrap with secure store if encryption is enabled
+		var cacheStatsStore proxy.CacheStatsStore = s.db
+		if s.tokenHasher != nil {
+			cacheStatsStore = encryption.NewSecureCacheStatsStore(s.db, s.tokenHasher)
+			s.logger.Debug("Using secure cache stats store with token hashing")
+		}
+
+		s.cacheStatsAgg = proxy.NewCacheStatsAggregator(aggConfig, cacheStatsStore, s.logger)
 		s.cacheStatsAgg.Start()
 		proxyHandler.SetCacheStatsAggregator(s.cacheStatsAgg)
 		s.logger.Info("Cache stats aggregator started", zap.Int("buffer_size", aggConfig.BufferSize))

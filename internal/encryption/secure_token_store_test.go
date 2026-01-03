@@ -1207,3 +1207,136 @@ func TestSecureUsageStatsStore_NullHasher(t *testing.T) {
 		t.Error("NullTokenHasher should not modify token")
 	}
 }
+
+// ========== SecureCacheStatsStore Tests ==========
+
+type mockCacheStatsStore struct {
+	batchCalls []map[string]int
+	batchError error
+}
+
+func newMockCacheStatsStore() *mockCacheStatsStore {
+	return &mockCacheStatsStore{}
+}
+
+func (m *mockCacheStatsStore) IncrementCacheHitCountBatch(ctx context.Context, deltas map[string]int) error {
+	m.batchCalls = append(m.batchCalls, deltas)
+	return m.batchError
+}
+
+func TestNewSecureCacheStatsStore(t *testing.T) {
+	mock := newMockCacheStatsStore()
+
+	t.Run("with hasher", func(t *testing.T) {
+		hasher := NewTokenHasher()
+		store := NewSecureCacheStatsStore(mock, hasher)
+		if store == nil {
+			t.Error("expected store, got nil")
+		}
+	})
+
+	t.Run("nil hasher uses NullTokenHasher", func(t *testing.T) {
+		store := NewSecureCacheStatsStore(mock, nil)
+		if store == nil {
+			t.Error("expected store, got nil")
+		}
+	})
+}
+
+func TestSecureCacheStatsStore_IncrementCacheHitCountBatch(t *testing.T) {
+	hasher := NewTokenHasher()
+	mock := newMockCacheStatsStore()
+	store := NewSecureCacheStatsStore(mock, hasher)
+	ctx := context.Background()
+
+	token1 := "sk-test-token-1"
+	token2 := "sk-test-token-2"
+
+	deltas := map[string]int{
+		token1: 5,
+		token2: 3,
+	}
+
+	err := store.IncrementCacheHitCountBatch(ctx, deltas)
+	if err != nil {
+		t.Fatalf("IncrementCacheHitCountBatch failed: %v", err)
+	}
+
+	if len(mock.batchCalls) != 1 {
+		t.Fatalf("expected 1 batch call, got %d", len(mock.batchCalls))
+	}
+
+	call := mock.batchCalls[0]
+
+	// Verify tokens were hashed
+	hashedToken1 := hasher.CreateLookupKey(token1)
+	hashedToken2 := hasher.CreateLookupKey(token2)
+
+	if call[hashedToken1] != 5 {
+		t.Errorf("expected delta 5 for hashed token1, got %d", call[hashedToken1])
+	}
+	if call[hashedToken2] != 3 {
+		t.Errorf("expected delta 3 for hashed token2, got %d", call[hashedToken2])
+	}
+
+	// Original tokens should not be in the map
+	if _, ok := call[token1]; ok {
+		t.Error("original token1 should not be in deltas map")
+	}
+	if _, ok := call[token2]; ok {
+		t.Error("original token2 should not be in deltas map")
+	}
+}
+
+func TestSecureCacheStatsStore_IncrementCacheHitCountBatch_Empty(t *testing.T) {
+	hasher := NewTokenHasher()
+	mock := newMockCacheStatsStore()
+	store := NewSecureCacheStatsStore(mock, hasher)
+	ctx := context.Background()
+
+	// Empty map should return early without calling the underlying store
+	err := store.IncrementCacheHitCountBatch(ctx, map[string]int{})
+	if err != nil {
+		t.Fatalf("IncrementCacheHitCountBatch failed: %v", err)
+	}
+
+	if len(mock.batchCalls) != 0 {
+		t.Errorf("expected 0 batch calls for empty deltas, got %d", len(mock.batchCalls))
+	}
+}
+
+func TestSecureCacheStatsStore_IncrementCacheHitCountBatch_Error(t *testing.T) {
+	hasher := NewTokenHasher()
+	mock := newMockCacheStatsStore()
+	mock.batchError = errors.New("db error")
+	store := NewSecureCacheStatsStore(mock, hasher)
+	ctx := context.Background()
+
+	err := store.IncrementCacheHitCountBatch(ctx, map[string]int{"token": 1})
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestSecureCacheStatsStore_NullHasher(t *testing.T) {
+	mock := newMockCacheStatsStore()
+	store := NewSecureCacheStatsStore(mock, nil) // Uses NullTokenHasher
+	ctx := context.Background()
+
+	originalToken := "sk-test-token"
+	deltas := map[string]int{originalToken: 1}
+
+	err := store.IncrementCacheHitCountBatch(ctx, deltas)
+	if err != nil {
+		t.Fatalf("IncrementCacheHitCountBatch failed: %v", err)
+	}
+
+	if len(mock.batchCalls) != 1 {
+		t.Fatalf("expected 1 batch call, got %d", len(mock.batchCalls))
+	}
+
+	// With NullTokenHasher, token should remain unchanged
+	if mock.batchCalls[0][originalToken] != 1 {
+		t.Error("NullTokenHasher should not modify token")
+	}
+}

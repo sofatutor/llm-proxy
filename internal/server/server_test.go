@@ -1837,3 +1837,73 @@ func TestSecureUsageStatsStore_PropagatesError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "db error")
 }
+
+// ========== Secure Cache Stats Store Tests ==========
+
+// mockCacheStatsStoreForServer implements proxy.CacheStatsStore for testing
+type mockCacheStatsStoreForServer struct {
+	batchCalls []map[string]int
+	batchError error
+}
+
+func (m *mockCacheStatsStoreForServer) IncrementCacheHitCountBatch(ctx context.Context, deltas map[string]int) error {
+	m.batchCalls = append(m.batchCalls, deltas)
+	return m.batchError
+}
+
+func TestSecureCacheStatsStore_HashesTokens(t *testing.T) {
+	hasher := &mockTokenHasher{}
+	mockStore := &mockCacheStatsStoreForServer{}
+
+	adapter := encryption.NewSecureCacheStatsStore(mockStore, hasher)
+
+	ctx := context.Background()
+	deltas := map[string]int{
+		"token1": 5,
+		"token2": 3,
+	}
+
+	err := adapter.IncrementCacheHitCountBatch(ctx, deltas)
+	require.NoError(t, err)
+
+	require.Len(t, mockStore.batchCalls, 1)
+	call := mockStore.batchCalls[0]
+
+	// Verify tokens were hashed
+	assert.Equal(t, 5, call["hashed:token1"])
+	assert.Equal(t, 3, call["hashed:token2"])
+
+	// Original tokens should not be present
+	_, hasOriginal1 := call["token1"]
+	_, hasOriginal2 := call["token2"]
+	assert.False(t, hasOriginal1)
+	assert.False(t, hasOriginal2)
+}
+
+func TestSecureCacheStatsStore_EmptyDeltas(t *testing.T) {
+	hasher := &mockTokenHasher{}
+	mockStore := &mockCacheStatsStoreForServer{}
+
+	adapter := encryption.NewSecureCacheStatsStore(mockStore, hasher)
+
+	ctx := context.Background()
+	err := adapter.IncrementCacheHitCountBatch(ctx, map[string]int{})
+	require.NoError(t, err)
+
+	// Should return early without calling the underlying store
+	assert.Len(t, mockStore.batchCalls, 0)
+}
+
+func TestSecureCacheStatsStore_PropagatesError(t *testing.T) {
+	hasher := &mockTokenHasher{}
+	mockStore := &mockCacheStatsStoreForServer{
+		batchError: errors.New("db error"),
+	}
+
+	adapter := encryption.NewSecureCacheStatsStore(mockStore, hasher)
+
+	ctx := context.Background()
+	err := adapter.IncrementCacheHitCountBatch(ctx, map[string]int{"token": 1})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "db error")
+}
