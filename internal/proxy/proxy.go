@@ -772,7 +772,8 @@ func prepareBodyHashForCaching(r *http.Request, maxBytes int64, logger *zap.Logg
 	bodyBytes, readErr := io.ReadAll(limitedReader)
 	if readErr != nil {
 		logger.Warn("Failed to read request body for hashing", zap.Error(readErr))
-		// Restore the body with whatever we have read plus the remaining unread part.
+		// Restore the body with whatever we have read plus any remaining unread bytes.
+		// Note: io.LimitReader stops after maxBytes+1 bytes and does not drain the underlying body.
 		r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(bodyBytes), r.Body))
 		return false
 	}
@@ -782,7 +783,7 @@ func prepareBodyHashForCaching(r *http.Request, maxBytes int64, logger *zap.Logg
 			zap.Int64("max_bytes", maxBytes),
 			zap.Int64("read_bytes", int64(len(bodyBytes))),
 		)
-		// Restore the full body (the bytes we already consumed plus what remains unread)
+		// Restore the full body (the bytes we already consumed plus what remains unread).
 		r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(bodyBytes), r.Body))
 		return false
 	}

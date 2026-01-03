@@ -200,9 +200,12 @@ func TestPrepareBodyHashForCaching(t *testing.T) {
 		}
 		result := prepareBodyHashForCaching(req, maxBytes, logger)
 		require.False(t, result)
+		require.Empty(t, req.Header.Get("X-Body-Hash"))
 
-		// Verify body was restored (first maxBytes+1 bytes)
-		require.NotNil(t, req.Body)
+		// Verify body was fully restored (bytes we consumed + unread remainder)
+		restoredBody, err := io.ReadAll(req.Body)
+		require.NoError(t, err)
+		require.Equal(t, bodyContent, restoredBody)
 	})
 
 	t.Run("read_error_restores_body", func(t *testing.T) {
@@ -219,9 +222,12 @@ func TestPrepareBodyHashForCaching(t *testing.T) {
 		}
 		result := prepareBodyHashForCaching(req, maxBytes, logger)
 		require.False(t, result)
+		require.Empty(t, req.Header.Get("X-Body-Hash"))
 
-		// Verify body was restored with partial data
-		require.NotNil(t, req.Body)
+		// Verify body was restored with whatever bytes were read before the error.
+		restoredBody, err := io.ReadAll(req.Body)
+		require.Error(t, err)
+		require.Equal(t, []byte("partial"), restoredBody)
 	})
 
 	t.Run("exact_max_bytes", func(t *testing.T) {
