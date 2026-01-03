@@ -3,6 +3,7 @@ package encryption
 
 import (
 	"context"
+	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/token"
 )
@@ -188,3 +189,81 @@ func (s *SecureRateLimitStore) UpdateTokenLimit(ctx context.Context, tokenID str
 
 // Compile-time interface check
 var _ token.RateLimitStore = (*SecureRateLimitStore)(nil)
+
+// SecureUsageStatsStore wraps a UsageStatsStore and hashes tokens before batch operations.
+type SecureUsageStatsStore struct {
+	store  token.UsageStatsStore
+	hasher TokenHasherInterface
+}
+
+// NewSecureUsageStatsStore creates a new SecureUsageStatsStore.
+func NewSecureUsageStatsStore(store token.UsageStatsStore, hasher TokenHasherInterface) *SecureUsageStatsStore {
+	if hasher == nil {
+		hasher = NewNullTokenHasher()
+	}
+	return &SecureUsageStatsStore{
+		store:  store,
+		hasher: hasher,
+	}
+}
+
+// IncrementTokenUsageBatch increments request_count for multiple tokens.
+// Token strings are hashed before the operation.
+func (s *SecureUsageStatsStore) IncrementTokenUsageBatch(ctx context.Context, deltas map[string]int, lastUsedAt time.Time) error {
+	if len(deltas) == 0 {
+		return nil
+	}
+
+	hashedDeltas := make(map[string]int, len(deltas))
+	for tokenString, delta := range deltas {
+		hashedToken := s.hasher.CreateLookupKey(tokenString)
+		hashedDeltas[hashedToken] = delta
+	}
+
+	return s.store.IncrementTokenUsageBatch(ctx, hashedDeltas, lastUsedAt)
+}
+
+// Compile-time interface check
+var _ token.UsageStatsStore = (*SecureUsageStatsStore)(nil)
+
+// CacheStatsStore defines the interface for cache stats storage.
+// This mirrors proxy.CacheStatsStore to avoid import cycles.
+type CacheStatsStore interface {
+	IncrementCacheHitCountBatch(ctx context.Context, deltas map[string]int) error
+}
+
+// SecureCacheStatsStore wraps a CacheStatsStore and hashes tokens before batch operations.
+type SecureCacheStatsStore struct {
+	store  CacheStatsStore
+	hasher TokenHasherInterface
+}
+
+// NewSecureCacheStatsStore creates a new SecureCacheStatsStore.
+func NewSecureCacheStatsStore(store CacheStatsStore, hasher TokenHasherInterface) *SecureCacheStatsStore {
+	if hasher == nil {
+		hasher = NewNullTokenHasher()
+	}
+	return &SecureCacheStatsStore{
+		store:  store,
+		hasher: hasher,
+	}
+}
+
+// IncrementCacheHitCountBatch increments cache_hit_count for multiple tokens.
+// Token strings are hashed before the operation.
+func (s *SecureCacheStatsStore) IncrementCacheHitCountBatch(ctx context.Context, deltas map[string]int) error {
+	if len(deltas) == 0 {
+		return nil
+	}
+
+	hashedDeltas := make(map[string]int, len(deltas))
+	for tokenString, delta := range deltas {
+		hashedToken := s.hasher.CreateLookupKey(tokenString)
+		hashedDeltas[hashedToken] = delta
+	}
+
+	return s.store.IncrementCacheHitCountBatch(ctx, hashedDeltas)
+}
+
+// Compile-time interface check
+var _ CacheStatsStore = (*SecureCacheStatsStore)(nil)

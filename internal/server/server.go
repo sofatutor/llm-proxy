@@ -19,6 +19,7 @@ import (
 	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/sofatutor/llm-proxy/internal/database"
+	"github.com/sofatutor/llm-proxy/internal/encryption"
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/middleware"
@@ -44,6 +45,18 @@ type Server struct {
 	db            *database.DB
 	cacheStatsAgg *proxy.CacheStatsAggregator
 	usageStatsAgg *token.UsageStatsAggregator
+	tokenHasher   encryption.TokenHasherInterface // Optional hasher for encryption support
+}
+
+// ServerOption is a functional option for configuring the server.
+type ServerOption func(*Server)
+
+// WithTokenHasher sets the token hasher for usage stats encryption.
+// When encryption is enabled, this hasher is used to hash tokens before batch updates.
+func WithTokenHasher(hasher encryption.TokenHasherInterface) ServerOption {
+	return func(s *Server) {
+		s.tokenHasher = hasher
+	}
 }
 
 // HealthResponse is the response body for the health check endpoint.
@@ -76,7 +89,8 @@ func New(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.Pro
 
 // NewWithDatabase creates a new HTTP server with database support for audit logging.
 // This allows the server to store audit events in both file and database backends.
-func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.ProjectStore, db *database.DB) (*Server, error) {
+// Options can be passed to configure additional features like encryption/hashing.
+func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectStore proxy.ProjectStore, db *database.DB, opts ...ServerOption) (*Server, error) {
 	mux := http.NewServeMux()
 
 	logger, err := logging.NewLogger(cfg.LogLevel, cfg.LogFormat, cfg.LogFile)
@@ -176,6 +190,11 @@ func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectSto
 			WriteTimeout: cfg.RequestTimeout,
 			IdleTimeout:  cfg.RequestTimeout * 2,
 		},
+	}
+
+	// Apply options
+	for _, opt := range opts {
+		opt(s)
 	}
 
 	// Register routes
@@ -329,7 +348,15 @@ func (s *Server) initializeAPIRoutes() error {
 		if s.config.UsageStatsBufferSize > 0 {
 			usageCfg.BufferSize = s.config.UsageStatsBufferSize
 		}
-		s.usageStatsAgg = token.NewUsageStatsAggregator(usageCfg, s.db, s.logger)
+
+		// Use the raw DB store, but wrap with secure store if encryption is enabled
+		var usageStore token.UsageStatsStore = s.db
+		if s.tokenHasher != nil {
+			usageStore = encryption.NewSecureUsageStatsStore(s.db, s.tokenHasher)
+			s.logger.Debug("Using secure usage stats store with token hashing")
+		}
+
+		s.usageStatsAgg = token.NewUsageStatsAggregator(usageCfg, usageStore, s.logger)
 		s.usageStatsAgg.Start()
 		tokenValidator.SetUsageStatsAggregator(s.usageStatsAgg)
 		s.logger.Info("Usage stats aggregator started", zap.Int("buffer_size", usageCfg.BufferSize))
@@ -355,7 +382,15 @@ func (s *Server) initializeAPIRoutes() error {
 			FlushInterval: 5 * time.Second,
 			BatchSize:     100,
 		}
-		s.cacheStatsAgg = proxy.NewCacheStatsAggregator(aggConfig, s.db, s.logger)
+
+		// Use the raw DB store, but wrap with secure store if encryption is enabled
+		var cacheStatsStore proxy.CacheStatsStore = s.db
+		if s.tokenHasher != nil {
+			cacheStatsStore = encryption.NewSecureCacheStatsStore(s.db, s.tokenHasher)
+			s.logger.Debug("Using secure cache stats store with token hashing")
+		}
+
+		s.cacheStatsAgg = proxy.NewCacheStatsAggregator(aggConfig, cacheStatsStore, s.logger)
 		s.cacheStatsAgg.Start()
 		proxyHandler.SetCacheStatsAggregator(s.cacheStatsAgg)
 		s.logger.Info("Cache stats aggregator started", zap.Int("buffer_size", aggConfig.BufferSize))

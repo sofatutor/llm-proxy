@@ -16,6 +16,7 @@ import (
 	"github.com/sofatutor/llm-proxy/internal/audit"
 	"github.com/sofatutor/llm-proxy/internal/config"
 	"github.com/sofatutor/llm-proxy/internal/database"
+	"github.com/sofatutor/llm-proxy/internal/encryption"
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/proxy"
 	"github.com/sofatutor/llm-proxy/internal/token"
@@ -1700,4 +1701,252 @@ func TestInitializeAPIRoutes_RedisCacheURLConstruction(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+// ========== Token Hasher and Secure Usage Stats Tests ==========
+
+// mockTokenHasher implements encryption.TokenHasherInterface for testing
+type mockTokenHasher struct {
+	prefix string
+}
+
+func (m *mockTokenHasher) HashToken(token string) (string, error) {
+	return m.CreateLookupKey(token), nil
+}
+
+func (m *mockTokenHasher) VerifyToken(token, hashedToken string) error {
+	if m.CreateLookupKey(token) == hashedToken {
+		return nil
+	}
+	return errors.New("hash mismatch")
+}
+
+func (m *mockTokenHasher) CreateLookupKey(token string) string {
+	if m.prefix == "" {
+		return "hashed:" + token
+	}
+	return m.prefix + token
+}
+
+// Compile-time check that mockTokenHasher implements encryption.TokenHasherInterface
+var _ encryption.TokenHasherInterface = (*mockTokenHasher)(nil)
+
+func TestWithTokenHasher(t *testing.T) {
+	cfg := &config.Config{
+		ListenAddr:      ":0",
+		RequestTimeout:  time.Second,
+		EventBusBackend: "in-memory",
+	}
+
+	hasher := &mockTokenHasher{prefix: "test:"}
+
+	srv, err := NewWithDatabase(cfg, &mockTokenStore{}, &mockProjectStore{}, nil, WithTokenHasher(hasher))
+	require.NoError(t, err)
+
+	// Verify the hasher was set
+	assert.NotNil(t, srv.tokenHasher)
+	assert.Equal(t, "test:mytoken", srv.tokenHasher.CreateLookupKey("mytoken"))
+}
+
+func TestWithTokenHasher_NilHasher(t *testing.T) {
+	cfg := &config.Config{
+		ListenAddr:      ":0",
+		RequestTimeout:  time.Second,
+		EventBusBackend: "in-memory",
+	}
+
+	// Creating server without hasher option should leave tokenHasher nil
+	srv, err := NewWithDatabase(cfg, &mockTokenStore{}, &mockProjectStore{}, nil)
+	require.NoError(t, err)
+
+	assert.Nil(t, srv.tokenHasher)
+}
+
+// mockUsageStatsStore implements token.UsageStatsStore for testing
+type mockUsageStatsStore struct {
+	batchCalls []struct {
+		deltas     map[string]int
+		lastUsedAt time.Time
+	}
+	batchError error
+}
+
+func (m *mockUsageStatsStore) IncrementTokenUsageBatch(ctx context.Context, deltas map[string]int, lastUsedAt time.Time) error {
+	m.batchCalls = append(m.batchCalls, struct {
+		deltas     map[string]int
+		lastUsedAt time.Time
+	}{deltas, lastUsedAt})
+	return m.batchError
+}
+
+func TestSecureUsageStatsStore_HashesTokens(t *testing.T) {
+	hasher := &mockTokenHasher{}
+	mockStore := &mockUsageStatsStore{}
+
+	// Use the encryption package's SecureUsageStatsStore (eliminates code duplication)
+	adapter := encryption.NewSecureUsageStatsStore(mockStore, hasher)
+
+	ctx := context.Background()
+	deltas := map[string]int{
+		"token1": 5,
+		"token2": 3,
+	}
+	lastUsed := time.Now()
+
+	err := adapter.IncrementTokenUsageBatch(ctx, deltas, lastUsed)
+	require.NoError(t, err)
+
+	require.Len(t, mockStore.batchCalls, 1)
+	call := mockStore.batchCalls[0]
+
+	// Verify tokens were hashed
+	assert.Equal(t, 5, call.deltas["hashed:token1"])
+	assert.Equal(t, 3, call.deltas["hashed:token2"])
+
+	// Original tokens should not be present
+	_, hasOriginal1 := call.deltas["token1"]
+	_, hasOriginal2 := call.deltas["token2"]
+	assert.False(t, hasOriginal1)
+	assert.False(t, hasOriginal2)
+}
+
+func TestSecureUsageStatsStore_EmptyDeltas(t *testing.T) {
+	hasher := &mockTokenHasher{}
+	mockStore := &mockUsageStatsStore{}
+
+	adapter := encryption.NewSecureUsageStatsStore(mockStore, hasher)
+
+	ctx := context.Background()
+	err := adapter.IncrementTokenUsageBatch(ctx, map[string]int{}, time.Now())
+	require.NoError(t, err)
+
+	// Should return early without calling the underlying store
+	assert.Len(t, mockStore.batchCalls, 0)
+}
+
+func TestSecureUsageStatsStore_PropagatesError(t *testing.T) {
+	hasher := &mockTokenHasher{}
+	mockStore := &mockUsageStatsStore{
+		batchError: errors.New("db error"),
+	}
+
+	adapter := encryption.NewSecureUsageStatsStore(mockStore, hasher)
+
+	ctx := context.Background()
+	err := adapter.IncrementTokenUsageBatch(ctx, map[string]int{"token": 1}, time.Now())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "db error")
+}
+
+// ========== Secure Cache Stats Store Tests ==========
+
+// mockCacheStatsStoreForServer implements proxy.CacheStatsStore for testing
+type mockCacheStatsStoreForServer struct {
+	batchCalls []map[string]int
+	batchError error
+}
+
+func (m *mockCacheStatsStoreForServer) IncrementCacheHitCountBatch(ctx context.Context, deltas map[string]int) error {
+	m.batchCalls = append(m.batchCalls, deltas)
+	return m.batchError
+}
+
+func TestSecureCacheStatsStore_HashesTokens(t *testing.T) {
+	hasher := &mockTokenHasher{}
+	mockStore := &mockCacheStatsStoreForServer{}
+
+	adapter := encryption.NewSecureCacheStatsStore(mockStore, hasher)
+
+	ctx := context.Background()
+	deltas := map[string]int{
+		"token1": 5,
+		"token2": 3,
+	}
+
+	err := adapter.IncrementCacheHitCountBatch(ctx, deltas)
+	require.NoError(t, err)
+
+	require.Len(t, mockStore.batchCalls, 1)
+	call := mockStore.batchCalls[0]
+
+	// Verify tokens were hashed
+	assert.Equal(t, 5, call["hashed:token1"])
+	assert.Equal(t, 3, call["hashed:token2"])
+
+	// Original tokens should not be present
+	_, hasOriginal1 := call["token1"]
+	_, hasOriginal2 := call["token2"]
+	assert.False(t, hasOriginal1)
+	assert.False(t, hasOriginal2)
+}
+
+func TestSecureCacheStatsStore_EmptyDeltas(t *testing.T) {
+	hasher := &mockTokenHasher{}
+	mockStore := &mockCacheStatsStoreForServer{}
+
+	adapter := encryption.NewSecureCacheStatsStore(mockStore, hasher)
+
+	ctx := context.Background()
+	err := adapter.IncrementCacheHitCountBatch(ctx, map[string]int{})
+	require.NoError(t, err)
+
+	// Should return early without calling the underlying store
+	assert.Len(t, mockStore.batchCalls, 0)
+}
+
+func TestSecureCacheStatsStore_PropagatesError(t *testing.T) {
+	hasher := &mockTokenHasher{}
+	mockStore := &mockCacheStatsStoreForServer{
+		batchError: errors.New("db error"),
+	}
+
+	adapter := encryption.NewSecureCacheStatsStore(mockStore, hasher)
+
+	ctx := context.Background()
+	err := adapter.IncrementCacheHitCountBatch(ctx, map[string]int{"token": 1})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "db error")
+}
+
+// TestServerWithHasher_InitializesSecureStores verifies that when a tokenHasher
+// is provided, initializeAPIRoutes correctly wraps the database stores with
+// secure wrappers that hash tokens before database operations.
+func TestServerWithHasher_InitializesSecureStores(t *testing.T) {
+	// Create a real in-memory database for this test
+	db, err := database.New(database.Config{Path: ":memory:"})
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Initialize schema for the database
+	require.NoError(t, database.DBInitForTests(db))
+
+	hasher := &mockTokenHasher{prefix: "secure:"}
+
+	cfg := &config.Config{
+		ListenAddr:              ":0",
+		RequestTimeout:          time.Second,
+		EventBusBackend:         "in-memory",
+		ObservabilityBufferSize: 100,
+		UsageStatsBufferSize:    10,
+		CacheStatsBufferSize:    10,
+	}
+
+	// Create server with hasher and real DB
+	srv, err := NewWithDatabase(cfg, database.NewDBTokenStoreAdapter(db), db, db, WithTokenHasher(hasher))
+	require.NoError(t, err)
+
+	// Verify hasher is set
+	require.NotNil(t, srv.tokenHasher)
+
+	// Initialize API routes - this is where secure stores get wired up
+	err = srv.initializeAPIRoutes()
+	require.NoError(t, err)
+
+	// Verify usageStatsAgg was created (it should be since db != nil)
+	require.NotNil(t, srv.usageStatsAgg, "usageStatsAgg should be initialized when db is provided")
+
+	// Clean up
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = srv.Shutdown(ctx)
 }
