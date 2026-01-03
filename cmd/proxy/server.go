@@ -288,6 +288,12 @@ func runServerForeground() {
 		_ = ln.Close()
 	}
 
+	// Fail fast on missing encryption config before any heavyweight initialization.
+	if err := validateEncryptionKeyRequired(); err != nil {
+		zapLogger.Fatal(err.Error(),
+			zap.String("hint", "Generate a valid key with: openssl rand -base64 32"))
+	}
+
 	// Database configuration
 	dbConfig := buildDatabaseConfig(cfg)
 
@@ -323,10 +329,6 @@ func runServerForeground() {
 	tokenStore := token.TokenStore(baseTokenStore)
 	projectStore := baseProjectStore
 
-	if err := validateEncryptionKeyRequired(); err != nil {
-		zapLogger.Fatal(err.Error(),
-			zap.String("hint", "Generate a valid key with: openssl rand -base64 32"))
-	}
 	encryptionKey := os.Getenv("ENCRYPTION_KEY")
 	if encryptionKey != "" {
 		// Create encryptor for API keys

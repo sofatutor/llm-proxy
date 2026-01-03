@@ -125,7 +125,7 @@ Get the name of the secret containing ENCRYPTION_KEY
 Get the key within the secret for ENCRYPTION_KEY
 */}}
 {{- define "llm-proxy.encryptionKeySecretKey" -}}
-{{- if .Values.secrets.create }}
+{{- if and .Values.secrets.create .Values.secrets.data.encryptionKey }}
 {{- printf "ENCRYPTION_KEY" }}
 {{- else }}
 {{- .Values.secrets.encryptionKey.existingSecret.key | default "ENCRYPTION_KEY" }}
