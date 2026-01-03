@@ -758,6 +758,14 @@ func (p *TransparentProxy) getMaxBodyHashBytes() int64 {
 	return 1024 * 1024
 }
 
+type readerWithCloser struct {
+	r io.Reader
+	c io.Closer
+}
+
+func (rc *readerWithCloser) Read(p []byte) (int, error) { return rc.r.Read(p) }
+func (rc *readerWithCloser) Close() error               { return rc.c.Close() }
+
 // prepareBodyHashForCaching reads the request body up to maxBytes,
 // computes a SHA-256 hash, sets X-Body-Hash header, and restores the body.
 // Returns true if successful, false if body exceeds limits or read fails.
@@ -766,15 +774,17 @@ func prepareBodyHashForCaching(r *http.Request, maxBytes int64, logger *zap.Logg
 		return false
 	}
 
+	originalBody := r.Body
+
 	// Enforce a hard limit on how much we read from the body to avoid unbounded memory usage.
 	// We read up to maxBytes+1 so we can detect if the body is larger than allowed.
-	limitedReader := io.LimitReader(r.Body, maxBytes+1)
+	limitedReader := io.LimitReader(originalBody, maxBytes+1)
 	bodyBytes, readErr := io.ReadAll(limitedReader)
 	if readErr != nil {
 		logger.Warn("Failed to read request body for hashing", zap.Error(readErr))
 		// Restore the body with whatever we have read plus any remaining unread bytes.
 		// Note: io.LimitReader stops after maxBytes+1 bytes and does not drain the underlying body.
-		r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(bodyBytes), r.Body))
+		r.Body = &readerWithCloser{r: io.MultiReader(bytes.NewReader(bodyBytes), originalBody), c: originalBody}
 		return false
 	}
 
@@ -784,12 +794,12 @@ func prepareBodyHashForCaching(r *http.Request, maxBytes int64, logger *zap.Logg
 			zap.Int64("read_bytes", int64(len(bodyBytes))),
 		)
 		// Restore the full body (the bytes we already consumed plus what remains unread).
-		r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(bodyBytes), r.Body))
+		r.Body = &readerWithCloser{r: io.MultiReader(bytes.NewReader(bodyBytes), originalBody), c: originalBody}
 		return false
 	}
 
 	// Body is within the allowed size. Restore it from the bytes we read and compute the hash.
-	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	r.Body = &readerWithCloser{r: bytes.NewReader(bodyBytes), c: originalBody}
 	sum := sha256.Sum256(bodyBytes)
 	r.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
 	return true

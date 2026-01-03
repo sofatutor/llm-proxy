@@ -167,9 +167,10 @@ func TestPrepareBodyHashForCaching(t *testing.T) {
 
 	t.Run("successful_hash", func(t *testing.T) {
 		bodyContent := []byte("test body")
-		body := bytes.NewReader(bodyContent)
+		closed := false
+		body := &closeTrackingReadCloser{r: bytes.NewReader(bodyContent), closed: &closed}
 		req := &http.Request{
-			Body:          io.NopCloser(body),
+			Body:          body,
 			ContentLength: int64(len(bodyContent)),
 			Header:        http.Header{},
 		}
@@ -184,6 +185,9 @@ func TestPrepareBodyHashForCaching(t *testing.T) {
 		restoredBody, err := io.ReadAll(req.Body)
 		require.NoError(t, err)
 		require.Equal(t, bodyContent, restoredBody)
+
+		require.NoError(t, req.Body.Close())
+		require.True(t, closed)
 	})
 
 	t.Run("body_exceeds_limit_during_read", func(t *testing.T) {
@@ -192,9 +196,10 @@ func TestPrepareBodyHashForCaching(t *testing.T) {
 		for i := range bodyContent {
 			bodyContent[i] = byte('a')
 		}
-		body := bytes.NewReader(bodyContent)
+		closed := false
+		body := &closeTrackingReadCloser{r: bytes.NewReader(bodyContent), closed: &closed}
 		req := &http.Request{
-			Body:          io.NopCloser(body),
+			Body:          body,
 			ContentLength: 100, // Lies about size
 			Header:        http.Header{},
 		}
@@ -206,17 +211,21 @@ func TestPrepareBodyHashForCaching(t *testing.T) {
 		restoredBody, err := io.ReadAll(req.Body)
 		require.NoError(t, err)
 		require.Equal(t, bodyContent, restoredBody)
+
+		require.NoError(t, req.Body.Close())
+		require.True(t, closed)
 	})
 
 	t.Run("read_error_restores_body", func(t *testing.T) {
 		// Create a reader that returns an error after some bytes
 		errorReader := &errorAfterNBytesReader{
-			data:  []byte("partial"),
-			n:     7,
-			count: 0,
+			data:   []byte("partial"),
+			n:      7,
+			count:  0,
+			closed: false,
 		}
 		req := &http.Request{
-			Body:          io.NopCloser(errorReader),
+			Body:          errorReader,
 			ContentLength: 100,
 			Header:        http.Header{},
 		}
@@ -228,6 +237,9 @@ func TestPrepareBodyHashForCaching(t *testing.T) {
 		restoredBody, err := io.ReadAll(req.Body)
 		require.Error(t, err)
 		require.Equal(t, []byte("partial"), restoredBody)
+
+		require.NoError(t, req.Body.Close())
+		require.True(t, errorReader.closed)
 	})
 
 	t.Run("exact_max_bytes", func(t *testing.T) {
@@ -249,11 +261,23 @@ func TestPrepareBodyHashForCaching(t *testing.T) {
 	})
 }
 
+type closeTrackingReadCloser struct {
+	r      *bytes.Reader
+	closed *bool
+}
+
+func (r *closeTrackingReadCloser) Read(p []byte) (int, error) { return r.r.Read(p) }
+func (r *closeTrackingReadCloser) Close() error {
+	*r.closed = true
+	return nil
+}
+
 // errorAfterNBytesReader is a helper that returns data then an error
 type errorAfterNBytesReader struct {
-	data  []byte
-	n     int
-	count int
+	data   []byte
+	n      int
+	count  int
+	closed bool
 }
 
 func (r *errorAfterNBytesReader) Read(p []byte) (n int, err error) {
@@ -269,5 +293,6 @@ func (r *errorAfterNBytesReader) Read(p []byte) (n int, err error) {
 }
 
 func (r *errorAfterNBytesReader) Close() error {
+	r.closed = true
 	return nil
 }
