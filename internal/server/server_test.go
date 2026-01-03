@@ -1907,3 +1907,46 @@ func TestSecureCacheStatsStore_PropagatesError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "db error")
 }
+
+// TestServerWithHasher_InitializesSecureStores verifies that when a tokenHasher
+// is provided, initializeAPIRoutes correctly wraps the database stores with
+// secure wrappers that hash tokens before database operations.
+func TestServerWithHasher_InitializesSecureStores(t *testing.T) {
+	// Create a real in-memory database for this test
+	db, err := database.New(database.Config{Path: ":memory:"})
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	// Initialize schema for the database
+	require.NoError(t, database.DBInitForTests(db))
+
+	hasher := &mockTokenHasher{prefix: "secure:"}
+
+	cfg := &config.Config{
+		ListenAddr:              ":0",
+		RequestTimeout:          time.Second,
+		EventBusBackend:         "in-memory",
+		ObservabilityBufferSize: 100,
+		UsageStatsBufferSize:    10,
+		CacheStatsBufferSize:    10,
+	}
+
+	// Create server with hasher and real DB
+	srv, err := NewWithDatabase(cfg, database.NewDBTokenStoreAdapter(db), db, db, WithTokenHasher(hasher))
+	require.NoError(t, err)
+
+	// Verify hasher is set
+	require.NotNil(t, srv.tokenHasher)
+
+	// Initialize API routes - this is where secure stores get wired up
+	err = srv.initializeAPIRoutes()
+	require.NoError(t, err)
+
+	// Verify usageStatsAgg was created (it should be since db != nil)
+	require.NotNil(t, srv.usageStatsAgg, "usageStatsAgg should be initialized when db is provided")
+
+	// Clean up
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = srv.Shutdown(ctx)
+}

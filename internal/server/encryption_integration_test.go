@@ -54,6 +54,8 @@ func setupEncryptionIntegrationServer(t *testing.T, enableCache bool) (*Server, 
 	require.NotNil(t, hasher)
 
 	// Create configuration
+	// Note: Buffer sizes must be large enough to hold all events in tests
+	// (MixedOperations test records 17 usage + 13 cache events)
 	cfg := &config.Config{
 		ListenAddr:              ":0",
 		RequestTimeout:          10 * time.Second,
@@ -61,8 +63,8 @@ func setupEncryptionIntegrationServer(t *testing.T, enableCache bool) (*Server, 
 		DatabasePath:            dbFile.Name(),
 		EventBusBackend:         "in-memory",
 		ObservabilityBufferSize: 100,
-		UsageStatsBufferSize:    10, // Small buffer to trigger flushes quickly
-		CacheStatsBufferSize:    10, // Small buffer to trigger flushes quickly
+		UsageStatsBufferSize:    100, // Must be >= total events recorded in tests
+		CacheStatsBufferSize:    100, // Must be >= total events recorded in tests
 	}
 
 	// Create stores with encryption wrapper
@@ -445,13 +447,24 @@ func TestEncryptionIntegration_MixedOperations(t *testing.T) {
 			srv.usageStatsAgg.RecordTokenUsage(tokens[2])
 		}
 
-		// Wait and flush
-		time.Sleep(200 * time.Millisecond)
+		// Wait for aggregator to process buffered items before stopping
+		// CI environments may be slower, so give more time
+		time.Sleep(500 * time.Millisecond)
 
-		stopCtx, cancel := context.WithTimeout(ctx, time.Second)
-		defer cancel()
-		_ = srv.usageStatsAgg.Stop(stopCtx)
-		_ = srv.cacheStatsAgg.Stop(stopCtx)
+		// Stop aggregators with generous timeout to ensure complete flush
+		// Using separate contexts to ensure both stop operations complete
+		usageStopCtx, usageCancel := context.WithTimeout(ctx, 2*time.Second)
+		defer usageCancel()
+		stopErr := srv.usageStatsAgg.Stop(usageStopCtx)
+		require.NoError(t, stopErr, "usageStatsAgg.Stop() failed")
+
+		cacheStopCtx, cacheCancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cacheCancel()
+		stopErr = srv.cacheStatsAgg.Stop(cacheStopCtx)
+		require.NoError(t, stopErr, "cacheStatsAgg.Stop() failed")
+
+		// Small delay to ensure DB writes are committed
+		time.Sleep(100 * time.Millisecond)
 
 		// Verify all counts
 		expectedUsage := []int{10, 5, 2}
