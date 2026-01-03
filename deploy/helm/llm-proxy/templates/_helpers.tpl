@@ -137,12 +137,12 @@ Validate SQLite configuration
 */}}
 {{- define "llm-proxy.validateSqliteConfig" -}}
 {{- $dbDriver := .Values.env.DB_DRIVER | default "sqlite" }}
-{{- $maxReplicas := .Values.replicaCount | default 1 }}
+{{- $effectiveMaxReplicas := .Values.replicaCount | default 1 }}
 {{- if .Values.autoscaling.enabled }}
-  {{- $maxReplicas = .Values.autoscaling.maxReplicas | default 1 }}
+  {{- $effectiveMaxReplicas = .Values.autoscaling.maxReplicas | default 1 }}
 {{- end }}
-{{- if and (eq $dbDriver "sqlite") (gt (int $maxReplicas) 1) }}
-  {{- fail (printf "Configuration error: DB_DRIVER is 'sqlite' but the deployment can scale to %v replicas. SQLite is not supported for multi-pod deployments. Set env.DB_DRIVER to 'mysql' or 'postgres' and configure secrets.databaseUrl / mysql.enabled / postgresql.enabled." $maxReplicas) }}
+{{- if and (eq $dbDriver "sqlite") (gt (int $effectiveMaxReplicas) 1) }}
+  {{- fail (printf "Configuration error: DB_DRIVER is 'sqlite' but the deployment can scale to %v replicas. SQLite is not supported for multi-pod deployments. Set env.DB_DRIVER to 'mysql' or 'postgres' and configure secrets.databaseUrl / mysql.enabled / postgresql.enabled." $effectiveMaxReplicas) }}
 {{- end }}
 {{- end }}
 

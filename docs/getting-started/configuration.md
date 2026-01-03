@@ -37,7 +37,7 @@ Command-line flags > Environment variables > Configuration files > Defaults
 
 ### Database Configuration
 
-LLM Proxy supports SQLite (default) and PostgreSQL databases.
+LLM Proxy supports SQLite (default), PostgreSQL, and MySQL databases.
 
 #### SQLite (Default)
 
@@ -70,6 +70,15 @@ DATABASE_URL=postgres://llmproxy:secret@localhost:5432/llmproxy?sslmode=require
 | `DATABASE_POOL_SIZE` | int | `10` | Maximum open connections |
 | `DATABASE_MAX_IDLE_CONNS` | int | `5` | Maximum idle connections |
 | `DATABASE_CONN_MAX_LIFETIME` | duration | `1h` | Maximum connection lifetime |
+
+### Encryption at Rest
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `ENCRYPTION_KEY` | string | - | Base64-encoded 32-byte key. When set, API keys are encrypted (AES-256-GCM) and bearer tokens are hashed (SHA-256) in the database. |
+| `REQUIRE_ENCRYPTION_KEY` | bool | `false` | If `true`, the server fails fast on startup when `ENCRYPTION_KEY` is not set. Useful to prevent accidental plaintext storage in production. |
+
+See [Encryption at Rest](../security/encryption.md) for details.
 
 ## Caching Configuration
 

@@ -51,6 +51,47 @@ func TestBuildDatabaseConfig_SQLitePathFallback(t *testing.T) {
 	}
 }
 
+func TestBuildDatabaseConfig_SQLiteExplicitDriverPathFallback(t *testing.T) {
+	t.Setenv("DB_DRIVER", "sqlite")
+	t.Setenv("DATABASE_PATH", "")
+
+	appConfig := &config.Config{DatabasePath: "/tmp/llm-proxy-test-explicit-driver.db"}
+	dbConfig := buildDatabaseConfig(appConfig)
+	if dbConfig.Driver != database.DriverSQLite {
+		t.Fatalf("expected DriverSQLite, got %q", dbConfig.Driver)
+	}
+	if dbConfig.Path != appConfig.DatabasePath {
+		t.Fatalf("expected Path %q, got %q", appConfig.DatabasePath, dbConfig.Path)
+	}
+}
+
+func TestBuildDatabaseConfig_SQLiteEnvDatabasePathOverridesAppConfig(t *testing.T) {
+	t.Setenv("DB_DRIVER", "sqlite")
+	t.Setenv("DATABASE_PATH", "/tmp/llm-proxy-env.db")
+
+	appConfig := &config.Config{DatabasePath: "/tmp/llm-proxy-app.db"}
+	dbConfig := buildDatabaseConfig(appConfig)
+	if dbConfig.Driver != database.DriverSQLite {
+		t.Fatalf("expected DriverSQLite, got %q", dbConfig.Driver)
+	}
+	if dbConfig.Path != "/tmp/llm-proxy-env.db" {
+		t.Fatalf("expected env Path %q, got %q", "/tmp/llm-proxy-env.db", dbConfig.Path)
+	}
+}
+
+func TestBuildDatabaseConfig_SQLiteNilAppConfigUsesDefaultPath(t *testing.T) {
+	t.Setenv("DB_DRIVER", "sqlite")
+	t.Setenv("DATABASE_PATH", "")
+
+	dbConfig := buildDatabaseConfig(nil)
+	if dbConfig.Driver != database.DriverSQLite {
+		t.Fatalf("expected DriverSQLite, got %q", dbConfig.Driver)
+	}
+	if dbConfig.Path != database.DefaultFullConfig().Path {
+		t.Fatalf("expected default Path %q, got %q", database.DefaultFullConfig().Path, dbConfig.Path)
+	}
+}
+
 func TestValidateEncryptionKeyRequired(t *testing.T) {
 	testCases := []struct {
 		name                 string

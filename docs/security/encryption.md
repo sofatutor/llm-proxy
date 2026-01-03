@@ -30,6 +30,16 @@ ENCRYPTION_KEY=<your-base64-encoded-key>
 
 ⚠️ **Important**: Store this key securely! Without it, you cannot decrypt API keys or verify tokens.
 
+### Fail-Fast Enforcement
+
+By default, if `ENCRYPTION_KEY` is not set, the proxy still starts but stores sensitive data in plaintext (and logs a warning). For production deployments, you can force a hard failure instead:
+
+```bash
+REQUIRE_ENCRYPTION_KEY=true
+```
+
+When `REQUIRE_ENCRYPTION_KEY=true` and `ENCRYPTION_KEY` is missing, the server exits on startup.
+
 ## Migration
 
 ### Encrypting Existing Data

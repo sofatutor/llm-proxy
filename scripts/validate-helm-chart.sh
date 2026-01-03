@@ -133,6 +133,25 @@ else
 fi
 echo ""
 
+# Test validation: sqlite driver with replicaCount > 1 (should fail)
+echo "Testing validation: sqlite driver with replicaCount > 1..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set replicaCount=2 \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag 2>&1); then
+    echo "✗ Validation should have failed for SQLite multi-pod configuration" >&2
+    exit 1
+else
+    if echo "$TEMPLATE_OUTPUT" | grep -q "SQLite is not supported for multi-pod deployments"; then
+        echo "✓ Validation correctly rejected SQLite multi-pod configuration"
+    else
+        echo "✗ Unexpected error message" >&2
+        echo "$TEMPLATE_OUTPUT" >&2
+        exit 1
+    fi
+fi
+echo ""
+
 # Test external PostgreSQL configuration
 echo "Running helm template with external PostgreSQL..."
 if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \

@@ -707,6 +707,8 @@ env:
 
 The `ENCRYPTION_KEY` is used to encrypt API keys (AES-256-GCM) and hash tokens (SHA-256) stored in the database. Without this key, sensitive data is stored in plaintext.
 
+For additional safety, the application also supports `REQUIRE_ENCRYPTION_KEY=true` (fail-fast startup if `ENCRYPTION_KEY` is missing). In Helm deployments, the preferred enforcement mechanism is `secrets.encryptionKey.required=true`.
+
 **To enable encryption:**
 
 1. Generate a secure encryption key:
