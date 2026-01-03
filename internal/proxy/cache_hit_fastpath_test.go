@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -95,20 +94,20 @@ func TestProxy_POSTCacheHitAvoidsTracking(t *testing.T) {
 	p, err := NewTransparentProxyWithLogger(cfg, validator, store, zap.NewNop())
 	require.NoError(t, err)
 
-	// Create POST request with cache opt-in
+	// First request: populate the cache
+	// This request will call ValidateTokenWithTracking (expected)
 	reqBody := []byte(`{"model":"gpt-4","messages":[{"role":"user","content":"test"}]}`)
-	req := httptest.NewRequest(http.MethodPost, "http://example.com/v1/chat/completions", bytes.NewReader(reqBody))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer valid-token")
-	req.Header.Set("Cache-Control", "public, max-age=300") // Client cache opt-in
-	req.ContentLength = int64(len(reqBody))
-
-	// Manually set the body hash header to match what the proxy would set
-	sum := sha256.Sum256(reqBody)
-	req.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
+	req1 := httptest.NewRequest(http.MethodPost, "http://example.com/v1/chat/completions", bytes.NewReader(reqBody))
+	req1.Header.Set("Content-Type", "application/json")
+	req1.Header.Set("Authorization", "Bearer valid-token")
+	req1.Header.Set("Cache-Control", "public, max-age=300") // Client cache opt-in
+	req1.ContentLength = int64(len(reqBody))
 
 	// Pre-populate cache with this exact request
-	key := CacheKeyFromRequest(req)
+	// We compute the hash manually to create the cache key
+	sum := sha256.Sum256(reqBody)
+	req1.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
+	key := CacheKeyFromRequest(req1)
 	p.cache.Set(key, cachedResponse{
 		statusCode: http.StatusOK,
 		headers: http.Header{
@@ -119,12 +118,17 @@ func TestProxy_POSTCacheHitAvoidsTracking(t *testing.T) {
 		expiresAt: time.Now().Add(5 * time.Minute),
 	})
 
-	// Recreate the request body since we already calculated the hash
-	req.Body = io.NopCloser(bytes.NewReader(reqBody))
+	// Second request: hit the cache
+	// Create a fresh request with the same body (do NOT set X-Body-Hash - let the proxy compute it)
+	req2 := httptest.NewRequest(http.MethodPost, "http://example.com/v1/chat/completions", bytes.NewReader(reqBody))
+	req2.Header.Set("Content-Type", "application/json")
+	req2.Header.Set("Authorization", "Bearer valid-token")
+	req2.Header.Set("Cache-Control", "public, max-age=300") // Client cache opt-in
+	req2.ContentLength = int64(len(reqBody))
 
-	// Make the request - should hit cache without calling ValidateTokenWithTracking
+	// Make the second request - should hit cache without calling ValidateTokenWithTracking
 	rr := httptest.NewRecorder()
-	p.Handler().ServeHTTP(rr, req)
+	p.Handler().ServeHTTP(rr, req2)
 
 	require.Equal(t, http.StatusOK, rr.Code)
 	require.Equal(t, "llm-proxy; hit", rr.Header().Get("Cache-Status"))

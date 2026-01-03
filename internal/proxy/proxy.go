@@ -758,11 +758,12 @@ func prepareBodyHashForCaching(r *http.Request, maxBytes int64, logger *zap.Logg
 		return false
 	}
 	bodyBytes, readErr := io.ReadAll(r.Body)
+	// Always restore the body from the bytes we managed to read to keep the request consistent.
+	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 	if readErr != nil {
 		logger.Warn("Failed to read request body for hashing", zap.Error(readErr))
 		return false
 	}
-	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 	sum := sha256.Sum256(bodyBytes)
 	r.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
 	return true
