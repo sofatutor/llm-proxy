@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
     method TEXT,
     path TEXT,
     user_agent TEXT,
-    outcome TEXT NOT NULL CHECK (outcome IN ('success', 'failure')),
+    outcome TEXT NOT NULL CHECK (outcome IN ('success', 'failure', 'denied', 'error')),
     reason TEXT,
     token_id TEXT,
     metadata TEXT
