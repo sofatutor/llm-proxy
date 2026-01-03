@@ -19,7 +19,7 @@ Production deployment guides for LLM Proxy.
 
 For production deployments, we recommend **AWS ECS with CDK**:
 
-- Aurora PostgreSQL Serverless v2 for database
+- Aurora PostgreSQL Serverless v2 or Aurora MySQL for database
 - ElastiCache Redis for caching and rate limiting
 - ALB with ACM for HTTPS termination
 - Auto-scaling based on CPU/request count
@@ -32,7 +32,7 @@ See the [AWS ECS Architecture Guide](aws-ecs-cdk.md) for details.
 For organizations with existing Kubernetes infrastructure, we provide a **comprehensive Helm chart**:
 
 - Single-instance deployments with SQLite (development)
-- Multi-replica deployments with PostgreSQL and Redis (production)
+- Multi-replica deployments with PostgreSQL, MySQL, and Redis (production)
 - Ingress support with TLS (NGINX, Traefik, etc.)
 - Horizontal Pod Autoscaler (HPA) for automatic scaling
 - Event dispatcher for observability platforms (Lunary, Helicone)
@@ -74,6 +74,26 @@ helm install llm-proxy deploy/helm/llm-proxy \
   --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
   --set secrets.databaseUrl.existingSecret.name=llm-proxy-db \
   --set env.DB_DRIVER=postgres
+```
+
+**Helm Quick Start (Production with MySQL)**:
+
+> **Note**: If using a custom-built image, ensure it's built with MySQL support: `docker build --build-arg MYSQL_SUPPORT=true ...`. See the [full guide](helm.md) for details.
+
+```bash
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+
+# NOTE: Replace USER and PASSWORD with your actual DB credentials; never commit real secrets
+kubectl create secret generic llm-proxy-db \
+  --from-literal=DATABASE_URL="USER:PASSWORD@tcp(mysql.example.com:3306)/llmproxy?parseTime=true&tls=true"
+
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set secrets.databaseUrl.existingSecret.name=llm-proxy-db \
+  --set env.DB_DRIVER=mysql
 ```
 
 ## Other Deployment Options

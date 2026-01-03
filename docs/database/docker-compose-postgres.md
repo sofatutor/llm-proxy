@@ -64,7 +64,16 @@ PostgreSQL support not compiled in; build with -tags postgres to enable
 
 ## Overview
 
-The llm-proxy supports both SQLite (default) and PostgreSQL as database backends. This guide explains how to run the PostgreSQL setup using Docker Compose.
+The llm-proxy supports SQLite (default), PostgreSQL, and MySQL as database backends. This guide explains how to run the PostgreSQL setup using Docker Compose.
+
+**⚠️ Important for Production:**
+- The Docker Compose PostgreSQL setup is intended for **development and testing only**
+- For production high-availability (HA) deployments, use an external managed PostgreSQL service:
+  - Amazon Aurora PostgreSQL / Amazon RDS for PostgreSQL
+  - Google Cloud SQL for PostgreSQL
+  - Azure Database for PostgreSQL
+  - Self-managed PostgreSQL with replication
+- The Docker Compose PostgreSQL instance runs as a single container and does not provide high availability or automatic failover
 
 ## Quick Start
 
