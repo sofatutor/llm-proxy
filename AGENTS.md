@@ -266,6 +266,7 @@ gh run watch <id>  # Monitor specific run until completion
 - Document all exported types/functions
 - Keep code DRY, simple, maintainable
 - No unresolved TODOs in code or docs
+- **Always run `gofmt -w` on modified Go files before committing**
 
 **Documentation Updates:**
 - Update relevant `docs/issues/` file with every significant change
@@ -338,11 +339,12 @@ Fixes #issue-number
 3. Write failing tests first (TDD)
 4. Implement minimal solution
 5. Ensure tests pass and coverage ≥ 90%
-6. Run linters and fix issues
-7. **VERIFY BRANCH AGAIN before commit** - Check `git branch --show-current` one more time
-8. Update documentation (issue doc, relevant docs)
-9. Create PR with proper format (feature branch → epic branch)
-10. Monitor CI completion
+6. **Format all modified Go files**: `gofmt -w <files>` (MANDATORY before commit)
+7. Run linters and fix issues: `make lint`
+8. **VERIFY BRANCH AGAIN before commit** - Check `git branch --show-current` one more time
+9. Update documentation (issue doc, relevant docs)
+10. Create PR with proper format (feature branch → epic branch)
+11. Monitor CI completion
 
 **Quality Standards:**
 - Prefer small, reviewable increments

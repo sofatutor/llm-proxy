@@ -750,6 +750,61 @@ func (p *TransparentProxy) createTransport() *http.Transport {
 	}
 }
 
+// getMaxBodyHashBytes returns the configured max body size for hashing, or a 1MB default.
+func (p *TransparentProxy) getMaxBodyHashBytes() int64 {
+	if p.config.HTTPCacheMaxObjectBytes > 0 {
+		return p.config.HTTPCacheMaxObjectBytes
+	}
+	return 1024 * 1024
+}
+
+type readerWithCloser struct {
+	r io.Reader
+	c io.Closer
+}
+
+func (rc *readerWithCloser) Read(p []byte) (int, error) { return rc.r.Read(p) }
+func (rc *readerWithCloser) Close() error               { return rc.c.Close() }
+
+// prepareBodyHashForCaching reads the request body up to maxBytes,
+// computes a SHA-256 hash, sets X-Body-Hash header, and restores the body.
+// Returns true if successful, false if body exceeds limits or read fails.
+func prepareBodyHashForCaching(r *http.Request, maxBytes int64, logger *zap.Logger) bool {
+	if r.Body == nil || r.ContentLength < 0 || r.ContentLength > maxBytes {
+		return false
+	}
+
+	originalBody := r.Body
+
+	// Enforce a hard limit on how much we read from the body to avoid unbounded memory usage.
+	// We read up to maxBytes+1 so we can detect if the body is larger than allowed.
+	limitedReader := io.LimitReader(originalBody, maxBytes+1)
+	bodyBytes, readErr := io.ReadAll(limitedReader)
+	if readErr != nil {
+		logger.Warn("Failed to read request body for hashing", zap.Error(readErr))
+		// Restore the body with whatever we have read plus any remaining unread bytes.
+		// Note: io.LimitReader stops after maxBytes+1 bytes and does not drain the underlying body.
+		r.Body = &readerWithCloser{r: io.MultiReader(bytes.NewReader(bodyBytes), originalBody), c: originalBody}
+		return false
+	}
+
+	if int64(len(bodyBytes)) > maxBytes {
+		logger.Warn("Request body exceeds maxBytes for hashing; skipping body hash",
+			zap.Int64("max_bytes", maxBytes),
+			zap.Int64("read_bytes", int64(len(bodyBytes))),
+		)
+		// Restore the full body (the bytes we already consumed plus what remains unread).
+		r.Body = &readerWithCloser{r: io.MultiReader(bytes.NewReader(bodyBytes), originalBody), c: originalBody}
+		return false
+	}
+
+	// Body is within the allowed size. Restore it from the bytes we read and compute the hash.
+	r.Body = &readerWithCloser{r: bytes.NewReader(bodyBytes), c: originalBody}
+	sum := sha256.Sum256(bodyBytes)
+	r.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
+	return true
+}
+
 // Handler returns the HTTP handler for the proxy
 func (p *TransparentProxy) Handler() http.Handler {
 	baseHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -793,7 +848,17 @@ func (p *TransparentProxy) Handler() http.Handler {
 			preCacheRes cachedResponse
 			preCacheOK  bool
 		)
-		if p.cache != nil && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
+		if p.cache != nil && (r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodPost) {
+			// For POST, we need to check cache opt-in and prepare body hash early
+			if r.Method == http.MethodPost {
+				if !hasClientCacheOptIn(r) {
+					goto skipPreCache
+				}
+				if !prepareBodyHashForCaching(r, p.getMaxBodyHashBytes(), p.logger) {
+					goto skipPreCache
+				}
+			}
+
 			key := CacheKeyFromRequest(r)
 			if cr, ok := p.cache.Get(key); ok {
 				// Only treat as a fast-path cache hit if it is actually eligible to serve
@@ -805,6 +870,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 				}
 			}
 		}
+	skipPreCache:
 
 		// --- Token extraction and validation (moved from director) ---
 		authHeader := r.Header.Get("Authorization")
@@ -938,27 +1004,12 @@ func (p *TransparentProxy) Handler() http.Handler {
 			optIn := hasClientCacheOptIn(r)
 			allowedLookup := (r.Method == http.MethodGet || r.Method == http.MethodHead) || (r.Method == http.MethodPost && optIn)
 			if r.Method == http.MethodPost && allowedLookup {
-				// For POST caching, require a known, bounded body size.
-				maxBodyHashBytes := p.config.HTTPCacheMaxObjectBytes
-				if maxBodyHashBytes <= 0 {
-					maxBodyHashBytes = 1024 * 1024
-				}
-				if r.Body == nil || r.ContentLength < 0 || r.ContentLength > maxBodyHashBytes {
-					allowedLookup = false
-				} else {
-					bodyBytes, readErr := io.ReadAll(r.Body)
-					if readErr != nil {
-						p.logger.Warn("Failed to read request body for hashing", zap.Error(readErr))
-						writeErrorResponse(w, http.StatusBadRequest, ErrorResponse{
-							Error:       "Invalid request body",
-							Code:        "invalid_request_body",
-							Description: "failed to read request body",
-						})
-						return
+				// Body already read and hashed in pre-cache check if we got here.
+				// If X-Body-Hash is not set, it means pre-cache was skipped, so read it now.
+				if r.Header.Get("X-Body-Hash") == "" {
+					if !prepareBodyHashForCaching(r, p.getMaxBodyHashBytes(), p.logger) {
+						allowedLookup = false
 					}
-					r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-					sum := sha256.Sum256(bodyBytes)
-					r.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
 				}
 			}
 			if !allowedLookup {

@@ -13,6 +13,10 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 - **Respect DB driver config** ([#258](https://github.com/sofatutor/llm-proxy/pull/258)): Proxy now initializes the database through the shared factory so `DB_DRIVER` is honored instead of silently falling back to SQLite, and new tests cover the selection logic.
 - **Harden MySQL+encryption** ([#258](https://github.com/sofatutor/llm-proxy/pull/258)): Adding fail-fast behavior when encryption is required but missing, wiring secrets through the Helm chart, preventing SQLite-scaled deployments, and aligning CI/Docs ensures secure MySQL setups are detected early.
 
+### Fixed
+
+- **Avoid quota tracking on cache hits** ([#260](https://github.com/sofatutor/llm-proxy/pull/260)): Ensures cached responses (including POST cache hits) bypass token usage tracking so request counters and quotas reflect upstream calls only.
+
 
 ## January 02, 2026
 
