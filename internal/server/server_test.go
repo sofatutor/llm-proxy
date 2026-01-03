@@ -1701,3 +1701,132 @@ func TestInitializeAPIRoutes_RedisCacheURLConstruction(t *testing.T) {
 		})
 	}
 }
+
+// ========== Token Hasher and Secure Usage Stats Tests ==========
+
+// mockTokenHasher implements TokenHasher for testing
+type mockTokenHasher struct {
+	prefix string
+}
+
+func (m *mockTokenHasher) CreateLookupKey(token string) string {
+	if m.prefix == "" {
+		return "hashed:" + token
+	}
+	return m.prefix + token
+}
+
+func TestWithTokenHasher(t *testing.T) {
+	cfg := &config.Config{
+		ListenAddr:      ":0",
+		RequestTimeout:  time.Second,
+		EventBusBackend: "in-memory",
+	}
+
+	hasher := &mockTokenHasher{prefix: "test:"}
+
+	srv, err := NewWithDatabase(cfg, &mockTokenStore{}, &mockProjectStore{}, nil, WithTokenHasher(hasher))
+	require.NoError(t, err)
+
+	// Verify the hasher was set
+	assert.NotNil(t, srv.tokenHasher)
+	assert.Equal(t, "test:mytoken", srv.tokenHasher.CreateLookupKey("mytoken"))
+}
+
+func TestWithTokenHasher_NilHasher(t *testing.T) {
+	cfg := &config.Config{
+		ListenAddr:      ":0",
+		RequestTimeout:  time.Second,
+		EventBusBackend: "in-memory",
+	}
+
+	// Creating server without hasher option should leave tokenHasher nil
+	srv, err := NewWithDatabase(cfg, &mockTokenStore{}, &mockProjectStore{}, nil)
+	require.NoError(t, err)
+
+	assert.Nil(t, srv.tokenHasher)
+}
+
+// mockUsageStatsStore implements token.UsageStatsStore for testing
+type mockUsageStatsStore struct {
+	batchCalls []struct {
+		deltas     map[string]int
+		lastUsedAt time.Time
+	}
+	batchError error
+}
+
+func (m *mockUsageStatsStore) IncrementTokenUsageBatch(ctx context.Context, deltas map[string]int, lastUsedAt time.Time) error {
+	m.batchCalls = append(m.batchCalls, struct {
+		deltas     map[string]int
+		lastUsedAt time.Time
+	}{deltas, lastUsedAt})
+	return m.batchError
+}
+
+func TestSecureUsageStatsStoreAdapter_HashesTokens(t *testing.T) {
+	hasher := &mockTokenHasher{}
+	mockStore := &mockUsageStatsStore{}
+
+	adapter := &secureUsageStatsStoreAdapter{
+		store:  mockStore,
+		hasher: hasher,
+	}
+
+	ctx := context.Background()
+	deltas := map[string]int{
+		"token1": 5,
+		"token2": 3,
+	}
+	lastUsed := time.Now()
+
+	err := adapter.IncrementTokenUsageBatch(ctx, deltas, lastUsed)
+	require.NoError(t, err)
+
+	require.Len(t, mockStore.batchCalls, 1)
+	call := mockStore.batchCalls[0]
+
+	// Verify tokens were hashed
+	assert.Equal(t, 5, call.deltas["hashed:token1"])
+	assert.Equal(t, 3, call.deltas["hashed:token2"])
+
+	// Original tokens should not be present
+	_, hasOriginal1 := call.deltas["token1"]
+	_, hasOriginal2 := call.deltas["token2"]
+	assert.False(t, hasOriginal1)
+	assert.False(t, hasOriginal2)
+}
+
+func TestSecureUsageStatsStoreAdapter_EmptyDeltas(t *testing.T) {
+	hasher := &mockTokenHasher{}
+	mockStore := &mockUsageStatsStore{}
+
+	adapter := &secureUsageStatsStoreAdapter{
+		store:  mockStore,
+		hasher: hasher,
+	}
+
+	ctx := context.Background()
+	err := adapter.IncrementTokenUsageBatch(ctx, map[string]int{}, time.Now())
+	require.NoError(t, err)
+
+	// Should return early without calling the underlying store
+	assert.Len(t, mockStore.batchCalls, 0)
+}
+
+func TestSecureUsageStatsStoreAdapter_PropagatesError(t *testing.T) {
+	hasher := &mockTokenHasher{}
+	mockStore := &mockUsageStatsStore{
+		batchError: errors.New("db error"),
+	}
+
+	adapter := &secureUsageStatsStoreAdapter{
+		store:  mockStore,
+		hasher: hasher,
+	}
+
+	ctx := context.Background()
+	err := adapter.IncrementTokenUsageBatch(ctx, map[string]int{"token": 1}, time.Now())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "db error")
+}
