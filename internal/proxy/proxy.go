@@ -750,6 +750,24 @@ func (p *TransparentProxy) createTransport() *http.Transport {
 	}
 }
 
+// prepareBodyHashForCaching reads the request body up to maxBytes,
+// computes a SHA-256 hash, sets X-Body-Hash header, and restores the body.
+// Returns true if successful, false if body exceeds limits or read fails.
+func prepareBodyHashForCaching(r *http.Request, maxBytes int64, logger *zap.Logger) bool {
+	if r.Body == nil || r.ContentLength < 0 || r.ContentLength > maxBytes {
+		return false
+	}
+	bodyBytes, readErr := io.ReadAll(r.Body)
+	if readErr != nil {
+		logger.Warn("Failed to read request body for hashing", zap.Error(readErr))
+		return false
+	}
+	r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	sum := sha256.Sum256(bodyBytes)
+	r.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
+	return true
+}
+
 // Handler returns the HTTP handler for the proxy
 func (p *TransparentProxy) Handler() http.Handler {
 	baseHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -803,17 +821,9 @@ func (p *TransparentProxy) Handler() http.Handler {
 				if maxBodyHashBytes <= 0 {
 					maxBodyHashBytes = 1024 * 1024
 				}
-				if r.Body == nil || r.ContentLength < 0 || r.ContentLength > maxBodyHashBytes {
+				if !prepareBodyHashForCaching(r, maxBodyHashBytes, p.logger) {
 					goto skipPreCache
 				}
-				bodyBytes, readErr := io.ReadAll(r.Body)
-				if readErr != nil {
-					p.logger.Warn("Failed to read request body for pre-cache check", zap.Error(readErr))
-					goto skipPreCache
-				}
-				r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-				sum := sha256.Sum256(bodyBytes)
-				r.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
 			}
 
 			key := CacheKeyFromRequest(r)
@@ -968,22 +978,8 @@ func (p *TransparentProxy) Handler() http.Handler {
 					if maxBodyHashBytes <= 0 {
 						maxBodyHashBytes = 1024 * 1024
 					}
-					if r.Body == nil || r.ContentLength < 0 || r.ContentLength > maxBodyHashBytes {
+					if !prepareBodyHashForCaching(r, maxBodyHashBytes, p.logger) {
 						allowedLookup = false
-					} else {
-						bodyBytes, readErr := io.ReadAll(r.Body)
-						if readErr != nil {
-							p.logger.Warn("Failed to read request body for hashing", zap.Error(readErr))
-							writeErrorResponse(w, http.StatusBadRequest, ErrorResponse{
-								Error:       "Invalid request body",
-								Code:        "invalid_request_body",
-								Description: "failed to read request body",
-							})
-							return
-						}
-						r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-						sum := sha256.Sum256(bodyBytes)
-						r.Header.Set("X-Body-Hash", hex.EncodeToString(sum[:]))
 					}
 				}
 			}
