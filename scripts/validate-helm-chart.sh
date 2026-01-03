@@ -121,12 +121,34 @@ if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
     --set resources.limits.cpu=2000m \
     --set resources.limits.memory=1Gi \
     --set env.LOG_LEVEL=trace \
-    --set env.ENABLE_METRICS=false 2>&1); then
+    --set env.ENABLE_METRICS=false \
+    --set env.DB_DRIVER=postgres \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set secrets.databaseUrl.existingSecret.name=test-db-secret 2>&1); then
     echo "✓ helm template with custom values rendered successfully"
 else
     echo "✗ helm template with custom values failed" >&2
     echo "$TEMPLATE_OUTPUT" >&2
     exit 1
+fi
+echo ""
+
+# Test validation: sqlite driver with replicaCount > 1 (should fail)
+echo "Testing validation: sqlite driver with replicaCount > 1..."
+if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
+    --set replicaCount=2 \
+    --set image.repository=test-repo \
+    --set image.tag=test-tag 2>&1); then
+    echo "✗ Validation should have failed for SQLite multi-pod configuration" >&2
+    exit 1
+else
+    if echo "$TEMPLATE_OUTPUT" | grep -q "SQLite is not supported for multi-pod deployments"; then
+        echo "✓ Validation correctly rejected SQLite multi-pod configuration"
+    else
+        echo "✗ Unexpected error message" >&2
+        echo "$TEMPLATE_OUTPUT" >&2
+        exit 1
+    fi
 fi
 echo ""
 
@@ -549,7 +571,10 @@ if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
     --set autoscaling.enabled=true \
     --set autoscaling.minReplicas=2 \
     --set autoscaling.maxReplicas=20 \
-    --set autoscaling.targetCPUUtilizationPercentage=75 2>&1); then
+    --set autoscaling.targetCPUUtilizationPercentage=75 \
+    --set env.DB_DRIVER=postgres \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set secrets.databaseUrl.existingSecret.name=test-db-secret 2>&1); then
     if ! echo "$TEMPLATE_OUTPUT" | grep -q 'kind: HorizontalPodAutoscaler'; then
         echo "✗ HPA should be created when enabled" >&2
         exit 1
@@ -588,7 +613,10 @@ if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
     --set image.tag=test-tag \
     --set autoscaling.enabled=true \
     --set autoscaling.targetCPUUtilizationPercentage=80 \
-    --set autoscaling.targetMemoryUtilizationPercentage=85 2>&1); then
+    --set autoscaling.targetMemoryUtilizationPercentage=85 \
+    --set env.DB_DRIVER=postgres \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set secrets.databaseUrl.existingSecret.name=test-db-secret 2>&1); then
     if ! echo "$TEMPLATE_OUTPUT" | grep -q 'kind: HorizontalPodAutoscaler'; then
         echo "✗ HPA should be created when enabled" >&2
         exit 1
@@ -615,7 +643,10 @@ if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
     --set ingress.enabled=true \
     --set ingress.hosts[0].host=example.com \
     --set ingress.hosts[0].paths[0].path=/ \
-    --set autoscaling.enabled=true 2>&1); then
+    --set autoscaling.enabled=true \
+    --set env.DB_DRIVER=postgres \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set secrets.databaseUrl.existingSecret.name=test-db-secret 2>&1); then
     if ! echo "$TEMPLATE_OUTPUT" | grep -q 'kind: Ingress'; then
         echo "✗ Ingress should be created when enabled" >&2
         exit 1
@@ -639,7 +670,10 @@ if TEMPLATE_OUTPUT=$(helm template test-release "${CHART_DIR}" \
     --set image.tag=test-tag \
     --set autoscaling.enabled=true \
     --set autoscaling.targetCPUUtilizationPercentage=null \
-    --set autoscaling.targetMemoryUtilizationPercentage=null 2>&1); then
+    --set autoscaling.targetMemoryUtilizationPercentage=null \
+    --set env.DB_DRIVER=postgres \
+    --set secrets.managementToken.existingSecret.name=test-secret \
+    --set secrets.databaseUrl.existingSecret.name=test-db-secret 2>&1); then
     echo "✗ Validation should have failed for HPA without metrics" >&2
     exit 1
 else

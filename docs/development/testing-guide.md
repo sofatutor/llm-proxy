@@ -322,7 +322,7 @@ make test-coverage-html
 - **Unit Tests**: Fast tests on multiple Go versions
 - **Integration Tests**: Tests with real database
 - **PostgreSQL Integration Tests**: Tests against PostgreSQL 15 service container
-- **MySQL Integration Tests**: Tests against MySQL 8.0 service container
+- **MySQL Integration Tests**: Tests against MySQL 8.4 service container
 - **Race Detection**: All tests run with `-race` flag
 - **Coverage Reporting**: Upload coverage to artifacts
 - **Combined Coverage**: Merge coverage from all test jobs and enforce 90%+ threshold

@@ -191,6 +191,7 @@ secrets:
   data:
     managementToken: ""
     databaseUrl: ""
+    encryptionKey: ""
   
   # MANAGEMENT_TOKEN: Required for admin operations
   # Reference an existing Kubernetes Secret containing the management token
@@ -215,6 +216,8 @@ secrets:
   # Generate with: openssl rand -base64 32
   # Reference an existing Kubernetes Secret containing the encryption key
   encryptionKey:
+    # When true, helm install/upgrade fails if ENCRYPTION_KEY is not configured.
+    required: false
     existingSecret:
       # Name of the existing Kubernetes Secret
       name: ""
@@ -282,7 +285,7 @@ mysql:
     # MySQL Docker image repository
     repository: mysql
     # MySQL version tag
-    tag: "8.0"
+    tag: "8.4.5"
     # Image pull policy
     pullPolicy: IfNotPresent
   

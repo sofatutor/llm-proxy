@@ -28,7 +28,7 @@ mysql:
   # MySQL image configuration
   image:
     repository: mysql
-    tag: "8.0"
+    tag: "8.4.5"
     pullPolicy: IfNotPresent
   
   # MySQL authentication

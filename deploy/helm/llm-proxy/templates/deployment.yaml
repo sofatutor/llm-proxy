@@ -1,6 +1,8 @@
+{{- include "llm-proxy.validateSqliteConfig" . }}
 {{- include "llm-proxy.validateRedisConfig" . }}
 {{- include "llm-proxy.validatePostgresConfig" . }}
 {{- include "llm-proxy.validateMysqlConfig" . }}
+{{- include "llm-proxy.validateEncryptionKeyConfig" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:

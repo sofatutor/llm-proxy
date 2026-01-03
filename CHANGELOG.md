@@ -6,6 +6,14 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ---
 
+## January 03, 2026
+
+### Changed
+
+- **Respect DB driver config** ([#258](https://github.com/sofatutor/llm-proxy/pull/258)): Proxy now initializes the database through the shared factory so `DB_DRIVER` is honored instead of silently falling back to SQLite, and new tests cover the selection logic.
+- **Harden MySQL+encryption** ([#258](https://github.com/sofatutor/llm-proxy/pull/258)): Adding fail-fast behavior when encryption is required but missing, wiring secrets through the Helm chart, preventing SQLite-scaled deployments, and aligning CI/Docs ensures secure MySQL setups are detected early.
+
+
 ## January 02, 2026
 
 ### Added
