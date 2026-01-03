@@ -47,6 +47,13 @@ var osExec = func(name string, args ...string) *execCommand {
 
 var newDatabaseFromConfig = database.NewFromConfig
 
+func validateEncryptionKeyRequired() error {
+	if os.Getenv("REQUIRE_ENCRYPTION_KEY") == "true" && os.Getenv("ENCRYPTION_KEY") == "" {
+		return fmt.Errorf("ENCRYPTION_KEY is required but not set")
+	}
+	return nil
+}
+
 func buildDatabaseConfig(appConfig *config.Config) database.FullConfig {
 	dbConfig := database.ConfigFromEnv()
 	if dbConfig.Driver == database.DriverSQLite {
@@ -316,11 +323,11 @@ func runServerForeground() {
 	tokenStore := token.TokenStore(baseTokenStore)
 	projectStore := baseProjectStore
 
-	encryptionKey := os.Getenv("ENCRYPTION_KEY")
-	if os.Getenv("REQUIRE_ENCRYPTION_KEY") == "true" && encryptionKey == "" {
-		zapLogger.Fatal("ENCRYPTION_KEY is required but not set",
+	if err := validateEncryptionKeyRequired(); err != nil {
+		zapLogger.Fatal(err.Error(),
 			zap.String("hint", "Generate a valid key with: openssl rand -base64 32"))
 	}
+	encryptionKey := os.Getenv("ENCRYPTION_KEY")
 	if encryptionKey != "" {
 		// Create encryptor for API keys
 		encryptor, err := encryption.NewEncryptorFromBase64Key(encryptionKey)
