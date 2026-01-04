@@ -78,7 +78,7 @@
                                     </span>
                                     <span class="text-muted">|</span>
                                     <span class="badge bg-primary" title="Total responses served" data-bs-toggle="tooltip">
-                                        <i class="bi bi-cloud-arrow-up"></i> {{ .RequestCount }}
+                                        <i class="bi bi-cloud-arrow-up"></i> {{ add .RequestCount .CacheHitCount }}
                                     </span>
                                 </td>
                                 <td>
