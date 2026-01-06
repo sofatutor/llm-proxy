@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -308,6 +309,15 @@ func (s *Server) initializeAPIRoutes() error {
 		}
 	}
 
+	// Response metadata extraction (X-OpenAI-*): cap bytes read to avoid buffering large JSON bodies.
+	// Default: 256KB; set to 0 to preserve legacy unlimited behavior.
+	proxyConfig.ResponseMetadataMaxBytes = 256 * 1024
+	if v := os.Getenv("LLM_PROXY_RESPONSE_METADATA_MAX_BYTES"); v != "" {
+		if n, convErr := strconv.ParseInt(v, 10, 64); convErr == nil && n >= 0 {
+			proxyConfig.ResponseMetadataMaxBytes = n
+		}
+	}
+
 	// Apply HTTP cache env overrides (simple toggle + backend selection)
 	if v := os.Getenv("HTTP_CACHE_ENABLED"); v != "" {
 		// Parse bool; default to true on invalid for safety
@@ -366,7 +376,19 @@ func (s *Server) initializeAPIRoutes() error {
 
 	obsCfg := middleware.ObservabilityConfig{Enabled: s.config.ObservabilityEnabled, EventBus: s.eventBus}
 
-	proxyHandler, err := proxy.NewTransparentProxyWithAudit(*proxyConfig, cachedValidator, s.projectStore, s.logger, s.auditLogger, obsCfg)
+	projectStore := s.projectStore
+	if s.config.APIKeyCacheTTL > 0 && s.config.APIKeyCacheMax > 0 {
+		projectStore = proxy.NewCachedProjectStore(projectStore, proxy.CachedProjectStoreConfig{
+			TTL: s.config.APIKeyCacheTTL,
+			Max: s.config.APIKeyCacheMax,
+		})
+		s.logger.Info("Upstream API key cache enabled",
+			zap.Duration("ttl", s.config.APIKeyCacheTTL),
+			zap.Int("max", s.config.APIKeyCacheMax),
+		)
+	}
+
+	proxyHandler, err := proxy.NewTransparentProxyWithAudit(*proxyConfig, cachedValidator, projectStore, s.logger, s.auditLogger, obsCfg)
 	if err != nil {
 		return fmt.Errorf("failed to initialize proxy: %w", err)
 	}

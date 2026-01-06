@@ -159,6 +159,9 @@ The async event bus handles observability events for all API calls.
 | `LLM_PROXY_EVENT_BUS` | string | `redis-streams` | Event bus backend: `redis-streams` or `in-memory` |
 | `REDIS_ADDR` | string | `localhost:6379` | Redis address for event bus |
 | `REDIS_DB` | int | `0` | Redis database number |
+| `LLM_PROXY_API_KEY_CACHE_TTL` | duration | `30s` | TTL for per-project upstream API key cache (reduces DB reads on hot path) |
+| `LLM_PROXY_API_KEY_CACHE_MAX` | int | `10000` | Max entries for per-project upstream API key cache |
+| `LLM_PROXY_RESPONSE_METADATA_MAX_BYTES` | int64 | `262144` | Cap bytes buffered for JSON response metadata extraction (`X-OpenAI-*`). Set `0` for unlimited |
 
 ### Redis Streams Configuration (Recommended for Production)
 

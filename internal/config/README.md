@@ -334,6 +334,13 @@ Complete mapping of environment variables to configuration fields:
 | `LLM_PROXY_ACTIVE_CACHE_TTL` | duration | `ActiveCacheTTL` | `5s` |
 | `LLM_PROXY_ACTIVE_CACHE_MAX` | int | `ActiveCacheMax` | `10000` |
 
+### Upstream API Key Cache
+
+| Variable | Type | Field | Default |
+|----------|------|-------|---------|
+| `LLM_PROXY_API_KEY_CACHE_TTL` | duration | `APIKeyCacheTTL` | `30s` |
+| `LLM_PROXY_API_KEY_CACHE_MAX` | int | `APIKeyCacheMax` | `10000` |
+
 ### Event Bus
 
 | Variable | Type | Field | Default |

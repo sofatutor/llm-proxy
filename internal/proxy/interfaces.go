@@ -105,6 +105,10 @@ type ProxyConfig struct {
 	// Project active guard configuration
 	EnforceProjectActive bool // Whether to enforce project active status
 
+	// ResponseMetadataMaxBytes caps how many bytes of a JSON response body may be buffered
+	// for metadata extraction (X-OpenAI-* headers). 0 means unlimited (legacy behavior).
+	ResponseMetadataMaxBytes int64
+
 	// --- HTTP cache (global, opt-in; set programmatically, not via YAML) ---
 	// HTTPCacheEnabled toggles the proxy cache for GET/HEAD based on HTTP semantics
 	HTTPCacheEnabled bool

@@ -84,6 +84,10 @@ type Config struct {
 	ActiveCacheTTL       time.Duration // TTL for project active status cache (e.g., 5s)
 	ActiveCacheMax       int           // Maximum entries in project active status cache (e.g., 10000)
 
+	// API key caching (hot path: per-request upstream auth lookup)
+	APIKeyCacheTTL time.Duration // TTL for per-project upstream API key cache (e.g., 30s)
+	APIKeyCacheMax int           // Maximum entries for upstream API key cache (e.g., 10000)
+
 	// Event bus configuration
 	EventBusBackend string // Backend for event bus: "redis-streams" or "in-memory"
 	RedisAddr       string // Redis server address (e.g., "localhost:6379")
@@ -197,6 +201,10 @@ func New() (*Config, error) {
 		EnforceProjectActive: getEnvBool("LLM_PROXY_ENFORCE_PROJECT_ACTIVE", true),
 		ActiveCacheTTL:       getEnvDuration("LLM_PROXY_ACTIVE_CACHE_TTL", 5*time.Second),
 		ActiveCacheMax:       getEnvInt("LLM_PROXY_ACTIVE_CACHE_MAX", 10000),
+
+		// API key caching defaults
+		APIKeyCacheTTL: getEnvDuration("LLM_PROXY_API_KEY_CACHE_TTL", 30*time.Second),
+		APIKeyCacheMax: getEnvInt("LLM_PROXY_API_KEY_CACHE_MAX", 10000),
 
 		// Event bus configuration
 		EventBusBackend: getEnvString("LLM_PROXY_EVENT_BUS", "redis-streams"),
