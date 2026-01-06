@@ -118,7 +118,12 @@ func (m *ObservabilityMiddleware) Middleware() Middleware {
 				RequestBody:     reqBody,
 			}
 
-			go m.cfg.EventBus.Publish(context.Background(), evt)
+			// Off-hot-path enrichment: parse OpenAI response metadata from the already-captured body.
+			// This avoids buffering/parsing response bodies in the proxy ModifyResponse path.
+			go func(e eventbus.Event) {
+				addOpenAIResponseMetadataHeaders(e.ResponseHeaders, e.ResponseBody)
+				m.cfg.EventBus.Publish(context.Background(), e)
+			}(evt)
 		})
 	}
 }

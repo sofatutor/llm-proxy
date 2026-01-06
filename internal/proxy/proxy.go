@@ -440,15 +440,9 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 		return nil
 	}
 
-	// Process response body to extract metadata for non-streaming responses
-	if res.StatusCode == http.StatusOK &&
-		strings.Contains(res.Header.Get("Content-Type"), "application/json") &&
-		res.Body != nil {
-		// Extract metadata without consuming the response body
-		if err := p.extractResponseMetadata(res); err != nil {
-			p.logger.Warn("Failed to extract response metadata", zap.Error(err))
-		}
-	}
+	// NOTE: Response metadata extraction (X-OpenAI-*) is intentionally not performed here.
+	// Reading/parsing response bodies in ModifyResponse can add latency/GC pressure on the hot path.
+	// Metadata extraction for logging/observability is handled asynchronously in the observability middleware.
 
 	// Update metrics
 	p.metrics.mu.Lock()
