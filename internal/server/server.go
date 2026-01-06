@@ -415,6 +415,16 @@ func (s *Server) initializeAPIRoutes() error {
 			zap.Int("max", s.config.APIKeyCacheMax),
 		)
 	}
+	if proxyConfig.EnforceProjectActive && s.config.ActiveCacheTTL > 0 && s.config.ActiveCacheMax > 0 {
+		projectStore = proxy.NewCachedProjectActiveStore(projectStore, proxy.CachedProjectActiveStoreConfig{
+			TTL: s.config.ActiveCacheTTL,
+			Max: s.config.ActiveCacheMax,
+		})
+		s.logger.Info("Project active status cache enabled",
+			zap.Duration("ttl", s.config.ActiveCacheTTL),
+			zap.Int("max", s.config.ActiveCacheMax),
+		)
+	}
 
 	proxyHandler, err := proxy.NewTransparentProxyWithAudit(*proxyConfig, cachedValidator, projectStore, s.logger, s.auditLogger, obsCfg)
 	if err != nil {
