@@ -64,6 +64,14 @@ func TestObservabilityMiddleware_EnrichesOpenAIResponseMetadataHeaders(t *testin
 	ch := bus.Subscribe()
 	wrapped.ServeHTTP(rr, req)
 
+	// Ensure enrichment does not affect the client-visible response.
+	require.Empty(t, rr.Header().Get("X-OpenAI-Model"))
+	require.Empty(t, rr.Header().Get("X-OpenAI-Prompt-Tokens"))
+	require.Empty(t, rr.Header().Get("X-OpenAI-Completion-Tokens"))
+	require.Empty(t, rr.Header().Get("X-OpenAI-Total-Tokens"))
+	require.Empty(t, rr.Header().Get("X-OpenAI-ID"))
+	require.Empty(t, rr.Header().Get("X-OpenAI-Created"))
+
 	select {
 	case evt := <-ch:
 		require.Equal(t, "req-meta", evt.RequestID)
