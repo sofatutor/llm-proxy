@@ -265,6 +265,8 @@ func (d *DB) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	UPDATE tokens
 	SET request_count = request_count + 1, last_used_at = ?
 	WHERE token = ?
+	  AND is_active = 1
+	  AND (expires_at IS NULL OR expires_at > ?)
 	  AND (
 		max_requests IS NULL
 		OR max_requests <= 0
@@ -272,7 +274,7 @@ func (d *DB) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	  )
 	`
 
-	result, err := d.ExecContextRebound(ctx, query, now, tokenID)
+	result, err := d.ExecContextRebound(ctx, query, now, tokenID, now)
 	if err != nil {
 		return fmt.Errorf("failed to increment token usage: %w", err)
 	}
@@ -283,19 +285,35 @@ func (d *DB) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	}
 
 	if rowsAffected == 0 {
-		// No rows updated means either the token doesn't exist, or it exists but is already
-		// at quota. We do a follow-up SELECT to return the correct, semantically meaningful
-		// error (404 vs 429). If this becomes a hot path, we can explore dialect-specific
-		// optimizations like UPDATE ... RETURNING.
-		var requestCount int
-		var maxRequests sql.NullInt32
-		checkQuery := `SELECT request_count, max_requests FROM tokens WHERE token = ?`
-		err := d.QueryRowContextRebound(ctx, checkQuery, tokenID).Scan(&requestCount, &maxRequests)
+		// No rows updated means either:
+		// - token doesn't exist
+		// - token is inactive
+		// - token is expired
+		// - token is already at quota
+		//
+		// We do a follow-up SELECT to return a semantically meaningful error.
+		var (
+			isActive     bool
+			expiresAt    sql.NullTime
+			requestCount int
+			maxRequests  sql.NullInt32
+		)
+		checkQuery := `SELECT is_active, expires_at, request_count, max_requests FROM tokens WHERE token = ?`
+		err := d.QueryRowContextRebound(ctx, checkQuery, tokenID).Scan(&isActive, &expiresAt, &requestCount, &maxRequests)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return ErrTokenNotFound
 			}
 			return fmt.Errorf("failed to check token usage for %s: %w", obfuscate.ObfuscateTokenGeneric(tokenID), err)
+		}
+		if !isActive {
+			return token.ErrTokenInactive
+		}
+		if expiresAt.Valid {
+			exp := expiresAt.Time.UTC()
+			if !exp.IsZero() && now.After(exp) {
+				return token.ErrTokenExpired
+			}
 		}
 		if maxRequests.Valid && maxRequests.Int32 > 0 {
 			if requestCount >= int(maxRequests.Int32) {

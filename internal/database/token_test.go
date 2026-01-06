@@ -130,6 +130,32 @@ func TestTokenCRUD(t *testing.T) {
 		t.Fatalf("Expected ErrTokenNotFound, got %v", err)
 	}
 
+	// Test IncrementTokenUsage with inactive token
+	inactive := token1
+	inactive.IsActive = false
+	err = db.UpdateToken(ctx, inactive)
+	if err != nil {
+		t.Fatalf("Failed to update token to inactive: %v", err)
+	}
+	err = db.IncrementTokenUsage(ctx, token1.Token)
+	if err != token.ErrTokenInactive {
+		t.Fatalf("Expected ErrTokenInactive, got %v", err)
+	}
+
+	// Test IncrementTokenUsage with expired token
+	expired := token1
+	expired.IsActive = true
+	past := time.Now().Add(-1 * time.Hour)
+	expired.ExpiresAt = &past
+	err = db.UpdateToken(ctx, expired)
+	if err != nil {
+		t.Fatalf("Failed to update token to expired: %v", err)
+	}
+	err = db.IncrementTokenUsage(ctx, token1.Token)
+	if err != token.ErrTokenExpired {
+		t.Fatalf("Expected ErrTokenExpired, got %v", err)
+	}
+
 	// Test UpdateToken
 	updatedToken1.IsActive = false
 	updatedToken1.RequestCount = 10
