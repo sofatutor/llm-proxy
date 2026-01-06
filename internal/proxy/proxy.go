@@ -660,39 +660,58 @@ func (p *TransparentProxy) extractResponseMetadata(res *http.Response) error {
 
 // parseOpenAIResponseMetadata extracts metadata from OpenAI API responses
 func (p *TransparentProxy) parseOpenAIResponseMetadata(bodyBytes []byte) (map[string]string, error) {
-	metadata := make(map[string]string)
+	metadata := make(map[string]string, 6)
 
-	// Try to parse as JSON
-	var result map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &result); err != nil {
+	// Use typed decoding with RawMessage fields so we can ignore unexpected types
+	// (e.g., usage.prompt_tokens being a string) without failing the whole request.
+	type resp struct {
+		Usage   json.RawMessage `json:"usage"`
+		Model   json.RawMessage `json:"model"`
+		ID      json.RawMessage `json:"id"`
+		Created json.RawMessage `json:"created"`
+	}
+
+	var r resp
+	if err := json.Unmarshal(bodyBytes, &r); err != nil {
 		return metadata, fmt.Errorf("failed to parse response JSON: %w", err)
 	}
 
-	// Look for usage information
-	if usage, ok := result["usage"].(map[string]interface{}); ok {
-		// Extract token counts
-		if promptTokens, ok := usage["prompt_tokens"].(float64); ok {
-			metadata["Prompt-Tokens"] = fmt.Sprintf("%.0f", promptTokens)
-		}
-		if completionTokens, ok := usage["completion_tokens"].(float64); ok {
-			metadata["Completion-Tokens"] = fmt.Sprintf("%.0f", completionTokens)
-		}
-		if totalTokens, ok := usage["total_tokens"].(float64); ok {
-			metadata["Total-Tokens"] = fmt.Sprintf("%.0f", totalTokens)
+	if len(r.Usage) > 0 {
+		var u map[string]json.RawMessage
+		if err := json.Unmarshal(r.Usage, &u); err == nil {
+			var v int
+			if raw := u["prompt_tokens"]; len(raw) > 0 && json.Unmarshal(raw, &v) == nil && v > 0 {
+				metadata["Prompt-Tokens"] = strconv.Itoa(v)
+			}
+			if raw := u["completion_tokens"]; len(raw) > 0 && json.Unmarshal(raw, &v) == nil && v > 0 {
+				metadata["Completion-Tokens"] = strconv.Itoa(v)
+			}
+			if raw := u["total_tokens"]; len(raw) > 0 && json.Unmarshal(raw, &v) == nil && v > 0 {
+				metadata["Total-Tokens"] = strconv.Itoa(v)
+			}
 		}
 	}
 
-	// Extract model information
-	if model, ok := result["model"].(string); ok {
-		metadata["Model"] = model
+	if len(r.Model) > 0 {
+		var s string
+		if err := json.Unmarshal(r.Model, &s); err == nil && s != "" {
+			metadata["Model"] = s
+		}
 	}
 
-	// Extract other potentially useful metadata
-	if id, ok := result["id"].(string); ok {
-		metadata["ID"] = id
+	if len(r.ID) > 0 {
+		var s string
+		if err := json.Unmarshal(r.ID, &s); err == nil && s != "" {
+			metadata["ID"] = s
+		}
 	}
-	if created, ok := result["created"].(float64); ok {
-		metadata["Created"] = fmt.Sprintf("%.0f", created)
+
+	if len(r.Created) > 0 {
+		// OpenAI uses JSON numbers; accept int64.
+		var n int64
+		if err := json.Unmarshal(r.Created, &n); err == nil && n != 0 {
+			metadata["Created"] = strconv.FormatInt(n, 10)
+		}
 	}
 
 	return metadata, nil
