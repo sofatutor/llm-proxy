@@ -585,17 +585,57 @@ func (p *TransparentProxy) extractResponseMetadata(res *http.Response) error {
 		return nil
 	}
 
-	// We need to read the body to extract metadata, but we must also
-	// preserve it for the client. This is done by creating a new Reader
-	// that allows us to read the body twice.
-	bodyBytes, err := io.ReadAll(res.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
+	// Avoid buffering very large JSON bodies on the hot path.
+	// We preserve legacy behavior by allowing unlimited reads when ResponseMetadataMaxBytes == 0.
+	maxBytes := p.config.ResponseMetadataMaxBytes
+	if maxBytes > 0 && res.ContentLength > maxBytes {
+		return nil
 	}
 
-	// Replace the body with a new ReadCloser that can be read again
-	err = res.Body.Close()
-	if err != nil {
+	// Read the body to extract metadata, but preserve it for the client.
+	// When maxBytes > 0 and Content-Length is unknown, we only read up to maxBytes+1 and skip extraction if truncated.
+	originalBody := res.Body
+	var (
+		bodyBytes  []byte
+		truncated  bool
+		readErr    error
+		limitBytes int64
+	)
+	if maxBytes > 0 {
+		limitBytes = maxBytes + 1
+	} else {
+		limitBytes = 0
+	}
+	if limitBytes > 0 {
+		bodyBytes, readErr = io.ReadAll(io.LimitReader(originalBody, limitBytes))
+		if readErr == nil && int64(len(bodyBytes)) > maxBytes {
+			truncated = true
+		}
+	} else {
+		bodyBytes, readErr = io.ReadAll(originalBody)
+	}
+	if readErr != nil {
+		// Restore the body (best effort) so the client can still read the bytes we successfully consumed.
+		// Note: io.ReadAll may return partial bytes alongside an error.
+		if len(bodyBytes) > 0 {
+			res.Body = &readerWithCloser{
+				r: io.MultiReader(bytes.NewReader(bodyBytes), originalBody),
+				c: originalBody,
+			}
+		} else {
+			res.Body = originalBody
+		}
+		return fmt.Errorf("failed to read response body: %w", readErr)
+	}
+
+	if truncated {
+		// Restore the full body (bytes we already consumed + remaining unread bytes).
+		res.Body = &readerWithCloser{r: io.MultiReader(bytes.NewReader(bodyBytes), originalBody), c: originalBody}
+		return nil
+	}
+
+	// We consumed the whole response body; replace with a new ReadCloser that can be read again.
+	if err := originalBody.Close(); err != nil {
 		return fmt.Errorf("failed to close response body: %w", err)
 	}
 	res.Body = io.NopCloser(bytes.NewReader(bodyBytes))

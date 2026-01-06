@@ -279,6 +279,9 @@ See [API Configuration Guide](api-configuration.md) for detailed provider config
 |----------|------|---------|-------------|
 | `MAX_CONCURRENT_REQUESTS` | int | `100` | Max concurrent requests |
 | `WORKER_POOL_SIZE` | int | `10` | Worker goroutines for background tasks |
+| `LLM_PROXY_API_KEY_CACHE_TTL` | duration | `30s` | TTL for per-project upstream API key cache (reduces DB reads on hot path) |
+| `LLM_PROXY_API_KEY_CACHE_MAX` | int | `10000` | Max entries for per-project upstream API key cache |
+| `LLM_PROXY_RESPONSE_METADATA_MAX_BYTES` | int64 | `262144` | Cap bytes buffered for JSON response metadata extraction (`X-OpenAI-*`). Set `0` for unlimited |
 
 ## Metrics and Monitoring
 
