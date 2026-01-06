@@ -56,14 +56,21 @@ func GenerateToken() (string, error) {
 // ValidateTokenFormat checks if the given token string follows the expected format.
 // It does not check if the token exists or is valid in the database.
 func ValidateTokenFormat(token string) error {
-	// Check format with regex
-	if !TokenRegex.MatchString(token) {
+	// Fast-path structural validation (avoid regex + decode double work).
+	// Tokens are: "sk-" + base64url(UUID bytes) where UUID is 16 bytes => 22 base64url chars.
+	if len(token) != len(TokenPrefix)+22 {
+		return ErrInvalidTokenFormat
+	}
+	if !strings.HasPrefix(token, TokenPrefix) {
 		return ErrInvalidTokenFormat
 	}
 
-	// Attempt to decode the token to ensure it was properly generated
-	_, err := DecodeToken(token)
-	if err != nil {
+	// Attempt to decode the token to ensure it was properly generated.
+	// This implicitly validates the base64url charset and length.
+	if _, err := DecodeToken(token); err != nil {
+		if errors.Is(err, ErrInvalidTokenFormat) {
+			return ErrInvalidTokenFormat
+		}
 		return fmt.Errorf("%w: %v", ErrTokenDecodingFailed, err)
 	}
 

@@ -53,6 +53,12 @@ type Config struct {
 	// Observability middleware
 	ObservabilityEnabled    bool // Enable async observability middleware
 	ObservabilityBufferSize int  // Buffer size for in-memory event bus
+	// ObservabilityMaxRequestBodyBytes caps how many bytes of request bodies are captured for observability events.
+	// This is only for the async event payload and does not affect the proxied request body.
+	ObservabilityMaxRequestBodyBytes int64
+	// ObservabilityMaxResponseBodyBytes caps how many bytes of response bodies are captured for observability events.
+	// This is only for the async event payload and does not affect the proxied response body.
+	ObservabilityMaxResponseBodyBytes int64
 
 	// CORS settings
 	CORSAllowedOrigins []string      // Allowed origins for CORS
@@ -165,8 +171,10 @@ func New() (*Config, error) {
 		AuditCreateDir: getEnvBool("AUDIT_CREATE_DIR", true),
 		AuditStoreInDB: getEnvBool("AUDIT_STORE_IN_DB", true),
 
-		ObservabilityEnabled:    getEnvBool("OBSERVABILITY_ENABLED", true),
-		ObservabilityBufferSize: getEnvInt("OBSERVABILITY_BUFFER_SIZE", 1000),
+		ObservabilityEnabled:              getEnvBool("OBSERVABILITY_ENABLED", true),
+		ObservabilityBufferSize:           getEnvInt("OBSERVABILITY_BUFFER_SIZE", 1000),
+		ObservabilityMaxRequestBodyBytes:  getEnvInt64("OBSERVABILITY_MAX_REQUEST_BODY_BYTES", 64*1024),   // 64KB
+		ObservabilityMaxResponseBodyBytes: getEnvInt64("OBSERVABILITY_MAX_RESPONSE_BODY_BYTES", 256*1024), // 256KB
 
 		// CORS defaults
 		CORSAllowedOrigins: getEnvStringSlice("CORS_ALLOWED_ORIGINS", []string{"*"}),

@@ -23,6 +23,10 @@ type Middleware func(http.Handler) http.Handler
 type ObservabilityConfig struct {
 	Enabled  bool
 	EventBus eventbus.EventBus
+	// MaxRequestBodyBytes limits request body capture for observability events. 0 means "use default".
+	MaxRequestBodyBytes int64
+	// MaxResponseBodyBytes limits response body capture for observability events. 0 means "use default".
+	MaxResponseBodyBytes int64
 }
 
 // ObservabilityMiddleware captures request/response data and forwards it to an event bus.
@@ -48,17 +52,39 @@ func (m *ObservabilityMiddleware) Middleware() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
-			crw := &captureResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+			maxReq := m.cfg.MaxRequestBodyBytes
+			if maxReq <= 0 {
+				maxReq = 64 * 1024 // default 64KB
+			}
+			maxResp := m.cfg.MaxResponseBodyBytes
+			if maxResp <= 0 {
+				maxResp = 256 * 1024 // default 256KB
+			}
+
+			crw := &captureResponseWriter{ResponseWriter: w, statusCode: http.StatusOK, maxBodyBytes: maxResp}
 
 			var reqBody []byte
 			if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch {
 				if r.Body != nil {
-					// Read and buffer the request body
-					bodyBytes, err := io.ReadAll(r.Body)
-					if err == nil {
-						reqBody = bodyBytes
-						// Restore the body for downstream handlers
-						r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+					// Capture only up to maxReq bytes without consuming the downstream body.
+					// We read maxReq+1 bytes so we can detect truncation.
+					originalBody := r.Body
+					limitedReader := io.LimitReader(originalBody, maxReq+1)
+					bodyBytes, err := io.ReadAll(limitedReader)
+					if err == nil && len(bodyBytes) > 0 {
+						if int64(len(bodyBytes)) > maxReq {
+							reqBody = bodyBytes[:maxReq]
+						} else {
+							reqBody = bodyBytes
+						}
+						// Restore the body for downstream handlers (including any unread bytes from originalBody).
+						r.Body = &readerWithCloser{
+							r: io.MultiReader(bytes.NewReader(bodyBytes), originalBody),
+							c: originalBody,
+						}
+					} else {
+						// Restore the body even on read errors.
+						r.Body = originalBody
 					}
 				}
 			}
@@ -100,8 +126,10 @@ func (m *ObservabilityMiddleware) Middleware() Middleware {
 // captureResponseWriter wraps http.ResponseWriter to capture status and body while supporting streaming.
 type captureResponseWriter struct {
 	http.ResponseWriter
-	statusCode int
-	body       bytes.Buffer
+	statusCode    int
+	body          bytes.Buffer
+	maxBodyBytes  int64
+	capturedBytes int64
 }
 
 func (w *captureResponseWriter) WriteHeader(code int) {
@@ -110,7 +138,20 @@ func (w *captureResponseWriter) WriteHeader(code int) {
 }
 
 func (w *captureResponseWriter) Write(b []byte) (int, error) {
-	w.body.Write(b)
+	if w.maxBodyBytes <= 0 || w.capturedBytes < w.maxBodyBytes {
+		remaining := int64(len(b))
+		if w.maxBodyBytes > 0 {
+			remaining = w.maxBodyBytes - w.capturedBytes
+		}
+		if remaining > 0 {
+			toWrite := b
+			if int64(len(b)) > remaining {
+				toWrite = b[:remaining]
+			}
+			_, _ = w.body.Write(toWrite)
+			w.capturedBytes += int64(len(toWrite))
+		}
+	}
 	return w.ResponseWriter.Write(b)
 }
 
@@ -143,3 +184,11 @@ func cloneHeader(h http.Header) http.Header {
 	}
 	return cloned
 }
+
+type readerWithCloser struct {
+	r io.Reader
+	c io.Closer
+}
+
+func (rc *readerWithCloser) Read(p []byte) (int, error) { return rc.r.Read(p) }
+func (rc *readerWithCloser) Close() error               { return rc.c.Close() }

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1264,6 +1265,9 @@ func newTestProxyWithConfig(cfg ProxyConfig) *TransparentProxy {
 	stubValidator := &stubTokenValidator{}
 	stubStore := &stubProjectStore{}
 	logger := zap.NewNop()
+	if cfg.TargetBaseURL == "" {
+		cfg.TargetBaseURL = "https://api.example.com"
+	}
 	p, _ := NewTransparentProxyWithLogger(cfg, stubValidator, stubStore, logger)
 	return p
 }
@@ -1322,6 +1326,42 @@ func TestTimingResponseWriter_Flush(t *testing.T) {
 	if !rec.flushed {
 		t.Errorf("Flush was not called on underlying ResponseWriter")
 	}
+}
+
+func TestTransparentProxy_Handler_ConcurrentRequests(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer upstream.Close()
+
+	v := &stubTokenValidator{}
+	s := &stubProjectStore{}
+
+	p, err := NewTransparentProxyWithLogger(ProxyConfig{
+		TargetBaseURL:    upstream.URL,
+		AllowedEndpoints: []string{"/v1/test"},
+		AllowedMethods:   []string{"GET"},
+	}, v, s, zap.NewNop())
+	require.NoError(t, err)
+
+	h := p.Handler()
+
+	const n = 50
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func() {
+			defer wg.Done()
+			req := httptest.NewRequest(http.MethodGet, "/v1/test", nil)
+			req.Header.Set("Authorization", "Bearer tok")
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			assert.Equal(t, http.StatusOK, w.Code)
+		}()
+	}
+	wg.Wait()
 }
 
 func TestSetTimingHeaders(t *testing.T) {
