@@ -121,6 +121,8 @@ func (m *ObservabilityMiddleware) Middleware() Middleware {
 			// Off-hot-path enrichment: parse OpenAI response metadata from the already-captured body.
 			// This avoids buffering/parsing response bodies in the proxy ModifyResponse path.
 			go func(e eventbus.Event) {
+				// ResponseHeaders is a map type; make a defensive copy so the async mutation is fully isolated.
+				e.ResponseHeaders = cloneHeader(e.ResponseHeaders)
 				addOpenAIResponseMetadataHeaders(e.ResponseHeaders, e.ResponseBody)
 				m.cfg.EventBus.Publish(context.Background(), e)
 			}(evt)

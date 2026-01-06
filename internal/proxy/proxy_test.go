@@ -1040,45 +1040,6 @@ func TestModifyResponse_StreamingReturnsEarly(t *testing.T) {
 	assert.Equal(t, int64(0), p.metrics.ErrorCount)
 }
 
-func TestParseOpenAIResponseMetadata(t *testing.T) {
-	p := &TransparentProxy{}
-
-	// Case: full metadata
-	body := []byte(`{
-		"usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
-		"model": "gpt-4",
-		"id": "abc123",
-		"created": 1234567890
-	}`)
-	meta, err := p.parseOpenAIResponseMetadata(body)
-	assert.NoError(t, err)
-	assert.Equal(t, "10", meta["Prompt-Tokens"])
-	assert.Equal(t, "20", meta["Completion-Tokens"])
-	assert.Equal(t, "30", meta["Total-Tokens"])
-	assert.Equal(t, "gpt-4", meta["Model"])
-	assert.Equal(t, "abc123", meta["ID"])
-	assert.Equal(t, "1234567890", meta["Created"])
-
-	// Case: missing usage
-	body = []byte(`{"model": "gpt-3.5"}`)
-	meta, err = p.parseOpenAIResponseMetadata(body)
-	assert.NoError(t, err)
-	assert.Equal(t, "gpt-3.5", meta["Model"])
-	assert.NotContains(t, meta, "Prompt-Tokens")
-
-	// Case: invalid JSON
-	body = []byte("not json")
-	meta, err = p.parseOpenAIResponseMetadata(body)
-	assert.Error(t, err)
-	assert.Empty(t, meta)
-
-	// Case: usage present but wrong types
-	body = []byte(`{"usage": {"prompt_tokens": "foo"}}`)
-	meta, err = p.parseOpenAIResponseMetadata(body)
-	assert.NoError(t, err)
-	assert.NotContains(t, meta, "Prompt-Tokens")
-}
-
 func TestNewTransparentProxy_Coverage(t *testing.T) {
 	_, err := NewTransparentProxy(ProxyConfig{}, nil, nil)
 	if err == nil {
