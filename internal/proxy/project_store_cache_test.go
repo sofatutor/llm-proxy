@@ -248,3 +248,32 @@ func TestCachedProjectStore_ConcurrentAccess(t *testing.T) {
 	require.Greater(t, under.apiKeyN, 0)
 	require.Less(t, under.apiKeyN, totalCalls)
 }
+
+func TestCachedProjectStore_PassThroughMethods_AreNotCached(t *testing.T) {
+	under := &countingProjectStore{apiKey: "sk-test", active: true}
+	c := NewCachedProjectStore(under, CachedProjectStoreConfig{TTL: time.Minute, Max: 10})
+
+	ctx := context.Background()
+
+	// These methods should always delegate to the underlying store.
+	_, err := c.GetProjectActive(ctx, "p1")
+	require.NoError(t, err)
+	_, err = c.GetProjectActive(ctx, "p1")
+	require.NoError(t, err)
+
+	_, err = c.GetProjectByID(ctx, "p1")
+	require.NoError(t, err)
+	_, err = c.GetProjectByID(ctx, "p1")
+	require.NoError(t, err)
+
+	_, err = c.ListProjects(ctx)
+	require.NoError(t, err)
+	_, err = c.ListProjects(ctx)
+	require.NoError(t, err)
+
+	under.mu.Lock()
+	defer under.mu.Unlock()
+	require.Equal(t, 2, under.activeN)
+	require.Equal(t, 2, under.getByIDN)
+	require.Equal(t, 2, under.listN)
+}

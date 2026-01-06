@@ -324,6 +324,10 @@ func (s *Server) initializeAPIRoutes() error {
 				zap.String("value", v),
 				zap.Error(convErr),
 			)
+		case n < 0:
+			s.logger.Warn("Negative LLM_PROXY_RESPONSE_METADATA_MAX_BYTES value; using default",
+				zap.String("value", v),
+			)
 		case n == 0:
 			// Explicitly allow 0 to preserve legacy unlimited behavior.
 			proxyConfig.ResponseMetadataMaxBytes = 0
