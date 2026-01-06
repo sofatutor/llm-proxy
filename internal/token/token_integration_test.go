@@ -80,6 +80,16 @@ func (m *MockStore) IncrementTokenUsage(ctx context.Context, tokenID string) err
 		return ErrTokenNotFound
 	}
 
+	if !token.IsActive {
+		return ErrTokenInactive
+	}
+	if IsExpired(token.ExpiresAt) {
+		return ErrTokenExpired
+	}
+	if token.MaxRequests != nil && *token.MaxRequests > 0 && token.RequestCount >= *token.MaxRequests {
+		return ErrTokenRateLimit
+	}
+
 	token.RequestCount++
 	now := time.Now()
 	token.LastUsedAt = &now

@@ -3,6 +3,7 @@ package token
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 )
@@ -217,6 +218,166 @@ func TestCachedValidator_ValidateTokenWithTracking(t *testing.T) {
 	}
 	if mockValidator.validationCount != 1 {
 		t.Errorf("ValidateToken() after tracking should not use cache, validationCount = %v, want 1", mockValidator.validationCount)
+	}
+}
+
+type countingStore struct {
+	mu sync.Mutex
+
+	tokens map[string]TokenData
+
+	getByTokenCalls int
+	incCalls        int
+}
+
+func newCountingStore() *countingStore {
+	return &countingStore{tokens: make(map[string]TokenData)}
+}
+
+func (s *countingStore) GetTokenByID(ctx context.Context, id string) (TokenData, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	td, ok := s.tokens[id]
+	if !ok {
+		return TokenData{}, ErrTokenNotFound
+	}
+	return td, nil
+}
+
+func (s *countingStore) GetTokenByToken(ctx context.Context, tokenString string) (TokenData, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.getByTokenCalls++
+	td, ok := s.tokens[tokenString]
+	if !ok {
+		return TokenData{}, ErrTokenNotFound
+	}
+	return td, nil
+}
+
+func (s *countingStore) IncrementTokenUsage(ctx context.Context, tokenString string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.incCalls++
+
+	td, ok := s.tokens[tokenString]
+	if !ok {
+		return ErrTokenNotFound
+	}
+	if !td.IsActive {
+		return ErrTokenInactive
+	}
+	if IsExpired(td.ExpiresAt) {
+		return ErrTokenExpired
+	}
+	if td.MaxRequests != nil && *td.MaxRequests > 0 && td.RequestCount >= *td.MaxRequests {
+		return ErrTokenRateLimit
+	}
+	td.RequestCount++
+	now := time.Now()
+	td.LastUsedAt = &now
+	s.tokens[tokenString] = td
+	return nil
+}
+
+func (s *countingStore) CreateToken(ctx context.Context, token TokenData) error { return nil }
+func (s *countingStore) UpdateToken(ctx context.Context, token TokenData) error { return nil }
+func (s *countingStore) ListTokens(ctx context.Context) ([]TokenData, error)    { return nil, nil }
+func (s *countingStore) GetTokensByProjectID(ctx context.Context, projectID string) ([]TokenData, error) {
+	return nil, nil
+}
+
+func TestCachedValidator_ValidateTokenWithTracking_LimitedToken_UsesCacheAndAvoidsExtraReads(t *testing.T) {
+	ctx := context.Background()
+	store := newCountingStore()
+	validator := &StandardValidator{store: store}
+	cv := NewCachedValidator(validator, CacheOptions{TTL: time.Minute, MaxSize: 10, EnableCleanup: false})
+
+	now := time.Now()
+	future := now.Add(1 * time.Hour)
+	maxReq := 100
+	tok, _ := GenerateToken()
+
+	store.tokens[tok] = TokenData{
+		Token:        tok,
+		ProjectID:    "p1",
+		ExpiresAt:    &future,
+		IsActive:     true,
+		RequestCount: 0,
+		MaxRequests:  &maxReq,
+		CreatedAt:    now,
+	}
+
+	// First call: expect underlying validation+tracking and then cache population (may re-read once).
+	got, err := cv.ValidateTokenWithTracking(ctx, tok)
+	if err != nil {
+		t.Fatalf("ValidateTokenWithTracking() error = %v", err)
+	}
+	if got != "p1" {
+		t.Fatalf("ValidateTokenWithTracking() = %q, want %q", got, "p1")
+	}
+
+	// Second call: should hit cache and only do a usage increment (no GetTokenByToken read).
+	got, err = cv.ValidateTokenWithTracking(ctx, tok)
+	if err != nil {
+		t.Fatalf("ValidateTokenWithTracking() second error = %v", err)
+	}
+	if got != "p1" {
+		t.Fatalf("ValidateTokenWithTracking() second = %q, want %q", got, "p1")
+	}
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	if store.incCalls != 2 {
+		t.Fatalf("IncrementTokenUsage calls = %d, want 2", store.incCalls)
+	}
+	// First call: 2x reads (1x via validateTokenData + 1x via cacheToken population) and 1x write.
+	// Second call (cache hit): 0x reads and 1x write (only IncrementTokenUsage).
+	if store.getByTokenCalls != 2 {
+		t.Fatalf("GetTokenByToken calls = %d, want 2", store.getByTokenCalls)
+	}
+}
+
+func TestCachedValidator_ValidateTokenWithTracking_LimitedToken_InvalidatesOnRateLimit(t *testing.T) {
+	ctx := context.Background()
+	store := newCountingStore()
+	validator := &StandardValidator{store: store}
+	cv := NewCachedValidator(validator, CacheOptions{TTL: time.Minute, MaxSize: 10, EnableCleanup: false})
+
+	now := time.Now()
+	future := now.Add(1 * time.Hour)
+	maxReq := 1
+	tok, _ := GenerateToken()
+
+	store.tokens[tok] = TokenData{
+		Token:        tok,
+		ProjectID:    "p1",
+		ExpiresAt:    &future,
+		IsActive:     true,
+		RequestCount: 0,
+		MaxRequests:  &maxReq,
+		CreatedAt:    now,
+	}
+
+	// First use should succeed and populate cache (initial validation read + cacheToken read = 2 GetTokenByToken calls).
+	_, err := cv.ValidateTokenWithTracking(ctx, tok)
+	if err != nil {
+		t.Fatalf("ValidateTokenWithTracking() first error = %v", err)
+	}
+
+	// Second use should hit cache, attempt increment, fail with rate limit, and invalidate cache entry.
+	_, err = cv.ValidateTokenWithTracking(ctx, tok)
+	if err == nil || !errors.Is(err, ErrTokenRateLimit) {
+		t.Fatalf("ValidateTokenWithTracking() second error = %v, want ErrTokenRateLimit", err)
+	}
+
+	// Cache should be invalidated after the failed increment.
+	cv.cacheMutex.RLock()
+	_, ok := cv.cache[tok]
+	cv.cacheMutex.RUnlock()
+	if ok {
+		t.Fatalf("expected cache entry to be invalidated after ErrTokenRateLimit")
 	}
 }
 

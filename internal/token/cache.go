@@ -141,11 +141,12 @@ func (cv *CachedValidator) ValidateToken(ctx context.Context, tokenID string) (s
 // ValidateTokenWithTracking validates a token and tracks usage.
 //
 // For cached *unlimited* tokens, we keep validation cheap by returning from the cache and enqueueing
-// async tracking (when an aggregator is configured). For cached *limited* tokens we defer to the
-// underlying validator and invalidate the cache afterwards, to avoid serving stale rate-limit state.
+// async tracking (when an aggregator is configured).
+//
+// For cached *limited* tokens, we still want to avoid an extra DB read on every request. We do this
+// by using the cached token metadata (active/expiry/project) and performing a synchronous usage
+// increment (which is where max_requests is enforced).
 func (cv *CachedValidator) ValidateTokenWithTracking(ctx context.Context, tokenID string) (string, error) {
-	shouldInvalidateAfterTracking := false
-
 	cv.cacheMutex.RLock()
 	entry, found := cv.cache[tokenID]
 	cv.cacheMutex.RUnlock()
@@ -163,7 +164,7 @@ func (cv *CachedValidator) ValidateTokenWithTracking(ctx context.Context, tokenI
 			cv.misses++
 			cv.evictions++
 			cv.statsMutex.Unlock()
-		} else if entry.Data.IsValid() {
+		} else if isCacheableTokenValid(entry.Data) {
 			cv.statsMutex.Lock()
 			cv.hits++
 			cv.statsMutex.Unlock()
@@ -176,11 +177,20 @@ func (cv *CachedValidator) ValidateTokenWithTracking(ctx context.Context, tokenI
 						return entry.Data.ProjectID, nil
 					}
 				}
-			} else {
-				shouldInvalidateAfterTracking = true
+			} else if sv, ok := cv.validator.(*StandardValidator); ok && sv != nil && sv.store != nil {
+				// Limited token: enforce max_requests via a synchronous increment, but avoid a DB read.
+				if err := sv.store.IncrementTokenUsage(ctx, tokenID); err != nil {
+					// If the token is no longer usable (inactive/expired/quota), invalidate the cache entry
+					// so we avoid repeatedly hitting the cache and failing the same increment.
+					if err == ErrTokenRateLimit || err == ErrTokenInactive || err == ErrTokenExpired {
+						cv.invalidateCache(tokenID)
+					}
+					return "", err
+				}
+				return entry.Data.ProjectID, nil
 			}
 		} else {
-			// Should be unreachable (invalid tokens should never be cached), but be defensive.
+			// Token became invalid (inactive/expired). Be defensive and drop the cache entry.
 			cv.invalidateCache(tokenID)
 
 			cv.statsMutex.Lock()
@@ -195,9 +205,9 @@ func (cv *CachedValidator) ValidateTokenWithTracking(ctx context.Context, tokenI
 		return "", err
 	}
 
-	if shouldInvalidateAfterTracking {
-		cv.invalidateCache(tokenID)
-	}
+	// Populate the cache after successful tracking so subsequent requests can avoid extra DB reads.
+	// (Only works for StandardValidator; others are safely ignored.)
+	cv.cacheToken(ctx, tokenID)
 
 	return projectID, nil
 }
@@ -231,12 +241,37 @@ func (cv *CachedValidator) checkCache(tokenID string) (string, bool) {
 		return "", false
 	}
 
+	// In cache but token is no longer valid (inactive/expired)
+	if !isCacheableTokenValid(entry.Data) {
+		cv.invalidateCache(tokenID)
+		cv.statsMutex.Lock()
+		cv.misses++
+		cv.evictions++
+		cv.statsMutex.Unlock()
+		return "", false
+	}
+
 	// In cache and valid
 	cv.statsMutex.Lock()
 	cv.hits++
 	cv.statsMutex.Unlock()
 
 	return entry.Data.ProjectID, true
+}
+
+// isCacheableTokenValid determines whether a cached token can be used for authentication.
+//
+// Important: We intentionally do NOT use RequestCount/MaxRequests here.
+// Cache hits are not supposed to count against token quotas (see cache-hit fast path),
+// and cached RequestCount is inherently stale under concurrency.
+func isCacheableTokenValid(td TokenData) bool {
+	if !td.IsActive {
+		return false
+	}
+	if IsExpired(td.ExpiresAt) {
+		return false
+	}
+	return true
 }
 
 // cacheToken retrieves and caches a token
@@ -252,7 +287,7 @@ func (cv *CachedValidator) cacheToken(ctx context.Context, tokenID string) {
 	if err != nil {
 		return
 	}
-	if !tokenData.IsValid() {
+	if !isCacheableTokenValid(tokenData) {
 		return
 	}
 
