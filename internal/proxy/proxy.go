@@ -440,15 +440,9 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 		return nil
 	}
 
-	// Process response body to extract metadata for non-streaming responses
-	if res.StatusCode == http.StatusOK &&
-		strings.Contains(res.Header.Get("Content-Type"), "application/json") &&
-		res.Body != nil {
-		// Extract metadata without consuming the response body
-		if err := p.extractResponseMetadata(res); err != nil {
-			p.logger.Warn("Failed to extract response metadata", zap.Error(err))
-		}
-	}
+	// NOTE: Response metadata extraction (X-OpenAI-*) is intentionally not performed here.
+	// Reading/parsing response bodies in ModifyResponse can add latency/GC pressure on the hot path.
+	// Metadata extraction for logging/observability is handled asynchronously in the observability middleware.
 
 	// Update metrics
 	p.metrics.mu.Lock()
@@ -566,136 +560,6 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 	}
 
 	return nil
-}
-
-// extractResponseMetadata extracts metadata from the response body without consuming it
-func (p *TransparentProxy) extractResponseMetadata(res *http.Response) error {
-	// Check if we need to process the response
-	if res.Body == nil {
-		return errors.New("response body is nil")
-	}
-
-	// Only parse as JSON if Content-Type is application/json and not compressed
-	contentType := res.Header.Get("Content-Type")
-	contentEncoding := res.Header.Get("Content-Encoding")
-	if !strings.Contains(contentType, "application/json") || (contentEncoding != "" && contentEncoding != "identity") {
-		p.logger.Debug("Skipping metadata extraction: not JSON or compressed",
-			zap.String("content_type", contentType),
-			zap.String("content_encoding", contentEncoding))
-		return nil
-	}
-
-	// Avoid buffering very large JSON bodies on the hot path.
-	// We preserve legacy behavior by allowing unlimited reads when ResponseMetadataMaxBytes == 0.
-	maxBytes := p.config.ResponseMetadataMaxBytes
-	if maxBytes > 0 && res.ContentLength > maxBytes {
-		return nil
-	}
-
-	// Read the body to extract metadata, but preserve it for the client.
-	// When maxBytes > 0 and Content-Length is unknown, we only read up to maxBytes+1 and skip extraction if truncated.
-	originalBody := res.Body
-	var (
-		bodyBytes  []byte
-		truncated  bool
-		readErr    error
-		limitBytes int64
-	)
-	if maxBytes > 0 {
-		limitBytes = maxBytes + 1
-	} else {
-		limitBytes = 0
-	}
-	if limitBytes > 0 {
-		bodyBytes, readErr = io.ReadAll(io.LimitReader(originalBody, limitBytes))
-		if readErr == nil && int64(len(bodyBytes)) > maxBytes {
-			truncated = true
-		}
-	} else {
-		bodyBytes, readErr = io.ReadAll(originalBody)
-	}
-	if readErr != nil {
-		// Restore the body (best effort) so the client can still read the bytes we successfully consumed.
-		// Note: io.ReadAll may return partial bytes alongside an error.
-		if len(bodyBytes) > 0 {
-			res.Body = &readerWithCloser{
-				r: io.MultiReader(bytes.NewReader(bodyBytes), originalBody),
-				c: originalBody,
-			}
-		} else {
-			res.Body = originalBody
-		}
-		return fmt.Errorf("failed to read response body: %w", readErr)
-	}
-
-	if truncated {
-		// Restore the full body (bytes we already consumed + remaining unread bytes).
-		res.Body = &readerWithCloser{r: io.MultiReader(bytes.NewReader(bodyBytes), originalBody), c: originalBody}
-		return nil
-	}
-
-	// We consumed the whole response body; replace with a new ReadCloser that can be read again.
-	if err := originalBody.Close(); err != nil {
-		return fmt.Errorf("failed to close response body: %w", err)
-	}
-	res.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-
-	// Parse the body to extract metadata
-	metadata, err := p.parseOpenAIResponseMetadata(bodyBytes)
-	if err != nil {
-		p.logger.Debug("Failed to extract response metadata",
-			zap.Error(err),
-			zap.String("content_type", contentType),
-			zap.String("content_encoding", contentEncoding))
-		return nil
-	}
-
-	// Add metadata to response headers
-	for k, v := range metadata {
-		res.Header.Set(fmt.Sprintf("X-OpenAI-%s", k), v)
-	}
-
-	return nil
-}
-
-// parseOpenAIResponseMetadata extracts metadata from OpenAI API responses
-func (p *TransparentProxy) parseOpenAIResponseMetadata(bodyBytes []byte) (map[string]string, error) {
-	metadata := make(map[string]string)
-
-	// Try to parse as JSON
-	var result map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &result); err != nil {
-		return metadata, fmt.Errorf("failed to parse response JSON: %w", err)
-	}
-
-	// Look for usage information
-	if usage, ok := result["usage"].(map[string]interface{}); ok {
-		// Extract token counts
-		if promptTokens, ok := usage["prompt_tokens"].(float64); ok {
-			metadata["Prompt-Tokens"] = fmt.Sprintf("%.0f", promptTokens)
-		}
-		if completionTokens, ok := usage["completion_tokens"].(float64); ok {
-			metadata["Completion-Tokens"] = fmt.Sprintf("%.0f", completionTokens)
-		}
-		if totalTokens, ok := usage["total_tokens"].(float64); ok {
-			metadata["Total-Tokens"] = fmt.Sprintf("%.0f", totalTokens)
-		}
-	}
-
-	// Extract model information
-	if model, ok := result["model"].(string); ok {
-		metadata["Model"] = model
-	}
-
-	// Extract other potentially useful metadata
-	if id, ok := result["id"].(string); ok {
-		metadata["ID"] = id
-	}
-	if created, ok := result["created"].(float64); ok {
-		metadata["Created"] = fmt.Sprintf("%.0f", created)
-	}
-
-	return metadata, nil
 }
 
 // errorHandler handles errors that occur during proxying

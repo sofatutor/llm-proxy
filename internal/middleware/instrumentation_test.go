@@ -45,6 +45,46 @@ func TestObservabilityMiddleware_NonStreaming(t *testing.T) {
 	}
 }
 
+func TestObservabilityMiddleware_EnrichesOpenAIResponseMetadataHeaders(t *testing.T) {
+	bus := eventbus.NewInMemoryEventBus(10)
+	mw := NewObservabilityMiddleware(ObservabilityConfig{Enabled: true, EventBus: bus}, nil)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"model":"gpt-4","usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}`))
+	})
+
+	wrapped := mw.Middleware()(handler)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", bytes.NewReader([]byte(`{"foo":"bar"}`)))
+	req.Header.Set("X-Request-ID", "req-meta")
+	rr := httptest.NewRecorder()
+
+	ch := bus.Subscribe()
+	wrapped.ServeHTTP(rr, req)
+
+	// Ensure enrichment does not affect the client-visible response.
+	require.Empty(t, rr.Header().Get("X-OpenAI-Model"))
+	require.Empty(t, rr.Header().Get("X-OpenAI-Prompt-Tokens"))
+	require.Empty(t, rr.Header().Get("X-OpenAI-Completion-Tokens"))
+	require.Empty(t, rr.Header().Get("X-OpenAI-Total-Tokens"))
+	require.Empty(t, rr.Header().Get("X-OpenAI-ID"))
+	require.Empty(t, rr.Header().Get("X-OpenAI-Created"))
+
+	select {
+	case evt := <-ch:
+		require.Equal(t, "req-meta", evt.RequestID)
+		require.Equal(t, http.StatusOK, evt.Status)
+		require.Equal(t, "gpt-4", evt.ResponseHeaders.Get("X-OpenAI-Model"))
+		require.Equal(t, "1", evt.ResponseHeaders.Get("X-OpenAI-Prompt-Tokens"))
+		require.Equal(t, "2", evt.ResponseHeaders.Get("X-OpenAI-Completion-Tokens"))
+		require.Equal(t, "3", evt.ResponseHeaders.Get("X-OpenAI-Total-Tokens"))
+	case <-time.After(time.Second):
+		t.Fatal("event not received")
+	}
+}
+
 func TestObservabilityMiddleware_Streaming(t *testing.T) {
 	bus := eventbus.NewInMemoryEventBus(10)
 	mw := NewObservabilityMiddleware(ObservabilityConfig{Enabled: true, EventBus: bus}, nil)

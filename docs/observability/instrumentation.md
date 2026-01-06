@@ -80,7 +80,7 @@ These settings primarily affect hot-path performance characteristics rather than
 
 - `LLM_PROXY_API_KEY_CACHE_TTL` (duration): TTL for per-project upstream API key cache (default: 30s).
 - `LLM_PROXY_API_KEY_CACHE_MAX` (int): Max entries for per-project upstream API key cache (default: 10000).
-- `LLM_PROXY_RESPONSE_METADATA_MAX_BYTES` (int64): Cap bytes buffered for JSON response metadata extraction (`X-OpenAI-*`). Default: 262144. Set 0 for unlimited.
+- `OBSERVABILITY_MAX_RESPONSE_BODY_BYTES` (int64): Cap bytes captured from response bodies for observability events (also bounds OpenAI metadata extraction). Default: 262144.
 
 ## How It Works
 - The middleware wraps all proxy requests and responses.

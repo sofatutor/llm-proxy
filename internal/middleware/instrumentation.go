@@ -108,17 +108,25 @@ func (m *ObservabilityMiddleware) Middleware() Middleware {
 			}
 
 			evt := eventbus.Event{
-				RequestID:       reqID,
-				Method:          r.Method,
-				Path:            r.URL.Path,
-				Status:          crw.statusCode,
-				Duration:        time.Since(start),
-				ResponseHeaders: cloneHeader(crw.Header()),
+				RequestID: reqID,
+				Method:    r.Method,
+				Path:      r.URL.Path,
+				Status:    crw.statusCode,
+				Duration:  time.Since(start),
+				// Avoid cloning here; we clone inside the goroutine before mutating/enriching.
+				ResponseHeaders: crw.Header(),
 				ResponseBody:    crw.body.Bytes(),
 				RequestBody:     reqBody,
 			}
 
-			go m.cfg.EventBus.Publish(context.Background(), evt)
+			// Off-hot-path enrichment: parse OpenAI response metadata from the already-captured body.
+			// This avoids buffering/parsing response bodies in the proxy ModifyResponse path.
+			go func(e eventbus.Event) {
+				// ResponseHeaders is a map type; make a defensive copy so the async mutation is fully isolated.
+				e.ResponseHeaders = cloneHeader(e.ResponseHeaders)
+				addOpenAIResponseMetadataHeaders(e.ResponseHeaders, e.ResponseBody)
+				m.cfg.EventBus.Publish(context.Background(), e)
+			}(evt)
 		})
 	}
 }

@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -77,10 +76,6 @@ type Metrics struct {
 
 // Version is the application version, following semantic versioning.
 const Version = "0.1.0"
-
-// maxResponseMetadataBytes is a hard upper bound for LLM_PROXY_RESPONSE_METADATA_MAX_BYTES.
-// This prevents accidental huge values from causing excessive buffering.
-const maxResponseMetadataBytes int64 = 10 * 1024 * 1024 // 10MB
 
 // maxDurationMinutes is the maximum allowed duration for a token (365 days)
 const maxDurationMinutes = 525600
@@ -310,34 +305,6 @@ func (s *Server) initializeAPIRoutes() error {
 		proxyConfig, err = apiConfig.GetProxyConfigForAPI(apiConfig.DefaultAPI)
 		if err != nil {
 			return fmt.Errorf("failed to get proxy configuration: %w", err)
-		}
-	}
-
-	// Response metadata extraction (X-OpenAI-*): cap bytes read to avoid buffering large JSON bodies.
-	// Default: 256KB; set to 0 to preserve legacy unlimited behavior.
-	proxyConfig.ResponseMetadataMaxBytes = 256 * 1024
-	if v := os.Getenv("LLM_PROXY_RESPONSE_METADATA_MAX_BYTES"); v != "" {
-		n, convErr := strconv.ParseInt(v, 10, 64)
-		switch {
-		case convErr != nil:
-			s.logger.Warn("Invalid LLM_PROXY_RESPONSE_METADATA_MAX_BYTES value; using default",
-				zap.String("value", v),
-				zap.Error(convErr),
-			)
-		case n < 0:
-			s.logger.Warn("Negative LLM_PROXY_RESPONSE_METADATA_MAX_BYTES value; using default",
-				zap.String("value", v),
-			)
-		case n == 0:
-			// Explicitly allow 0 to preserve legacy unlimited behavior.
-			proxyConfig.ResponseMetadataMaxBytes = 0
-		case n > 0 && n <= maxResponseMetadataBytes:
-			proxyConfig.ResponseMetadataMaxBytes = n
-		default:
-			s.logger.Warn("LLM_PROXY_RESPONSE_METADATA_MAX_BYTES out of range; using default",
-				zap.String("value", v),
-				zap.Int64("max_allowed", maxResponseMetadataBytes),
-			)
 		}
 	}
 
