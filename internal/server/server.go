@@ -364,7 +364,12 @@ func (s *Server) initializeAPIRoutes() error {
 
 	cachedValidator := token.NewCachedValidator(tokenValidator)
 
-	obsCfg := middleware.ObservabilityConfig{Enabled: s.config.ObservabilityEnabled, EventBus: s.eventBus}
+	obsCfg := middleware.ObservabilityConfig{
+		Enabled:              s.config.ObservabilityEnabled,
+		EventBus:             s.eventBus,
+		MaxRequestBodyBytes:  s.config.ObservabilityMaxRequestBodyBytes,
+		MaxResponseBodyBytes: s.config.ObservabilityMaxResponseBodyBytes,
+	}
 
 	proxyHandler, err := proxy.NewTransparentProxyWithAudit(*proxyConfig, cachedValidator, s.projectStore, s.logger, s.auditLogger, obsCfg)
 	if err != nil {

@@ -38,6 +38,7 @@ type TransparentProxy struct {
 	auditLogger          AuditLogger
 	metrics              *ProxyMetrics
 	proxy                *httputil.ReverseProxy
+	targetURL            *url.URL
 	httpServer           *http.Server
 	shuttingDown         bool
 	mu                   sync.RWMutex
@@ -185,6 +186,11 @@ func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator,
 		allowedMethodsHeader = strings.Join(config.AllowedMethods, ", ")
 	}
 
+	targetURL, err := url.Parse(config.TargetBaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse target base URL: %w", err)
+	}
+
 	proxy := &TransparentProxy{
 		config:               config,
 		tokenValidator:       validator,
@@ -192,6 +198,7 @@ func NewTransparentProxyWithLogger(config ProxyConfig, validator TokenValidator,
 		logger:               logger,
 		metrics:              &ProxyMetrics{},
 		allowedMethodsHeader: allowedMethodsHeader,
+		targetURL:            targetURL,
 	}
 
 	// Initialize HTTP cache (enabled only when HTTPCacheEnabled is true)
@@ -300,16 +307,10 @@ func (p *TransparentProxy) director(req *http.Request) {
 	// Store original path in context for logging
 	*req = *req.WithContext(context.WithValue(req.Context(), ctxKeyOriginalPath, req.URL.Path))
 
-	targetURL, err := url.Parse(p.config.TargetBaseURL)
-	if err != nil {
-		p.logger.Error("Failed to parse target URL", zap.Error(err))
-		return
-	}
-
 	// Update request URL
-	req.URL.Scheme = targetURL.Scheme
-	req.URL.Host = targetURL.Host
-	req.Host = targetURL.Host
+	req.URL.Scheme = p.targetURL.Scheme
+	req.URL.Host = p.targetURL.Host
+	req.Host = p.targetURL.Host
 
 	// Add proxy identification headers
 	req.Header.Set("X-Proxy", "llm-proxy")
@@ -321,17 +322,23 @@ func (p *TransparentProxy) director(req *http.Request) {
 	// Preserve or strip certain headers
 	p.processRequestHeaders(req)
 
+	// --- PATCH: Add X-UPSTREAM-REQUEST-START header ---
+	upstreamStart := time.Now().UnixNano()
+	req.Header.Set("X-UPSTREAM-REQUEST-START", strconv.FormatInt(upstreamStart, 10))
+
+	if !p.logger.Core().Enabled(zap.DebugLevel) {
+		return
+	}
+
 	requestID, _ := req.Context().Value(ctxKeyRequestID).(string)
 	p.logger.Debug("Proxying request",
 		zap.String("request_id", requestID),
 		zap.String("method", req.Method),
 		zap.String("path", req.URL.Path),
-		zap.String("project_id", req.Header.Get("X-Proxy-ID")))
+		zap.String("project_id", req.Header.Get("X-Proxy-ID")),
+	)
 
 	// Verbose upstream request logging
-	if !p.logger.Core().Enabled(zap.DebugLevel) {
-		return
-	}
 	headers := make(map[string][]string)
 	for k, v := range req.Header {
 		headers[k] = v
@@ -342,10 +349,6 @@ func (p *TransparentProxy) director(req *http.Request) {
 		zap.String("url", req.URL.String()),
 		zap.Any("headers", headers),
 	)
-
-	// --- PATCH: Add X-UPSTREAM-REQUEST-START header ---
-	upstreamStart := time.Now().UnixNano()
-	req.Header.Set("X-UPSTREAM-REQUEST-START", fmt.Sprintf("%d", upstreamStart))
 }
 
 // processRequestHeaders handles the manipulation of request headers
@@ -410,12 +413,32 @@ func calculateCacheTTL(res *http.Response, req *http.Request, defaultTTL time.Du
 }
 
 func (p *TransparentProxy) modifyResponse(res *http.Response) error {
-	// For streaming responses, return early without side effects
+	// Set proxy headers (always)
+	res.Header.Set("X-Proxy", "llm-proxy")
+
+	// Attach basic timing + request ID headers before ReverseProxy writes headers to the client.
+	// Note: ReverseProxy copies headers then calls WriteHeader, so post-WriteHeader mutations won't be visible.
+	if res.Request != nil {
+		firstRespAt := time.Now().UTC()
+		ctx := context.WithValue(res.Request.Context(), ctxKeyProxyFirstRespAt, firstRespAt)
+		ctx = context.WithValue(ctx, ctxKeyProxyFinalRespAt, firstRespAt)
+		res.Request = res.Request.WithContext(ctx)
+
+		setTimingHeaders(res, res.Request.Context())
+
+		if requestID, ok := res.Request.Context().Value(ctxKeyRequestID).(string); ok && requestID != "" {
+			res.Header.Set("X-Request-ID", requestID)
+		}
+	}
+
+	// --- PATCH: Add X-UPSTREAM-REQUEST-STOP header ---
+	upstreamStop := time.Now().UnixNano()
+	res.Header.Set("X-UPSTREAM-REQUEST-STOP", strconv.FormatInt(upstreamStop, 10))
+
+	// For streaming responses, skip heavy side effects (metadata extraction, caching) but keep headers.
 	if isStreaming(res) {
 		return nil
 	}
-	// Set proxy headers
-	res.Header.Set("X-Proxy", "llm-proxy")
 
 	// Process response body to extract metadata for non-streaming responses
 	if res.StatusCode == http.StatusOK &&
@@ -637,6 +660,8 @@ func (p *TransparentProxy) parseOpenAIResponseMetadata(bodyBytes []byte) (map[st
 
 // errorHandler handles errors that occur during proxying
 func (p *TransparentProxy) errorHandler(w http.ResponseWriter, r *http.Request, err error) {
+	logProxyTimings(p.logger, r.Context())
+
 	// Check if there was a validation error
 	if validationErr, ok := r.Context().Value(ctxKeyValidationError).(error); ok {
 		p.handleValidationError(w, r, validationErr)
@@ -827,7 +852,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 		}
 
 		// Generate request ID and add to context
-		requestID := uuid.New().String()
+		requestID := uuid.NewString()
 		ctx := context.WithValue(r.Context(), ctxKeyRequestID, requestID)
 		// Also add to shared logging context so middlewares can read it
 		ctx = logging.WithRequestID(ctx, requestID)
@@ -938,64 +963,6 @@ func (p *TransparentProxy) Handler() http.Handler {
 
 		// Wrap the ResponseWriter to allow us to set headers at first/last byte
 		rw := &timingResponseWriter{ResponseWriter: w}
-
-		// Instrument the reverse proxy (director now only rewrites URL/host)
-		p.proxy.Director = func(req *http.Request) {
-			// Store original path in context for logging
-			*req = *req.WithContext(context.WithValue(req.Context(), ctxKeyOriginalPath, req.URL.Path))
-			targetURL, err := url.Parse(p.config.TargetBaseURL)
-			if err != nil {
-				p.logger.Error("Failed to parse target URL", zap.Error(err))
-				return
-			}
-			// Update request URL
-			req.URL.Scheme = targetURL.Scheme
-			req.URL.Host = targetURL.Host
-			req.Host = targetURL.Host
-			// Add proxy identification headers
-			req.Header.Set("X-Proxy", "llm-proxy")
-			req.Header.Set("X-Proxy-Version", version)
-			if pid, ok := req.Context().Value(ctxKeyProjectID).(string); ok {
-				req.Header.Set("X-Proxy-ID", pid)
-			}
-			// Preserve or strip certain headers
-			p.processRequestHeaders(req)
-			requestID, _ := req.Context().Value(ctxKeyRequestID).(string)
-			p.logger.Debug("Proxying request",
-				zap.String("request_id", requestID),
-				zap.String("method", req.Method),
-				zap.String("path", req.URL.Path),
-				zap.String("project_id", req.Header.Get("X-Proxy-ID")))
-
-			// --- PATCH: Add X-UPSTREAM-REQUEST-START header ---
-			upstreamStart := time.Now().UnixNano()
-			req.Header.Set("X-UPSTREAM-REQUEST-START", fmt.Sprintf("%d", upstreamStart))
-		}
-
-		p.proxy.ModifyResponse = func(res *http.Response) error {
-			firstRespAt := time.Now().UTC()
-			ctx := context.WithValue(res.Request.Context(), ctxKeyProxyFirstRespAt, firstRespAt)
-			res.Request = res.Request.WithContext(ctx)
-			ctx = context.WithValue(res.Request.Context(), ctxKeyProxyFinalRespAt, firstRespAt)
-			res.Request = res.Request.WithContext(ctx)
-			setTimingHeaders(res, res.Request.Context())
-			requestID, _ := res.Request.Context().Value(ctxKeyRequestID).(string)
-			if requestID != "" {
-				res.Header.Set("X-Request-ID", requestID)
-			}
-			logProxyTimings(p.logger, res.Request.Context())
-
-			// --- PATCH: Add X-UPSTREAM-REQUEST-STOP header ---
-			upstreamStop := time.Now().UnixNano()
-			res.Header.Set("X-UPSTREAM-REQUEST-STOP", fmt.Sprintf("%d", upstreamStop))
-
-			return p.modifyResponse(res)
-		}
-
-		p.proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-			logProxyTimings(p.logger, r.Context())
-			p.errorHandler(w, r, err)
-		}
 
 		// Simple cache lookup with conditional handling (ETag/Last-Modified)
 		if p.cache != nil && (r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodPost) {

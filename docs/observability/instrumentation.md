@@ -71,6 +71,8 @@ llm-proxy dispatcher --backend file --file ./data/events.jsonl
 ## Configuration Reference
 - `OBSERVABILITY_ENABLED`: Deprecated; the async event bus is always enabled.
 - `OBSERVABILITY_BUFFER_SIZE` (int): Buffer size for event bus (default: 1000)
+- `OBSERVABILITY_MAX_REQUEST_BODY_BYTES` (int64): Max bytes of request body captured into observability events (default: 65536). Does not affect proxying.
+- `OBSERVABILITY_MAX_RESPONSE_BODY_BYTES` (int64): Max bytes of response body captured into observability events (default: 262144). Does not affect proxying.
 - `FILE_EVENT_LOG`: Path to persistent event log file (enables file event logging via dispatcher)
 
 ## How It Works

@@ -25,13 +25,14 @@ func generateCacheKey(r *http.Request, headersToInclude []string) string {
 	b.WriteString(r.URL.Path)
 	b.WriteString("|")
 	// Sorted query to normalize key
-	keys := make([]string, 0, len(r.URL.Query()))
-	for k := range r.URL.Query() {
+	q := r.URL.Query()
+	keys := make([]string, 0, len(q))
+	for k := range q {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		vals := r.URL.Query()[k]
+		vals := q[k]
 		sort.Strings(vals)
 		b.WriteString(k)
 		b.WriteString("=")

@@ -155,6 +155,8 @@ The async event bus handles observability events for all API calls.
 |----------|------|---------|-------------|
 | `OBSERVABILITY_ENABLED` | bool | - | **Deprecated**: Event bus is always enabled |
 | `OBSERVABILITY_BUFFER_SIZE` | int | `1000` | Event buffer size (for in-memory backend) |
+| `OBSERVABILITY_MAX_REQUEST_BODY_BYTES` | int64 | `65536` | Max bytes of request body captured into observability events (does not affect proxying) |
+| `OBSERVABILITY_MAX_RESPONSE_BODY_BYTES` | int64 | `262144` | Max bytes of response body captured into observability events (does not affect proxying) |
 | `FILE_EVENT_LOG` | string | - | Path to persistent event log file |
 | `LLM_PROXY_EVENT_BUS` | string | `redis-streams` | Event bus backend: `redis-streams` or `in-memory` |
 | `REDIS_ADDR` | string | `localhost:6379` | Redis address for event bus |
