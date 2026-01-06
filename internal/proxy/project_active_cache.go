@@ -120,6 +120,7 @@ func newProjectActiveCache(ttl time.Duration, max int) *projectActiveCache {
 }
 
 func (c *projectActiveCache) Get(key string) (bool, bool) {
+	now := time.Now()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -127,7 +128,7 @@ func (c *projectActiveCache) Get(key string) (bool, bool) {
 	if ent == nil {
 		return false, false
 	}
-	if time.Now().After(ent.expiresAt) {
+	if now.After(ent.expiresAt) {
 		c.removeLocked(ent)
 		return false, false
 	}
