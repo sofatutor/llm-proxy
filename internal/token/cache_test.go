@@ -332,8 +332,8 @@ func TestCachedValidator_ValidateTokenWithTracking_LimitedToken_UsesCacheAndAvoi
 	if store.incCalls != 2 {
 		t.Fatalf("IncrementTokenUsage calls = %d, want 2", store.incCalls)
 	}
-	// First call: 1x read via validateTokenData + 1x read via cacheToken population.
-	// Second call (cache hit): 0x reads.
+	// First call: 2x reads (1x via validateTokenData + 1x via cacheToken population) and 1x write.
+	// Second call (cache hit): 0x reads and 1x write (only IncrementTokenUsage).
 	if store.getByTokenCalls != 2 {
 		t.Fatalf("GetTokenByToken calls = %d, want 2", store.getByTokenCalls)
 	}
@@ -360,7 +360,7 @@ func TestCachedValidator_ValidateTokenWithTracking_LimitedToken_InvalidatesOnRat
 		CreatedAt:    now,
 	}
 
-	// First use should succeed and populate cache (plus cacheToken read).
+	// First use should succeed and populate cache (initial validation read + cacheToken read = 2 GetTokenByToken calls).
 	_, err := cv.ValidateTokenWithTracking(ctx, tok)
 	if err != nil {
 		t.Fatalf("ValidateTokenWithTracking() first error = %v", err)
