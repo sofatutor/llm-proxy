@@ -108,12 +108,13 @@ func (m *ObservabilityMiddleware) Middleware() Middleware {
 			}
 
 			evt := eventbus.Event{
-				RequestID:       reqID,
-				Method:          r.Method,
-				Path:            r.URL.Path,
-				Status:          crw.statusCode,
-				Duration:        time.Since(start),
-				ResponseHeaders: cloneHeader(crw.Header()),
+				RequestID: reqID,
+				Method:    r.Method,
+				Path:      r.URL.Path,
+				Status:    crw.statusCode,
+				Duration:  time.Since(start),
+				// Avoid cloning here; we clone inside the goroutine before mutating/enriching.
+				ResponseHeaders: crw.Header(),
 				ResponseBody:    crw.body.Bytes(),
 				RequestBody:     reqBody,
 			}
