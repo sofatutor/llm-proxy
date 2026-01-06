@@ -332,10 +332,10 @@ func TestCachedValidator_ValidateTokenWithTracking_LimitedToken_UsesCacheAndAvoi
 	if store.incCalls != 2 {
 		t.Fatalf("IncrementTokenUsage calls = %d, want 2", store.incCalls)
 	}
-	// Cache population after first tracking currently performs one extra GetTokenByToken read.
-	// The key property we assert: it does not keep reading on every subsequent request.
-	if store.getByTokenCalls > 2 {
-		t.Fatalf("GetTokenByToken calls = %d, want <= 2", store.getByTokenCalls)
+	// First call: 1x read via validateTokenData + 1x read via cacheToken population.
+	// Second call (cache hit): 0x reads.
+	if store.getByTokenCalls != 2 {
+		t.Fatalf("GetTokenByToken calls = %d, want 2", store.getByTokenCalls)
 	}
 }
 

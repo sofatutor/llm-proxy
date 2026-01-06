@@ -265,7 +265,7 @@ func (d *DB) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 	UPDATE tokens
 	SET request_count = request_count + 1, last_used_at = ?
 	WHERE token = ?
-	  AND is_active = 1
+	  AND is_active = TRUE
 	  AND (expires_at IS NULL OR expires_at > ?)
 	  AND (
 		max_requests IS NULL
