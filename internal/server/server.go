@@ -78,6 +78,10 @@ type Metrics struct {
 // Version is the application version, following semantic versioning.
 const Version = "0.1.0"
 
+// maxResponseMetadataBytes is a hard upper bound for LLM_PROXY_RESPONSE_METADATA_MAX_BYTES.
+// This prevents accidental huge values from causing excessive buffering.
+const maxResponseMetadataBytes int64 = 10 * 1024 * 1024 // 10MB
+
 // maxDurationMinutes is the maximum allowed duration for a token (365 days)
 const maxDurationMinutes = 525600
 
@@ -311,7 +315,6 @@ func (s *Server) initializeAPIRoutes() error {
 
 	// Response metadata extraction (X-OpenAI-*): cap bytes read to avoid buffering large JSON bodies.
 	// Default: 256KB; set to 0 to preserve legacy unlimited behavior.
-	const maxResponseMetadataBytes int64 = 10 * 1024 * 1024 // 10MB upper bound for safety
 	proxyConfig.ResponseMetadataMaxBytes = 256 * 1024
 	if v := os.Getenv("LLM_PROXY_RESPONSE_METADATA_MAX_BYTES"); v != "" {
 		n, convErr := strconv.ParseInt(v, 10, 64)

@@ -181,7 +181,12 @@ func (c *apiKeyCache) evictOldestLocked() {
 	if elem == nil {
 		return
 	}
-	key, _ := elem.Value.(string)
+	key, ok := elem.Value.(string)
+	if !ok {
+		// Value type is unexpected; remove the list element defensively.
+		c.ll.Remove(elem)
+		return
+	}
 	ent := c.m[key]
 	if ent != nil {
 		c.removeLocked(ent)
