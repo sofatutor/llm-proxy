@@ -224,7 +224,9 @@ func TestCachedProjectStore_ConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 			pid := string(rune('a' + (idx % 10)))
 			for i := 0; i < iterations; i++ {
-				_, _ = c.GetAPIKeyForProject(ctx, pid)
+				v, err := c.GetAPIKeyForProject(ctx, pid)
+				require.NoError(t, err)
+				require.Equal(t, "sk-test", v)
 				if i%10 == 0 {
 					_ = c.UpdateProject(ctx, Project{ID: pid})
 				}
@@ -238,4 +240,11 @@ func TestCachedProjectStore_ConcurrentAccess(t *testing.T) {
 		}(g)
 	}
 	wg.Wait()
+
+	// Sanity: caching should reduce underlying lookups below raw request count.
+	totalCalls := goroutines * iterations
+	under.mu.Lock()
+	defer under.mu.Unlock()
+	require.Greater(t, under.apiKeyN, 0)
+	require.Less(t, under.apiKeyN, totalCalls)
 }

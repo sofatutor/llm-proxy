@@ -49,6 +49,8 @@ func (s *CachedProjectStore) GetAPIKeyForProject(ctx context.Context, projectID 
 		return "", err
 	}
 	if projectID != "" && apiKey != "" {
+		// Intentionally do not cache empty API keys: an empty key typically indicates misconfiguration
+		// and we prefer not to "stick" that state in cache while an operator fixes the project.
 		s.cache.Set(projectID, apiKey)
 	}
 	return apiKey, nil

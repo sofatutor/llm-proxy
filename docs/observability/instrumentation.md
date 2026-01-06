@@ -72,6 +72,10 @@ llm-proxy dispatcher --backend file --file ./data/events.jsonl
 - `OBSERVABILITY_ENABLED`: Deprecated; the async event bus is always enabled.
 - `OBSERVABILITY_BUFFER_SIZE` (int): Buffer size for event bus (default: 1000)
 - `FILE_EVENT_LOG`: Path to persistent event log file (enables file event logging via dispatcher)
+
+## Hot-Path Performance Tuning (Non-Observability)
+These settings primarily affect hot-path performance characteristics rather than core observability semantics:
+
 - `LLM_PROXY_API_KEY_CACHE_TTL` (duration): TTL for per-project upstream API key cache (default: 30s).
 - `LLM_PROXY_API_KEY_CACHE_MAX` (int): Max entries for per-project upstream API key cache (default: 10000).
 - `LLM_PROXY_RESPONSE_METADATA_MAX_BYTES` (int64): Cap bytes buffered for JSON response metadata extraction (`X-OpenAI-*`). Default: 262144. Set 0 for unlimited.
