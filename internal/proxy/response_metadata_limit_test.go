@@ -110,3 +110,37 @@ func TestExtractResponseMetadata_Limited_KnownContentLength_ExceedsLimit_SkipsWi
 		t.Fatalf("expected body not to be consumed on early exit; mismatch")
 	}
 }
+
+func TestExtractResponseMetadata_Unlimited_MaxBytesZero_ExtractsMetadata(t *testing.T) {
+	p := &TransparentProxy{
+		config: ProxyConfig{ResponseMetadataMaxBytes: 0},
+		logger: zap.NewNop(),
+	}
+
+	origBody := `{"model":"gpt-4","usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3},"pad":"` +
+		string(bytes.Repeat([]byte("x"), 2048)) + `"}` // > typical small cap
+	req, _ := http.NewRequest(http.MethodGet, "http://x", nil)
+	res := &http.Response{
+		StatusCode:    http.StatusOK,
+		Header:        http.Header{"Content-Type": {"application/json"}},
+		Body:          io.NopCloser(bytes.NewBufferString(origBody)),
+		ContentLength: 9999, // known; should NOT early exit when maxBytes==0
+		Request:       req,
+	}
+
+	err := p.extractResponseMetadata(res)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if got := res.Header.Get("X-OpenAI-Model"); got != "gpt-4" {
+		t.Fatalf("expected model header, got %q", got)
+	}
+
+	after, readErr := io.ReadAll(res.Body)
+	if readErr != nil {
+		t.Fatalf("read body: %v", readErr)
+	}
+	if string(after) != origBody {
+		t.Fatalf("expected body to be preserved; mismatch")
+	}
+}

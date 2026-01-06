@@ -67,6 +67,8 @@ func (s *CachedProjectStore) CreateProject(ctx context.Context, project Project)
 		return err
 	}
 	if project.ID != "" {
+		// Defensive purge: ensures we never serve a stale API key for a re-created project ID
+		// (e.g., delete+recreate with same ID, or out-of-band DB changes).
 		s.cache.Purge(project.ID)
 	}
 	return nil

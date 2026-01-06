@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -166,4 +167,75 @@ func TestCachedProjectStore_GetAPIKeyForProject_LRUEviction(t *testing.T) {
 	// Expected underlying calls:
 	// p1 (1), p2 (2), p3 (3), p2 again after eviction (4). p1 accesses are hits.
 	require.Equal(t, 4, under.apiKeyN, "expected LRU eviction of p2 when inserting p3")
+}
+
+type errorProjectStore struct {
+	err error
+	n   int
+	mu  sync.Mutex
+}
+
+func (s *errorProjectStore) GetAPIKeyForProject(ctx context.Context, projectID string) (string, error) {
+	s.mu.Lock()
+	s.n++
+	s.mu.Unlock()
+	return "", s.err
+}
+func (s *errorProjectStore) GetProjectActive(ctx context.Context, projectID string) (bool, error) {
+	return true, nil
+}
+func (s *errorProjectStore) ListProjects(ctx context.Context) ([]Project, error) { return nil, nil }
+func (s *errorProjectStore) CreateProject(ctx context.Context, project Project) error {
+	return nil
+}
+func (s *errorProjectStore) GetProjectByID(ctx context.Context, projectID string) (Project, error) {
+	return Project{}, nil
+}
+func (s *errorProjectStore) UpdateProject(ctx context.Context, project Project) error  { return nil }
+func (s *errorProjectStore) DeleteProject(ctx context.Context, projectID string) error { return nil }
+
+func TestCachedProjectStore_GetAPIKeyForProject_DoesNotCacheErrors(t *testing.T) {
+	under := &errorProjectStore{err: errors.New("db down")}
+	c := NewCachedProjectStore(under, CachedProjectStoreConfig{TTL: time.Minute, Max: 10})
+
+	ctx := context.Background()
+	_, err1 := c.GetAPIKeyForProject(ctx, "p1")
+	_, err2 := c.GetAPIKeyForProject(ctx, "p1")
+	require.Error(t, err1)
+	require.Error(t, err2)
+
+	under.mu.Lock()
+	defer under.mu.Unlock()
+	require.Equal(t, 2, under.n, "expected underlying store to be called again (errors are not cached)")
+}
+
+func TestCachedProjectStore_ConcurrentAccess(t *testing.T) {
+	under := &countingProjectStore{apiKey: "sk-test"}
+	c := NewCachedProjectStore(under, CachedProjectStoreConfig{TTL: time.Minute, Max: 50})
+
+	ctx := context.Background()
+	const goroutines = 50
+	const iterations = 100
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for g := 0; g < goroutines; g++ {
+		go func(idx int) {
+			defer wg.Done()
+			pid := string(rune('a' + (idx % 10)))
+			for i := 0; i < iterations; i++ {
+				_, _ = c.GetAPIKeyForProject(ctx, pid)
+				if i%10 == 0 {
+					_ = c.UpdateProject(ctx, Project{ID: pid})
+				}
+				if i%25 == 0 {
+					_ = c.DeleteProject(ctx, pid)
+				}
+				if i%40 == 0 {
+					_ = c.CreateProject(ctx, Project{ID: pid})
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
 }
