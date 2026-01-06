@@ -19,13 +19,13 @@ func shouldAllowProject(ctx context.Context, enforceActive bool, checker Project
 		return true, 0, ErrorResponse{}
 	}
 
-	// Get request metadata for audit events
-	requestID, _ := logging.GetRequestID(ctx)
-	clientIP := getClientIP(r)
-	userAgent := r.UserAgent()
-
 	isActive, err := checker.GetProjectActive(ctx, projectID)
 	if err != nil {
+		// Get request metadata for audit events (only on error)
+		requestID, _ := logging.GetRequestID(ctx)
+		clientIP := getClientIP(r)
+		userAgent := r.UserAgent()
+
 		if logger := getLoggerFromContext(ctx); logger != nil {
 			logger.Error("Failed to check project active status",
 				zap.String("project_id", projectID),
@@ -50,6 +50,11 @@ func shouldAllowProject(ctx context.Context, enforceActive bool, checker Project
 	}
 
 	if !isActive {
+		// Get request metadata for audit events (only on deny)
+		requestID, _ := logging.GetRequestID(ctx)
+		clientIP := getClientIP(r)
+		userAgent := r.UserAgent()
+
 		// Emit audit event for project inactive denial
 		if auditLogger != nil {
 			auditEvent := audit.NewEvent(audit.ActionProxyRequest, audit.ActorSystem, audit.ResultDenied).
