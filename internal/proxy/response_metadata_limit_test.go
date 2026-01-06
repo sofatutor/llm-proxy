@@ -77,3 +77,36 @@ func TestExtractResponseMetadata_Limited_ParsesSmallBodies(t *testing.T) {
 		t.Fatalf("expected preserved body; mismatch")
 	}
 }
+
+func TestExtractResponseMetadata_Limited_KnownContentLength_ExceedsLimit_SkipsWithoutConsuming(t *testing.T) {
+	p := &TransparentProxy{
+		config: ProxyConfig{ResponseMetadataMaxBytes: 64},
+		logger: zap.NewNop(),
+	}
+
+	origBody := `{"model":"gpt-4","usage":{"prompt_tokens":1,"completion_tokens":2,"total_tokens":3}}`
+	req, _ := http.NewRequest(http.MethodGet, "http://x", nil)
+	res := &http.Response{
+		StatusCode:    http.StatusOK,
+		Header:        http.Header{"Content-Type": {"application/json"}},
+		Body:          io.NopCloser(bytes.NewBufferString(origBody)),
+		ContentLength: 999, // known and exceeds limit => early exit
+		Request:       req,
+	}
+
+	err := p.extractResponseMetadata(res)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if got := res.Header.Get("X-OpenAI-Model"); got != "" {
+		t.Fatalf("expected no metadata headers on early exit, got %q", got)
+	}
+
+	after, readErr := io.ReadAll(res.Body)
+	if readErr != nil {
+		t.Fatalf("read body: %v", readErr)
+	}
+	if string(after) != origBody {
+		t.Fatalf("expected body not to be consumed on early exit; mismatch")
+	}
+}

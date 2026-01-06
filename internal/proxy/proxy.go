@@ -592,8 +592,16 @@ func (p *TransparentProxy) extractResponseMetadata(res *http.Response) error {
 		bodyBytes, readErr = io.ReadAll(originalBody)
 	}
 	if readErr != nil {
-		// Restore the body (best effort) and return.
-		res.Body = originalBody
+		// Restore the body (best effort) so the client can still read the bytes we successfully consumed.
+		// Note: io.ReadAll may return partial bytes alongside an error.
+		if len(bodyBytes) > 0 {
+			res.Body = &readerWithCloser{
+				r: io.MultiReader(bytes.NewReader(bodyBytes), originalBody),
+				c: originalBody,
+			}
+		} else {
+			res.Body = originalBody
+		}
 		return fmt.Errorf("failed to read response body: %w", readErr)
 	}
 

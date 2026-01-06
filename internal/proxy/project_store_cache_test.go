@@ -118,3 +118,52 @@ func TestCachedProjectStore_UpdateProject_Invalidate(t *testing.T) {
 	require.Equal(t, 2, under.apiKeyN, "expected cache to be invalidated on UpdateProject")
 	require.Equal(t, 1, under.updateN)
 }
+
+func TestCachedProjectStore_DeleteProject_Invalidate(t *testing.T) {
+	under := &countingProjectStore{apiKey: "sk-test"}
+	c := NewCachedProjectStore(under, CachedProjectStoreConfig{TTL: time.Minute, Max: 10})
+
+	ctx := context.Background()
+	_, _ = c.GetAPIKeyForProject(ctx, "p1")
+	require.NoError(t, c.DeleteProject(ctx, "p1"))
+	_, _ = c.GetAPIKeyForProject(ctx, "p1")
+
+	under.mu.Lock()
+	defer under.mu.Unlock()
+	require.Equal(t, 2, under.apiKeyN, "expected cache to be invalidated on DeleteProject")
+	require.Equal(t, 1, under.deleteN)
+}
+
+func TestCachedProjectStore_CreateProject_Invalidate(t *testing.T) {
+	under := &countingProjectStore{apiKey: "sk-test"}
+	c := NewCachedProjectStore(under, CachedProjectStoreConfig{TTL: time.Minute, Max: 10})
+
+	ctx := context.Background()
+	_, _ = c.GetAPIKeyForProject(ctx, "p1")
+	require.NoError(t, c.CreateProject(ctx, Project{ID: "p1"}))
+	_, _ = c.GetAPIKeyForProject(ctx, "p1")
+
+	under.mu.Lock()
+	defer under.mu.Unlock()
+	require.Equal(t, 2, under.apiKeyN, "expected cache to be invalidated on CreateProject")
+	require.Equal(t, 1, under.createN)
+}
+
+func TestCachedProjectStore_GetAPIKeyForProject_LRUEviction(t *testing.T) {
+	under := &countingProjectStore{apiKey: "sk-test"}
+	c := NewCachedProjectStore(under, CachedProjectStoreConfig{TTL: time.Minute, Max: 2})
+
+	ctx := context.Background()
+	_, _ = c.GetAPIKeyForProject(ctx, "p1") // miss
+	_, _ = c.GetAPIKeyForProject(ctx, "p2") // miss
+	_, _ = c.GetAPIKeyForProject(ctx, "p1") // hit => p1 is MRU, p2 is LRU
+	_, _ = c.GetAPIKeyForProject(ctx, "p3") // miss => should evict p2
+	_, _ = c.GetAPIKeyForProject(ctx, "p1") // still hit (p1 should not have been evicted by inserting p3)
+	_, _ = c.GetAPIKeyForProject(ctx, "p2") // miss if evicted (note: this will reinsert p2 and may evict another key)
+
+	under.mu.Lock()
+	defer under.mu.Unlock()
+	// Expected underlying calls:
+	// p1 (1), p2 (2), p3 (3), p2 again after eviction (4). p1 accesses are hits.
+	require.Equal(t, 4, under.apiKeyN, "expected LRU eviction of p2 when inserting p3")
+}
