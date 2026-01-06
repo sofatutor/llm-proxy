@@ -339,6 +339,48 @@ func TestCachedValidator_ValidateTokenWithTracking_LimitedToken_UsesCacheAndAvoi
 	}
 }
 
+func TestCachedValidator_ValidateTokenWithTracking_LimitedToken_InvalidatesOnRateLimit(t *testing.T) {
+	ctx := context.Background()
+	store := newCountingStore()
+	validator := &StandardValidator{store: store}
+	cv := NewCachedValidator(validator, CacheOptions{TTL: time.Minute, MaxSize: 10, EnableCleanup: false})
+
+	now := time.Now()
+	future := now.Add(1 * time.Hour)
+	maxReq := 1
+	tok, _ := GenerateToken()
+
+	store.tokens[tok] = TokenData{
+		Token:        tok,
+		ProjectID:    "p1",
+		ExpiresAt:    &future,
+		IsActive:     true,
+		RequestCount: 0,
+		MaxRequests:  &maxReq,
+		CreatedAt:    now,
+	}
+
+	// First use should succeed and populate cache (plus cacheToken read).
+	_, err := cv.ValidateTokenWithTracking(ctx, tok)
+	if err != nil {
+		t.Fatalf("ValidateTokenWithTracking() first error = %v", err)
+	}
+
+	// Second use should hit cache, attempt increment, fail with rate limit, and invalidate cache entry.
+	_, err = cv.ValidateTokenWithTracking(ctx, tok)
+	if err == nil || !errors.Is(err, ErrTokenRateLimit) {
+		t.Fatalf("ValidateTokenWithTracking() second error = %v, want ErrTokenRateLimit", err)
+	}
+
+	// Cache should be invalidated after the failed increment.
+	cv.cacheMutex.RLock()
+	_, ok := cv.cache[tok]
+	cv.cacheMutex.RUnlock()
+	if ok {
+		t.Fatalf("expected cache entry to be invalidated after ErrTokenRateLimit")
+	}
+}
+
 func TestCachedValidator_CacheEviction(t *testing.T) {
 	ctx := context.Background()
 	mockValidator := NewMockValidator()

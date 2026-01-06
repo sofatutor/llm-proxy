@@ -311,7 +311,7 @@ func (d *DB) IncrementTokenUsage(ctx context.Context, tokenID string) error {
 		}
 		if expiresAt.Valid {
 			exp := expiresAt.Time.UTC()
-			if !exp.IsZero() && now.After(exp) {
+			if now.After(exp) {
 				return token.ErrTokenExpired
 			}
 		}

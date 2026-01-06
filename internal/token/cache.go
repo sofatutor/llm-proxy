@@ -180,6 +180,11 @@ func (cv *CachedValidator) ValidateTokenWithTracking(ctx context.Context, tokenI
 			} else if sv, ok := cv.validator.(*StandardValidator); ok && sv != nil && sv.store != nil {
 				// Limited token: enforce max_requests via a synchronous increment, but avoid a DB read.
 				if err := sv.store.IncrementTokenUsage(ctx, tokenID); err != nil {
+					// If the token is no longer usable (inactive/expired/quota), invalidate the cache entry
+					// so we avoid repeatedly hitting the cache and failing the same increment.
+					if err == ErrTokenRateLimit || err == ErrTokenInactive || err == ErrTokenExpired {
+						cv.invalidateCache(tokenID)
+					}
 					return "", err
 				}
 				return entry.Data.ProjectID, nil
