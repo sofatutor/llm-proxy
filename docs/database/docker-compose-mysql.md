@@ -67,6 +67,15 @@ MySQL named locking requires the 'mysql' build tag
 
 The llm-proxy supports SQLite (default), PostgreSQL, and MySQL as database backends. This guide explains how to run the MySQL setup using Docker Compose.
 
+**⚠️ Important for Production:**
+- The Docker Compose MySQL setup is intended for **development and testing only**
+- For production high-availability (HA) deployments, use an external managed MySQL service:
+  - Amazon Aurora MySQL / Amazon RDS for MySQL
+  - Google Cloud SQL for MySQL
+  - Azure Database for MySQL
+  - Self-managed MySQL Group Replication or InnoDB Cluster
+- The Docker Compose MySQL instance runs as a single container and does not provide high availability or automatic failover
+
 ## Quick Start
 
 ### Prerequisites

@@ -18,7 +18,7 @@ A transparent, secure proxy for OpenAI's API with token management, rate limitin
 - **Async Event Bus & Dispatcher**: All API instrumentation events are handled via an always-on, fully asynchronous event bus (in-memory or Redis) with support for multiple subscribers, batching, retry logic, and graceful shutdown. Persistent event logging is handled by a dispatcher CLI or the `--file-event-log` flag.
 - **OpenAI Token Counting**: Accurate prompt and completion token counting using tiktoken-go.
 - **Metrics Endpoint (provider-agnostic)**: Optional JSON metrics endpoint; Prometheus scraping/export is optional and not required by core features
-- **Multiple Database Support**: SQLite (default) and PostgreSQL with automatic migrations
+- **Multiple Database Support**: SQLite (default), PostgreSQL, and MySQL with automatic migrations
 - **Database Migrations**: Version-controlled schema changes with rollback support. See [Migration Guide](docs/database/migrations.md)
 - **Docker Deployment**
 
@@ -101,7 +101,7 @@ MANAGEMENT_TOKEN=your-secure-management-token ./bin/llm-proxy
 - `FILE_EVENT_LOG`: Path to persistent event log file (enables file event logging via dispatcher)
 
 ### Database Configuration
-The LLM Proxy supports **SQLite** (default) and **PostgreSQL** as database backends.
+The LLM Proxy supports **SQLite** (default), **PostgreSQL**, and **MySQL** as database backends.
 
 **SQLite (default):**
 - `DB_DRIVER`: Database driver, set to `sqlite` (default)
@@ -111,12 +111,21 @@ The LLM Proxy supports **SQLite** (default) and **PostgreSQL** as database backe
 - `DB_DRIVER`: Set to `postgres` for PostgreSQL
 - `DATABASE_URL`: PostgreSQL connection string (e.g., `postgres://user:password@localhost:5432/llmproxy?sslmode=require`)
 
-**Connection Pool (both drivers):**
+**MySQL:**
+- `DB_DRIVER`: Set to `mysql` for MySQL
+- `DATABASE_URL`: MySQL connection string (e.g., `llmproxy:secret@tcp(localhost:3306)/llmproxy?parseTime=true&tls=true`)
+
+**Connection Pool (all drivers):**
 - `DATABASE_POOL_SIZE`: Maximum open connections (default `10`)
 - `DATABASE_MAX_IDLE_CONNS`: Maximum idle connections (default `5`)
 - `DATABASE_CONN_MAX_LIFETIME`: Connection max lifetime (default `1h`)
 
-See [PostgreSQL Setup Guide](docs/database/docker-compose-postgres.md) for detailed PostgreSQL configuration.
+**Build Requirements:**
+- SQLite: No build tags required (included by default)
+- PostgreSQL: Requires `-tags postgres` build flag
+- MySQL: Requires `-tags mysql` build flag
+
+See [Database Selection Guide](docs/database/database-selection.md) for choosing the right database, or the [PostgreSQL Setup Guide](docs/database/docker-compose-postgres.md) and [MySQL Setup Guide](docs/database/docker-compose-mysql.md) for detailed configuration.
 
 ### Caching Configuration
 - `HTTP_CACHE_ENABLED`: Enable HTTP response caching (default `true`)
