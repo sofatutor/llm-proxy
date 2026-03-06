@@ -6,6 +6,13 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ---
 
+## March 06, 2026
+
+### Changed
+
+- **Document MySQL Backend** ([#257](https://github.com/sofatutor/llm-proxy/pull/257)): Added MySQL coverage across configuration, deployment, and getting started guides, including build tag requirements, connection strings, and cloud provider examples so users can configure it like other supported databases. Updated Helm, deployment, and architectural docs with production HA guidance that highlights external managed MySQL or group replication instead of the single‑replica StatefulSet example.
+
+
 ## January 02, 2026
 
 ### Added
