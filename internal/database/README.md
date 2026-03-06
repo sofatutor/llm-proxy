@@ -8,7 +8,7 @@ The `database` package provides data persistence for the LLM Proxy. It handles:
 - Token and project CRUD operations
 - Audit event storage and retrieval
 - Database migrations using goose
-- Support for SQLite (default) and PostgreSQL
+- Support for SQLite (default), PostgreSQL, and MySQL
 - Connection pooling and transaction management
 
 ## Architecture
@@ -30,6 +30,7 @@ graph TB
     subgraph Drivers
         SQLite[(SQLite)]
         PG[(PostgreSQL)]
+        MySQL[(MySQL)]
     end
     
     F --> DB
@@ -38,6 +39,7 @@ graph TB
     DB --> A
     DB --> SQLite
     DB --> PG
+    DB --> MySQL
     M --> DB
 ```
 
@@ -84,11 +86,11 @@ erDiagram
 |------|-------------|
 | `DB` | Main database connection wrapper |
 | `Config` | SQLite-specific configuration |
-| `FullConfig` | Multi-driver configuration (SQLite + PostgreSQL) |
+| `FullConfig` | Multi-driver configuration (SQLite + PostgreSQL + MySQL) |
 | `Project` | Project entity model |
 | `Token` | Token entity model |
 | `AuditEvent` | Audit log entry model |
-| `DriverType` | Database driver enum (SQLite, Postgres) |
+| `DriverType` | Database driver enum (SQLite, Postgres, MySQL) |
 
 ### Constructor Functions
 
@@ -124,21 +126,22 @@ The `DB` struct provides CRUD operations for all entities:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DB_DRIVER` | Database driver (`sqlite`, `postgres`) | `sqlite` |
+| `DB_DRIVER` | Database driver (`sqlite`, `postgres`, `mysql`) | `sqlite` |
 | `DATABASE_PATH` | SQLite database path | `data/llm-proxy.db` |
-| `DATABASE_URL` | PostgreSQL connection URL | - |
+| `DATABASE_URL` | PostgreSQL or MySQL connection URL | - |
 | `DATABASE_POOL_SIZE` | Max open connections | 10 |
 | `DATABASE_MAX_IDLE_CONNS` | Max idle connections | 5 |
 | `DATABASE_CONN_MAX_LIFETIME` | Connection lifetime | 1h |
 
-### SQLite vs PostgreSQL
+### Database Comparison
 
-| Feature | SQLite | PostgreSQL |
-|---------|--------|------------|
-| Setup | Zero configuration | Requires server |
-| Concurrency | Single writer | Multiple writers |
-| Use case | Development, single instance | Production, multi-instance |
-| Connection string | File path | URL with credentials |
+| Feature | SQLite | PostgreSQL | MySQL |
+|---------|--------|------------|-------|
+| Setup | Zero configuration | Requires server | Requires server |
+| Concurrency | Single writer | Multiple writers | Multiple writers |
+| Use case | Development, single instance | Production, multi-instance | Production, multi-instance |
+| Connection string | File path | URL with credentials | DSN with tcp() |
+| Build tag | None | `-tags postgres` | `-tags mysql` |
 
 ## Migration Workflow
 
@@ -223,6 +226,7 @@ Migrations run automatically on `New()`. See `internal/database/migrations/READM
 | `database.go` | Core DB struct, connection, and migrations |
 | `factory.go` | Multi-driver database factory |
 | `factory_postgres.go` | PostgreSQL-specific factory |
+| `factory_mysql.go` | MySQL-specific factory |
 | `models.go` | Data models (Project, Token, AuditEvent) |
 | `project.go` | Project CRUD operations |
 | `token.go` | Token CRUD operations |

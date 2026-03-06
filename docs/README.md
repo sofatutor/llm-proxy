@@ -33,7 +33,8 @@ Start with the main [README](../README.md) for a quick overview, then follow the
 - **[API Configuration](guides/api-configuration.md)** - Configure API providers, endpoints, and security policies
 - **[Security Best Practices](deployment/security.md)** - Production security, secrets management, and hardening
 - **[Docker Compose PostgreSQL Setup](database/docker-compose-postgres.md)** - Run llm-proxy with PostgreSQL using Docker Compose
-- **[Database Selection Guide](database/database-selection.md)** - Choose between SQLite and PostgreSQL
+- **[Docker Compose MySQL Setup](database/docker-compose-mysql.md)** - Run llm-proxy with MySQL using Docker Compose
+- **[Database Selection Guide](database/database-selection.md)** - Choose between SQLite, PostgreSQL, and MySQL
 - **[Database Migrations Guide](database/migrations.md)** - Version-controlled schema changes
 
 ## Observability & Monitoring
@@ -87,9 +88,9 @@ The [OpenAPI specification](../api/openapi.yaml) provides machine-readable API d
 |----------|---------|---------|
 | `MANAGEMENT_TOKEN` | Admin API access | **Required** |
 | `LISTEN_ADDR` | Server address | `:8080` |
-| `DB_DRIVER` | Database driver (`sqlite` or `postgres`) | `sqlite` |
+| `DB_DRIVER` | Database driver (`sqlite`, `postgres`, or `mysql`) | `sqlite` |
 | `DATABASE_PATH` | SQLite database path | `./data/llm-proxy.db` |
-| `DATABASE_URL` | PostgreSQL connection string | - |
+| `DATABASE_URL` | PostgreSQL or MySQL connection string | - |
 | `LOG_LEVEL` | Logging level | `info` |
 | `HTTP_CACHE_ENABLED` | Enable response caching | `true` |
 | `HTTP_CACHE_BACKEND` | Cache backend (`in-memory` or `redis`) | `in-memory` |

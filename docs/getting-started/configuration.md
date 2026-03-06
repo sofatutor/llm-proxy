@@ -63,7 +63,32 @@ postgres://user:password@host:port/database?sslmode=require
 DATABASE_URL=postgres://llmproxy:secret@localhost:5432/llmproxy?sslmode=require
 ```
 
-#### Connection Pool (Both Drivers)
+**Build Requirement:** Binary must be built with `-tags postgres` flag.
+
+#### MySQL
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `DB_DRIVER` | string | `sqlite` | Set to `mysql` for MySQL |
+| `DATABASE_URL` | string | - | MySQL connection string |
+
+**MySQL Connection String Format:**
+```
+user:password@tcp(host:port)/database?parseTime=true&tls=true
+```
+
+**Example:**
+```bash
+DATABASE_URL=llmproxy:secret@tcp(localhost:3306)/llmproxy?parseTime=true&tls=true
+```
+
+**Build Requirement:** Binary must be built with `-tags mysql` flag.
+
+**Version Compatibility:**
+- MySQL 8.0 or higher
+- MariaDB 10.5 or higher
+
+#### Connection Pool (All Drivers)
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|

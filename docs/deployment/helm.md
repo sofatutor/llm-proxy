@@ -17,6 +17,7 @@ Deploy LLM Proxy to Kubernetes using the official Helm chart. The chart supports
 
 - **SQLite** for single-instance deployments (development/testing)
 - **PostgreSQL** for production (external or in-cluster)
+- **MySQL** for production (external or in-cluster)
 - **Redis** for event bus and caching (external)
 - **Ingress** for external access with TLS
 - **Horizontal Pod Autoscaler (HPA)** for automatic scaling
@@ -92,6 +93,38 @@ helm install llm-proxy deploy/helm/llm-proxy \
 docker build --build-arg POSTGRES_SUPPORT=true -t your-registry/llm-proxy:v1.0.0 .
 ```
 Pre-built images from `ghcr.io/sofatutor/llm-proxy` include PostgreSQL support by default.
+
+**⚠️ Production HA Note**: For high-availability deployments, use an external managed PostgreSQL service (Aurora, RDS, Cloud SQL, Azure Database). The in-cluster PostgreSQL option is for development/testing only and does not provide HA or automatic failover.
+
+### 2b. MySQL (External, Production)
+
+Production deployment with external MySQL:
+
+```bash
+# Create secrets
+kubectl create secret generic llm-proxy-secrets \
+  --from-literal=MANAGEMENT_TOKEN="$(openssl rand -base64 32)"
+
+# NOTE: Replace USER and PASSWORD with your actual DB credentials; never commit real secrets
+kubectl create secret generic llm-proxy-db \
+  --from-literal=DATABASE_URL="USER:PASSWORD@tcp(mysql.example.com:3306)/llmproxy?parseTime=true&tls=true"
+
+# Deploy with external MySQL
+helm install llm-proxy deploy/helm/llm-proxy \
+  --set image.repository=your-registry/llm-proxy \
+  --set image.tag=v1.0.0 \
+  --set secrets.managementToken.existingSecret.name=llm-proxy-secrets \
+  --set secrets.databaseUrl.existingSecret.name=llm-proxy-db \
+  --set env.DB_DRIVER=mysql
+```
+
+**Important**: If building images yourself, ensure MySQL support is enabled:
+```bash
+docker build --build-arg MYSQL_SUPPORT=true -t your-registry/llm-proxy:v1.0.0 .
+```
+Pre-built images from `ghcr.io/sofatutor/llm-proxy` include MySQL support by default.
+
+**⚠️ Production HA Note**: For high-availability deployments, use an external managed MySQL service (Aurora MySQL, RDS MySQL, Cloud SQL MySQL, Azure Database for MySQL). The in-cluster MySQL option is for development/testing only and does not provide HA or automatic failover.
 
 ### 3. External Redis (Multi-Instance)
 
