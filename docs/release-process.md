@@ -7,7 +7,7 @@ This document describes how to publish a new release of LLM Proxy, including Doc
 Releases are automated through GitHub Actions workflows that trigger on git tags:
 
 - **Version tags** (`v*`): Build Docker images and publish Helm charts for a semver tag
-- **Stable tags** (`v*-stable`): Run release validation and create a GitHub release with generated release notes
+- **Stable tags** (`v*-stable`): Run release validation and create a GitHub release with generated release notes for an already-published version tag
 
 ## Creating a Release
 
@@ -32,7 +32,7 @@ The repository uses two tag classes:
 - `vMAJOR.MINOR.PATCH`: a valid version tag that publishes build artifacts, but does **not** create a GitHub release.
 - `vMAJOR.MINOR.PATCH-stable`: a production-eligible stable tag that creates a GitHub release after validation passes.
 
-Tags outside these formats fail the release validation workflow with a clear error.
+Tags matching the `v*` trigger but outside these formats fail the release validation workflow with a clear error. Tags outside the `v*` family are ignored by the release workflow.
 
 Examples:
 
@@ -63,9 +63,11 @@ For the stable release cutover:
 ```bash
 # Promote the validated version tag to a production release
 VERSION="1.0.0"
-git tag -a "v${VERSION}-stable" -m "Stable release v${VERSION}"
+git tag -a "v${VERSION}-stable" "v${VERSION}^{}" -m "Stable release v${VERSION}"
 git push origin "v${VERSION}-stable"
 ```
+
+This ensures the stable tag points at the exact commit that produced the version-tag artifacts.
 
 ### 4. Automated Workflows
 
@@ -78,12 +80,14 @@ Pushing a tag triggers automated workflows:
   - `1.0` (major.minor)
   - `sha-xxxxxxx` (git commit SHA)
   - `latest` (if from default branch)
+- Ignores stable tags so production cutover does not republish artifacts
 
 #### Helm Chart Workflow (`.github/workflows/helm-publish.yml`)
 - Updates `Chart.yaml` version and appVersion to match the git tag
 - Runs `helm lint` and validation tests
 - Packages the chart
-- Publishes to `oci://ghcr.io/sofatutor/llm-proxy` as version `1.0.0`
+- Publishes to `oci://ghcr.io/sofatutor/charts` as version `1.0.0`
+- Ignores stable tags so production cutover reuses the previously published chart
 
 #### Release Workflow (`.github/workflows/release.yml`)
 - Validates that the tag matches either `vMAJOR.MINOR.PATCH` or `vMAJOR.MINOR.PATCH-stable`
@@ -91,6 +95,7 @@ Pushing a tag triggers automated workflows:
 - Skips GitHub release creation for plain `vMAJOR.MINOR.PATCH` tags
 - Runs `make build`, `make lint`, and `make test` before creating a release for `vMAJOR.MINOR.PATCH-stable`
 - Creates the GitHub release with generated release notes for stable tags
+- Uses the full stable tag name in the release title and never forces every stable release to become the repository latest release
 
 ### 5. Verify the Release
 
@@ -111,10 +116,10 @@ You can view available chart versions in the GitHub Container Registry UI at htt
 
 ```bash
 # Pull the chart
-helm pull oci://ghcr.io/sofatutor/llm-proxy --version 1.0.0
+helm pull oci://ghcr.io/sofatutor/charts/llm-proxy --version 1.0.0
 
 # Verify the chart
-helm show chart oci://ghcr.io/sofatutor/llm-proxy --version 1.0.0
+helm show chart oci://ghcr.io/sofatutor/charts/llm-proxy --version 1.0.0
 ```
 
 #### GitHub Release
@@ -132,7 +137,7 @@ Use this checklist for every production release:
 1. Merge approved changes to `main`
 2. Run `make build`, `make lint`, and `make test` locally
 3. Push a version tag `vMAJOR.MINOR.PATCH` and confirm artifact workflows complete
-4. Push the corresponding stable tag `vMAJOR.MINOR.PATCH-stable`
+4. Push the corresponding stable tag `vMAJOR.MINOR.PATCH-stable` on the version tag's commit
 5. Confirm `.github/workflows/release.yml` succeeds
 6. Confirm the GitHub release exists and includes generated release notes
 7. Record the successful stable-tag run and any invalid-tag rejection run in the issue or release notes
@@ -155,7 +160,7 @@ The stable production contract is layered on top of semver:
 The Helm chart version matches the application version. When you push a tag `v1.2.3`:
 
 - Chart `version` is set to `1.2.3`
-- Chart `appVersion` is set to `1.2.3`
+- Chart `appVersion` is set to `v1.2.3`
 - Docker image default is `ghcr.io/sofatutor/llm-proxy:v1.2.3`
 
 ## Troubleshooting
@@ -174,8 +179,8 @@ Common issues:
 ### Chart Not Found in GHCR
 
 Charts are published to the organization's GHCR, not the repository:
-- Correct: `oci://ghcr.io/sofatutor/llm-proxy`
-- Incorrect: `oci://ghcr.io/sofatutor/llm-proxy/llm-proxy`
+- Correct: `oci://ghcr.io/sofatutor/charts/llm-proxy`
+- Incorrect: `oci://ghcr.io/sofatutor/llm-proxy`
 
 ### Version Mismatch
 
@@ -195,7 +200,7 @@ If you need to roll back:
 
 2. **Helm**: Users can install previous chart versions:
    ```bash
-   helm install llm-proxy oci://ghcr.io/sofatutor/llm-proxy --version 1.0.0
+   helm install llm-proxy oci://ghcr.io/sofatutor/charts/llm-proxy --version 1.0.0
    ```
 
 3. **Delete the tag** (if release should not exist):

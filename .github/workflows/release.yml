@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - 'v*'
-      - '*-stable'
 
 permissions:
   contents: write
@@ -74,6 +73,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: Release v${{ needs.validate-tag.outputs.version }}
+          name: Release ${{ github.ref_name }}
           generate_release_notes: true
-          make_latest: true
+          make_latest: false
