@@ -394,13 +394,13 @@ func (p *TransparentProxy) processRequestHeaders(req *http.Request) {
 // It prefers TTL from response headers (when the response is cacheable),
 // otherwise falls back to client-forced TTL from the request. It returns the
 // chosen TTL and whether it came from the response headers.
-func calculateCacheTTL(res *http.Response, req *http.Request, defaultTTL time.Duration) (time.Duration, bool) {
+func calculateCacheTTL(res *http.Response, req *http.Request, defaultTTL time.Duration, allowStreaming bool) (time.Duration, bool) {
 	if res == nil || req == nil {
 		return 0, false
 	}
 	respTTL := cacheTTLFromHeaders(res, defaultTTL)
 	if respTTL > 0 {
-		if !isResponseCacheable(res) {
+		if !isResponseCacheable(res, allowStreaming) {
 			return 0, false
 		}
 		return respTTL, true
@@ -441,8 +441,8 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 	upstreamStop := time.Now().UnixNano()
 	res.Header.Set("X-UPSTREAM-REQUEST-STOP", strconv.FormatInt(upstreamStop, 10))
 
-	// For streaming responses, skip heavy side effects (metadata extraction, caching) but keep headers.
-	if isStreaming(res) {
+	// For streaming responses, skip heavy side effects unless streaming cache capture is enabled.
+	if isStreaming(res) && !p.config.HTTPCacheStreamResponses {
 		return nil
 	}
 
@@ -476,7 +476,7 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 			}
 
 			// Calculate effective TTL
-			ttl, fromResponse := calculateCacheTTL(res, req, p.config.HTTPCacheDefaultTTL)
+			ttl, fromResponse := calculateCacheTTL(res, req, p.config.HTTPCacheDefaultTTL, p.config.HTTPCacheStreamResponses)
 			if ttl <= 0 {
 				res.Header.Set("X-CACHE-DEBUG", fmt.Sprintf("ttl-zero-ttl=%v-from-resp=%v", ttl, fromResponse))
 				return nil

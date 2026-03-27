@@ -11,7 +11,7 @@ A transparent, secure proxy for OpenAI's API with token management, rate limitin
   - **Bulk Token Management**: Revoke all tokens for a project
   - **Project Activation Controls**: Deactivate projects to block token generation and API access
   - **Admin UI Actions**: Edit/revoke tokens, activate/deactivate projects, bulk operations
-- **HTTP Response Caching**: Redis-backed cache with configurable TTL, auth-aware shared caching, and streaming response support. Enable with `HTTP_CACHE_ENABLED=true`.
+- **HTTP Response Caching**: Redis-backed cache with configurable TTL, auth-aware shared caching, and optional completed-stream caching. Enable with `HTTP_CACHE_ENABLED=true`.
 - **Admin UI**: Web interface for management
 - **Comprehensive Logging & Audit Events**: Full lifecycle operation tracking for compliance
 - **Async Instrumentation Middleware**: Non-blocking, streaming-capable instrumentation for all API calls. See [docs/observability/instrumentation.md](docs/observability/instrumentation.md) for advanced usage and extension.
@@ -130,6 +130,7 @@ See [Database Selection Guide](docs/database/database-selection.md) for choosing
 ### Caching Configuration
 - `HTTP_CACHE_ENABLED`: Enable HTTP response caching (default `true`)
 - `HTTP_CACHE_BACKEND`: Cache backend (`redis` or `in-memory`, default `in-memory`)
+- `HTTP_CACHE_STREAM_RESPONSES`: Cache completed streaming responses when requests explicitly opt in (default `false`)
 - `REDIS_ADDR`: Redis server address, shared with event bus (default `localhost:6379`)
 - `REDIS_DB`: Redis database number (default `0`)
 - `REDIS_CACHE_URL`: Optional override for Redis cache URL (constructed from `REDIS_ADDR` and `REDIS_DB` if not set)

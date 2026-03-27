@@ -113,6 +113,7 @@ HTTP response caching improves performance by storing and reusing responses.
 |----------|------|---------|-------------|
 | `HTTP_CACHE_ENABLED` | bool | `true` | Enable HTTP response caching |
 | `HTTP_CACHE_BACKEND` | string | `in-memory` | Cache backend (`redis` or `in-memory`) |
+| `HTTP_CACHE_STREAM_RESPONSES` | bool | `false` | Cache completed streaming responses when requests explicitly opt in |
 | `REDIS_ADDR` | string | `localhost:6379` | Redis server address (shared with event bus) |
 | `REDIS_DB` | int | `0` | Redis database number |
 | `REDIS_CACHE_URL` | string | (auto) | Optional override; constructed from `REDIS_ADDR` + `REDIS_DB` if not set |

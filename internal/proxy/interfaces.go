@@ -112,6 +112,8 @@ type ProxyConfig struct {
 	HTTPCacheDefaultTTL time.Duration
 	// HTTPCacheMaxObjectBytes is a guardrail for maximum cacheable response size
 	HTTPCacheMaxObjectBytes int64
+	// HTTPCacheStreamResponses enables caching completed streaming responses when explicitly opted in
+	HTTPCacheStreamResponses bool
 
 	// RedisCacheURL enables Redis-backed cache when non-empty (e.g., redis://localhost:6379/0)
 	RedisCacheURL string

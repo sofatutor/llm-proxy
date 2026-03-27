@@ -88,6 +88,55 @@ func TestModifyResponse_StreamingEarlyReturn(t *testing.T) {
 	_ = before
 }
 
+func TestModifyResponse_StreamingStoresWhenEnabled(t *testing.T) {
+	p := &TransparentProxy{
+		config: ProxyConfig{
+			HTTPCacheEnabled:         true,
+			HTTPCacheStreamResponses: true,
+			HTTPCacheMaxObjectBytes:  1024,
+		},
+		logger:  zap.NewNop(),
+		metrics: &ProxyMetrics{},
+	}
+	p.cache = newMemoryCache()
+	req, _ := http.NewRequest(http.MethodGet, "http://x/v1/stream", nil)
+	req.Header.Set("Cache-Control", "public, max-age=5")
+	body := "data: one\n\ndata: two\n\n"
+	res := &http.Response{
+		StatusCode: 200,
+		Header:     http.Header{"Content-Type": {"text/event-stream"}},
+		Body:       io.NopCloser(bytes.NewBufferString(body)),
+		Request:    req,
+	}
+	if err := p.modifyResponse(res); err != nil {
+		t.Fatalf("modifyResponse err: %v", err)
+	}
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("read body err: %v", err)
+	}
+	if err := res.Body.Close(); err != nil {
+		t.Fatalf("close body err: %v", err)
+	}
+	if string(data) != body {
+		t.Fatalf("unexpected body %q", string(data))
+	}
+	if p.metrics.RequestCount != 1 {
+		t.Fatalf("expected streaming response to update metrics, got %d", p.metrics.RequestCount)
+	}
+	if p.metrics.CacheStores != 1 {
+		t.Fatalf("expected streaming response to be stored once, got %d", p.metrics.CacheStores)
+	}
+	key := CacheKeyFromRequest(req)
+	stored, ok := p.cache.Get(key)
+	if !ok {
+		t.Fatalf("expected cached streaming response")
+	}
+	if string(stored.body) != body {
+		t.Fatalf("unexpected cached body %q", string(stored.body))
+	}
+}
+
 // additional branches
 type errReadCloser struct{}
 
