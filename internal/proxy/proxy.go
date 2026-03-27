@@ -1151,6 +1151,12 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 				r = r.WithContext(context.WithValue(r.Context(), ctxKeyRequestID, requestID))
 			}
 
+			// Let the dedicated preflight handler answer before request validation.
+			if r.Method == http.MethodOptions {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// --- Validation Scope: Only token, path, and method are validated here ---
 			// Do not add API-specific validation or transformation logic here.
 

@@ -1008,6 +1008,27 @@ func TestValidateRequestMiddleware_OPTIONSPreflightCORS(t *testing.T) {
 		assert.Empty(t, resp.Header.Get("Access-Control-Allow-Origin"))
 		_ = resp.Body.Close()
 	})
+
+	t.Run("OPTIONS bypasses method and endpoint validation", func(t *testing.T) {
+		proxy2 := newTestProxyWithConfig(ProxyConfig{
+			AllowedMethods:   []string{"POST"},
+			AllowedEndpoints: []string{"/v1/completions"},
+		})
+		ts2 := httptest.NewServer(proxy2.Handler())
+		defer ts2.Close()
+
+		req, _ := http.NewRequest("OPTIONS", ts2.URL+"/v1/responses", nil)
+		req.Header.Set("Origin", "https://allowed.com")
+		req.Header.Set("Access-Control-Request-Method", "POST")
+		req.Header.Set("Access-Control-Request-Headers", "Authorization, Content-Type")
+
+		resp, err := http.DefaultClient.Do(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+		assert.Equal(t, "*", resp.Header.Get("Access-Control-Allow-Origin"))
+		assert.Contains(t, resp.Header.Get("Access-Control-Allow-Methods"), "OPTIONS")
+		_ = resp.Body.Close()
+	})
 }
 
 func TestTransparentProxy_AddsCORSHeadersToActualResponses(t *testing.T) {
