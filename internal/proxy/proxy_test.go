@@ -1010,6 +1010,36 @@ func TestValidateRequestMiddleware_OPTIONSPreflightCORS(t *testing.T) {
 	})
 }
 
+func TestTransparentProxy_AddsCORSHeadersToActualResponses(t *testing.T) {
+	mockAPI := createMockAPIServer(t)
+	defer mockAPI.Close()
+
+	proxy := newTestProxyWithConfig(ProxyConfig{
+		TargetBaseURL:    mockAPI.URL,
+		AllowedMethods:   []string{"POST", "OPTIONS"},
+		AllowedEndpoints: []string{"/v1/completions"},
+	})
+
+	ts := httptest.NewServer(proxy.Handler())
+	defer ts.Close()
+
+	req, _ := http.NewRequest("POST", ts.URL+"/v1/completions", strings.NewReader(`{"prompt":"hi"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer valid-token")
+	req.Header.Set("Origin", "http://localhost:3000")
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, resp.Body.Close())
+	}()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "http://localhost:3000", resp.Header.Get("Access-Control-Allow-Origin"))
+	assert.Contains(t, resp.Header.Get("Access-Control-Expose-Headers"), "X-Request-ID")
+	assert.Contains(t, resp.Header.Values("Vary"), "Origin")
+}
+
 func TestModifyResponse_NonStreamingErrorIncrementsErrorCount(t *testing.T) {
 	p := &TransparentProxy{metrics: &ProxyMetrics{}, logger: zap.NewNop()}
 	res := &http.Response{
