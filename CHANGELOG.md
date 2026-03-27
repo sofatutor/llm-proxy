@@ -6,6 +6,18 @@ The format is based on [Common Changelog](https://common-changelog.org/).
 
 ---
 
+## March 27, 2026
+
+### Added
+
+- **Stable Tag Contract** ([#269](https://github.com/sofatutor/llm-proxy/pull/269)): Defines distinct `v*` and `v*-stable` release tag classes with shared validation tooling to enforce deterministic production eligibility and artifact publishing behavior.
+- **Automated GitHub Releases** ([#269](https://github.com/sofatutor/llm-proxy/pull/269)): Adds a release workflow that validates tag shapes, gates release creation to `*-stable` refs, and generates release notes automatically for approved stable releases.
+
+### Changed
+
+- **Expanded release documentation** ([#269](https://github.com/sofatutor/llm-proxy/pull/269)): Updates the release-process guide with the versioning contract, valid/invalid tag examples, and a documented checklist so operators know how `v*` and `v*-stable` flows behave.
+
+
 ## January 03, 2026
 
 ### Changed
