@@ -429,6 +429,12 @@ func (p *TransparentProxy) modifyResponse(res *http.Response) error {
 		if requestID, ok := res.Request.Context().Value(ctxKeyRequestID).(string); ok && requestID != "" {
 			res.Header.Set("X-Request-ID", requestID)
 		}
+
+		if origin := res.Request.Header.Get("Origin"); origin != "" {
+			res.Header.Set("Access-Control-Allow-Origin", origin)
+			res.Header.Set("Access-Control-Expose-Headers", "X-Request-ID, X-Proxy-ID, X-LLM-Proxy-Remote-Duration, X-LLM-Proxy-Remote-Duration-Ms")
+			res.Header.Add("Vary", "Origin")
+		}
 	}
 
 	// --- PATCH: Add X-UPSTREAM-REQUEST-STOP header ---
