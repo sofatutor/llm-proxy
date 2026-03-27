@@ -83,7 +83,7 @@ func ProjectActiveGuardMiddleware(enforceActive bool, checker ProjectActiveCheck
 			// Get project ID from context (should be set by token validation middleware)
 			projectIDValue := r.Context().Value(ctxKeyProjectID)
 			if projectIDValue == nil {
-				writeErrorResponse(w, http.StatusInternalServerError, ErrorResponse{
+				writeErrorResponseForRequest(w, r, http.StatusInternalServerError, ErrorResponse{
 					Error:       "Internal server error",
 					Code:        "internal_error",
 					Description: "missing project ID in request context",
@@ -93,7 +93,7 @@ func ProjectActiveGuardMiddleware(enforceActive bool, checker ProjectActiveCheck
 
 			projectID, ok := projectIDValue.(string)
 			if !ok || projectID == "" {
-				writeErrorResponse(w, http.StatusInternalServerError, ErrorResponse{
+				writeErrorResponseForRequest(w, r, http.StatusInternalServerError, ErrorResponse{
 					Error:       "Internal server error",
 					Code:        "internal_error",
 					Description: "invalid project ID in request context",
@@ -102,7 +102,7 @@ func ProjectActiveGuardMiddleware(enforceActive bool, checker ProjectActiveCheck
 			}
 
 			if allowed, status, er := shouldAllowProject(r.Context(), enforceActive, checker, projectID, auditLogger, r); !allowed {
-				writeErrorResponse(w, status, er)
+				writeErrorResponseForRequest(w, r, status, er)
 				return
 			}
 
@@ -110,6 +110,26 @@ func ProjectActiveGuardMiddleware(enforceActive bool, checker ProjectActiveCheck
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func applyCORSResponseHeaders(w http.ResponseWriter, r *http.Request) {
+	if r == nil {
+		return
+	}
+
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return
+	}
+
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID, X-Proxy-ID, X-LLM-Proxy-Remote-Duration, X-LLM-Proxy-Remote-Duration-Ms")
+	w.Header().Add("Vary", "Origin")
+}
+
+func writeErrorResponseForRequest(w http.ResponseWriter, r *http.Request, statusCode int, errorResp ErrorResponse) {
+	applyCORSResponseHeaders(w, r)
+	writeErrorResponse(w, statusCode, errorResp)
 }
 
 // writeErrorResponse writes a JSON error response

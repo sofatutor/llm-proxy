@@ -204,4 +204,19 @@ func TestWriteErrorResponse(t *testing.T) {
 			assert.Equal(t, code, rr.Code)
 		}
 	})
+
+	t.Run("adds cors headers when request has origin", func(t *testing.T) {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+		req.Header.Set("Origin", "http://localhost:3000")
+
+		writeErrorResponseForRequest(rr, req, http.StatusUnauthorized, ErrorResponse{
+			Error: "Token has expired",
+			Code:  "token_expired",
+		})
+
+		assert.Equal(t, "http://localhost:3000", rr.Header().Get("Access-Control-Allow-Origin"))
+		assert.Contains(t, rr.Header().Values("Vary"), "Origin")
+		assert.Contains(t, rr.Header().Get("Access-Control-Expose-Headers"), "X-Request-ID")
+	})
 }
