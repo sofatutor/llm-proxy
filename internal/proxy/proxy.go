@@ -606,11 +606,7 @@ func (p *TransparentProxy) errorHandler(w http.ResponseWriter, r *http.Request, 
 		// Use default values
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	if err := json.NewEncoder(w).Encode(errorResponse); err != nil {
-		p.logger.Error("Failed to encode error response", zap.Error(err))
-	}
+	writeErrorResponseForRequest(w, r, statusCode, errorResponse)
 }
 
 // handleValidationError handles errors specific to token validation
@@ -654,11 +650,7 @@ func (p *TransparentProxy) handleValidationError(w http.ResponseWriter, r *http.
 		errorResponse.Code = "invalid_token"
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	if err := json.NewEncoder(w).Encode(errorResponse); err != nil {
-		p.logger.Error("Failed to encode error response", zap.Error(err))
-	}
+	writeErrorResponseForRequest(w, r, statusCode, errorResponse)
 
 	p.logger.Error("Validation error",
 		zap.String("request_id", requestID),
@@ -854,7 +846,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 					zap.String("project_id", projectID),
 					zap.Error(upstreamAPIKeyErr),
 				)
-				writeErrorResponse(w, http.StatusServiceUnavailable, ErrorResponse{
+				writeErrorResponseForRequest(w, reqToAuthorize, http.StatusServiceUnavailable, ErrorResponse{
 					Error:       "Upstream authentication error",
 					Code:        "upstream_auth_error",
 					Description: "failed to load upstream API key",
@@ -867,7 +859,7 @@ func (p *TransparentProxy) Handler() http.Handler {
 
 		// Enforce project active status using shared helper (if enabled)
 		if allowed, status, er := shouldAllowProject(r.Context(), p.config.EnforceProjectActive, p.projectStore, projectID, p.auditLogger, r); !allowed {
-			writeErrorResponse(w, status, er)
+			writeErrorResponseForRequest(w, r, status, er)
 			return
 		}
 
@@ -1165,17 +1157,13 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 				p.logger.Warn("Method not allowed",
 					zap.String("method", r.Method),
 					zap.String("path", r.URL.Path))
-				w.WriteHeader(http.StatusMethodNotAllowed)
 				if requestID != "" {
 					w.Header().Set("X-Request-ID", requestID)
 				}
-				w.Header().Set("Content-Type", "application/json")
-				if err := json.NewEncoder(w).Encode(ErrorResponse{
+				writeErrorResponseForRequest(w, r, http.StatusMethodNotAllowed, ErrorResponse{
 					Error: "Method not allowed",
 					Code:  "method_not_allowed",
-				}); err != nil {
-					p.logger.Error("Failed to encode error response", zap.Error(err))
-				}
+				})
 				return
 			}
 
@@ -1184,14 +1172,10 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 				p.logger.Warn("Endpoint not allowed",
 					zap.String("method", r.Method),
 					zap.String("path", r.URL.Path))
-				w.WriteHeader(http.StatusNotFound)
-				w.Header().Set("Content-Type", "application/json")
-				if err := json.NewEncoder(w).Encode(ErrorResponse{
+				writeErrorResponseForRequest(w, r, http.StatusNotFound, ErrorResponse{
 					Error: "Endpoint not found",
 					Code:  "endpoint_not_found",
-				}); err != nil {
-					p.logger.Error("Failed to encode error response", zap.Error(err))
-				}
+				})
 				return
 			}
 
@@ -1227,14 +1211,10 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 									}
 								}
 								if !found {
-									w.WriteHeader(http.StatusBadRequest)
-									w.Header().Set("Content-Type", "application/json")
-									if err := json.NewEncoder(w).Encode(ErrorResponse{
+									writeErrorResponseForRequest(w, r, http.StatusBadRequest, ErrorResponse{
 										Error: fmt.Sprintf("Parameter '%s' value '%s' is not allowed. Allowed patterns: %v", param, valStr, allowed),
 										Code:  "param_not_allowed",
-									}); err != nil {
-										p.logger.Error("Failed to encode error response", zap.Error(err))
-									}
+									})
 									return
 								}
 							}
@@ -1257,14 +1237,10 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 			}
 			if originRequired {
 				if origin == "" {
-					w.WriteHeader(http.StatusBadRequest)
-					w.Header().Set("Content-Type", "application/json")
-					if err := json.NewEncoder(w).Encode(ErrorResponse{
+					writeErrorResponseForRequest(w, r, http.StatusBadRequest, ErrorResponse{
 						Error: "Origin header required",
 						Code:  "origin_required",
-					}); err != nil {
-						p.logger.Error("Failed to encode error response", zap.Error(err))
-					}
+					})
 					return
 				}
 				if len(p.config.AllowedOrigins) > 0 {
@@ -1276,14 +1252,10 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 						}
 					}
 					if !allowed {
-						w.WriteHeader(http.StatusForbidden)
-						w.Header().Set("Content-Type", "application/json")
-						if err := json.NewEncoder(w).Encode(ErrorResponse{
+						writeErrorResponseForRequest(w, r, http.StatusForbidden, ErrorResponse{
 							Error: "Origin not allowed",
 							Code:  "origin_not_allowed",
-						}); err != nil {
-							p.logger.Error("Failed to encode error response", zap.Error(err))
-						}
+						})
 						return
 					}
 				}
@@ -1296,14 +1268,10 @@ func (p *TransparentProxy) ValidateRequestMiddleware() Middleware {
 					}
 				}
 				if !allowed {
-					w.WriteHeader(http.StatusForbidden)
-					w.Header().Set("Content-Type", "application/json")
-					if err := json.NewEncoder(w).Encode(ErrorResponse{
+					writeErrorResponseForRequest(w, r, http.StatusForbidden, ErrorResponse{
 						Error: "Origin not allowed",
 						Code:  "origin_not_allowed",
-					}); err != nil {
-						p.logger.Error("Failed to encode error response", zap.Error(err))
-					}
+					})
 					return
 				}
 			}

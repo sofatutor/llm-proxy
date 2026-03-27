@@ -697,15 +697,18 @@ func TestTransparentProxy_HandleValidationError(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			r.Header.Set("Origin", "http://localhost:3000")
 			proxy.handleValidationError(w, r, tc.err)
 			resp := w.Result()
+			body, _ := io.ReadAll(resp.Body)
 			if err := resp.Body.Close(); err != nil {
 				t.Logf("Failed to close response body: %v", err)
 			}
-			body, _ := io.ReadAll(resp.Body)
 			assert.Equal(t, tc.wantStatus, resp.StatusCode)
 			assert.Contains(t, string(body), tc.wantCode)
 			assert.Contains(t, string(body), tc.wantMsg)
+			assert.Equal(t, "http://localhost:3000", resp.Header.Get("Access-Control-Allow-Origin"))
+			assert.Contains(t, resp.Header.Values("Vary"), "Origin")
 		})
 	}
 }
@@ -907,6 +910,8 @@ func TestValidateRequestMiddleware_CORSOriginValidation(t *testing.T) {
 		_ = json.NewDecoder(resp.Body).Decode(&respBody)
 		_ = resp.Body.Close()
 		assert.Equal(t, "origin_not_allowed", respBody["code"])
+		assert.Equal(t, "https://not-allowed.com", resp.Header.Get("Access-Control-Allow-Origin"))
+		assert.Contains(t, resp.Header.Values("Vary"), "Origin")
 	})
 
 	t.Run("Origin present and allowed (required)", func(t *testing.T) {
@@ -945,6 +950,8 @@ func TestValidateRequestMiddleware_CORSOriginValidation(t *testing.T) {
 		_ = json.NewDecoder(resp.Body).Decode(&respBody)
 		_ = resp.Body.Close()
 		assert.Equal(t, "origin_not_allowed", respBody["code"])
+		assert.Equal(t, "https://not-allowed.com", resp.Header.Get("Access-Control-Allow-Origin"))
+		assert.Contains(t, resp.Header.Values("Vary"), "Origin")
 	})
 
 	t.Run("Origin present and allowed (not required)", func(t *testing.T) {
