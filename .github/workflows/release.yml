@@ -70,9 +70,12 @@ jobs:
         run: make test
 
       - name: Create release with generated notes
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
-          generate_release_notes: true
-          make_latest: false
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --verify-tag \
+            --title "Release ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --latest=false
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -95,6 +95,7 @@ Pushing a tag triggers automated workflows:
 - Skips GitHub release creation for plain `vMAJOR.MINOR.PATCH` tags
 - Runs `make build`, `make lint`, and `make test` before creating a release for `vMAJOR.MINOR.PATCH-stable`
 - Creates the GitHub release with generated release notes for stable tags
+- Uses GitHub CLI with the built-in workflow token, so the workflow stays compatible with organizations that block third-party actions
 - Uses the full stable tag name in the release title and never forces every stable release to become the repository latest release
 
 ### 5. Verify the Release
@@ -175,6 +176,7 @@ Common issues:
 - Tag doesn't match the allowed patterns `vMAJOR.MINOR.PATCH` or `vMAJOR.MINOR.PATCH-stable`
 - Chart dependencies not building (workflow uses `helm dependency build`)
 - Stable tag failed local-equivalent validation (`make build`, `make lint`, `make test`)
+- Organization policy blocks third-party GitHub Actions; the release workflow avoids this by using `gh release create` with `GH_TOKEN`
 
 ### Chart Not Found in GHCR
 
