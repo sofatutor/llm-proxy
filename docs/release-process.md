@@ -43,6 +43,8 @@ Examples:
 - Invalid: `v1.4.0stable`
 - Invalid: `v1.4.0-rc1`
 
+Any suffix other than `-stable` is invalid for this workflow, including `-rc1`, `-beta`, and `-alpha`.
+
 ### 3. Create and Push a Tag
 
 Use semantic versioning (for example `v1.0.0` during release preparation, then `v1.0.0-stable` once the release is approved):

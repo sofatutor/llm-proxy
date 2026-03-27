@@ -73,6 +73,7 @@ main() {
     if [[ -z "$command" ]]; then
         log_error "Command is required"
         echo "Usage: release-tag.sh <classify|version> <tag-or-ref>"
+        echo "Accepted formats: v1.2.3, v1.2.3-stable, refs/tags/v1.2.3, refs/tags/v1.2.3-stable"
         exit 1
     fi
 
@@ -88,6 +89,7 @@ main() {
         *)
             log_error "Unknown command: $command"
             echo "Usage: release-tag.sh <classify|version> <tag-or-ref>"
+            echo "Accepted formats: v1.2.3, v1.2.3-stable, refs/tags/v1.2.3, refs/tags/v1.2.3-stable"
             exit 1
             ;;
     esac
