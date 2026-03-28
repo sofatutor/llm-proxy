@@ -476,6 +476,9 @@ func TestHandleTokens(t *testing.T) {
 		reqBody := map[string]interface{}{
 			"project_id":       "project-1",
 			"duration_minutes": 60 * 24,
+			"metadata": map[string]string{
+				"user_id": "42",
+			},
 		}
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest("POST", "/manage/tokens", bytes.NewReader(body))
@@ -494,6 +497,8 @@ func TestHandleTokens(t *testing.T) {
 		assert.Contains(t, response, "id")
 		assert.Contains(t, response, "token")
 		assert.Contains(t, response, "expires_at")
+		require.NotEmpty(t, tokenStore.tokens)
+		assert.Equal(t, map[string]string{"user_id": "42"}, tokenStore.tokens[len(tokenStore.tokens)-1].Metadata)
 	})
 
 	t.Run("POST_Token_InvalidRequest", func(t *testing.T) {

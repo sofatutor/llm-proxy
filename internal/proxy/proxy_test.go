@@ -16,6 +16,7 @@ import (
 	"errors"
 
 	"github.com/sofatutor/llm-proxy/internal/audit"
+	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/middleware"
 	"github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/stretchr/testify/assert"
@@ -37,6 +38,30 @@ func (m *MockTokenValidator) ValidateToken(ctx context.Context, tokenID string) 
 func (m *MockTokenValidator) ValidateTokenWithTracking(ctx context.Context, tokenID string) (string, error) {
 	args := m.Called(ctx, tokenID)
 	return args.String(0), args.Error(1)
+}
+
+type MockTokenDataValidator struct {
+	mock.Mock
+}
+
+func (m *MockTokenDataValidator) ValidateToken(ctx context.Context, tokenID string) (string, error) {
+	args := m.Called(ctx, tokenID)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockTokenDataValidator) ValidateTokenWithTracking(ctx context.Context, tokenID string) (string, error) {
+	args := m.Called(ctx, tokenID)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockTokenDataValidator) ValidateTokenData(ctx context.Context, tokenID string) (token.TokenData, error) {
+	args := m.Called(ctx, tokenID)
+	return args.Get(0).(token.TokenData), args.Error(1)
+}
+
+func (m *MockTokenDataValidator) ValidateTokenDataWithTracking(ctx context.Context, tokenID string) (token.TokenData, error) {
+	args := m.Called(ctx, tokenID)
+	return args.Get(0).(token.TokenData), args.Error(1)
 }
 
 // MockProjectStore mocks the project storage interface
@@ -1768,6 +1793,58 @@ func TestNewTransparentProxyWithLoggerAndObservability(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, proxy)
 	assert.NotNil(t, proxy.obsMiddleware)
+}
+
+func TestTransparentProxy_ObservabilityEnrichesTokenMetadata(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id":"resp_1","model":"gpt-4.1-mini","usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}`))
+	}))
+	defer upstream.Close()
+
+	validator := &MockTokenDataValidator{}
+	projectStore := &MockProjectStore{}
+	bus := eventbus.NewInMemoryEventBus(10)
+	obsCfg := middleware.ObservabilityConfig{Enabled: true, EventBus: bus}
+
+	validator.On("ValidateTokenDataWithTracking", mock.Anything, "tok").Return(token.TokenData{
+		ID:        "token-uuid-1",
+		Token:     "tok",
+		ProjectID: "project-1",
+		Metadata:  map[string]string{"feature": "sofabuddy", "user_id": "42"},
+		IsActive:  true,
+	}, nil).Once()
+	projectStore.On("GetAPIKeyForProject", mock.Anything, "project-1").Return("upstream-key", nil).Once()
+
+	p, err := NewTransparentProxyWithAudit(ProxyConfig{
+		TargetBaseURL:    upstream.URL,
+		AllowedEndpoints: []string{"/v1/responses"},
+		AllowedMethods:   []string{"POST"},
+	}, validator, projectStore, zap.NewNop(), &TestAuditLogger{}, obsCfg)
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(`{"model":"gpt-4.1-mini","input":"hello"}`))
+	req.Header.Set("Authorization", "Bearer tok")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Request-ID", "req-observe")
+	w := httptest.NewRecorder()
+	ch := bus.Subscribe()
+
+	p.Handler().ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code)
+
+	select {
+	case evt := <-ch:
+		require.Equal(t, "project-1", evt.ProjectID)
+		require.Equal(t, "token-uuid-1", evt.TokenID)
+		require.Equal(t, map[string]string{"feature": "sofabuddy", "user_id": "42"}, evt.TokenMetadata)
+	case <-time.After(time.Second):
+		t.Fatal("event not received")
+	}
+
+	validator.AssertExpectations(t)
+	projectStore.AssertExpectations(t)
 }
 
 // --- Project Active Enforcement Coverage ---

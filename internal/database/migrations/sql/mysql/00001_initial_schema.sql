@@ -19,6 +19,7 @@ CREATE INDEX idx_projects_name ON projects(name);
 CREATE TABLE IF NOT EXISTS tokens (
 	token VARCHAR(191) PRIMARY KEY, -- VARCHAR for compatibility; 191 chars max for utf8mb4 indexes
 	project_id VARCHAR(191) NOT NULL,
+	metadata TEXT,
 	expires_at DATETIME(6),
 	is_active BOOLEAN NOT NULL DEFAULT TRUE,
 	request_count INTEGER NOT NULL DEFAULT 0,

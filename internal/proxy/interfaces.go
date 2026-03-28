@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/sofatutor/llm-proxy/internal/audit"
+	tokenpkg "github.com/sofatutor/llm-proxy/internal/token"
 )
 
 // TokenValidator defines the interface for token validation
@@ -16,6 +17,12 @@ type TokenValidator interface {
 
 	// ValidateTokenWithTracking validates a token, increments its usage, and returns the project ID
 	ValidateTokenWithTracking(ctx context.Context, token string) (string, error)
+}
+
+// TokenDataValidator exposes token metadata from the validation step without a second store lookup.
+type TokenDataValidator interface {
+	ValidateTokenData(ctx context.Context, token string) (tokenpkg.TokenData, error)
+	ValidateTokenDataWithTracking(ctx context.Context, token string) (tokenpkg.TokenData, error)
 }
 
 // ProjectStore defines the interface for retrieving and managing project information
@@ -164,6 +171,12 @@ const (
 	ctxKeyProjectID contextKey = "project_id"
 	// ctxKeyTokenID is the context key for the token ID (used for cache stats)
 	ctxKeyTokenID contextKey = "token_id"
+	// ctxKeyTokenRecordID is the context key for the stored token UUID
+	ctxKeyTokenRecordID contextKey = "token_record_id"
+	// ctxKeyTokenMetadata carries non-secret token metadata for observability
+	ctxKeyTokenMetadata contextKey = "token_metadata"
+	// ctxKeyObservabilityEventData carries request-scoped metadata shared with observability middleware.
+	ctxKeyObservabilityEventData contextKey = "observability_event_data"
 	// ctxKeyLogger is the context key for a request-scoped logger
 	ctxKeyLogger contextKey = "logger"
 	// ctxKeyOriginalPath stores the original request path before proxy rewriting

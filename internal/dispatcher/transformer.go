@@ -189,6 +189,18 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 			"request_id":  evt.RequestID,
 		},
 	}
+	if evt.ProjectID != "" {
+		payload.Metadata["project_id"] = evt.ProjectID
+	}
+	if evt.TokenID != "" {
+		payload.Metadata["token_id"] = evt.TokenID
+	}
+	if len(evt.TokenMetadata) > 0 {
+		payload.Metadata["token_metadata"] = evt.TokenMetadata
+		if userID := firstNonEmpty(evt.TokenMetadata["user_id"], evt.TokenMetadata["app_user_id"]); userID != "" {
+			payload.UserID = &userID
+		}
+	}
 
 	// Add request body as input (JSON or base64)
 	if len(evt.RequestBody) > 0 {
@@ -202,6 +214,7 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 	// --- OpenAI-specific output transformation ---
 	isOpenAI := strings.HasPrefix(evt.Path, "/v1/completions") ||
 		strings.HasPrefix(evt.Path, "/v1/chat/completions") ||
+		strings.HasPrefix(evt.Path, "/v1/responses") ||
 		strings.HasPrefix(evt.Path, "/v1/threads/")
 
 	if isOpenAI && len(evt.ResponseBody) > 0 {
@@ -209,20 +222,27 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 		if js := json.Valid(evt.ResponseBody); js {
 			openaiTransformer := &eventtransformer.OpenAITransformer{}
 			parsed, err := openaiTransformer.TransformEvent(map[string]any{
-				"response_body": string(evt.ResponseBody),
-				"path":          evt.Path,
+				"Method":          evt.Method,
+				"Path":            evt.Path,
+				"RequestBody":     string(evt.RequestBody),
+				"ResponseBody":    string(evt.ResponseBody),
+				"ResponseHeaders": headerToAnyMap(evt.ResponseHeaders),
 			})
 			if err == nil && parsed != nil {
 				if js, err := json.Marshal(parsed); err == nil {
 					payload.Output = js
+					if model := modelFromParsedOpenAIEvent(parsed); model != "" {
+						payload.Metadata["model"] = model
+					}
 					// Optionally extract token usage if present
 					if usage, ok := parsed["usage"].(map[string]any); ok {
-						payload.TokensUsage = &TokensUsage{
-							Prompt:     int(usage["prompt_tokens"].(float64)),
-							Completion: int(usage["completion_tokens"].(float64)),
+						payload.TokensUsage = tokensUsageFromUsageMap(usage)
+					}
+					if payload.TokensUsage == nil {
+						if usage, ok := parsed["token_usage"].(map[string]any); ok {
+							payload.TokensUsage = tokensUsageFromUsageMap(usage)
 						}
 					}
-					return payload, nil
 				}
 			}
 			// If parsing fails, fall through to generic logic
@@ -252,4 +272,85 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 	}
 
 	return payload, nil
+}
+
+func headerToAnyMap(header map[string][]string) map[string]any {
+	if len(header) == 0 {
+		return nil
+	}
+
+	converted := make(map[string]any, len(header))
+	for key, values := range header {
+		if len(values) == 1 {
+			converted[key] = values[0]
+			continue
+		}
+
+		items := make([]any, len(values))
+		for index, value := range values {
+			items[index] = value
+		}
+		converted[key] = items
+	}
+
+	return converted
+}
+
+func tokensUsageFromUsageMap(usage map[string]any) *TokensUsage {
+	prompt, okPrompt := floatToInt(usage["prompt_tokens"])
+	completion, okCompletion := floatToInt(usage["completion_tokens"])
+	if !okPrompt && !okCompletion {
+		return nil
+	}
+
+	return &TokensUsage{Prompt: prompt, Completion: completion}
+}
+
+func modelFromParsedOpenAIEvent(parsed map[string]any) string {
+	if model, ok := parsed["model"].(string); ok && model != "" {
+		return model
+	}
+
+	responseBody, ok := parsed["response_body"].(string)
+	if !ok || responseBody == "" || !json.Valid([]byte(responseBody)) {
+		return ""
+	}
+
+	var responseObject map[string]any
+	if err := json.Unmarshal([]byte(responseBody), &responseObject); err != nil {
+		return ""
+	}
+
+	if model, ok := responseObject["model"].(string); ok {
+		return model
+	}
+
+	return ""
+}
+
+func floatToInt(value any) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		return typed, true
+	case int32:
+		return int(typed), true
+	case int64:
+		return int(typed), true
+	case float64:
+		return int(typed), true
+	case float32:
+		return int(typed), true
+	default:
+		return 0, false
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+
+	return ""
 }

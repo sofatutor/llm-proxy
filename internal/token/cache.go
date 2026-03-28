@@ -120,22 +120,42 @@ func NewCachedValidator(validator TokenValidator, options ...CacheOptions) *Cach
 
 // ValidateToken validates a token using the cache when possible
 func (cv *CachedValidator) ValidateToken(ctx context.Context, tokenID string) (string, error) {
-	// Check cache first
-	projectID, found := cv.checkCache(tokenID)
-	if found {
-		return projectID, nil
-	}
-
-	// Cache miss, validate using the underlying validator
-	projectID, err := cv.validator.ValidateToken(ctx, tokenID)
+	tokenData, err := cv.ValidateTokenData(ctx, tokenID)
 	if err != nil {
 		return "", err
 	}
 
-	// Cache the successful validation
+	return tokenData.ProjectID, nil
+}
+
+// ValidateTokenData validates a token using the cache when possible and returns token data.
+func (cv *CachedValidator) ValidateTokenData(ctx context.Context, tokenID string) (TokenData, error) {
+	// Check cache first
+	tokenData, found := cv.checkCacheData(tokenID)
+	if found {
+		return tokenData, nil
+	}
+
+	if validator, ok := cv.validator.(interface {
+		ValidateTokenData(context.Context, string) (TokenData, error)
+	}); ok {
+		tokenData, err := validator.ValidateTokenData(ctx, tokenID)
+		if err != nil {
+			return TokenData{}, err
+		}
+
+		cv.cacheToken(ctx, tokenID)
+		return tokenData, nil
+	}
+
+	projectID, err := cv.validator.ValidateToken(ctx, tokenID)
+	if err != nil {
+		return TokenData{}, err
+	}
+
 	cv.cacheToken(ctx, tokenID)
 
-	return projectID, nil
+	return TokenData{Token: tokenID, ProjectID: projectID}, nil
 }
 
 // ValidateTokenWithTracking validates a token and tracks usage.
@@ -147,6 +167,16 @@ func (cv *CachedValidator) ValidateToken(ctx context.Context, tokenID string) (s
 // by using the cached token metadata (active/expiry/project) and performing a synchronous usage
 // increment (which is where max_requests is enforced).
 func (cv *CachedValidator) ValidateTokenWithTracking(ctx context.Context, tokenID string) (string, error) {
+	tokenData, err := cv.ValidateTokenDataWithTracking(ctx, tokenID)
+	if err != nil {
+		return "", err
+	}
+
+	return tokenData.ProjectID, nil
+}
+
+// ValidateTokenDataWithTracking validates a token, tracks usage, and returns token data.
+func (cv *CachedValidator) ValidateTokenDataWithTracking(ctx context.Context, tokenID string) (TokenData, error) {
 	cv.cacheMutex.RLock()
 	entry, found := cv.cache[tokenID]
 	cv.cacheMutex.RUnlock()
@@ -174,7 +204,7 @@ func (cv *CachedValidator) ValidateTokenWithTracking(ctx context.Context, tokenI
 				if getter, ok := cv.validator.(usageStatsAggregatorGetter); ok {
 					if agg := getter.usageStatsAggregator(); agg != nil {
 						agg.RecordTokenUsage(tokenID)
-						return entry.Data.ProjectID, nil
+						return cloneTokenData(entry.Data), nil
 					}
 				}
 			} else if sv, ok := cv.validator.(*StandardValidator); ok && sv != nil && sv.store != nil {
@@ -185,9 +215,9 @@ func (cv *CachedValidator) ValidateTokenWithTracking(ctx context.Context, tokenI
 					if err == ErrTokenRateLimit || err == ErrTokenInactive || err == ErrTokenExpired {
 						cv.invalidateCache(tokenID)
 					}
-					return "", err
+					return TokenData{}, err
 				}
-				return entry.Data.ProjectID, nil
+				return cloneTokenData(entry.Data), nil
 			}
 		} else {
 			// Token became invalid (inactive/expired). Be defensive and drop the cache entry.
@@ -200,20 +230,41 @@ func (cv *CachedValidator) ValidateTokenWithTracking(ctx context.Context, tokenI
 		}
 	}
 
+	if validator, ok := cv.validator.(interface {
+		ValidateTokenDataWithTracking(context.Context, string) (TokenData, error)
+	}); ok {
+		tokenData, err := validator.ValidateTokenDataWithTracking(ctx, tokenID)
+		if err != nil {
+			return TokenData{}, err
+		}
+
+		cv.cacheToken(ctx, tokenID)
+		return tokenData, nil
+	}
+
 	projectID, err := cv.validator.ValidateTokenWithTracking(ctx, tokenID)
 	if err != nil {
-		return "", err
+		return TokenData{}, err
 	}
 
 	// Populate the cache after successful tracking so subsequent requests can avoid extra DB reads.
 	// (Only works for StandardValidator; others are safely ignored.)
 	cv.cacheToken(ctx, tokenID)
 
-	return projectID, nil
+	return TokenData{Token: tokenID, ProjectID: projectID}, nil
 }
 
 // checkCache checks if a token is in the cache and still valid
 func (cv *CachedValidator) checkCache(tokenID string) (string, bool) {
+	tokenData, found := cv.checkCacheData(tokenID)
+	if !found {
+		return "", false
+	}
+
+	return tokenData.ProjectID, true
+}
+
+func (cv *CachedValidator) checkCacheData(tokenID string) (TokenData, bool) {
 	cv.cacheMutex.RLock()
 	entry, found := cv.cache[tokenID]
 	cv.cacheMutex.RUnlock()
@@ -223,7 +274,7 @@ func (cv *CachedValidator) checkCache(tokenID string) (string, bool) {
 		cv.statsMutex.Lock()
 		cv.misses++
 		cv.statsMutex.Unlock()
-		return "", false
+		return TokenData{}, false
 	}
 
 	// In cache but expired
@@ -238,7 +289,7 @@ func (cv *CachedValidator) checkCache(tokenID string) (string, bool) {
 		cv.evictions++
 		cv.statsMutex.Unlock()
 
-		return "", false
+		return TokenData{}, false
 	}
 
 	// In cache but token is no longer valid (inactive/expired)
@@ -248,7 +299,7 @@ func (cv *CachedValidator) checkCache(tokenID string) (string, bool) {
 		cv.misses++
 		cv.evictions++
 		cv.statsMutex.Unlock()
-		return "", false
+		return TokenData{}, false
 	}
 
 	// In cache and valid
@@ -256,7 +307,13 @@ func (cv *CachedValidator) checkCache(tokenID string) (string, bool) {
 	cv.hits++
 	cv.statsMutex.Unlock()
 
-	return entry.Data.ProjectID, true
+	return cloneTokenData(entry.Data), true
+}
+
+func cloneTokenData(data TokenData) TokenData {
+	cloned := data
+	cloned.Metadata = CloneMetadata(data.Metadata)
+	return cloned
 }
 
 // isCacheableTokenValid determines whether a cached token can be used for authentication.

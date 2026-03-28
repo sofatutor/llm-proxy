@@ -23,6 +23,8 @@ type Middleware func(http.Handler) http.Handler
 type ObservabilityConfig struct {
 	Enabled  bool
 	EventBus eventbus.EventBus
+	// EventEnricher adds request-scoped metadata to the event before publication.
+	EventEnricher func(*http.Request, *eventbus.Event)
 	// MaxRequestBodyBytes limits request body capture for observability events. 0 means "use default".
 	MaxRequestBodyBytes int64
 	// MaxResponseBodyBytes limits response body capture for observability events. 0 means "use default".
@@ -117,6 +119,10 @@ func (m *ObservabilityMiddleware) Middleware() Middleware {
 				ResponseHeaders: cloneHeader(crw.Header()),
 				ResponseBody:    crw.body.Bytes(),
 				RequestBody:     reqBody,
+			}
+
+			if m.cfg.EventEnricher != nil {
+				m.cfg.EventEnricher(r, &evt)
 			}
 
 			// Publish is non-blocking; avoid spawning a goroutine per request.

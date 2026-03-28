@@ -93,3 +93,52 @@ func TestDefaultEventTransformer_Transform_VerboseHeaders(t *testing.T) {
 		t.Fatalf("expected multi-value header preserved, got %T %v", headers["X-Custom"], headers["X-Custom"])
 	}
 }
+
+func TestDefaultEventTransformer_Transform_ResponsesUsageAndTokenMetadata(t *testing.T) {
+	tr := NewDefaultEventTransformer(false)
+	evt := eventbus.Event{
+		RequestID:     "req-123",
+		Method:        "POST",
+		Path:          "/v1/responses",
+		ProjectID:     "project-1",
+		TokenID:       "token-uuid-1",
+		TokenMetadata: map[string]string{"feature": "sofabuddy", "user_id": "42"},
+		Status:        200,
+		Duration:      5 * time.Millisecond,
+		RequestBody:   []byte(`{"model":"gpt-4.1-mini","input":"hello"}`),
+		ResponseBody:  []byte(`{"id":"resp_1","model":"gpt-4.1-mini","usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18},"output":[]}`),
+		ResponseHeaders: http.Header{
+			"Content-Type": {"application/json"},
+		},
+	}
+
+	payload, err := tr.Transform(evt)
+	if err != nil {
+		t.Fatalf("Transform err: %v", err)
+	}
+	if payload == nil {
+		t.Fatalf("expected payload")
+	}
+	if payload.UserID == nil || *payload.UserID != "42" {
+		t.Fatalf("expected user id 42, got %v", payload.UserID)
+	}
+	if payload.TokensUsage == nil || payload.TokensUsage.Prompt != 11 || payload.TokensUsage.Completion != 7 {
+		t.Fatalf("unexpected token usage: %#v", payload.TokensUsage)
+	}
+	if payload.Metadata["project_id"] != "project-1" {
+		t.Fatalf("expected project_id metadata, got %v", payload.Metadata["project_id"])
+	}
+	if payload.Metadata["token_id"] != "token-uuid-1" {
+		t.Fatalf("expected token_id metadata, got %v", payload.Metadata["token_id"])
+	}
+	if payload.Metadata["model"] != "gpt-4.1-mini" {
+		t.Fatalf("expected model metadata, got %v", payload.Metadata["model"])
+	}
+	tokenMetadata, ok := payload.Metadata["token_metadata"].(map[string]string)
+	if !ok {
+		t.Fatalf("expected token metadata map, got %T", payload.Metadata["token_metadata"])
+	}
+	if tokenMetadata["feature"] != "sofabuddy" {
+		t.Fatalf("expected feature metadata, got %v", tokenMetadata)
+	}
+}

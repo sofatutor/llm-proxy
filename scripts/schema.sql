@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS tokens (
     id TEXT PRIMARY KEY,
     token TEXT NOT NULL UNIQUE,
     project_id TEXT NOT NULL,
+    metadata TEXT,
     expires_at DATETIME,
     is_active BOOLEAN NOT NULL DEFAULT 1,
     deactivated_at DATETIME,
