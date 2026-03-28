@@ -185,9 +185,12 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 			"method":      evt.Method,
 			"path":        evt.Path,
 			"status":      evt.Status,
-			"duration_ms": evt.Duration.Milliseconds(),
+			"duration_ms": durationMilliseconds(evt.Duration),
 			"request_id":  evt.RequestID,
 		},
+	}
+	if model := modelFromRequestBody(evt.RequestBody); model != "" {
+		payload.Metadata["model"] = model
 	}
 	if evt.ProjectID != "" {
 		payload.Metadata["project_id"] = evt.ProjectID
@@ -231,7 +234,7 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 			if err == nil && parsed != nil {
 				if js, err := json.Marshal(parsed); err == nil {
 					payload.Output = js
-					if model := firstNonEmpty(modelFromParsedOpenAIEvent(parsed), modelFromRequestBody(evt.RequestBody)); model != "" {
+					if model := firstNonEmpty(modelFromParsedOpenAIEvent(parsed), metadataStringValue(payload.Metadata, "model")); model != "" {
 						payload.Metadata["model"] = model
 					}
 					payload.TokensUsage = firstTokensUsage(parsed["token_usage"], parsed["usage"])
@@ -248,6 +251,10 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 		} else {
 			payload.OutputBase64 = b64
 		}
+	}
+
+	if payload.TokensUsage == nil {
+		payload.TokensUsage = fallbackTokensUsage(evt.RequestBody, evt.ResponseBody, metadataStringValue(payload.Metadata, "model"))
 	}
 
 	// Add response headers to metadata only if Verbose is true
@@ -391,4 +398,121 @@ func firstNonEmpty(values ...string) string {
 	}
 
 	return ""
+}
+
+func durationMilliseconds(duration time.Duration) int64 {
+	if duration <= 0 {
+		return 0
+	}
+
+	if milliseconds := duration.Milliseconds(); milliseconds > 0 {
+		return milliseconds
+	}
+
+	return 1
+}
+
+func metadataStringValue(metadata map[string]any, key string) string {
+	if metadata == nil {
+		return ""
+	}
+
+	value, _ := metadata[key].(string)
+	return value
+}
+
+func fallbackTokensUsage(requestBody, responseBody []byte, model string) *TokensUsage {
+	promptTokens := promptTokensFromRequestBody(requestBody, model)
+	completionTokens := completionTokensFromResponseBody(responseBody, model)
+	if promptTokens == 0 && completionTokens == 0 {
+		return nil
+	}
+
+	return &TokensUsage{Prompt: promptTokens, Completion: completionTokens}
+}
+
+func promptTokensFromRequestBody(requestBody []byte, model string) int {
+	if len(requestBody) == 0 || !json.Valid(requestBody) {
+		return 0
+	}
+
+	var requestObject map[string]any
+	if err := json.Unmarshal(requestBody, &requestObject); err != nil {
+		return 0
+	}
+
+	promptSource := ""
+	if messages, ok := requestObject["messages"]; ok {
+		if encodedMessages, err := json.Marshal(messages); err == nil {
+			promptSource = string(encodedMessages)
+		}
+	}
+	if instructions, ok := requestObject["instructions"].(string); ok && instructions != "" {
+		promptSource += instructions
+	}
+	if inputSource := promptInputSource(requestObject["input"]); inputSource != "" {
+		promptSource += inputSource
+	}
+	if promptSource == "" {
+		return 0
+	}
+
+	tokens, err := eventtransformer.CountOpenAITokensForModel(promptSource, model)
+	if err != nil {
+		return 0
+	}
+
+	return tokens
+}
+
+func promptInputSource(input any) string {
+	switch typed := input.(type) {
+	case string:
+		return typed
+	case nil:
+		return ""
+	default:
+		encodedInput, err := json.Marshal(typed)
+		if err != nil {
+			return ""
+		}
+		return string(encodedInput)
+	}
+}
+
+func completionTokensFromResponseBody(responseBody []byte, model string) int {
+	if len(responseBody) == 0 || !json.Valid(responseBody) {
+		return 0
+	}
+
+	content, ok := assistantReplyContentFromResponseBody(responseBody)
+	if !ok || content == "" {
+		return 0
+	}
+
+	tokens, err := eventtransformer.CountOpenAITokensForModel(content, model)
+	if err != nil {
+		return 0
+	}
+
+	return tokens
+}
+
+func assistantReplyContentFromResponseBody(responseBody []byte) (string, bool) {
+	var responseObject map[string]any
+	if err := json.Unmarshal(responseBody, &responseObject); err != nil {
+		return "", false
+	}
+
+	if choices, ok := responseObject["choices"].([]any); ok && len(choices) > 0 {
+		if choice, ok := choices[0].(map[string]any); ok {
+			if message, ok := choice["message"].(map[string]any); ok {
+				if content, ok := message["content"].(string); ok {
+					return content, true
+				}
+			}
+		}
+	}
+
+	return "", false
 }

@@ -202,3 +202,66 @@ func TestDefaultEventTransformer_Transform_TokenUsageFallbackFromComputedUsage(t
 		t.Fatalf("expected completion tokens > 0, got %#v", payload.TokensUsage)
 	}
 }
+
+func TestDefaultEventTransformer_Transform_ChatErrorStillKeepsModelAndPromptTokens(t *testing.T) {
+	tr := NewDefaultEventTransformer(false)
+	evt := eventbus.Event{
+		RequestID:    "req-chat-404",
+		Method:       "POST",
+		Path:         "/v1/chat/completions",
+		Status:       404,
+		Duration:     600 * time.Microsecond,
+		RequestBody:  []byte(`{"model":"gpt-4.1-mini","messages":[{"role":"user","content":"hello"}]}`),
+		ResponseBody: []byte(`not found`),
+		ResponseHeaders: http.Header{
+			"Content-Type": {"text/plain"},
+		},
+	}
+
+	payload, err := tr.Transform(evt)
+	if err != nil {
+		t.Fatalf("Transform err: %v", err)
+	}
+	if payload == nil {
+		t.Fatalf("expected payload")
+	}
+	if payload.Metadata["model"] != "gpt-4.1-mini" {
+		t.Fatalf("expected request model on error response, got %v", payload.Metadata["model"])
+	}
+	if payload.TokensUsage == nil || payload.TokensUsage.Prompt <= 0 || payload.TokensUsage.Completion != 0 {
+		t.Fatalf("expected prompt-only token usage on error response, got %#v", payload.TokensUsage)
+	}
+	if payload.Metadata["duration_ms"] != int64(1) {
+		t.Fatalf("expected sub-millisecond duration to round up to 1ms, got %v", payload.Metadata["duration_ms"])
+	}
+}
+
+func TestDefaultEventTransformer_Transform_ModerationsModelFallback(t *testing.T) {
+	tr := NewDefaultEventTransformer(false)
+	evt := eventbus.Event{
+		RequestID:    "req-mod-1",
+		Method:       "POST",
+		Path:         "/v1/moderations",
+		Status:       200,
+		Duration:     2 * time.Millisecond,
+		RequestBody:  []byte(`{"model":"omni-moderation-latest","input":"hello"}`),
+		ResponseBody: []byte(`{"id":"modr-1","results":[{"flagged":false}]}`),
+		ResponseHeaders: http.Header{
+			"Content-Type": {"application/json"},
+		},
+	}
+
+	payload, err := tr.Transform(evt)
+	if err != nil {
+		t.Fatalf("Transform err: %v", err)
+	}
+	if payload == nil {
+		t.Fatalf("expected payload")
+	}
+	if payload.Metadata["model"] != "omni-moderation-latest" {
+		t.Fatalf("expected moderation model from request body, got %v", payload.Metadata["model"])
+	}
+	if payload.TokensUsage == nil || payload.TokensUsage.Prompt <= 0 {
+		t.Fatalf("expected moderation prompt tokens from input fallback, got %#v", payload.TokensUsage)
+	}
+}
