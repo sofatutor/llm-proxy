@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -244,6 +245,97 @@ func TestCloudWatchPlugin_SendEvents_ExhaustedSequenceRetries(t *testing.T) {
 	}})
 	if err == nil || !errors.Is(err, errCloudWatchRetriesExhausted) {
 		t.Fatalf("SendEvents() error = %v, want errCloudWatchRetriesExhausted", err)
+	}
+}
+
+func TestCloudWatchPlugin_Init_RequiresLogGroup(t *testing.T) {
+	plugin := NewCloudWatchPlugin()
+	plugin.client = &fakeCloudWatchLogsClient{}
+
+	err := plugin.Init(map[string]string{"log-stream": "dispatcher-1"})
+	if err == nil || !strings.Contains(err.Error(), "log-group") {
+		t.Fatalf("Init() error = %v, want missing log-group error", err)
+	}
+}
+
+func TestCloudWatchPlugin_Init_DefaultsLogStreamWhenMissing(t *testing.T) {
+	plugin := NewCloudWatchPlugin()
+	plugin.client = &fakeCloudWatchLogsClient{}
+
+	err := plugin.Init(map[string]string{"log-group": "/llm-proxy", "region": "eu-central-1"})
+	if err != nil {
+		t.Fatalf("Init() error = %v", err)
+	}
+	if plugin.logStream == "" || !strings.Contains(plugin.logStream, "llm-proxy-dispatcher-") {
+		t.Fatalf("expected generated log stream, got %q", plugin.logStream)
+	}
+}
+
+func TestCloudWatchPlugin_EnsureLogStream_AlreadyExists(t *testing.T) {
+	plugin := NewCloudWatchPlugin()
+	plugin.client = &fakeCloudWatchLogsClient{createErr: &cloudwatchtypes.ResourceAlreadyExistsException{}}
+	plugin.logGroup = "/llm-proxy"
+	plugin.logStream = "dispatcher-1"
+
+	if err := plugin.ensureLogStream(context.Background()); err != nil {
+		t.Fatalf("ensureLogStream() error = %v", err)
+	}
+}
+
+func TestCloudWatchPlugin_EnsureLogStream_PropagatesCreateError(t *testing.T) {
+	plugin := NewCloudWatchPlugin()
+	plugin.client = &fakeCloudWatchLogsClient{createErr: errors.New("boom")}
+	plugin.logGroup = "/llm-proxy"
+	plugin.logStream = "dispatcher-1"
+
+	err := plugin.ensureLogStream(context.Background())
+	if err == nil || err.Error() != "boom" {
+		t.Fatalf("ensureLogStream() error = %v, want boom", err)
+	}
+}
+
+func TestCloudWatchPlugin_Close_NoOp(t *testing.T) {
+	plugin := NewCloudWatchPlugin()
+	if err := plugin.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestCloudWatchMetadataHelpers(t *testing.T) {
+	metadata := map[string]any{
+		"as-string": "value",
+		"as-int":    12,
+		"as-float":  float64(34),
+		"as-text":   "56",
+		"invalid":   true,
+	}
+
+	if got := metadataString(metadata, "as-string"); got != "value" {
+		t.Fatalf("metadataString() = %q, want value", got)
+	}
+	if got := metadataString(metadata, "missing"); got != "" {
+		t.Fatalf("metadataString() missing = %q, want empty", got)
+	}
+	if got := metadataInt(metadata, "as-int"); got != 12 {
+		t.Fatalf("metadataInt() int = %d, want 12", got)
+	}
+	if got := metadataInt(metadata, "as-float"); got != 34 {
+		t.Fatalf("metadataInt() float = %d, want 34", got)
+	}
+	if got := metadataInt(metadata, "as-text"); got != 56 {
+		t.Fatalf("metadataInt() string = %d, want 56", got)
+	}
+	if got := metadataInt(metadata, "invalid"); got != 0 {
+		t.Fatalf("metadataInt() invalid = %d, want 0", got)
+	}
+	if got := metadataInt(nil, "as-int"); got != 0 {
+		t.Fatalf("metadataInt() nil metadata = %d, want 0", got)
+	}
+	if got := firstNonEmpty("", "fallback", "last"); got != "fallback" {
+		t.Fatalf("firstNonEmpty() = %q, want fallback", got)
+	}
+	if got := firstNonEmpty("", ""); got != "" {
+		t.Fatalf("firstNonEmpty() empty = %q, want empty", got)
 	}
 }
 
