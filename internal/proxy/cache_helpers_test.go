@@ -212,6 +212,27 @@ func TestCalculateCacheTTL_Paths(t *testing.T) {
 	if ttl != 2*time.Second || fromResp {
 		t.Fatalf("expected forced ttl 2s from request; got %v %v", ttl, fromResp)
 	}
+	// Forced TTL must not override no-store/private responses
+	res = &http.Response{StatusCode: 200, Header: http.Header{"Cache-Control": {"private"}, "Content-Type": {"application/json"}}}
+	ttl, fromResp = calculateCacheTTL(res, req, 0, false)
+	if ttl != 0 || fromResp {
+		t.Fatalf("private response should reject forced ttl; got %v %v", ttl, fromResp)
+	}
+	res = &http.Response{StatusCode: 200, Header: http.Header{"Cache-Control": {"no-store"}, "Content-Type": {"application/json"}}}
+	ttl, fromResp = calculateCacheTTL(res, req, 0, false)
+	if ttl != 0 || fromResp {
+		t.Fatalf("no-store response should reject forced ttl; got %v %v", ttl, fromResp)
+	}
+	// Forced TTL still respects the streaming gate
+	res = &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"text/event-stream"}}}
+	ttl, fromResp = calculateCacheTTL(res, req, 0, false)
+	if ttl != 0 || fromResp {
+		t.Fatalf("streaming response should reject forced ttl by default; got %v %v", ttl, fromResp)
+	}
+	ttl, fromResp = calculateCacheTTL(res, req, 0, true)
+	if ttl != 2*time.Second || fromResp {
+		t.Fatalf("streaming response should allow forced ttl when enabled; got %v %v", ttl, fromResp)
+	}
 }
 
 func TestHasClientCacheOptIn(t *testing.T) {

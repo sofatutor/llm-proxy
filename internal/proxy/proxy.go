@@ -107,6 +107,14 @@ func (p *TransparentProxy) Cache() httpCache {
 	return p.cache
 }
 
+// HTTPCacheStreamResponsesEnabled reports whether completed streaming responses
+// are eligible for caching when the client explicitly opts in.
+func (p *TransparentProxy) HTTPCacheStreamResponsesEnabled() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.config.HTTPCacheStreamResponses
+}
+
 // SetCacheStatsAggregator sets the cache stats aggregator for per-token cache hit tracking.
 func (p *TransparentProxy) SetCacheStatsAggregator(agg *CacheStatsAggregator) {
 	p.mu.Lock()
@@ -407,6 +415,13 @@ func calculateCacheTTL(res *http.Response, req *http.Request, defaultTTL time.Du
 	}
 	forcedTTL := requestForcedCacheTTL(req)
 	if forcedTTL > 0 {
+		cc := parseCacheControl(res.Header.Get("Cache-Control"))
+		if cc.noStore || cc.privateCache {
+			return 0, false
+		}
+		if isStreaming(res) && !allowStreaming {
+			return 0, false
+		}
 		return forcedTTL, false
 	}
 	return 0, false

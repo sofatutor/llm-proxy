@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1746,9 +1745,7 @@ func TestInitializeAPIRoutes_StreamCacheEnvOverride(t *testing.T) {
 			err = srv.initializeAPIRoutes()
 			require.NoError(t, err)
 			require.NotNil(t, srv.proxy)
-			proxyValue := reflect.ValueOf(srv.proxy).Elem()
-			configValue := proxyValue.FieldByName("config")
-			assert.Equal(t, tc.expected, configValue.FieldByName("HTTPCacheStreamResponses").Bool())
+			assert.Equal(t, tc.expected, srv.proxy.HTTPCacheStreamResponsesEnabled())
 		})
 	}
 }
