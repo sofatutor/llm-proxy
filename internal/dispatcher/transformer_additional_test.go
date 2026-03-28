@@ -142,3 +142,63 @@ func TestDefaultEventTransformer_Transform_ResponsesUsageAndTokenMetadata(t *tes
 		t.Fatalf("expected feature metadata, got %v", tokenMetadata)
 	}
 }
+
+func TestDefaultEventTransformer_Transform_ModelFallbackFromRequestBody(t *testing.T) {
+	tr := NewDefaultEventTransformer(false)
+	evt := eventbus.Event{
+		RequestID:    "req-chat-1",
+		Method:       "POST",
+		Path:         "/v1/chat/completions",
+		Status:       200,
+		Duration:     12 * time.Millisecond,
+		RequestBody:  []byte(`{"model":"gpt-4.1-mini","messages":[{"role":"user","content":"hello"}]}`),
+		ResponseBody: []byte(`{"id":"chatcmpl_1","choices":[{"index":0,"message":{"role":"assistant","content":"hi there"},"finish_reason":"stop"}]}`),
+		ResponseHeaders: http.Header{
+			"Content-Type": {"application/json"},
+		},
+	}
+
+	payload, err := tr.Transform(evt)
+	if err != nil {
+		t.Fatalf("Transform err: %v", err)
+	}
+	if payload == nil {
+		t.Fatalf("expected payload")
+	}
+	if payload.Metadata["model"] != "gpt-4.1-mini" {
+		t.Fatalf("expected request model fallback, got %v", payload.Metadata["model"])
+	}
+}
+
+func TestDefaultEventTransformer_Transform_TokenUsageFallbackFromComputedUsage(t *testing.T) {
+	tr := NewDefaultEventTransformer(false)
+	evt := eventbus.Event{
+		RequestID:    "req-chat-2",
+		Method:       "POST",
+		Path:         "/v1/chat/completions",
+		Status:       200,
+		Duration:     12 * time.Millisecond,
+		RequestBody:  []byte(`{"model":"gpt-4.1-mini","messages":[{"role":"user","content":"hello"}]}`),
+		ResponseBody: []byte(`{"id":"chatcmpl_1","choices":[{"index":0,"message":{"role":"assistant","content":"hi there"},"finish_reason":"stop"}]}`),
+		ResponseHeaders: http.Header{
+			"Content-Type": {"application/json"},
+		},
+	}
+
+	payload, err := tr.Transform(evt)
+	if err != nil {
+		t.Fatalf("Transform err: %v", err)
+	}
+	if payload == nil {
+		t.Fatalf("expected payload")
+	}
+	if payload.TokensUsage == nil {
+		t.Fatalf("expected computed token usage")
+	}
+	if payload.TokensUsage.Prompt <= 0 {
+		t.Fatalf("expected prompt tokens > 0, got %#v", payload.TokensUsage)
+	}
+	if payload.TokensUsage.Completion <= 0 {
+		t.Fatalf("expected completion tokens > 0, got %#v", payload.TokensUsage)
+	}
+}

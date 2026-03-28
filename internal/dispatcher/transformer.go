@@ -231,18 +231,10 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 			if err == nil && parsed != nil {
 				if js, err := json.Marshal(parsed); err == nil {
 					payload.Output = js
-					if model := modelFromParsedOpenAIEvent(parsed); model != "" {
+					if model := firstNonEmpty(modelFromParsedOpenAIEvent(parsed), modelFromRequestBody(evt.RequestBody)); model != "" {
 						payload.Metadata["model"] = model
 					}
-					// Optionally extract token usage if present
-					if usage, ok := parsed["usage"].(map[string]any); ok {
-						payload.TokensUsage = tokensUsageFromUsageMap(usage)
-					}
-					if payload.TokensUsage == nil {
-						if usage, ok := parsed["token_usage"].(map[string]any); ok {
-							payload.TokensUsage = tokensUsageFromUsageMap(usage)
-						}
-					}
+					payload.TokensUsage = firstTokensUsage(parsed["token_usage"], parsed["usage"])
 				}
 			}
 			// If parsing fails, fall through to generic logic
@@ -306,6 +298,35 @@ func tokensUsageFromUsageMap(usage map[string]any) *TokensUsage {
 	return &TokensUsage{Prompt: prompt, Completion: completion}
 }
 
+func firstTokensUsage(values ...any) *TokensUsage {
+	for _, value := range values {
+		if usage := tokensUsageFromValue(value); usage != nil {
+			return usage
+		}
+	}
+
+	return nil
+}
+
+func tokensUsageFromValue(value any) *TokensUsage {
+	switch typed := value.(type) {
+	case map[string]any:
+		return tokensUsageFromUsageMap(typed)
+	case map[string]int:
+		return &TokensUsage{
+			Prompt:     typed["prompt_tokens"],
+			Completion: typed["completion_tokens"],
+		}
+	case map[string]float64:
+		return &TokensUsage{
+			Prompt:     int(typed["prompt_tokens"]),
+			Completion: int(typed["completion_tokens"]),
+		}
+	default:
+		return nil
+	}
+}
+
 func modelFromParsedOpenAIEvent(parsed map[string]any) string {
 	if model, ok := parsed["model"].(string); ok && model != "" {
 		return model
@@ -322,6 +343,23 @@ func modelFromParsedOpenAIEvent(parsed map[string]any) string {
 	}
 
 	if model, ok := responseObject["model"].(string); ok {
+		return model
+	}
+
+	return ""
+}
+
+func modelFromRequestBody(requestBody []byte) string {
+	if len(requestBody) == 0 || !json.Valid(requestBody) {
+		return ""
+	}
+
+	var requestObject map[string]any
+	if err := json.Unmarshal(requestBody, &requestObject); err != nil {
+		return ""
+	}
+
+	if model, ok := requestObject["model"].(string); ok {
 		return model
 	}
 
