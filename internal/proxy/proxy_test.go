@@ -199,7 +199,7 @@ func TestHTTPCache_BasicHitOnSecondGET(t *testing.T) {
 	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
 	mockValidator.On("ValidateToken", mock.Anything, "test_token").Return("project123", nil)
 	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
-	mockStore.On("GetProjectActive", mock.Anything, "project123").Return(true, nil)
+	mockStore.On("GetProjectActive", mock.Anything, "project123").Return(true, nil).Maybe()
 
 	cfg := ProxyConfig{
 		TargetBaseURL:       server.URL,
@@ -299,7 +299,7 @@ func TestHTTPCache_VaryAcceptSeparatesEntries(t *testing.T) {
 	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
 	mockValidator.On("ValidateToken", mock.Anything, "test_token").Return("project123", nil)
 	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
-	mockStore.On("GetProjectActive", mock.Anything, "project123").Return(true, nil)
+	mockStore.On("GetProjectActive", mock.Anything, "project123").Return(true, nil).Maybe()
 
 	cfg := ProxyConfig{
 		TargetBaseURL:       srv.URL,
@@ -449,6 +449,71 @@ func TestTransparentProxy_StreamingResponses(t *testing.T) {
 	assert.Equal(t, 3, len(events), "Expected 3 SSE events")
 
 	// Verify mock expectations
+	mockValidator.AssertExpectations(t)
+	mockStore.AssertExpectations(t)
+}
+
+func TestHTTPCache_StreamingHitWhenEnabled(t *testing.T) {
+	hitCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hitCount++
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		_, _ = w.Write([]byte("data: hello\n\ndata: world\n\n"))
+	}))
+	defer server.Close()
+
+	mockValidator := new(MockTokenValidator)
+	mockStore := new(MockProjectStore)
+	mockValidator.On("ValidateTokenWithTracking", mock.Anything, "test_token").Return("project123", nil)
+	mockValidator.On("ValidateToken", mock.Anything, "test_token").Return("project123", nil)
+	mockStore.On("GetAPIKeyForProject", mock.Anything, "project123").Return("api_key_123", nil)
+	mockStore.On("GetProjectActive", mock.Anything, "project123").Return(true, nil).Maybe()
+
+	cfg := ProxyConfig{
+		TargetBaseURL:            server.URL,
+		AllowedEndpoints:         []string{"/v1/streaming-cache"},
+		AllowedMethods:           []string{"GET"},
+		HTTPCacheEnabled:         true,
+		HTTPCacheStreamResponses: true,
+		HTTPCacheDefaultTTL:      10 * time.Second,
+	}
+
+	p, err := NewTransparentProxyWithLogger(cfg, mockValidator, mockStore, zap.NewNop())
+	require.NoError(t, err)
+
+	req1 := httptest.NewRequest("GET", "/v1/streaming-cache", nil)
+	req1.Header.Set("Authorization", "Bearer test_token")
+	req1.Header.Set("Cache-Control", "public, max-age=60")
+	req1.Header.Set("Accept", "text/event-stream")
+	w1 := httptest.NewRecorder()
+	p.Handler().ServeHTTP(w1, req1)
+	res1 := w1.Result()
+	body1, err := io.ReadAll(res1.Body)
+	require.NoError(t, err)
+	_ = res1.Body.Close()
+	assert.Equal(t, http.StatusOK, res1.StatusCode)
+	assert.Contains(t, string(body1), "data: hello")
+	assert.Equal(t, 1, hitCount)
+
+	req2 := httptest.NewRequest("GET", "/v1/streaming-cache", nil)
+	req2.Header.Set("Authorization", "Bearer test_token")
+	req2.Header.Set("Cache-Control", "public, max-age=60")
+	req2.Header.Set("Accept", "text/event-stream")
+	w2 := httptest.NewRecorder()
+	p.Handler().ServeHTTP(w2, req2)
+	res2 := w2.Result()
+	body2, err := io.ReadAll(res2.Body)
+	require.NoError(t, err)
+	_ = res2.Body.Close()
+	assert.Equal(t, http.StatusOK, res2.StatusCode)
+	assert.Contains(t, res2.Header.Get("Cache-Status"), "hit")
+	assert.Equal(t, string(body1), string(body2))
+	assert.Equal(t, 1, hitCount)
+	assert.Equal(t, int64(1), p.metrics.CacheStores)
+	assert.Equal(t, int64(1), p.metrics.CacheHits)
+	assert.Equal(t, int64(1), p.metrics.CacheMisses)
+
 	mockValidator.AssertExpectations(t)
 	mockStore.AssertExpectations(t)
 }

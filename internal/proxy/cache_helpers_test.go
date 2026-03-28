@@ -100,34 +100,37 @@ func TestIsResponseCacheable_Policy(t *testing.T) {
 	}
 
 	// Non-cacheable: no-store
-	if isResponseCacheable(mk(200, "no-store", "application/json", false)) {
+	if isResponseCacheable(mk(200, "no-store", "application/json", false), false) {
 		t.Fatalf("no-store should not be cacheable")
 	}
 	// Non-cacheable: private
-	if isResponseCacheable(mk(200, "private, max-age=10", "application/json", false)) {
+	if isResponseCacheable(mk(200, "private, max-age=10", "application/json", false), false) {
 		t.Fatalf("private should not be cacheable")
 	}
-	// Non-cacheable: SSE
-	if isResponseCacheable(mk(200, "public, max-age=10", "text/event-stream", false)) {
+	// Non-cacheable: SSE by default
+	if isResponseCacheable(mk(200, "public, max-age=10", "text/event-stream", false), false) {
 		t.Fatalf("SSE should not be cacheable")
+	}
+	if !isResponseCacheable(mk(200, "public, max-age=10", "text/event-stream", false), true) {
+		t.Fatalf("SSE should be cacheable when explicitly enabled")
 	}
 	// Non-cacheable: Vary: *
 	r := mk(200, "public, max-age=10", "application/json", false)
 	r.Header.Set("Vary", "*")
-	if isResponseCacheable(r) {
+	if isResponseCacheable(r, false) {
 		t.Fatalf("Vary * should not be cacheable")
 	}
 	// Cacheable status variants
 	for _, st := range []int{200, 203, 301, 308, 404, 410} {
-		if !isResponseCacheable(mk(st, "public, max-age=1", "application/json", false)) {
+		if !isResponseCacheable(mk(st, "public, max-age=1", "application/json", false), false) {
 			t.Fatalf("status %d should be cacheable with public+max-age", st)
 		}
 	}
 	// With Authorization requires explicit shared cache directives
-	if isResponseCacheable(mk(200, "max-age=10", "application/json", true)) {
+	if isResponseCacheable(mk(200, "max-age=10", "application/json", true), false) {
 		t.Fatalf("auth without public/s-maxage should not be cacheable for shared cache")
 	}
-	if !isResponseCacheable(mk(200, "public, max-age=10", "application/json", true)) {
+	if !isResponseCacheable(mk(200, "public, max-age=10", "application/json", true), false) {
 		t.Fatalf("auth with public should be cacheable")
 	}
 }
@@ -182,22 +185,53 @@ func TestCalculateCacheTTL_Paths(t *testing.T) {
 	// Response cacheable with s-maxage from response
 	res := &http.Response{StatusCode: 200, Header: http.Header{"Cache-Control": {"public, s-maxage=5"}, "Content-Type": {"application/json"}}}
 	req := &http.Request{Header: http.Header{}}
-	ttl, fromResp := calculateCacheTTL(res, req, 0)
+	ttl, fromResp := calculateCacheTTL(res, req, 0, false)
 	if ttl != 5*time.Second || !fromResp {
 		t.Fatalf("unexpected ttl/fromResp: %v %v", ttl, fromResp)
 	}
 	// Non-cacheable response despite TTL
 	res = &http.Response{StatusCode: 200, Header: http.Header{"Cache-Control": {"private, s-maxage=5"}, "Content-Type": {"application/json"}}}
-	ttl, fromResp = calculateCacheTTL(res, req, 0)
+	ttl, fromResp = calculateCacheTTL(res, req, 0, false)
 	if ttl != 0 || fromResp {
 		t.Fatalf("private should not be cacheable")
+	}
+	// Streaming responses require explicit enablement even with response TTL
+	res = &http.Response{StatusCode: 200, Header: http.Header{"Cache-Control": {"public, max-age=5"}, "Content-Type": {"text/event-stream"}}}
+	ttl, fromResp = calculateCacheTTL(res, req, 0, false)
+	if ttl != 0 || fromResp {
+		t.Fatalf("streaming response should not be cacheable by default")
+	}
+	ttl, fromResp = calculateCacheTTL(res, req, 0, true)
+	if ttl != 5*time.Second || !fromResp {
+		t.Fatalf("streaming response should use response ttl when enabled; got %v %v", ttl, fromResp)
 	}
 	// Fallback to client-forced TTL
 	req = &http.Request{Header: http.Header{"Cache-Control": {"public, max-age=2"}}}
 	res = &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}}
-	ttl, fromResp = calculateCacheTTL(res, req, 0)
+	ttl, fromResp = calculateCacheTTL(res, req, 0, false)
 	if ttl != 2*time.Second || fromResp {
 		t.Fatalf("expected forced ttl 2s from request; got %v %v", ttl, fromResp)
+	}
+	// Forced TTL must not override no-store/private responses
+	res = &http.Response{StatusCode: 200, Header: http.Header{"Cache-Control": {"private"}, "Content-Type": {"application/json"}}}
+	ttl, fromResp = calculateCacheTTL(res, req, 0, false)
+	if ttl != 0 || fromResp {
+		t.Fatalf("private response should reject forced ttl; got %v %v", ttl, fromResp)
+	}
+	res = &http.Response{StatusCode: 200, Header: http.Header{"Cache-Control": {"no-store"}, "Content-Type": {"application/json"}}}
+	ttl, fromResp = calculateCacheTTL(res, req, 0, false)
+	if ttl != 0 || fromResp {
+		t.Fatalf("no-store response should reject forced ttl; got %v %v", ttl, fromResp)
+	}
+	// Forced TTL still respects the streaming gate
+	res = &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"text/event-stream"}}}
+	ttl, fromResp = calculateCacheTTL(res, req, 0, false)
+	if ttl != 0 || fromResp {
+		t.Fatalf("streaming response should reject forced ttl by default; got %v %v", ttl, fromResp)
+	}
+	ttl, fromResp = calculateCacheTTL(res, req, 0, true)
+	if ttl != 2*time.Second || fromResp {
+		t.Fatalf("streaming response should allow forced ttl when enabled; got %v %v", ttl, fromResp)
 	}
 }
 

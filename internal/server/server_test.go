@@ -1605,12 +1605,14 @@ func TestInitializeAPIRoutes_RedisCacheURLConstruction(t *testing.T) {
 	origDB := os.Getenv("REDIS_DB")
 	origBackend := os.Getenv("HTTP_CACHE_BACKEND")
 	origEnabled := os.Getenv("HTTP_CACHE_ENABLED")
+	origStreamResponses := os.Getenv("HTTP_CACHE_STREAM_RESPONSES")
 	defer func() {
 		_ = os.Setenv("REDIS_CACHE_URL", origCacheURL)
 		_ = os.Setenv("REDIS_ADDR", origAddr)
 		_ = os.Setenv("REDIS_DB", origDB)
 		_ = os.Setenv("HTTP_CACHE_BACKEND", origBackend)
 		_ = os.Setenv("HTTP_CACHE_ENABLED", origEnabled)
+		_ = os.Setenv("HTTP_CACHE_STREAM_RESPONSES", origStreamResponses)
 	}()
 
 	tests := []struct {
@@ -1671,6 +1673,7 @@ func TestInitializeAPIRoutes_RedisCacheURLConstruction(t *testing.T) {
 			_ = os.Unsetenv("REDIS_DB")
 			_ = os.Unsetenv("HTTP_CACHE_BACKEND")
 			_ = os.Unsetenv("HTTP_CACHE_ENABLED")
+			_ = os.Unsetenv("HTTP_CACHE_STREAM_RESPONSES")
 
 			if tc.cacheURL != "" {
 				_ = os.Setenv("REDIS_CACHE_URL", tc.cacheURL)
@@ -1699,6 +1702,50 @@ func TestInitializeAPIRoutes_RedisCacheURLConstruction(t *testing.T) {
 			// initializeAPIRoutes should not error regardless of config
 			err = srv.initializeAPIRoutes()
 			require.NoError(t, err)
+		})
+	}
+}
+
+func TestInitializeAPIRoutes_StreamCacheEnvOverride(t *testing.T) {
+	orig := os.Getenv("HTTP_CACHE_STREAM_RESPONSES")
+	defer func() {
+		if orig == "" {
+			_ = os.Unsetenv("HTTP_CACHE_STREAM_RESPONSES")
+			return
+		}
+		_ = os.Setenv("HTTP_CACHE_STREAM_RESPONSES", orig)
+	}()
+
+	tests := []struct {
+		name     string
+		value    string
+		expected bool
+	}{
+		{name: "disabled by default", value: "", expected: false},
+		{name: "enabled by env", value: "true", expected: true},
+		{name: "yes also enables", value: "yes", expected: true},
+		{name: "false disables", value: "false", expected: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.value == "" {
+				_ = os.Unsetenv("HTTP_CACHE_STREAM_RESPONSES")
+			} else {
+				_ = os.Setenv("HTTP_CACHE_STREAM_RESPONSES", tc.value)
+			}
+
+			cfg := &config.Config{
+				ListenAddr:      ":0",
+				RequestTimeout:  time.Second,
+				EventBusBackend: "in-memory",
+			}
+			srv, err := New(cfg, &mockTokenStore{}, &mockProjectStore{})
+			require.NoError(t, err)
+			err = srv.initializeAPIRoutes()
+			require.NoError(t, err)
+			require.NotNil(t, srv.proxy)
+			assert.Equal(t, tc.expected, srv.proxy.HTTPCacheStreamResponsesEnabled())
 		})
 	}
 }

@@ -316,6 +316,9 @@ func (s *Server) initializeAPIRoutes() error {
 		// Default: enabled
 		proxyConfig.HTTPCacheEnabled = true
 	}
+	if v := os.Getenv("HTTP_CACHE_STREAM_RESPONSES"); v != "" {
+		proxyConfig.HTTPCacheStreamResponses = strings.EqualFold(v, "true") || strings.EqualFold(v, "1") || strings.EqualFold(v, "yes")
+	}
 	backend := strings.ToLower(os.Getenv("HTTP_CACHE_BACKEND"))
 	if backend == "redis" {
 		// Use REDIS_CACHE_URL if explicitly set, otherwise construct from REDIS_ADDR

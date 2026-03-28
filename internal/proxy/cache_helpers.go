@@ -133,7 +133,7 @@ func normalizeHeaderName(name string) string {
 	return textproto.CanonicalMIMEHeaderKey(name)
 }
 
-func isResponseCacheable(res *http.Response) bool {
+func isResponseCacheable(res *http.Response, allowStreaming bool) bool {
 	if res == nil {
 		return false
 	}
@@ -156,8 +156,8 @@ func isResponseCacheable(res *http.Response) bool {
 			}
 		}
 	}
-	// Don't cache SSE
-	if strings.Contains(res.Header.Get("Content-Type"), "text/event-stream") {
+	// Streaming responses are only cacheable when explicitly enabled.
+	if strings.Contains(res.Header.Get("Content-Type"), "text/event-stream") && !allowStreaming {
 		return false
 	}
 	if res.Header.Get("Vary") == "*" {
