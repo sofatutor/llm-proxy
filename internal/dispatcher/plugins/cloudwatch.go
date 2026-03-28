@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -14,6 +16,8 @@ import (
 	cloudwatchtypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/sofatutor/llm-proxy/internal/dispatcher"
 )
+
+var errCloudWatchRetriesExhausted = errors.New("cloudwatch put log events retries exhausted")
 
 type cloudWatchLogsClient interface {
 	CreateLogStream(context.Context, *cloudwatchlogs.CreateLogStreamInput, ...func(*cloudwatchlogs.Options)) (*cloudwatchlogs.CreateLogStreamOutput, error)
@@ -26,6 +30,9 @@ type CloudWatchPlugin struct {
 	logGroup  string
 	logStream string
 	region    string
+
+	mu            sync.Mutex
+	sequenceToken *string
 }
 
 // NewCloudWatchPlugin creates a CloudWatch plugin.
@@ -77,8 +84,13 @@ func (p *CloudWatchPlugin) SendEvents(ctx context.Context, events []dispatcher.E
 		return fmt.Errorf("cloudwatch plugin not initialized")
 	}
 
-	logEvents := make([]cloudwatchtypes.InputLogEvent, 0, len(events))
-	for _, event := range events {
+	sortedEvents := append([]dispatcher.EventPayload(nil), events...)
+	sort.SliceStable(sortedEvents, func(i, j int) bool {
+		return sortedEvents[i].Timestamp.Before(sortedEvents[j].Timestamp)
+	})
+
+	logEvents := make([]cloudwatchtypes.InputLogEvent, 0, len(sortedEvents))
+	for _, event := range sortedEvents {
 		message, err := cloudWatchLogMessage(event)
 		if err != nil {
 			return err
@@ -89,39 +101,99 @@ func (p *CloudWatchPlugin) SendEvents(ctx context.Context, events []dispatcher.E
 		})
 	}
 
+	for attempt := 0; attempt < 3; attempt++ {
+		output, err := p.client.PutLogEvents(ctx, p.newPutLogEventsInput(logEvents))
+		if err == nil {
+			p.setSequenceToken(output.NextSequenceToken)
+			return nil
+		}
+
+		var notFound *cloudwatchtypes.ResourceNotFoundException
+		if errorAs(err, &notFound) {
+			if createErr := p.ensureLogStream(ctx); createErr != nil {
+				return createErr
+			}
+			p.setSequenceToken(nil)
+			continue
+		}
+
+		var invalidSequence *cloudwatchtypes.InvalidSequenceTokenException
+		if errorAs(err, &invalidSequence) {
+			p.setSequenceToken(invalidSequence.ExpectedSequenceToken)
+			continue
+		}
+
+		var alreadyAccepted *cloudwatchtypes.DataAlreadyAcceptedException
+		if errorAs(err, &alreadyAccepted) {
+			p.setSequenceToken(alreadyAccepted.ExpectedSequenceToken)
+			return nil
+		}
+
+		return err
+	}
+
+	return fmt.Errorf("put cloudwatch log events: %w", errCloudWatchRetriesExhausted)
+}
+
+// Close cleans up plugin resources.
+func (p *CloudWatchPlugin) Close() error {
+	return nil
+}
+
+func (p *CloudWatchPlugin) ensureLogStream(ctx context.Context) error {
+	_, createErr := p.client.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
+		LogGroupName:  &p.logGroup,
+		LogStreamName: &p.logStream,
+	})
+	if createErr == nil {
+		return nil
+	}
+
+	var alreadyExists *cloudwatchtypes.ResourceAlreadyExistsException
+	if errorAs(createErr, &alreadyExists) {
+		return nil
+	}
+
+	return createErr
+}
+
+func (p *CloudWatchPlugin) newPutLogEventsInput(logEvents []cloudwatchtypes.InputLogEvent) *cloudwatchlogs.PutLogEventsInput {
 	input := &cloudwatchlogs.PutLogEventsInput{
 		LogEvents:     logEvents,
 		LogGroupName:  &p.logGroup,
 		LogStreamName: &p.logStream,
 	}
 
-	_, err := p.client.PutLogEvents(ctx, input)
-	if err == nil {
+	if sequenceToken := p.getSequenceToken(); sequenceToken != nil {
+		input.SequenceToken = sequenceToken
+	}
+
+	return input
+}
+
+func (p *CloudWatchPlugin) getSequenceToken() *string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.sequenceToken == nil {
 		return nil
 	}
 
-	var notFound *cloudwatchtypes.ResourceNotFoundException
-	if !errorAs(err, &notFound) {
-		return err
-	}
-
-	if _, createErr := p.client.CreateLogStream(ctx, &cloudwatchlogs.CreateLogStreamInput{
-		LogGroupName:  &p.logGroup,
-		LogStreamName: &p.logStream,
-	}); createErr != nil {
-		var alreadyExists *cloudwatchtypes.ResourceAlreadyExistsException
-		if !errorAs(createErr, &alreadyExists) {
-			return createErr
-		}
-	}
-
-	_, err = p.client.PutLogEvents(ctx, input)
-	return err
+	value := *p.sequenceToken
+	return &value
 }
 
-// Close cleans up plugin resources.
-func (p *CloudWatchPlugin) Close() error {
-	return nil
+func (p *CloudWatchPlugin) setSequenceToken(sequenceToken *string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if sequenceToken == nil || *sequenceToken == "" {
+		p.sequenceToken = nil
+		return
+	}
+
+	value := *sequenceToken
+	p.sequenceToken = &value
 }
 
 func cloudWatchLogMessage(event dispatcher.EventPayload) (string, error) {

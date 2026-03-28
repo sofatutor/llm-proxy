@@ -144,7 +144,7 @@ func (cv *CachedValidator) ValidateTokenData(ctx context.Context, tokenID string
 			return TokenData{}, err
 		}
 
-		cv.cacheToken(ctx, tokenID)
+		cv.cacheTokenData(tokenID, tokenData)
 		return tokenData, nil
 	}
 
@@ -238,7 +238,7 @@ func (cv *CachedValidator) ValidateTokenDataWithTracking(ctx context.Context, to
 			return TokenData{}, err
 		}
 
-		cv.cacheToken(ctx, tokenID)
+		cv.cacheTokenData(tokenID, tokenData)
 		return tokenData, nil
 	}
 
@@ -252,16 +252,6 @@ func (cv *CachedValidator) ValidateTokenDataWithTracking(ctx context.Context, to
 	cv.cacheToken(ctx, tokenID)
 
 	return TokenData{Token: tokenID, ProjectID: projectID}, nil
-}
-
-// checkCache checks if a token is in the cache and still valid
-func (cv *CachedValidator) checkCache(tokenID string) (string, bool) {
-	tokenData, found := cv.checkCacheData(tokenID)
-	if !found {
-		return "", false
-	}
-
-	return tokenData.ProjectID, true
 }
 
 func (cv *CachedValidator) checkCacheData(tokenID string) (TokenData, bool) {
@@ -344,6 +334,11 @@ func (cv *CachedValidator) cacheToken(ctx context.Context, tokenID string) {
 	if err != nil {
 		return
 	}
+
+	cv.cacheTokenData(tokenID, tokenData)
+}
+
+func (cv *CachedValidator) cacheTokenData(tokenID string, tokenData TokenData) {
 	if !isCacheableTokenValid(tokenData) {
 		return
 	}
@@ -357,7 +352,7 @@ func (cv *CachedValidator) cacheToken(ctx context.Context, tokenID string) {
 	cv.insertCounter++
 
 	cv.cache[tokenID] = CacheEntry{
-		Data:       tokenData,
+		Data:       cloneTokenData(tokenData),
 		ValidUntil: validUntil,
 	}
 	// Remove old heap entry if present

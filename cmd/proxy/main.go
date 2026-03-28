@@ -75,6 +75,16 @@ func proxyLatencyFromProxyTimingHeaders(headers http.Header) (time.Duration, boo
 	return finalAt.Sub(receivedAt), true
 }
 
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+
+	return ""
+}
+
 func newBenchmarkHTTPClient(timeout time.Duration) *http.Client {
 	// NOTE: We intentionally reuse a single client+transport for all requests so we
 	// get connection pooling/keep-alives. Creating a new client per request

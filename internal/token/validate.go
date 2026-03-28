@@ -51,9 +51,9 @@ type TokenStore interface {
 
 // TokenData represents the data associated with a token
 type TokenData struct {
-	ID            string     // The token ID (UUID) - used for management operations
-	Token         string     // The token string (sk-...) - used for authentication
-	ProjectID     string     // The associated project ID
+	ID            string // The token ID (UUID) - used for management operations
+	Token         string // The token string (sk-...) - used for authentication
+	ProjectID     string // The associated project ID
 	Metadata      map[string]string
 	ExpiresAt     *time.Time // When the token expires (nil for no expiration)
 	IsActive      bool       // Whether the token is active

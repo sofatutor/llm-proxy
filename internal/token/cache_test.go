@@ -332,10 +332,56 @@ func TestCachedValidator_ValidateTokenWithTracking_LimitedToken_UsesCacheAndAvoi
 	if store.incCalls != 2 {
 		t.Fatalf("IncrementTokenUsage calls = %d, want 2", store.incCalls)
 	}
-	// First call: 2x reads (1x via validateTokenData + 1x via cacheToken population) and 1x write.
+	// First call: 1x read (validateTokenData) and 1x write.
 	// Second call (cache hit): 0x reads and 1x write (only IncrementTokenUsage).
-	if store.getByTokenCalls != 2 {
-		t.Fatalf("GetTokenByToken calls = %d, want 2", store.getByTokenCalls)
+	if store.getByTokenCalls != 1 {
+		t.Fatalf("GetTokenByToken calls = %d, want 1", store.getByTokenCalls)
+	}
+}
+
+func TestCachedValidator_ValidateTokenData_CachesReturnedTokenData(t *testing.T) {
+	ctx := context.Background()
+	store := newCountingStore()
+	validator := &StandardValidator{store: store}
+	cv := NewCachedValidator(validator, CacheOptions{TTL: time.Minute, MaxSize: 10, EnableCleanup: false})
+
+	now := time.Now()
+	future := now.Add(1 * time.Hour)
+	tok, _ := GenerateToken()
+
+	store.tokens[tok] = TokenData{
+		Token:     tok,
+		ProjectID: "p1",
+		Metadata:  map[string]string{"feature": "sofabuddy"},
+		ExpiresAt: &future,
+		IsActive:  true,
+		CreatedAt: now,
+	}
+
+	first, err := cv.ValidateTokenData(ctx, tok)
+	if err != nil {
+		t.Fatalf("ValidateTokenData() first error = %v", err)
+	}
+	second, err := cv.ValidateTokenData(ctx, tok)
+	if err != nil {
+		t.Fatalf("ValidateTokenData() second error = %v", err)
+	}
+
+	if first.ProjectID != "p1" || second.ProjectID != "p1" {
+		t.Fatalf("unexpected project IDs: first=%q second=%q", first.ProjectID, second.ProjectID)
+	}
+	if second.Metadata["feature"] != "sofabuddy" {
+		t.Fatalf("expected cached metadata to be preserved, got %#v", second.Metadata)
+	}
+	if store.getByTokenCalls != 1 {
+		t.Fatalf("GetTokenByToken calls = %d, want 1", store.getByTokenCalls)
+	}
+	if store.incCalls != 0 {
+		t.Fatalf("IncrementTokenUsage calls = %d, want 0", store.incCalls)
+	}
+	first.Metadata["feature"] = "changed"
+	if second.Metadata["feature"] != "sofabuddy" {
+		t.Fatalf("expected cached token metadata clone to be isolated, got %#v", second.Metadata)
 	}
 }
 
