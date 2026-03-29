@@ -97,8 +97,8 @@ func TestDefaultEventTransformer_Transform(t *testing.T) {
 				t.Error("Expected non-empty RunID")
 			}
 
-			if result.Event != "start" {
-				t.Errorf("Expected Event 'start', got %s", result.Event)
+			if result.Event != "finish" {
+				t.Errorf("Expected Event 'finish', got %s", result.Event)
 			}
 
 			// Check metadata
@@ -153,5 +153,24 @@ func TestDefaultEventTransformer_Transform(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDefaultEventTransformer_Transform_StartEventWithoutResponseState(t *testing.T) {
+	transformer := &DefaultEventTransformer{}
+	result, err := transformer.Transform(eventbus.Event{
+		RequestID:   "req-start",
+		Method:      "POST",
+		Path:        "/v1/chat/completions",
+		RequestBody: []byte(`{"model":"gpt-4.1-mini","messages":[]}`),
+	})
+	if err != nil {
+		t.Fatalf("Transform failed: %v", err)
+	}
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+	if result.Event != "start" {
+		t.Fatalf("Expected Event 'start', got %s", result.Event)
 	}
 }

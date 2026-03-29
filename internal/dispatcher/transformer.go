@@ -177,7 +177,7 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 	// Basic transformation
 	payload := &EventPayload{
 		Type:      "llm",
-		Event:     "start", // For now, all events are considered "start" events
+		Event:     eventNameForEvent(evt),
 		RunID:     runID,
 		Timestamp: time.Now(),
 		LogID:     evt.LogID,
@@ -419,6 +419,14 @@ func metadataStringValue(metadata map[string]any, key string) string {
 
 	value, _ := metadata[key].(string)
 	return value
+}
+
+func eventNameForEvent(evt eventbus.Event) string {
+	if evt.Status != 0 || evt.Duration > 0 || len(evt.ResponseBody) > 0 || len(evt.ResponseHeaders) > 0 {
+		return "finish"
+	}
+
+	return "start"
 }
 
 func fallbackTokensUsage(requestBody, responseBody []byte, model string) *TokensUsage {
