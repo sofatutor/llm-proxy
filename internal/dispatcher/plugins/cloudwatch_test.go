@@ -113,8 +113,17 @@ func TestCloudWatchLogMessage_SanitizesPayload(t *testing.T) {
 	if usage["output_tokens"].(float64) != 2 {
 		t.Fatalf("expected output_tokens 2, got %v", usage["output_tokens"])
 	}
-	if decoded["total_tokens"].(float64) != 5 {
-		t.Fatalf("expected total_tokens 5, got %v", decoded["total_tokens"])
+	if usage["total_tokens"].(float64) != 5 {
+		t.Fatalf("expected usage.total_tokens 5, got %v", usage["total_tokens"])
+	}
+	if _, exists := decoded["input_tokens"]; exists {
+		t.Fatalf("expected top-level input_tokens to be omitted")
+	}
+	if _, exists := decoded["output_tokens"]; exists {
+		t.Fatalf("expected top-level output_tokens to be omitted")
+	}
+	if _, exists := decoded["total_tokens"]; exists {
+		t.Fatalf("expected top-level total_tokens to be omitted")
 	}
 }
 

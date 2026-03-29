@@ -236,9 +236,6 @@ func cloudWatchLogMessage(event dispatcher.EventPayload) (string, error) {
 			usage["output_tokens_details"] = event.TokensUsage.OutputDetails
 		}
 		message["usage"] = usage
-		message["input_tokens"] = event.TokensUsage.Input
-		message["output_tokens"] = event.TokensUsage.Output
-		message["total_tokens"] = event.TokensUsage.Total
 	}
 	if tokenMetadata, ok := event.Metadata["token_metadata"].(map[string]string); ok && len(tokenMetadata) > 0 {
 		message["token_metadata"] = tokenMetadata
