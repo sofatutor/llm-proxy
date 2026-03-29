@@ -211,13 +211,34 @@ func cloudWatchLogMessage(event dispatcher.EventPayload) (string, error) {
 		"duration_ms": metadataInt64(event.Metadata, "duration_ms"),
 	}
 
-	if event.UserID != nil && *event.UserID != "" {
-		message["user_id"] = *event.UserID
+	if event.UserID != nil || len(event.UserProps) > 0 {
+		user := make(map[string]any, len(event.UserProps)+1)
+		for key, value := range event.UserProps {
+			user[key] = value
+		}
+		if event.UserID != nil && *event.UserID != "" {
+			user["id"] = *event.UserID
+		}
+		if len(user) > 0 {
+			message["user"] = user
+		}
 	}
 	if event.TokensUsage != nil {
-		message["prompt_tokens"] = event.TokensUsage.Prompt
-		message["completion_tokens"] = event.TokensUsage.Completion
-		message["total_tokens"] = event.TokensUsage.Prompt + event.TokensUsage.Completion
+		usage := map[string]any{
+			"input_tokens":  event.TokensUsage.Input,
+			"output_tokens": event.TokensUsage.Output,
+			"total_tokens":  event.TokensUsage.Total,
+		}
+		if len(event.TokensUsage.InputDetails) > 0 {
+			usage["input_tokens_details"] = event.TokensUsage.InputDetails
+		}
+		if len(event.TokensUsage.OutputDetails) > 0 {
+			usage["output_tokens_details"] = event.TokensUsage.OutputDetails
+		}
+		message["usage"] = usage
+		message["input_tokens"] = event.TokensUsage.Input
+		message["output_tokens"] = event.TokensUsage.Output
+		message["total_tokens"] = event.TokensUsage.Total
 	}
 	if tokenMetadata, ok := event.Metadata["token_metadata"].(map[string]string); ok && len(tokenMetadata) > 0 {
 		message["token_metadata"] = tokenMetadata

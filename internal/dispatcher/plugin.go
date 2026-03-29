@@ -33,8 +33,11 @@ type EventPayload struct {
 
 // TokensUsage represents token usage statistics
 type TokensUsage struct {
-	Completion int `json:"completion"`
-	Prompt     int `json:"prompt"`
+	Input         int            `json:"input_tokens"`
+	InputDetails  map[string]any `json:"input_tokens_details,omitempty"`
+	Output        int            `json:"output_tokens"`
+	OutputDetails map[string]any `json:"output_tokens_details,omitempty"`
+	Total         int            `json:"total_tokens"`
 }
 
 // BackendPlugin defines the interface for dispatcher backends

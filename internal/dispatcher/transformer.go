@@ -318,13 +318,23 @@ func headerToAnyMap(header map[string][]string) map[string]any {
 }
 
 func tokensUsageFromUsageMap(usage map[string]any) *TokensUsage {
-	prompt, okPrompt := firstUsageValue(usage, "prompt_tokens", "input_tokens")
-	completion, okCompletion := firstUsageValue(usage, "completion_tokens", "output_tokens")
-	if !okPrompt && !okCompletion {
+	input, okInput := firstUsageValue(usage, "input_tokens", "prompt_tokens")
+	output, okOutput := firstUsageValue(usage, "output_tokens", "completion_tokens")
+	total, okTotal := firstUsageValue(usage, "total_tokens")
+	if !okInput && !okOutput && !okTotal {
 		return nil
 	}
+	if !okTotal {
+		total = input + output
+	}
 
-	return &TokensUsage{Prompt: prompt, Completion: completion}
+	return &TokensUsage{
+		Input:         input,
+		InputDetails:  firstUsageDetailsMap(usage, "input_tokens_details", "prompt_tokens_details"),
+		Output:        output,
+		OutputDetails: firstUsageDetailsMap(usage, "output_tokens_details", "completion_tokens_details"),
+		Total:         total,
+	}
 }
 
 func firstTokensUsage(values ...any) *TokensUsage {
@@ -343,16 +353,58 @@ func tokensUsageFromValue(value any) *TokensUsage {
 		return tokensUsageFromUsageMap(typed)
 	case map[string]int:
 		return &TokensUsage{
-			Prompt:     firstIntMapValue(typed, "prompt_tokens", "input_tokens"),
-			Completion: firstIntMapValue(typed, "completion_tokens", "output_tokens"),
+			Input:  firstIntMapValue(typed, "input_tokens", "prompt_tokens"),
+			Output: firstIntMapValue(typed, "output_tokens", "completion_tokens"),
+			Total:  firstIntMapValue(typed, "total_tokens"),
 		}
 	case map[string]float64:
 		return &TokensUsage{
-			Prompt:     firstFloatMapValue(typed, "prompt_tokens", "input_tokens"),
-			Completion: firstFloatMapValue(typed, "completion_tokens", "output_tokens"),
+			Input:  firstFloatMapValue(typed, "input_tokens", "prompt_tokens"),
+			Output: firstFloatMapValue(typed, "output_tokens", "completion_tokens"),
+			Total:  firstFloatMapValue(typed, "total_tokens"),
 		}
 	default:
 		return nil
+	}
+}
+
+func firstUsageDetailsMap(usage map[string]any, keys ...string) map[string]any {
+	for _, key := range keys {
+		value, ok := usage[key]
+		if !ok {
+			continue
+		}
+		if typed, ok := value.(map[string]any); ok && len(typed) > 0 {
+			return cloneStringAnyMap(typed)
+		}
+	}
+
+	return nil
+}
+
+func cloneStringAnyMap(source map[string]any) map[string]any {
+	if len(source) == 0 {
+		return nil
+	}
+	cloned := make(map[string]any, len(source))
+	for key, value := range source {
+		cloned[key] = cloneAnyValue(value)
+	}
+	return cloned
+}
+
+func cloneAnyValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		return cloneStringAnyMap(typed)
+	case []any:
+		cloned := make([]any, len(typed))
+		for index, item := range typed {
+			cloned[index] = cloneAnyValue(item)
+		}
+		return cloned
+	default:
+		return value
 	}
 }
 
@@ -488,7 +540,11 @@ func fallbackTokensUsage(requestBody, responseBody []byte, model string) *Tokens
 		return nil
 	}
 
-	return &TokensUsage{Prompt: promptTokens, Completion: completionTokens}
+	return &TokensUsage{
+		Input:  promptTokens,
+		Output: completionTokens,
+		Total:  promptTokens + completionTokens,
+	}
 }
 
 func promptTokensFromRequestBody(requestBody []byte, model string) int {

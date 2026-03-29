@@ -56,9 +56,13 @@ func TestCloudWatchLogMessage_SanitizesPayload(t *testing.T) {
 		Event:     "start",
 		Timestamp: time.Unix(1700000000, 0),
 		UserID:    stringPtrCW("42"),
+		UserProps: map[string]any{"plan": "pro"},
 		TokensUsage: &dispatcher.TokensUsage{
-			Prompt:     3,
-			Completion: 2,
+			Input:         3,
+			InputDetails:  map[string]any{"cached_tokens": 1},
+			Output:        2,
+			OutputDetails: map[string]any{"reasoning_tokens": 0},
+			Total:         5,
 		},
 		Input:  json.RawMessage(`{"sensitive":"input"}`),
 		Output: json.RawMessage(`{"sensitive":"output"}`),
@@ -86,11 +90,28 @@ func TestCloudWatchLogMessage_SanitizesPayload(t *testing.T) {
 	if _, exists := decoded["output"]; exists {
 		t.Fatalf("expected sanitized payload to omit output")
 	}
-	if decoded["user_id"] != "42" {
-		t.Fatalf("expected user_id 42, got %v", decoded["user_id"])
+	user, ok := decoded["user"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected nested user object, got %T", decoded["user"])
+	}
+	if user["id"] != "42" {
+		t.Fatalf("expected user.id 42, got %v", user["id"])
+	}
+	if user["plan"] != "pro" {
+		t.Fatalf("expected user.plan pro, got %v", user["plan"])
 	}
 	if decoded["duration_ms"].(float64) != 123 {
 		t.Fatalf("expected duration_ms 123, got %v", decoded["duration_ms"])
+	}
+	usage, ok := decoded["usage"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected canonical usage object, got %T", decoded["usage"])
+	}
+	if usage["input_tokens"].(float64) != 3 {
+		t.Fatalf("expected input_tokens 3, got %v", usage["input_tokens"])
+	}
+	if usage["output_tokens"].(float64) != 2 {
+		t.Fatalf("expected output_tokens 2, got %v", usage["output_tokens"])
 	}
 	if decoded["total_tokens"].(float64) != 5 {
 		t.Fatalf("expected total_tokens 5, got %v", decoded["total_tokens"])

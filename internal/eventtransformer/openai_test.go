@@ -43,6 +43,47 @@ func TestMergeOpenAIStreamingChunks(t *testing.T) {
 	}
 }
 
+func TestMergeOpenAIStreamingChunks_ResponsesCompletedEvent(t *testing.T) {
+	input := "event: response.created\n" +
+		"data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"object\":\"response\",\"created_at\":123,\"model\":\"gpt-4.1-mini\",\"status\":\"in_progress\",\"output\":[]}}\n\n" +
+		"event: response.output_text.delta\n" +
+		"data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hallo Welt\"}\n\n" +
+		"event: response.completed\n" +
+		"data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"object\":\"response\",\"created_at\":123,\"status\":\"completed\",\"model\":\"gpt-4.1-mini\",\"usage\":{\"input_tokens\":40,\"output_tokens\":12,\"total_tokens\":52},\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hallo Welt\"}]}]}}\n\n" +
+		"data: [DONE]\n"
+
+	merged, err := MergeOpenAIStreamingChunks(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if merged["status"] != "completed" {
+		t.Fatalf("expected completed status, got %v", merged["status"])
+	}
+	if merged["model"] != "gpt-4.1-mini" {
+		t.Fatalf("expected model gpt-4.1-mini, got %v", merged["model"])
+	}
+	usage, ok := merged["usage"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected usage map, got %T", merged["usage"])
+	}
+	if usage["input_tokens"] != 40 {
+		t.Fatalf("expected input_tokens 40, got %v", usage["input_tokens"])
+	}
+	if usage["output_tokens"] != 12 {
+		t.Fatalf("expected output_tokens 12, got %v", usage["output_tokens"])
+	}
+	output, ok := merged["output"].([]any)
+	if !ok || len(output) == 0 {
+		t.Fatalf("expected response output, got %T", merged["output"])
+	}
+	message := output[0].(map[string]any)
+	content := message["content"].([]any)
+	segment := content[0].(map[string]any)
+	if segment["text"] != "Hallo Welt" {
+		t.Fatalf("expected merged response text, got %v", segment["text"])
+	}
+}
+
 func TestMergeThreadStreamingChunks(t *testing.T) {
 	input := "event: thread.run.created\ndata: {\"id\":\"run1\",\"assistant_id\":\"asst1\",\"thread_id\":\"th1\",\"status\":\"queued\",\"created_at\":123}\nevent: thread.message.delta\ndata: {\"delta\":{\"content\":[{\"type\":\"text\",\"text\":{\"value\":\"Hello\"}}]}}\nevent: thread.message.completed\ndata: {\"content\":[{\"type\":\"text\",\"text\":{\"value\":\"Final\"}}]}\n"
 	merged, err := MergeThreadStreamingChunks(input)
@@ -330,21 +371,21 @@ func TestOpenAITransformer_TransformEvent_ErrorsAndEdgeCases(t *testing.T) {
 				}
 				switch usage := out["token_usage"].(type) {
 				case map[string]int:
-					if usage["prompt_tokens"] != 51 {
-						t.Fatalf("expected prompt_tokens 51, got %v", usage["prompt_tokens"])
+					if usage["input_tokens"] != 51 {
+						t.Fatalf("expected input_tokens 51, got %v", usage["input_tokens"])
 					}
-					if usage["completion_tokens"] != 19 {
-						t.Fatalf("expected completion_tokens 19, got %v", usage["completion_tokens"])
+					if usage["output_tokens"] != 19 {
+						t.Fatalf("expected output_tokens 19, got %v", usage["output_tokens"])
 					}
 					if usage["total_tokens"] != 70 {
 						t.Fatalf("expected total_tokens 70, got %v", usage["total_tokens"])
 					}
 				case map[string]any:
-					if usage["prompt_tokens"] != 51 {
-						t.Fatalf("expected prompt_tokens 51, got %v", usage["prompt_tokens"])
+					if usage["input_tokens"] != 51 {
+						t.Fatalf("expected input_tokens 51, got %v", usage["input_tokens"])
 					}
-					if usage["completion_tokens"] != 19 {
-						t.Fatalf("expected completion_tokens 19, got %v", usage["completion_tokens"])
+					if usage["output_tokens"] != 19 {
+						t.Fatalf("expected output_tokens 19, got %v", usage["output_tokens"])
 					}
 					if usage["total_tokens"] != 70 {
 						t.Fatalf("expected total_tokens 70, got %v", usage["total_tokens"])
@@ -366,15 +407,19 @@ func TestOpenAITransformer_TransformEvent_ErrorsAndEdgeCases(t *testing.T) {
 				if err != nil {
 					t.Errorf("unexpected error: %v", err)
 				}
-				usage, ok := out["token_usage"].(map[string]int)
+				usage, ok := out["token_usage"].(map[string]any)
 				if !ok {
-					t.Fatalf("expected token_usage map[string]int, got %T", out["token_usage"])
+					t.Fatalf("expected token_usage map[string]any, got %T", out["token_usage"])
 				}
-				if usage["prompt_tokens"] <= 0 {
-					t.Fatalf("expected prompt_tokens > 0, got %v", usage["prompt_tokens"])
+				inputTokens, ok := usage["input_tokens"].(int)
+				if !ok {
+					t.Fatalf("expected input_tokens int, got %T", usage["input_tokens"])
 				}
-				if usage["completion_tokens"] != 0 {
-					t.Fatalf("expected completion_tokens 0 for in_progress response, got %v", usage["completion_tokens"])
+				if inputTokens <= 0 {
+					t.Fatalf("expected input_tokens > 0, got %v", usage["input_tokens"])
+				}
+				if usage["output_tokens"] != 0 {
+					t.Fatalf("expected output_tokens 0 for in_progress response, got %v", usage["output_tokens"])
 				}
 			},
 		},
@@ -447,11 +492,35 @@ func TestMergeOpenAIStreamingChunks_EdgeCases(t *testing.T) {
 				if !ok {
 					t.Fatalf("expected usage map, got %T", merged["usage"])
 				}
-				if usage["prompt_tokens"] != 3.0 && usage["prompt_tokens"] != 3 {
-					t.Fatalf("expected prompt_tokens 3, got %v", usage["prompt_tokens"])
+				if usage["input_tokens"] != 3.0 && usage["input_tokens"] != 3 {
+					t.Fatalf("expected input_tokens 3, got %v", usage["input_tokens"])
 				}
-				if usage["completion_tokens"] != 4.0 && usage["completion_tokens"] != 4 {
-					t.Fatalf("expected completion_tokens 4, got %v", usage["completion_tokens"])
+				if usage["output_tokens"] != 4.0 && usage["output_tokens"] != 4 {
+					t.Fatalf("expected output_tokens 4, got %v", usage["output_tokens"])
+				}
+			},
+		},
+		{
+			name: "responses completed event is authoritative",
+			input: "event: response.created\n" +
+				"data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"status\":\"in_progress\",\"model\":\"gpt-4.1-mini\"}}\n\n" +
+				"event: response.output_text.delta\n" +
+				"data: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\n" +
+				"event: response.completed\n" +
+				"data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"status\":\"completed\",\"model\":\"gpt-4.1-mini\",\"usage\":{\"input_tokens\":3,\"output_tokens\":4,\"total_tokens\":7},\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"hi\"}]}]}}",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				if merged["status"] != "completed" {
+					t.Fatalf("expected completed status, got %v", merged["status"])
+				}
+				usage, ok := merged["usage"].(map[string]any)
+				if !ok {
+					t.Fatalf("expected usage map, got %T", merged["usage"])
+				}
+				if usage["output_tokens"] != 4 {
+					t.Fatalf("expected output_tokens 4, got %v", usage["output_tokens"])
 				}
 			},
 		},
@@ -544,8 +613,8 @@ func TestMergeThreadStreamingChunks_MoreBranches(t *testing.T) {
 			input: "event: thread.run.step.completed\ndata: {\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2,\"total_tokens\":3}}",
 			check: func(t *testing.T, merged map[string]any, err error) {
 				usage, ok := merged["usage"].(map[string]any)
-				if !ok || usage["prompt_tokens"] != 1 {
-					t.Errorf("expected usage to be set with prompt_tokens=1, got %v", usage["prompt_tokens"])
+				if !ok || usage["input_tokens"] != 1 {
+					t.Errorf("expected usage to be set with input_tokens=1, got %v", usage["input_tokens"])
 				}
 			},
 		},

@@ -123,7 +123,7 @@ func TestDefaultEventTransformer_Transform_ResponsesUsageAndTokenMetadata(t *tes
 	if payload.UserID == nil || *payload.UserID != "42" {
 		t.Fatalf("expected user id 42, got %v", payload.UserID)
 	}
-	if payload.TokensUsage == nil || payload.TokensUsage.Prompt != 11 || payload.TokensUsage.Completion != 7 {
+	if payload.TokensUsage == nil || payload.TokensUsage.Input != 11 || payload.TokensUsage.Output != 7 || payload.TokensUsage.Total != 18 {
 		t.Fatalf("unexpected token usage: %#v", payload.TokensUsage)
 	}
 	if payload.Metadata["project_id"] != "project-1" {
@@ -169,8 +169,55 @@ func TestDefaultEventTransformer_Transform_ResponsesTokenUsageFallbackFromOutput
 	if payload.TokensUsage == nil {
 		t.Fatalf("expected computed token usage")
 	}
-	if payload.TokensUsage.Completion <= 0 {
+	if payload.TokensUsage.Output <= 0 {
 		t.Fatalf("expected responses completion tokens > 0, got %#v", payload.TokensUsage)
+	}
+}
+
+func TestDefaultEventTransformer_Transform_ResponsesStreamUsesCompletedEvent(t *testing.T) {
+	tr := NewDefaultEventTransformer(false)
+	stream := "event: response.created\n" +
+		"data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"object\":\"response\",\"created_at\":123,\"status\":\"in_progress\",\"model\":\"gpt-4.1-mini\",\"output\":[]}}\n\n" +
+		"event: response.output_text.delta\n" +
+		"data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hallo Welt\"}\n\n" +
+		"event: response.completed\n" +
+		"data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"object\":\"response\",\"created_at\":123,\"status\":\"completed\",\"model\":\"gpt-4.1-mini\",\"usage\":{\"input_tokens\":40,\"output_tokens\":12,\"total_tokens\":52},\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"Hallo Welt\"}]}]}}\n\n" +
+		"data: [DONE]\n\n"
+	vt := eventbus.Event{
+		RequestID:    "req-responses-stream-1",
+		Method:       "POST",
+		Path:         "/v1/responses",
+		Status:       200,
+		Duration:     12 * time.Millisecond,
+		RequestBody:  []byte(`{"model":"gpt-4.1-mini","input":"hello"}`),
+		ResponseBody: []byte(stream),
+		ResponseHeaders: http.Header{
+			"Content-Type": {"text/event-stream"},
+		},
+	}
+
+	payload, err := tr.Transform(vt)
+	if err != nil {
+		t.Fatalf("Transform err: %v", err)
+	}
+	if payload == nil {
+		t.Fatalf("expected payload")
+	}
+	if payload.TokensUsage == nil {
+		t.Fatalf("expected token usage from response.completed")
+	}
+	if payload.TokensUsage.Input != 40 || payload.TokensUsage.Output != 12 || payload.TokensUsage.Total != 52 {
+		t.Fatalf("expected final stream usage 40/12, got %#v", payload.TokensUsage)
+	}
+	if payload.Metadata["model"] != "gpt-4.1-mini" {
+		t.Fatalf("expected model metadata, got %v", payload.Metadata["model"])
+	}
+	var output map[string]any
+	if err := json.Unmarshal(payload.Output, &output); err != nil {
+		t.Fatalf("failed to unmarshal payload output: %v", err)
+	}
+	if output["status"] != "completed" {
+		t.Fatalf("expected completed merged response status, got %v", output["status"])
 	}
 }
 
@@ -226,10 +273,10 @@ func TestDefaultEventTransformer_Transform_TokenUsageFallbackFromComputedUsage(t
 	if payload.TokensUsage == nil {
 		t.Fatalf("expected computed token usage")
 	}
-	if payload.TokensUsage.Prompt <= 0 {
+	if payload.TokensUsage.Input <= 0 {
 		t.Fatalf("expected prompt tokens > 0, got %#v", payload.TokensUsage)
 	}
-	if payload.TokensUsage.Completion <= 0 {
+	if payload.TokensUsage.Output <= 0 {
 		t.Fatalf("expected completion tokens > 0, got %#v", payload.TokensUsage)
 	}
 }
@@ -271,7 +318,7 @@ func TestDefaultEventTransformer_Transform_TokenUsageFallbackFromGzippedChatResp
 	if payload.TokensUsage == nil {
 		t.Fatalf("expected token usage")
 	}
-	if payload.TokensUsage.Completion <= 0 {
+	if payload.TokensUsage.Output <= 0 {
 		t.Fatalf("expected completion tokens > 0 for gzipped chat response, got %#v", payload.TokensUsage)
 	}
 	if payload.Metadata["model"] != "gpt-4.1-mini" {
@@ -307,7 +354,7 @@ func TestDefaultEventTransformer_Transform_TokenUsageFallbackFromChatStream(t *t
 	if payload.TokensUsage == nil {
 		t.Fatalf("expected computed token usage from stream")
 	}
-	if payload.TokensUsage.Completion <= 0 {
+	if payload.TokensUsage.Output <= 0 {
 		t.Fatalf("expected stream completion tokens > 0, got %#v", payload.TokensUsage)
 	}
 	if payload.Metadata["model"] != "gpt-4.1-mini" {
@@ -348,7 +395,7 @@ func TestDefaultEventTransformer_Transform_TokenUsageFallbackFromThreadStream(t 
 	if payload.TokensUsage == nil {
 		t.Fatalf("expected token usage from thread stream")
 	}
-	if payload.TokensUsage.Completion <= 0 {
+	if payload.TokensUsage.Output <= 0 {
 		t.Fatalf("expected thread stream completion tokens > 0, got %#v", payload.TokensUsage)
 	}
 }
@@ -378,7 +425,7 @@ func TestDefaultEventTransformer_Transform_ChatErrorStillKeepsModelAndPromptToke
 	if payload.Metadata["model"] != "gpt-4.1-mini" {
 		t.Fatalf("expected request model on error response, got %v", payload.Metadata["model"])
 	}
-	if payload.TokensUsage == nil || payload.TokensUsage.Prompt <= 0 || payload.TokensUsage.Completion != 0 {
+	if payload.TokensUsage == nil || payload.TokensUsage.Input <= 0 || payload.TokensUsage.Output != 0 {
 		t.Fatalf("expected prompt-only token usage on error response, got %#v", payload.TokensUsage)
 	}
 	if payload.Metadata["duration_ms"] != int64(1) {
@@ -411,7 +458,7 @@ func TestDefaultEventTransformer_Transform_ModerationsModelFallback(t *testing.T
 	if payload.Metadata["model"] != "omni-moderation-latest" {
 		t.Fatalf("expected moderation model from request body, got %v", payload.Metadata["model"])
 	}
-	if payload.TokensUsage == nil || payload.TokensUsage.Prompt <= 0 {
+	if payload.TokensUsage == nil || payload.TokensUsage.Input <= 0 {
 		t.Fatalf("expected moderation prompt tokens from input fallback, got %#v", payload.TokensUsage)
 	}
 }
