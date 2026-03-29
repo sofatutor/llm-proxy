@@ -354,6 +354,30 @@ func TestOpenAITransformer_TransformEvent_ErrorsAndEdgeCases(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "responses api fallback counts input prompt",
+			input: map[string]interface{}{
+				"Method":          "POST",
+				"ResponseHeaders": map[string]interface{}{"Content-Type": "application/json"},
+				"ResponseBody":    base64.StdEncoding.EncodeToString([]byte(`{"id":"resp_456","model":"gpt-4.1-mini","status":"in_progress","output":[]}`)),
+				"RequestBody":     base64.StdEncoding.EncodeToString([]byte(`{"model":"gpt-4.1-mini","input":"hello from responses"}`)),
+			},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				usage, ok := out["token_usage"].(map[string]int)
+				if !ok {
+					t.Fatalf("expected token_usage map[string]int, got %T", out["token_usage"])
+				}
+				if usage["prompt_tokens"] <= 0 {
+					t.Fatalf("expected prompt_tokens > 0, got %v", usage["prompt_tokens"])
+				}
+				if usage["completion_tokens"] != 0 {
+					t.Fatalf("expected completion_tokens 0 for in_progress response, got %v", usage["completion_tokens"])
+				}
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

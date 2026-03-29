@@ -411,6 +411,9 @@ func (t *OpenAITransformer) TransformEvent(evt map[string]any) (map[string]any, 
 							promptTokenSource = instr
 						}
 					}
+					if inputSource := promptInputSource(reqObj["input"]); inputSource != "" {
+						promptTokenSource += inputSource
+					}
 				}
 			}
 			if promptTokenSource != "" {
@@ -438,7 +441,9 @@ func (t *OpenAITransformer) TransformEvent(evt map[string]any) (map[string]any, 
 				tk, _ := CountOpenAITokensForModel(cnt, modelName)
 				ct = tk
 			}
-			evt["TokenUsage"] = map[string]int{"prompt_tokens": pt, "completion_tokens": ct, "total_tokens": pt + ct}
+			if pt > 0 || ct > 0 {
+				evt["TokenUsage"] = map[string]int{"prompt_tokens": pt, "completion_tokens": ct, "total_tokens": pt + ct}
+			}
 		}
 	}
 
@@ -544,6 +549,21 @@ func usageNumber(usage map[string]any, keys ...string) (int, bool) {
 	}
 
 	return 0, false
+}
+
+func promptInputSource(input any) string {
+	switch typed := input.(type) {
+	case string:
+		return typed
+	case nil:
+		return ""
+	default:
+		encodedInput, err := json.Marshal(typed)
+		if err != nil {
+			return ""
+		}
+		return string(encodedInput)
+	}
 }
 
 func extractAssistantReplyContent(resp string) (string, error) {
