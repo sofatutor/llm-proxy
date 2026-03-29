@@ -316,6 +316,44 @@ func TestOpenAITransformer_TransformEvent_ErrorsAndEdgeCases(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "responses api usage normalization",
+			input: map[string]interface{}{
+				"Method":          "POST",
+				"ResponseHeaders": map[string]interface{}{"Content-Type": "application/json"},
+				"ResponseBody":    base64.StdEncoding.EncodeToString([]byte(`{"id":"resp_123","model":"gpt-4.1-mini","usage":{"input_tokens":51,"output_tokens":19,"total_tokens":70},"output":[{"type":"message","content":[{"type":"output_text","text":"Hello from responses"}]}]}`)),
+				"RequestBody":     base64.StdEncoding.EncodeToString([]byte(`{"model":"gpt-4.1-mini","input":"hello"}`)),
+			},
+			check: func(t *testing.T, out map[string]interface{}, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				switch usage := out["token_usage"].(type) {
+				case map[string]int:
+					if usage["prompt_tokens"] != 51 {
+						t.Fatalf("expected prompt_tokens 51, got %v", usage["prompt_tokens"])
+					}
+					if usage["completion_tokens"] != 19 {
+						t.Fatalf("expected completion_tokens 19, got %v", usage["completion_tokens"])
+					}
+					if usage["total_tokens"] != 70 {
+						t.Fatalf("expected total_tokens 70, got %v", usage["total_tokens"])
+					}
+				case map[string]any:
+					if usage["prompt_tokens"] != 51 {
+						t.Fatalf("expected prompt_tokens 51, got %v", usage["prompt_tokens"])
+					}
+					if usage["completion_tokens"] != 19 {
+						t.Fatalf("expected completion_tokens 19, got %v", usage["completion_tokens"])
+					}
+					if usage["total_tokens"] != 70 {
+						t.Fatalf("expected total_tokens 70, got %v", usage["total_tokens"])
+					}
+				default:
+					t.Fatalf("expected token_usage map, got %T", out["token_usage"])
+				}
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -371,6 +409,25 @@ func TestMergeOpenAIStreamingChunks_EdgeCases(t *testing.T) {
 			check: func(t *testing.T, merged map[string]any, err error) {
 				if _, ok := merged["usage"]; ok {
 					t.Error("usage should not be present if all fields zero")
+				}
+			},
+		},
+		{
+			name:  "responses usage keys are normalized",
+			input: "data: {\"usage\":{\"input_tokens\":3,\"output_tokens\":4,\"total_tokens\":7},\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}",
+			check: func(t *testing.T, merged map[string]any, err error) {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+				usage, ok := merged["usage"].(map[string]any)
+				if !ok {
+					t.Fatalf("expected usage map, got %T", merged["usage"])
+				}
+				if usage["prompt_tokens"] != 3.0 && usage["prompt_tokens"] != 3 {
+					t.Fatalf("expected prompt_tokens 3, got %v", usage["prompt_tokens"])
+				}
+				if usage["completion_tokens"] != 4.0 && usage["completion_tokens"] != 4 {
+					t.Fatalf("expected completion_tokens 4, got %v", usage["completion_tokens"])
 				}
 			},
 		},

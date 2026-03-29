@@ -214,21 +214,23 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 		}
 	}
 
+	decodedResponseBody := decodeResponseBodyForProcessing(evt.ResponseBody, evt.ResponseHeaders)
+
 	// --- OpenAI-specific output transformation ---
 	isOpenAI := strings.HasPrefix(evt.Path, "/v1/completions") ||
 		strings.HasPrefix(evt.Path, "/v1/chat/completions") ||
 		strings.HasPrefix(evt.Path, "/v1/responses") ||
 		strings.HasPrefix(evt.Path, "/v1/threads/")
 
-	if isOpenAI && len(evt.ResponseBody) > 0 {
+	if isOpenAI && len(decodedResponseBody) > 0 {
 		// Only use OpenAI transformer if response is valid JSON
-		if js := json.Valid(evt.ResponseBody); js {
+		if js := json.Valid(decodedResponseBody); js {
 			openaiTransformer := &eventtransformer.OpenAITransformer{}
 			parsed, err := openaiTransformer.TransformEvent(map[string]any{
 				"Method":          evt.Method,
 				"Path":            evt.Path,
 				"RequestBody":     string(evt.RequestBody),
-				"ResponseBody":    string(evt.ResponseBody),
+				"ResponseBody":    string(decodedResponseBody),
 				"ResponseHeaders": headerToAnyMap(evt.ResponseHeaders),
 			})
 			if err == nil && parsed != nil {
@@ -254,7 +256,7 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 	}
 
 	if payload.TokensUsage == nil {
-		payload.TokensUsage = fallbackTokensUsage(evt.RequestBody, evt.ResponseBody, metadataStringValue(payload.Metadata, "model"))
+		payload.TokensUsage = fallbackTokensUsage(evt.RequestBody, decodedResponseBody, metadataStringValue(payload.Metadata, "model"))
 	}
 
 	// Add response headers to metadata only if Verbose is true
@@ -271,6 +273,26 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 	}
 
 	return payload, nil
+}
+
+func decodeResponseBodyForProcessing(responseBody []byte, headers map[string][]string) []byte {
+	if len(responseBody) == 0 {
+		return nil
+	}
+
+	js, _ := safeRawMessageOrBase64(responseBody, headers)
+	if js != nil {
+		if len(js) >= 2 && js[0] == '"' && js[len(js)-1] == '"' {
+			var decoded string
+			if err := json.Unmarshal(js, &decoded); err == nil {
+				return []byte(decoded)
+			}
+		}
+
+		return []byte(js)
+	}
+
+	return responseBody
 }
 
 func headerToAnyMap(header map[string][]string) map[string]any {
@@ -296,8 +318,8 @@ func headerToAnyMap(header map[string][]string) map[string]any {
 }
 
 func tokensUsageFromUsageMap(usage map[string]any) *TokensUsage {
-	prompt, okPrompt := floatToInt(usage["prompt_tokens"])
-	completion, okCompletion := floatToInt(usage["completion_tokens"])
+	prompt, okPrompt := firstUsageValue(usage, "prompt_tokens", "input_tokens")
+	completion, okCompletion := firstUsageValue(usage, "completion_tokens", "output_tokens")
 	if !okPrompt && !okCompletion {
 		return nil
 	}
@@ -321,13 +343,13 @@ func tokensUsageFromValue(value any) *TokensUsage {
 		return tokensUsageFromUsageMap(typed)
 	case map[string]int:
 		return &TokensUsage{
-			Prompt:     typed["prompt_tokens"],
-			Completion: typed["completion_tokens"],
+			Prompt:     firstIntMapValue(typed, "prompt_tokens", "input_tokens"),
+			Completion: firstIntMapValue(typed, "completion_tokens", "output_tokens"),
 		}
 	case map[string]float64:
 		return &TokensUsage{
-			Prompt:     int(typed["prompt_tokens"]),
-			Completion: int(typed["completion_tokens"]),
+			Prompt:     firstFloatMapValue(typed, "prompt_tokens", "input_tokens"),
+			Completion: firstFloatMapValue(typed, "completion_tokens", "output_tokens"),
 		}
 	default:
 		return nil
@@ -388,6 +410,36 @@ func floatToInt(value any) (int, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func firstUsageValue(usage map[string]any, keys ...string) (int, bool) {
+	for _, key := range keys {
+		if value, ok := floatToInt(usage[key]); ok {
+			return value, true
+		}
+	}
+
+	return 0, false
+}
+
+func firstIntMapValue(values map[string]int, keys ...string) int {
+	for _, key := range keys {
+		if value, ok := values[key]; ok {
+			return value
+		}
+	}
+
+	return 0
+}
+
+func firstFloatMapValue(values map[string]float64, keys ...string) int {
+	for _, key := range keys {
+		if value, ok := values[key]; ok {
+			return int(value)
+		}
+	}
+
+	return 0
 }
 
 func firstNonEmpty(values ...string) string {

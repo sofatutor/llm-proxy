@@ -2,6 +2,7 @@ package dispatcher
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -106,7 +107,7 @@ func TestDefaultEventTransformer_Transform_ResponsesUsageAndTokenMetadata(t *tes
 		Status:        200,
 		Duration:      5 * time.Millisecond,
 		RequestBody:   []byte(`{"model":"gpt-4.1-mini","input":"hello"}`),
-		ResponseBody:  []byte(`{"id":"resp_1","model":"gpt-4.1-mini","usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18},"output":[]}`),
+		ResponseBody:  []byte(`{"id":"resp_1","model":"gpt-4.1-mini","usage":{"input_tokens":11,"output_tokens":7,"total_tokens":18},"output":[]}`),
 		ResponseHeaders: http.Header{
 			"Content-Type": {"application/json"},
 		},
@@ -230,6 +231,51 @@ func TestDefaultEventTransformer_Transform_TokenUsageFallbackFromComputedUsage(t
 	}
 	if payload.TokensUsage.Completion <= 0 {
 		t.Fatalf("expected completion tokens > 0, got %#v", payload.TokensUsage)
+	}
+}
+
+func TestDefaultEventTransformer_Transform_TokenUsageFallbackFromGzippedChatResponse(t *testing.T) {
+	tr := NewDefaultEventTransformer(false)
+
+	var compressed bytes.Buffer
+	gzipWriter := gzip.NewWriter(&compressed)
+	_, err := gzipWriter.Write([]byte(`{"id":"chatcmpl_1","choices":[{"index":0,"message":{"role":"assistant","content":"{\"suggestions\":[\"A\",\"B\",\"C\"]}"},"finish_reason":"stop"}]}`))
+	if err != nil {
+		t.Fatalf("gzip write err: %v", err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatalf("gzip close err: %v", err)
+	}
+
+	evt := eventbus.Event{
+		RequestID:    "req-chat-gzip-1",
+		Method:       "POST",
+		Path:         "/v1/chat/completions",
+		Status:       200,
+		Duration:     12 * time.Millisecond,
+		RequestBody:  []byte(`{"model":"gpt-4.1-mini","messages":[{"role":"user","content":"hello"}]}`),
+		ResponseBody: compressed.Bytes(),
+		ResponseHeaders: http.Header{
+			"Content-Type":     {"application/json"},
+			"Content-Encoding": {"gzip"},
+		},
+	}
+
+	payload, err := tr.Transform(evt)
+	if err != nil {
+		t.Fatalf("Transform err: %v", err)
+	}
+	if payload == nil {
+		t.Fatalf("expected payload")
+	}
+	if payload.TokensUsage == nil {
+		t.Fatalf("expected token usage")
+	}
+	if payload.TokensUsage.Completion <= 0 {
+		t.Fatalf("expected completion tokens > 0 for gzipped chat response, got %#v", payload.TokensUsage)
+	}
+	if payload.Metadata["model"] != "gpt-4.1-mini" {
+		t.Fatalf("expected model metadata, got %v", payload.Metadata["model"])
 	}
 }
 

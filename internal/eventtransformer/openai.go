@@ -75,14 +75,10 @@ func MergeOpenAIStreamingChunks(body string) (map[string]any, error) {
 		}
 		// Merge usage if present (usually only in last chunk)
 		if u, ok := chunk["usage"].(map[string]any); ok {
-			if v, ok := u["prompt_tokens"].(float64); ok {
-				usage.PromptTokens = int(v)
-			}
-			if v, ok := u["completion_tokens"].(float64); ok {
-				usage.CompletionTokens = int(v)
-			}
-			if v, ok := u["total_tokens"].(float64); ok {
-				usage.TotalTokens = int(v)
+			if normalized, ok := normalizeOpenAIUsageMap(u); ok {
+				usage.PromptTokens = normalized["prompt_tokens"]
+				usage.CompletionTokens = normalized["completion_tokens"]
+				usage.TotalTokens = normalized["total_tokens"]
 			}
 		}
 	}
@@ -361,7 +357,9 @@ func (t *OpenAITransformer) TransformEvent(evt map[string]any) (map[string]any, 
 					comp, _ := json.Marshal(merged)
 					evt["response_body"] = string(comp)
 					if usage, ok := merged["usage"].(map[string]any); ok {
-						evt["TokenUsage"] = usage
+						if normalized, ok := normalizeOpenAIUsageMap(usage); ok {
+							evt["TokenUsage"] = normalized
+						}
 					}
 				} else {
 					// Merge stream error - using decoded response body
@@ -380,7 +378,9 @@ func (t *OpenAITransformer) TransformEvent(evt map[string]any) (map[string]any, 
 					var respObj map[string]any
 					if err := json.Unmarshal([]byte(resp), &respObj); err == nil {
 						if usage, ok := respObj["usage"].(map[string]any); ok {
-							evt["TokenUsage"] = usage
+							if normalized, ok := normalizeOpenAIUsageMap(usage); ok {
+								evt["TokenUsage"] = normalized
+							}
 							delete(respObj, "usage")
 							b, _ := json.Marshal(respObj)
 							evt["response_body"] = string(b)
@@ -500,6 +500,51 @@ func normalizeToCompactJSON(input string) (string, string, bool) {
 }
 
 func isValidUTF8(s string) bool { return utf8.ValidString(s) }
+
+func normalizeOpenAIUsageMap(usage map[string]any) (map[string]int, bool) {
+	promptTokens, hasPromptTokens := usageNumber(usage, "prompt_tokens", "input_tokens")
+	completionTokens, hasCompletionTokens := usageNumber(usage, "completion_tokens", "output_tokens")
+	totalTokens, hasTotalTokens := usageNumber(usage, "total_tokens")
+
+	if !hasTotalTokens && (hasPromptTokens || hasCompletionTokens) {
+		totalTokens = promptTokens + completionTokens
+		hasTotalTokens = true
+	}
+
+	if !hasPromptTokens && !hasCompletionTokens && !hasTotalTokens {
+		return nil, false
+	}
+
+	return map[string]int{
+		"prompt_tokens":     promptTokens,
+		"completion_tokens": completionTokens,
+		"total_tokens":      totalTokens,
+	}, true
+}
+
+func usageNumber(usage map[string]any, keys ...string) (int, bool) {
+	for _, key := range keys {
+		value, ok := usage[key]
+		if !ok {
+			continue
+		}
+
+		switch typed := value.(type) {
+		case int:
+			return typed, true
+		case int32:
+			return int(typed), true
+		case int64:
+			return int(typed), true
+		case float32:
+			return int(typed), true
+		case float64:
+			return int(typed), true
+		}
+	}
+
+	return 0, false
+}
 
 func extractAssistantReplyContent(resp string) (string, error) {
 	var obj map[string]any
