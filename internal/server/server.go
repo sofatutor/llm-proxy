@@ -151,13 +151,14 @@ func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectSto
 		}
 
 		streamsConfig := eventbus.RedisStreamsConfig{
-			StreamKey:        cfg.RedisStreamKey,
-			ConsumerGroup:    cfg.RedisConsumerGroup,
-			ConsumerName:     consumerName,
-			MaxLen:           cfg.RedisStreamMaxLen,
-			BlockTimeout:     cfg.RedisStreamBlockTime,
-			ClaimMinIdleTime: cfg.RedisStreamClaimTime,
-			BatchSize:        cfg.RedisStreamBatchSize,
+			StreamKey:         cfg.RedisStreamKey,
+			ConsumerGroup:     cfg.RedisConsumerGroup,
+			ConsumerName:      consumerName,
+			PublishBufferSize: cfg.ObservabilityBufferSize,
+			MaxLen:            cfg.RedisStreamMaxLen,
+			BlockTimeout:      cfg.RedisStreamBlockTime,
+			ClaimMinIdleTime:  cfg.RedisStreamClaimTime,
+			BatchSize:         cfg.RedisStreamBatchSize,
 		}
 		adapter := &eventbus.RedisStreamsClientAdapter{Client: client}
 		bus = eventbus.NewRedisStreamsEventBus(adapter, streamsConfig)
