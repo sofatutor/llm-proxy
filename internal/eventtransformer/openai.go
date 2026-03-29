@@ -515,5 +515,40 @@ func extractAssistantReplyContent(resp string) (string, error) {
 			}
 		}
 	}
+	if outputItems, ok := obj["output"].([]any); ok {
+		var content strings.Builder
+		for _, outputItem := range outputItems {
+			itemMap, ok := outputItem.(map[string]any)
+			if !ok {
+				continue
+			}
+			segments, ok := itemMap["content"].([]any)
+			if !ok {
+				continue
+			}
+			for _, segment := range segments {
+				segmentMap, ok := segment.(map[string]any)
+				if !ok {
+					continue
+				}
+				if text, ok := segmentMap["text"].(string); ok && text != "" {
+					content.WriteString(text)
+					continue
+				}
+				if textMap, ok := segmentMap["text"].(map[string]any); ok {
+					if value, ok := textMap["value"].(string); ok && value != "" {
+						content.WriteString(value)
+						continue
+					}
+				}
+				if text, ok := segmentMap["output_text"].(string); ok && text != "" {
+					content.WriteString(text)
+				}
+			}
+		}
+		if content.Len() > 0 {
+			return content.String(), nil
+		}
+	}
 	return "", nil
 }

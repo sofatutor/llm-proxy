@@ -530,6 +530,65 @@ func assistantReplyContentFromResponseBody(responseBody []byte) (string, bool) {
 		}
 	}
 
+	if content, ok := responseOutputText(responseObject); ok {
+		return content, true
+	}
+
+	return "", false
+}
+
+func responseOutputText(responseObject map[string]any) (string, bool) {
+	outputItems, ok := responseObject["output"].([]any)
+	if !ok {
+		return "", false
+	}
+
+	var content strings.Builder
+	for _, outputItem := range outputItems {
+		itemMap, ok := outputItem.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		segments, ok := itemMap["content"].([]any)
+		if !ok {
+			continue
+		}
+
+		for _, segment := range segments {
+			segmentMap, ok := segment.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			if text, ok := responseOutputSegmentText(segmentMap); ok {
+				content.WriteString(text)
+			}
+		}
+	}
+
+	if content.Len() == 0 {
+		return "", false
+	}
+
+	return content.String(), true
+}
+
+func responseOutputSegmentText(segment map[string]any) (string, bool) {
+	if text, ok := segment["text"].(string); ok && text != "" {
+		return text, true
+	}
+
+	if textMap, ok := segment["text"].(map[string]any); ok {
+		if value, ok := textMap["value"].(string); ok && value != "" {
+			return value, true
+		}
+	}
+
+	if text, ok := segment["output_text"].(string); ok && text != "" {
+		return text, true
+	}
+
 	return "", false
 }
 

@@ -89,6 +89,9 @@ func TestCloudWatchLogMessage_SanitizesPayload(t *testing.T) {
 	if decoded["user_id"] != "42" {
 		t.Fatalf("expected user_id 42, got %v", decoded["user_id"])
 	}
+	if decoded["duration_ms"].(float64) != 123 {
+		t.Fatalf("expected duration_ms 123, got %v", decoded["duration_ms"])
+	}
 	if decoded["total_tokens"].(float64) != 5 {
 		t.Fatalf("expected total_tokens 5, got %v", decoded["total_tokens"])
 	}

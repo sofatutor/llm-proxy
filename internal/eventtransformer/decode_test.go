@@ -123,6 +123,18 @@ func TestExtractAssistantReplyContent(t *testing.T) {
 			want:    "",
 			wantErr: false,
 		},
+		{
+			name:    "responses api output text",
+			resp:    `{"output":[{"type":"message","content":[{"type":"output_text","text":"Hello from responses"}]}]}`,
+			want:    "Hello from responses",
+			wantErr: false,
+		},
+		{
+			name:    "responses api nested text value",
+			resp:    `{"output":[{"type":"message","content":[{"type":"output_text","text":{"value":"Hello nested"}}]}]}`,
+			want:    "Hello nested",
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

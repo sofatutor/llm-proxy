@@ -143,6 +143,36 @@ func TestDefaultEventTransformer_Transform_ResponsesUsageAndTokenMetadata(t *tes
 	}
 }
 
+func TestDefaultEventTransformer_Transform_ResponsesTokenUsageFallbackFromOutputText(t *testing.T) {
+	tr := NewDefaultEventTransformer(false)
+	evt := eventbus.Event{
+		RequestID:    "req-responses-1",
+		Method:       "POST",
+		Path:         "/v1/responses",
+		Status:       200,
+		Duration:     12 * time.Millisecond,
+		RequestBody:  []byte(`{"model":"gpt-4.1-mini","input":"hello"}`),
+		ResponseBody: []byte(`{"id":"resp_1","model":"gpt-4.1-mini","output":[{"type":"message","content":[{"type":"output_text","text":"hi there"}]}]}`),
+		ResponseHeaders: http.Header{
+			"Content-Type": {"application/json"},
+		},
+	}
+
+	payload, err := tr.Transform(evt)
+	if err != nil {
+		t.Fatalf("Transform err: %v", err)
+	}
+	if payload == nil {
+		t.Fatalf("expected payload")
+	}
+	if payload.TokensUsage == nil {
+		t.Fatalf("expected computed token usage")
+	}
+	if payload.TokensUsage.Completion <= 0 {
+		t.Fatalf("expected responses completion tokens > 0, got %#v", payload.TokensUsage)
+	}
+}
+
 func TestDefaultEventTransformer_Transform_ModelFallbackFromRequestBody(t *testing.T) {
 	tr := NewDefaultEventTransformer(false)
 	evt := eventbus.Event{

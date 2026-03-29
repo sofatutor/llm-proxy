@@ -248,7 +248,27 @@ func metadataInt(metadata map[string]any, key string) int {
 	switch value := metadata[key].(type) {
 	case int:
 		return value
+	case int8:
+		return int(value)
+	case int16:
+		return int(value)
+	case int32:
+		return int(value)
+	case int64:
+		return int(value)
+	case uint:
+		return int(value)
+	case uint8:
+		return int(value)
+	case uint16:
+		return int(value)
+	case uint32:
+		return int(value)
+	case uint64:
+		return int(value)
 	case float64:
+		return int(value)
+	case float32:
 		return int(value)
 	case string:
 		parsed, _ := strconv.Atoi(value)
