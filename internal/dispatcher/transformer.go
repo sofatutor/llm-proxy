@@ -481,7 +481,7 @@ func promptInputSource(input any) string {
 }
 
 func completionTokensFromResponseBody(responseBody []byte, model string) int {
-	if len(responseBody) == 0 || !json.Valid(responseBody) {
+	if len(responseBody) == 0 {
 		return 0
 	}
 
@@ -499,8 +499,8 @@ func completionTokensFromResponseBody(responseBody []byte, model string) int {
 }
 
 func assistantReplyContentFromResponseBody(responseBody []byte) (string, bool) {
-	var responseObject map[string]any
-	if err := json.Unmarshal(responseBody, &responseObject); err != nil {
+	responseObject, ok := responseObjectFromBody(responseBody)
+	if !ok {
 		return "", false
 	}
 
@@ -514,5 +514,45 @@ func assistantReplyContentFromResponseBody(responseBody []byte) (string, bool) {
 		}
 	}
 
+	if choices, ok := responseObject["choices"].([]map[string]any); ok && len(choices) > 0 {
+		if message, ok := choices[0]["message"].(map[string]any); ok {
+			if content, ok := message["content"].(string); ok {
+				return content, true
+			}
+		}
+	}
+
 	return "", false
+}
+
+func responseObjectFromBody(responseBody []byte) (map[string]any, bool) {
+	if len(responseBody) == 0 {
+		return nil, false
+	}
+
+	if json.Valid(responseBody) {
+		var responseObject map[string]any
+		if err := json.Unmarshal(responseBody, &responseObject); err == nil {
+			return responseObject, true
+		}
+	}
+
+	if !utf8.Valid(responseBody) {
+		return nil, false
+	}
+
+	responseText := string(responseBody)
+	if strings.Contains(responseText, "event: ") && strings.Contains(responseText, "data: ") {
+		if merged, err := eventtransformer.MergeThreadStreamingChunks(responseText); err == nil {
+			return merged, true
+		}
+	}
+
+	if eventtransformer.IsOpenAIStreaming(responseText) {
+		if merged, err := eventtransformer.MergeOpenAIStreamingChunks(responseText); err == nil {
+			return merged, true
+		}
+	}
+
+	return nil, false
 }

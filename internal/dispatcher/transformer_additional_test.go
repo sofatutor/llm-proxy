@@ -203,6 +203,80 @@ func TestDefaultEventTransformer_Transform_TokenUsageFallbackFromComputedUsage(t
 	}
 }
 
+func TestDefaultEventTransformer_Transform_TokenUsageFallbackFromChatStream(t *testing.T) {
+	tr := NewDefaultEventTransformer(false)
+	stream := "data: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"created\":123,\"model\":\"gpt-4.1-mini\",\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n" +
+		"data: {\"choices\":[{\"delta\":{\"content\":\" there\"},\"finish_reason\":\"stop\"}]}\n\n" +
+		"data: [DONE]\n\n"
+	evt := eventbus.Event{
+		RequestID:    "req-chat-stream-1",
+		Method:       "POST",
+		Path:         "/v1/chat/completions",
+		Status:       200,
+		Duration:     12 * time.Millisecond,
+		RequestBody:  []byte(`{"model":"gpt-4.1-mini","messages":[{"role":"user","content":"hello"}]}`),
+		ResponseBody: []byte(stream),
+		ResponseHeaders: http.Header{
+			"Content-Type": {"text/event-stream"},
+		},
+	}
+
+	payload, err := tr.Transform(evt)
+	if err != nil {
+		t.Fatalf("Transform err: %v", err)
+	}
+	if payload == nil {
+		t.Fatalf("expected payload")
+	}
+	if payload.TokensUsage == nil {
+		t.Fatalf("expected computed token usage from stream")
+	}
+	if payload.TokensUsage.Completion <= 0 {
+		t.Fatalf("expected stream completion tokens > 0, got %#v", payload.TokensUsage)
+	}
+	if payload.Metadata["model"] != "gpt-4.1-mini" {
+		t.Fatalf("expected model metadata from request body, got %v", payload.Metadata["model"])
+	}
+}
+
+func TestDefaultEventTransformer_Transform_TokenUsageFallbackFromThreadStream(t *testing.T) {
+	tr := NewDefaultEventTransformer(false)
+	stream := "event: thread.run.created\n" +
+		"data: {\"id\":\"run_1\",\"assistant_id\":\"asst_1\",\"thread_id\":\"thread_1\",\"status\":\"queued\",\"created_at\":123}\n\n" +
+		"event: thread.message.delta\n" +
+		"data: {\"delta\":{\"content\":[{\"type\":\"text\",\"text\":{\"value\":\"hello\"}}]}}\n\n" +
+		"event: thread.message.completed\n" +
+		"data: {\"content\":[{\"type\":\"text\",\"text\":{\"value\":\"hello there\"}}]}\n\n" +
+		"event: thread.run.completed\n" +
+		"data: {\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2,\"total_tokens\":3}}\n\n"
+	evt := eventbus.Event{
+		RequestID:    "req-thread-stream-1",
+		Method:       "POST",
+		Path:         "/v1/threads/runs",
+		Status:       200,
+		Duration:     12 * time.Millisecond,
+		RequestBody:  []byte(`{"model":"gpt-4.1-mini","input":"hello"}`),
+		ResponseBody: []byte(stream),
+		ResponseHeaders: http.Header{
+			"Content-Type": {"text/event-stream"},
+		},
+	}
+
+	payload, err := tr.Transform(evt)
+	if err != nil {
+		t.Fatalf("Transform err: %v", err)
+	}
+	if payload == nil {
+		t.Fatalf("expected payload")
+	}
+	if payload.TokensUsage == nil {
+		t.Fatalf("expected token usage from thread stream")
+	}
+	if payload.TokensUsage.Completion <= 0 {
+		t.Fatalf("expected thread stream completion tokens > 0, got %#v", payload.TokensUsage)
+	}
+}
+
 func TestDefaultEventTransformer_Transform_ChatErrorStillKeepsModelAndPromptTokens(t *testing.T) {
 	tr := NewDefaultEventTransformer(false)
 	evt := eventbus.Event{
