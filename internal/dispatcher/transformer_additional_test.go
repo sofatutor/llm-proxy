@@ -144,6 +144,42 @@ func TestDefaultEventTransformer_Transform_ResponsesUsageAndTokenMetadata(t *tes
 	}
 }
 
+func TestDefaultEventTransformer_Transform_EmbeddingsUsageNormalization(t *testing.T) {
+	tr := NewDefaultEventTransformer(false)
+	evt := eventbus.Event{
+		RequestID:    "req-embeddings-1",
+		Method:       "POST",
+		Path:         "/v1/embeddings",
+		Status:       200,
+		Duration:     8 * time.Millisecond,
+		RequestBody:  []byte(`{"model":"text-embedding-3-small","input":"hello embeddings"}`),
+		ResponseBody: []byte(`{"object":"list","data":[{"object":"embedding","embedding":[0.1,0.2],"index":0}],"model":"text-embedding-3-small","usage":{"prompt_tokens":2,"total_tokens":2}}`),
+		ResponseHeaders: http.Header{
+			"Content-Type": {"application/json"},
+		},
+	}
+
+	payload, err := tr.Transform(evt)
+	if err != nil {
+		t.Fatalf("Transform err: %v", err)
+	}
+	if payload == nil {
+		t.Fatalf("expected payload")
+	}
+	if payload.Metadata["model"] != "text-embedding-3-small" {
+		t.Fatalf("expected embeddings model metadata, got %v", payload.Metadata["model"])
+	}
+	if payload.TokensUsage == nil {
+		t.Fatalf("expected embeddings token usage")
+	}
+	if payload.TokensUsage.Input != 2 || payload.TokensUsage.Output != 0 || payload.TokensUsage.Total != 2 {
+		t.Fatalf("unexpected embeddings token usage: %#v", payload.TokensUsage)
+	}
+	if len(payload.Output) == 0 {
+		t.Fatalf("expected embeddings output to be preserved")
+	}
+}
+
 func TestDefaultEventTransformer_Transform_ResponsesTokenUsageFallbackFromOutputText(t *testing.T) {
 	tr := NewDefaultEventTransformer(false)
 	evt := eventbus.Event{

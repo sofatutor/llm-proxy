@@ -219,6 +219,7 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 	// --- OpenAI-specific output transformation ---
 	isOpenAI := strings.HasPrefix(evt.Path, "/v1/completions") ||
 		strings.HasPrefix(evt.Path, "/v1/chat/completions") ||
+		strings.HasPrefix(evt.Path, "/v1/embeddings") ||
 		strings.HasPrefix(evt.Path, "/v1/responses") ||
 		strings.HasPrefix(evt.Path, "/v1/threads/")
 
