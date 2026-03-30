@@ -154,6 +154,7 @@ The caching system follows HTTP standards:
 - **Authentication**: Cached responses for authenticated requests are only served if marked as publicly cacheable (`Cache-Control: public` or `s-maxage` present)
 - **Streaming responses**: Captured during streaming and stored after completion
 - **TTL precedence**: `s-maxage` (shared cache) takes precedence over `max-age`
+- **Optional namespace header**: Clients may send `X-LLM-Proxy-Cache-Namespace` to partition cache keys for logical invalidation; the value is sanitized, included in the proxy cache key, and not forwarded upstream
 - **Headers**: Responses include `X-PROXY-CACHE`, `X-PROXY-CACHE-KEY`, and `Cache-Status` for observability
 
 ### Cache Stats Aggregation

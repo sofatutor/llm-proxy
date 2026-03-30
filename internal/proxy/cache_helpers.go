@@ -11,6 +11,10 @@ import (
 	"time"
 )
 
+const maxCacheNamespaceLength = 128
+
+var cacheNamespaceHeader = textproto.CanonicalMIMEHeaderKey("X-LLM-Proxy-Cache-Namespace")
+
 // generateCacheKey builds a cache key from method, path, query and an optional
 // ordered list of header names to include. When headersToInclude is nil or empty,
 // no header values are incorporated. For methods carrying a body (POST/PUT/PATCH)
@@ -62,6 +66,11 @@ func generateCacheKey(r *http.Request, headersToInclude []string) string {
 	final := strings.Builder{}
 	final.WriteString(varyKey)
 
+	if namespace := cacheNamespaceFromRequest(r); namespace != "" {
+		final.WriteString("|ns=")
+		final.WriteString(namespace)
+	}
+
 	// For methods with body, include X-Body-Hash when present (computed in proxy)
 	if r.Header.Get("X-Body-Hash") != "" {
 		final.WriteString("|body=")
@@ -87,6 +96,38 @@ func generateCacheKey(r *http.Request, headersToInclude []string) string {
 	}
 
 	return final.String()
+}
+
+func cacheNamespaceFromRequest(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+
+	raw := strings.TrimSpace(r.Header.Get(cacheNamespaceHeader))
+	if raw == "" {
+		return ""
+	}
+
+	if len(raw) > maxCacheNamespaceLength {
+		raw = raw[:maxCacheNamespaceLength]
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(raw))
+	for _, char := range raw {
+		switch {
+		case char >= 'a' && char <= 'z':
+			builder.WriteRune(char)
+		case char >= 'A' && char <= 'Z':
+			builder.WriteRune(char)
+		case char >= '0' && char <= '9':
+			builder.WriteRune(char)
+		case char == '-', char == '_', char == ':':
+			builder.WriteRune(char)
+		}
+	}
+
+	return builder.String()
 }
 
 func CacheKeyFromRequest(r *http.Request) string {

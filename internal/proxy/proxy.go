@@ -363,6 +363,7 @@ func (p *TransparentProxy) processRequestHeaders(req *http.Request) {
 		"CF-IPCountry",             // Cloudflare headers
 		"X-Client-IP",              // Other proxies
 		"X-Original-Forwarded-For", // Chain of proxies
+		cacheNamespaceHeader,       // Internal cache-key namespace hint; never forward upstream
 	}
 
 	// Remove headers that shouldn't be passed to the upstream
