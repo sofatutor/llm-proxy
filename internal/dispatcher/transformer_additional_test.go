@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
@@ -12,6 +13,249 @@ import (
 
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
 )
+
+func TestCloneStringAnyMap_DeepClone(t *testing.T) {
+	original := map[string]any{
+		"message": "hello",
+		"nested": map[string]any{
+			"count": 3,
+		},
+		"items": []any{
+			map[string]any{"kind": "text", "value": "alpha"},
+			"tail",
+		},
+	}
+
+	cloned := cloneStringAnyMap(original)
+	if cloned == nil {
+		t.Fatal("expected cloned map")
+	}
+	if reflect.DeepEqual(cloned, original) == false {
+		t.Fatalf("expected equal content, got %#v want %#v", cloned, original)
+	}
+
+	cloned["message"] = "changed"
+	clonedNested := cloned["nested"].(map[string]any)
+	clonedNested["count"] = 9
+	clonedItems := cloned["items"].([]any)
+	clonedItems[0].(map[string]any)["value"] = "beta"
+
+	if original["message"] != "hello" {
+		t.Fatalf("expected top-level value to remain unchanged, got %v", original["message"])
+	}
+	if original["nested"].(map[string]any)["count"] != 3 {
+		t.Fatalf("expected nested map to remain unchanged, got %v", original["nested"])
+	}
+	if original["items"].([]any)[0].(map[string]any)["value"] != "alpha" {
+		t.Fatalf("expected nested slice map to remain unchanged, got %v", original["items"])
+	}
+
+	if cloneStringAnyMap(map[string]any{}) != nil {
+		t.Fatal("expected empty source to return nil")
+	}
+}
+
+func TestFirstMapValues(t *testing.T) {
+	intValues := map[string]int{"prompt_tokens": 7}
+	if got := firstIntMapValue(intValues, "input_tokens", "prompt_tokens"); got != 7 {
+		t.Fatalf("expected int fallback value 7, got %d", got)
+	}
+	if got := firstIntMapValue(intValues, "missing"); got != 0 {
+		t.Fatalf("expected missing int value 0, got %d", got)
+	}
+
+	floatValues := map[string]float64{"completion_tokens": 4.9}
+	if got := firstFloatMapValue(floatValues, "output_tokens", "completion_tokens"); got != 4 {
+		t.Fatalf("expected float fallback value 4, got %d", got)
+	}
+	if got := firstFloatMapValue(floatValues, "missing"); got != 0 {
+		t.Fatalf("expected missing float value 0, got %d", got)
+	}
+}
+
+func TestFloatToIntAndFirstUsageValue(t *testing.T) {
+	tests := []struct {
+		name   string
+		value  any
+		want   int
+		wantOK bool
+	}{
+		{name: "int", value: int(3), want: 3, wantOK: true},
+		{name: "int32", value: int32(4), want: 4, wantOK: true},
+		{name: "int64", value: int64(5), want: 5, wantOK: true},
+		{name: "float32", value: float32(6.9), want: 6, wantOK: true},
+		{name: "float64", value: float64(7.2), want: 7, wantOK: true},
+		{name: "unsupported", value: "8", want: 0, wantOK: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := floatToInt(tt.value)
+			if ok != tt.wantOK {
+				t.Fatalf("expected ok=%v, got %v", tt.wantOK, ok)
+			}
+			if got != tt.want {
+				t.Fatalf("expected %d, got %d", tt.want, got)
+			}
+		})
+	}
+
+	usage := map[string]any{"completion_tokens": float64(9), "total_tokens": int64(12)}
+	if got, ok := firstUsageValue(usage, "output_tokens", "completion_tokens"); !ok || got != 9 {
+		t.Fatalf("expected completion token fallback 9, got %d ok=%v", got, ok)
+	}
+	if got, ok := firstUsageValue(usage, "total_tokens"); !ok || got != 12 {
+		t.Fatalf("expected total token value 12, got %d ok=%v", got, ok)
+	}
+	if _, ok := firstUsageValue(usage, "missing"); ok {
+		t.Fatal("expected missing usage keys to return ok=false")
+	}
+}
+
+func TestPromptInputSource(t *testing.T) {
+	if got := promptInputSource("hello"); got != "hello" {
+		t.Fatalf("expected string input source, got %q", got)
+	}
+	if got := promptInputSource(nil); got != "" {
+		t.Fatalf("expected nil input source to be empty, got %q", got)
+	}
+	if got := promptInputSource([]any{"alpha", map[string]any{"beta": true}}); got != `["alpha",{"beta":true}]` {
+		t.Fatalf("expected structured input to be marshaled, got %q", got)
+	}
+}
+
+func TestAssistantReplyContentFromResponseBody(t *testing.T) {
+	if content, ok := assistantReplyContentFromResponseBody([]byte(`{"choices":[{"message":{"content":"hello"}}]}`)); !ok || content != "hello" {
+		t.Fatalf("expected chat choices content, got %q ok=%v", content, ok)
+	}
+
+	responseObject := map[string]any{
+		"choices": []map[string]any{{
+			"message": map[string]any{"content": "typed"},
+		}},
+	}
+	responseBytes, err := json.Marshal(responseObject)
+	if err != nil {
+		t.Fatalf("marshal response err: %v", err)
+	}
+	if content, ok := assistantReplyContentFromResponseBody(responseBytes); !ok || content != "typed" {
+		t.Fatalf("expected typed choices content, got %q ok=%v", content, ok)
+	}
+
+	if content, ok := assistantReplyContentFromResponseBody([]byte(`{"output":[{"content":[{"output_text":"fallback"}]}]}`)); !ok || content != "fallback" {
+		t.Fatalf("expected responses output fallback, got %q ok=%v", content, ok)
+	}
+
+	if _, ok := assistantReplyContentFromResponseBody([]byte(`{"choices":[]}`)); ok {
+		t.Fatal("expected false when no assistant content is present")
+	}
+}
+
+func TestResponseObjectFromBody(t *testing.T) {
+	if responseObject, ok := responseObjectFromBody([]byte(`{"id":"resp_1"}`)); !ok || responseObject["id"] != "resp_1" {
+		t.Fatalf("expected JSON response body to decode, got %#v ok=%v", responseObject, ok)
+	}
+
+	chatStream := "data: {\"id\":\"chatcmpl_1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\n" +
+		"data: {\"choices\":[{\"delta\":{\"content\":\" world\"},\"finish_reason\":\"stop\"}]}\n\n" +
+		"data: [DONE]\n\n"
+	if responseObject, ok := responseObjectFromBody([]byte(chatStream)); !ok || responseObject["id"] != "chatcmpl_1" {
+		t.Fatalf("expected streaming response body to merge, got %#v ok=%v", responseObject, ok)
+	}
+
+	threadStream := "event: thread.message.delta\n" +
+		"data: {\"delta\":{\"content\":[{\"type\":\"text\",\"text\":{\"value\":\"hello\"}}]}}\n\n" +
+		"event: thread.run.completed\n" +
+		"data: {\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2,\"total_tokens\":3}}\n\n"
+	if responseObject, ok := responseObjectFromBody([]byte(threadStream)); !ok || responseObject["usage"] == nil {
+		t.Fatalf("expected thread stream body to merge, got %#v ok=%v", responseObject, ok)
+	}
+
+	if _, ok := responseObjectFromBody([]byte{0xff, 0xfe, 0xfd}); ok {
+		t.Fatal("expected invalid UTF-8 response body to fail")
+	}
+	if _, ok := responseObjectFromBody(nil); ok {
+		t.Fatal("expected empty response body to fail")
+	}
+}
+
+func TestResponseOutputText(t *testing.T) {
+	response := map[string]any{
+		"output": []any{
+			map[string]any{
+				"content": []any{
+					map[string]any{"text": "Hello"},
+					map[string]any{"text": map[string]any{"value": " there"}},
+					map[string]any{"output_text": "!"},
+					map[string]any{"ignored": true},
+				},
+			},
+			map[string]any{"content": []any{"skip-non-map"}},
+			"skip-non-map",
+		},
+	}
+
+	content, ok := responseOutputText(response)
+	if !ok {
+		t.Fatal("expected response output text")
+	}
+	if content != "Hello there!" {
+		t.Fatalf("expected concatenated content, got %q", content)
+	}
+
+	if _, ok := responseOutputText(map[string]any{"output": []any{map[string]any{"content": []any{map[string]any{"ignored": true}}}}}); ok {
+		t.Fatal("expected false when no text segments are present")
+	}
+	if _, ok := responseOutputText(map[string]any{"output": "invalid"}); ok {
+		t.Fatal("expected false for invalid output shape")
+	}
+}
+
+func TestResponseOutputSegmentText(t *testing.T) {
+	tests := []struct {
+		name    string
+		segment map[string]any
+		want    string
+		wantOK  bool
+	}{
+		{
+			name:    "plain text",
+			segment: map[string]any{"text": "hello"},
+			want:    "hello",
+			wantOK:  true,
+		},
+		{
+			name:    "nested value",
+			segment: map[string]any{"text": map[string]any{"value": "nested"}},
+			want:    "nested",
+			wantOK:  true,
+		},
+		{
+			name:    "output text fallback",
+			segment: map[string]any{"output_text": "fallback"},
+			want:    "fallback",
+			wantOK:  true,
+		},
+		{
+			name:    "missing content",
+			segment: map[string]any{"text": map[string]any{"value": ""}},
+			want:    "",
+			wantOK:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := responseOutputSegmentText(tt.segment)
+			if ok != tt.wantOK {
+				t.Fatalf("expected ok=%v, got %v", tt.wantOK, ok)
+			}
+			if got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
 
 // Covers gzip Content-Encoding with non-gzipped but valid JSON payload: should fall back to raw JSON
 func TestSafeRawMessageOrBase64_GzipHeaderButPlainJSON(t *testing.T) {
