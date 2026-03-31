@@ -10,14 +10,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
 
 func TestProxy_CacheHitAvoidsTrackingAndAPIKeyLookup(t *testing.T) {
-	validator := &MockTokenValidator{}
-	validator.On("ValidateToken", mock.Anything, "valid-token").Return("project-1", nil).Once()
+	validator := &MockTokenDataValidator{}
+	validator.On("ValidateTokenData", mock.Anything, "valid-token").Return(token.TokenData{ProjectID: "project-1", Token: "valid-token", IsActive: true}, nil).Once()
 
 	// Intentionally do NOT set expectations for ValidateTokenWithTracking.
 	// If it is called, the mock will fail.
@@ -64,13 +65,14 @@ func TestProxy_CacheHitAvoidsTrackingAndAPIKeyLookup(t *testing.T) {
 	require.Equal(t, "llm-proxy; hit", rr.Header().Get("Cache-Status"))
 	require.Equal(t, "hit", rr.Header().Get("X-PROXY-CACHE"))
 	require.NotEmpty(t, rr.Header().Get("X-PROXY-CACHE-KEY"))
+	validator.AssertExpectations(t)
 }
 
 func TestProxy_POSTCacheHitAvoidsTracking(t *testing.T) {
-	validator := &MockTokenValidator{}
+	validator := &MockTokenDataValidator{}
 	// Only expect ValidateToken (no tracking) to be called during cache hit.
 	// The cache is manually pre-populated, so no actual upstream request occurs.
-	validator.On("ValidateToken", mock.Anything, "valid-token").Return("project-1", nil).Once()
+	validator.On("ValidateTokenData", mock.Anything, "valid-token").Return(token.TokenData{ProjectID: "project-1", Token: "valid-token", IsActive: true}, nil).Once()
 
 	// Intentionally do NOT set expectations for ValidateTokenWithTracking on cache hit.
 	// If it is called during the cache hit, the mock will fail.

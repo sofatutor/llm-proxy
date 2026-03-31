@@ -30,23 +30,57 @@ func MergeOpenAIStreamingChunks(body string) (map[string]any, error) {
 		TotalTokens      int `json:"total_tokens"`
 	}
 	var (
-		id      string
-		object  string
-		created int
-		model   string
-		content strings.Builder
-		finish  string
-		usage   Usage
+		id                string
+		object            string
+		created           int
+		model             string
+		content           strings.Builder
+		finish            string
+		usage             Usage
+		responseState     map[string]any
+		completedResponse map[string]any
 	)
 	lines := strings.Split(body, "\n")
+	currentEvent := ""
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "event: ") {
+			currentEvent = strings.TrimSpace(strings.TrimPrefix(line, "event: "))
+			continue
+		}
 		if !strings.HasPrefix(line, "data: ") || line == "data: [DONE]" {
 			continue
 		}
 		data := strings.TrimPrefix(line, "data: ")
 		var chunk map[string]any
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			currentEvent = ""
+			continue
+		}
+		eventType := currentEvent
+		if eventType == "" {
+			if v, ok := chunk["type"].(string); ok {
+				eventType = v
+			}
+		}
+		currentEvent = ""
+
+		if strings.HasPrefix(eventType, "response.") {
+			if response, ok := chunk["response"].(map[string]any); ok {
+				if responseState == nil {
+					responseState = cloneAnyMap(response)
+				} else {
+					mergeMissingAnyMap(responseState, response)
+				}
+				if eventType == "response.completed" {
+					completedResponse = cloneAnyMap(response)
+				}
+			}
+			if eventType == "response.output_text.delta" {
+				if delta, ok := chunk["delta"].(string); ok && delta != "" {
+					content.WriteString(delta)
+				}
+			}
 			continue
 		}
 		if v, ok := chunk["id"].(string); ok && id == "" {
@@ -75,16 +109,37 @@ func MergeOpenAIStreamingChunks(body string) (map[string]any, error) {
 		}
 		// Merge usage if present (usually only in last chunk)
 		if u, ok := chunk["usage"].(map[string]any); ok {
-			if v, ok := u["prompt_tokens"].(float64); ok {
-				usage.PromptTokens = int(v)
-			}
-			if v, ok := u["completion_tokens"].(float64); ok {
-				usage.CompletionTokens = int(v)
-			}
-			if v, ok := u["total_tokens"].(float64); ok {
-				usage.TotalTokens = int(v)
+			if normalized, ok := normalizeOpenAIUsageMap(u); ok {
+				usage.PromptTokens, _ = usageNumber(normalized, "input_tokens")
+				usage.CompletionTokens, _ = usageNumber(normalized, "output_tokens")
+				usage.TotalTokens, _ = usageNumber(normalized, "total_tokens")
 			}
 		}
+	}
+	if responseState != nil || completedResponse != nil {
+		merged := cloneAnyMap(responseState)
+		if completedResponse != nil {
+			merged = cloneAnyMap(completedResponse)
+			mergeMissingAnyMap(merged, responseState)
+		}
+		if merged == nil {
+			merged = map[string]any{}
+		}
+		if _, ok := merged["output"]; !ok && content.Len() > 0 {
+			merged["output"] = []any{map[string]any{
+				"type": "message",
+				"content": []any{map[string]any{
+					"type": "output_text",
+					"text": content.String(),
+				}},
+			}}
+		}
+		if responseUsage, ok := merged["usage"].(map[string]any); ok {
+			if normalized, ok := normalizeOpenAIUsageMap(responseUsage); ok {
+				merged["usage"] = normalized
+			}
+		}
+		return merged, nil
 	}
 	merged := map[string]any{
 		"id":      id,
@@ -102,13 +157,36 @@ func MergeOpenAIStreamingChunks(body string) (map[string]any, error) {
 	}
 	if usage.PromptTokens > 0 || usage.CompletionTokens > 0 || usage.TotalTokens > 0 {
 		merged["usage"] = map[string]any{
-			"prompt_tokens":     usage.PromptTokens,
-			"completion_tokens": usage.CompletionTokens,
-			"total_tokens":      usage.TotalTokens,
+			"input_tokens":  usage.PromptTokens,
+			"output_tokens": usage.CompletionTokens,
+			"total_tokens":  usage.TotalTokens,
 		}
 	}
 	// Merged OpenAI chunks successfully
 	return merged, nil
+}
+
+func cloneAnyMap(source map[string]any) map[string]any {
+	if source == nil {
+		return nil
+	}
+	cloned := make(map[string]any, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func mergeMissingAnyMap(target map[string]any, source map[string]any) {
+	if target == nil || source == nil {
+		return
+	}
+	for key, value := range source {
+		if _, exists := target[key]; exists {
+			continue
+		}
+		target[key] = value
+	}
 }
 
 // MergeThreadStreamingChunks parses and merges assistant thread.run streaming events.
@@ -236,9 +314,9 @@ func MergeThreadStreamingChunks(body string) (map[string]any, error) {
 	}
 	if usage.PromptTokens+usage.CompletionTokens+usage.TotalTokens > 0 {
 		merged["usage"] = map[string]any{
-			"prompt_tokens":     usage.PromptTokens,
-			"completion_tokens": usage.CompletionTokens,
-			"total_tokens":      usage.TotalTokens,
+			"input_tokens":  usage.PromptTokens,
+			"output_tokens": usage.CompletionTokens,
+			"total_tokens":  usage.TotalTokens,
 		}
 	}
 	// Merged thread.run chunks successfully
@@ -361,7 +439,9 @@ func (t *OpenAITransformer) TransformEvent(evt map[string]any) (map[string]any, 
 					comp, _ := json.Marshal(merged)
 					evt["response_body"] = string(comp)
 					if usage, ok := merged["usage"].(map[string]any); ok {
-						evt["TokenUsage"] = usage
+						if normalized, ok := normalizeOpenAIUsageMap(usage); ok {
+							evt["TokenUsage"] = normalized
+						}
 					}
 				} else {
 					// Merge stream error - using decoded response body
@@ -380,7 +460,9 @@ func (t *OpenAITransformer) TransformEvent(evt map[string]any) (map[string]any, 
 					var respObj map[string]any
 					if err := json.Unmarshal([]byte(resp), &respObj); err == nil {
 						if usage, ok := respObj["usage"].(map[string]any); ok {
-							evt["TokenUsage"] = usage
+							if normalized, ok := normalizeOpenAIUsageMap(usage); ok {
+								evt["TokenUsage"] = normalized
+							}
 							delete(respObj, "usage")
 							b, _ := json.Marshal(respObj)
 							evt["response_body"] = string(b)
@@ -411,6 +493,9 @@ func (t *OpenAITransformer) TransformEvent(evt map[string]any) (map[string]any, 
 							promptTokenSource = instr
 						}
 					}
+					if inputSource := promptInputSource(reqObj["input"]); inputSource != "" {
+						promptTokenSource += inputSource
+					}
 				}
 			}
 			if promptTokenSource != "" {
@@ -438,7 +523,9 @@ func (t *OpenAITransformer) TransformEvent(evt map[string]any) (map[string]any, 
 				tk, _ := CountOpenAITokensForModel(cnt, modelName)
 				ct = tk
 			}
-			evt["TokenUsage"] = map[string]int{"prompt_tokens": pt, "completion_tokens": ct, "total_tokens": pt + ct}
+			if pt > 0 || ct > 0 {
+				evt["TokenUsage"] = map[string]any{"input_tokens": pt, "output_tokens": ct, "total_tokens": pt + ct}
+			}
 		}
 	}
 
@@ -501,6 +588,88 @@ func normalizeToCompactJSON(input string) (string, string, bool) {
 
 func isValidUTF8(s string) bool { return utf8.ValidString(s) }
 
+func normalizeOpenAIUsageMap(usage map[string]any) (map[string]any, bool) {
+	inputTokens, hasInputTokens := usageNumber(usage, "input_tokens", "prompt_tokens")
+	outputTokens, hasOutputTokens := usageNumber(usage, "output_tokens", "completion_tokens")
+	totalTokens, hasTotalTokens := usageNumber(usage, "total_tokens")
+
+	if !hasTotalTokens && (hasInputTokens || hasOutputTokens) {
+		totalTokens = inputTokens + outputTokens
+		hasTotalTokens = true
+	}
+
+	if !hasInputTokens && !hasOutputTokens && !hasTotalTokens {
+		return nil, false
+	}
+
+	normalized := map[string]any{
+		"input_tokens":  inputTokens,
+		"output_tokens": outputTokens,
+		"total_tokens":  totalTokens,
+	}
+	if details, ok := usageDetailsMap(usage, "input_tokens_details", "prompt_tokens_details"); ok {
+		normalized["input_tokens_details"] = details
+	}
+	if details, ok := usageDetailsMap(usage, "output_tokens_details", "completion_tokens_details"); ok {
+		normalized["output_tokens_details"] = details
+	}
+
+	return normalized, true
+}
+
+func usageDetailsMap(usage map[string]any, keys ...string) (map[string]any, bool) {
+	for _, key := range keys {
+		value, ok := usage[key]
+		if !ok {
+			continue
+		}
+		if typed, ok := value.(map[string]any); ok && len(typed) > 0 {
+			return cloneAnyMap(typed), true
+		}
+	}
+
+	return nil, false
+}
+
+func usageNumber(usage map[string]any, keys ...string) (int, bool) {
+	for _, key := range keys {
+		value, ok := usage[key]
+		if !ok {
+			continue
+		}
+
+		switch typed := value.(type) {
+		case int:
+			return typed, true
+		case int32:
+			return int(typed), true
+		case int64:
+			return int(typed), true
+		case float32:
+			return int(typed), true
+		case float64:
+			return int(typed), true
+		}
+	}
+
+	return 0, false
+}
+
+func promptInputSource(input any) string {
+	switch typed := input.(type) {
+	case string:
+		return typed
+	case nil:
+		return ""
+	default:
+		encodedInput, err := json.Marshal(typed)
+		if err != nil {
+			return ""
+		}
+		return string(encodedInput)
+	}
+}
+
 func extractAssistantReplyContent(resp string) (string, error) {
 	var obj map[string]any
 	if err := json.Unmarshal([]byte(resp), &obj); err != nil {
@@ -513,6 +682,41 @@ func extractAssistantReplyContent(resp string) (string, error) {
 					return content, nil
 				}
 			}
+		}
+	}
+	if outputItems, ok := obj["output"].([]any); ok {
+		var content strings.Builder
+		for _, outputItem := range outputItems {
+			itemMap, ok := outputItem.(map[string]any)
+			if !ok {
+				continue
+			}
+			segments, ok := itemMap["content"].([]any)
+			if !ok {
+				continue
+			}
+			for _, segment := range segments {
+				segmentMap, ok := segment.(map[string]any)
+				if !ok {
+					continue
+				}
+				if text, ok := segmentMap["text"].(string); ok && text != "" {
+					content.WriteString(text)
+					continue
+				}
+				if textMap, ok := segmentMap["text"].(map[string]any); ok {
+					if value, ok := textMap["value"].(string); ok && value != "" {
+						content.WriteString(value)
+						continue
+					}
+				}
+				if text, ok := segmentMap["output_text"].(string); ok && text != "" {
+					content.WriteString(text)
+				}
+			}
+		}
+		if content.Len() > 0 {
+			return content.String(), nil
 		}
 	}
 	return "", nil

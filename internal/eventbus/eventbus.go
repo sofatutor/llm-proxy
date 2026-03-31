@@ -14,6 +14,9 @@ type Event struct {
 	RequestID       string
 	Method          string
 	Path            string
+	ProjectID       string
+	TokenID         string
+	TokenMetadata   map[string]string
 	Status          int
 	Duration        time.Duration
 	ResponseHeaders http.Header

@@ -75,6 +75,16 @@ func proxyLatencyFromProxyTimingHeaders(headers http.Header) (time.Duration, boo
 	return finalAt.Sub(receivedAt), true
 }
 
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+
+	return ""
+}
+
 func newBenchmarkHTTPClient(timeout time.Duration) *http.Client {
 	// NOTE: We intentionally reuse a single client+transport for all requests so we
 	// get connection pooling/keep-alives. Creating a new client per request
@@ -354,7 +364,7 @@ var benchmarkCmd *cobra.Command
 var dispatcherCmd = &cobra.Command{
 	Use:   "dispatcher",
 	Short: "Run the event dispatcher service",
-	Long:  `Run the event dispatcher service with pluggable backends. Supports file, lunary, and helicone services.`,
+	Long:  `Run the event dispatcher service with pluggable backends. Supports file, lunary, helicone, and cloudwatch services.`,
 	Run:   runDispatcher,
 }
 
@@ -499,6 +509,17 @@ func runDispatcher(cmd *cobra.Command, args []string) {
 	if dispatcherAPIKey == "" {
 		if envKey := os.Getenv("LLM_PROXY_API_KEY"); envKey != "" {
 			config["api-key"] = envKey
+		}
+	}
+	if dispatcherService == "cloudwatch" {
+		if logGroup := os.Getenv("DISPATCHER_CLOUDWATCH_LOG_GROUP"); logGroup != "" {
+			config["log-group"] = logGroup
+		}
+		if logStream := os.Getenv("DISPATCHER_CLOUDWATCH_LOG_STREAM"); logStream != "" {
+			config["log-stream"] = logStream
+		}
+		if region := firstNonEmpty(os.Getenv("DISPATCHER_CLOUDWATCH_REGION"), os.Getenv("AWS_REGION"), os.Getenv("AWS_DEFAULT_REGION")); region != "" {
+			config["region"] = region
 		}
 	}
 
@@ -1590,7 +1611,7 @@ Latency breakdown:
 	cobraRoot.PersistentFlags().StringVar(&manageAPIBaseURL, "manage-api-base-url", "http://localhost:8080", "Base URL for management API (default: http://localhost:8080)")
 
 	// Add dispatcher command flags
-	dispatcherCmd.Flags().StringVar(&dispatcherService, "service", config.EnvOrDefault("DISPATCHER_SERVICE", "file"), "Dispatcher service type (file, lunary, helicone)")
+	dispatcherCmd.Flags().StringVar(&dispatcherService, "service", config.EnvOrDefault("DISPATCHER_SERVICE", "file"), "Dispatcher service type (file, lunary, helicone, cloudwatch)")
 	dispatcherCmd.Flags().StringVar(&dispatcherEndpoint, "endpoint", config.EnvOrDefault("DISPATCHER_ENDPOINT", ""), "Dispatcher endpoint URL (file: path, lunary/helicone: API endpoint)")
 	dispatcherCmd.Flags().StringVar(&dispatcherAPIKey, "api-key", config.EnvOrDefault("LLM_PROXY_API_KEY", ""), "API key for external services (lunary, helicone)")
 	dispatcherCmd.Flags().IntVar(&dispatcherBuffer, "buffer", config.EnvIntOrDefault("DISPATCHER_BUFFER", 1000), "Event bus buffer size")

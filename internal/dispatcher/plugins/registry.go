@@ -25,6 +25,10 @@ func init() {
 	Registry["helicone"] = func() dispatcher.BackendPlugin {
 		return NewHeliconePlugin()
 	}
+
+	Registry["cloudwatch"] = func() dispatcher.BackendPlugin {
+		return NewCloudWatchPlugin()
+	}
 }
 
 // NewPlugin creates a new plugin instance by name

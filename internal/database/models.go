@@ -20,6 +20,7 @@ type Token struct {
 	ID            string     `json:"id"`
 	Token         string     `json:"token"`
 	ProjectID     string     `json:"project_id"`
+	Metadata      *string    `json:"metadata,omitempty"`
 	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
 	IsActive      bool       `json:"is_active"`
 	DeactivatedAt *time.Time `json:"deactivated_at,omitempty"`

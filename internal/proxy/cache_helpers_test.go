@@ -87,6 +87,20 @@ func TestCacheKeyFromRequest_VaryAndBodyHash(t *testing.T) {
 	if CacheKeyFromRequest(r5) == CacheKeyFromRequest(r6) {
 		t.Fatalf("expected cache-forced TTL to influence key for POST")
 	}
+
+	// Request cache namespace should influence key when provided
+	r7 := &http.Request{Method: http.MethodPost, Header: http.Header{cacheNamespaceHeader: {"search_v2_bucket_9_13"}}, URL: &url.URL{Path: "/v1/x"}}
+	r8 := &http.Request{Method: http.MethodPost, Header: http.Header{cacheNamespaceHeader: {"search_v3_bucket_9_13"}}, URL: &url.URL{Path: "/v1/x"}}
+	if CacheKeyFromRequest(r7) == CacheKeyFromRequest(r8) {
+		t.Fatalf("expected cache namespace to influence key")
+	}
+
+	// Invalid namespace characters should be stripped, producing the same key as sanitized form
+	r9 := &http.Request{Method: http.MethodPost, Header: http.Header{cacheNamespaceHeader: {"search!@#_v2"}}, URL: &url.URL{Path: "/v1/x"}}
+	r10 := &http.Request{Method: http.MethodPost, Header: http.Header{cacheNamespaceHeader: {"search_v2"}}, URL: &url.URL{Path: "/v1/x"}}
+	if CacheKeyFromRequest(r9) != CacheKeyFromRequest(r10) {
+		t.Fatalf("expected sanitized cache namespace to match")
+	}
 }
 
 func TestIsResponseCacheable_Policy(t *testing.T) {

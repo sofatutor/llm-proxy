@@ -23,6 +23,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/logging"
 	"github.com/sofatutor/llm-proxy/internal/middleware"
 	"github.com/sofatutor/llm-proxy/internal/token"
@@ -296,6 +297,7 @@ func NewTransparentProxyWithLoggerAndObservability(config ProxyConfig, validator
 	if err != nil {
 		return nil, err
 	}
+	obsCfg.EventEnricher = p.enrichObservabilityEvent(obsCfg.EventEnricher)
 	p.obsMiddleware = middleware.NewObservabilityMiddleware(obsCfg, logger)
 	return p, nil
 }
@@ -369,6 +371,7 @@ func (p *TransparentProxy) processRequestHeaders(req *http.Request) {
 		"CF-IPCountry",             // Cloudflare headers
 		"X-Client-IP",              // Other proxies
 		"X-Original-Forwarded-For", // Chain of proxies
+		cacheNamespaceHeader,       // Internal cache-key namespace hint; never forward upstream
 	}
 
 	// Remove headers that shouldn't be passed to the upstream
@@ -822,14 +825,24 @@ func (p *TransparentProxy) Handler() http.Handler {
 			return
 		}
 		var (
+			tokenData token.TokenData
 			projectID string
 			err       error
 		)
-		if preCacheOK {
-			// Avoid per-request DB updates on true cache hits.
-			projectID, err = p.tokenValidator.ValidateToken(r.Context(), tokenStr)
+		if validator, ok := p.tokenValidator.(TokenDataValidator); ok {
+			if preCacheOK {
+				// Avoid per-request DB updates on true cache hits.
+				tokenData, err = validator.ValidateTokenData(r.Context(), tokenStr)
+			} else {
+				tokenData, err = validator.ValidateTokenDataWithTracking(r.Context(), tokenStr)
+			}
+			projectID = tokenData.ProjectID
 		} else {
-			projectID, err = p.tokenValidator.ValidateTokenWithTracking(r.Context(), tokenStr)
+			if preCacheOK {
+				projectID, err = p.tokenValidator.ValidateToken(r.Context(), tokenStr)
+			} else {
+				projectID, err = p.tokenValidator.ValidateTokenWithTracking(r.Context(), tokenStr)
+			}
 		}
 		if err != nil {
 			p.handleValidationError(w, r, err)
@@ -837,6 +850,17 @@ func (p *TransparentProxy) Handler() http.Handler {
 		}
 		ctx = context.WithValue(r.Context(), ctxKeyProjectID, projectID)
 		ctx = context.WithValue(ctx, ctxKeyTokenID, tokenStr)
+		if tokenData.ID != "" {
+			ctx = context.WithValue(ctx, ctxKeyTokenRecordID, tokenData.ID)
+		}
+		if len(tokenData.Metadata) > 0 {
+			ctx = context.WithValue(ctx, ctxKeyTokenMetadata, token.CloneMetadata(tokenData.Metadata))
+		}
+		if eventData, ok := ctx.Value(ctxKeyObservabilityEventData).(*observabilityEventData); ok && eventData != nil {
+			eventData.ProjectID = projectID
+			eventData.TokenID = tokenData.ID
+			eventData.TokenMetadata = token.CloneMetadata(tokenData.Metadata)
+		}
 		r = r.WithContext(ctx)
 		// Defer upstream API key lookup until we actually need to proxy upstream.
 		// This keeps cache-hit latency low under concurrency.
@@ -1010,16 +1034,66 @@ func (p *TransparentProxy) Handler() http.Handler {
 	})
 
 	var handler http.Handler = baseHandler
-	handler = p.ValidateRequestMiddleware()(handler)
-
 	if p.obsMiddleware != nil {
 		handler = p.obsMiddleware.Middleware()(handler)
+		handler = p.observabilityEventContextMiddleware()(handler)
 	}
+	handler = p.ValidateRequestMiddleware()(handler)
 	handler = CircuitBreakerMiddleware(5, 30*time.Second, func(status int) bool {
 		return status == http.StatusBadGateway || status == http.StatusServiceUnavailable || status == http.StatusGatewayTimeout
 	})(handler)
 
 	return handler
+}
+
+type observabilityEventData struct {
+	ProjectID     string
+	TokenID       string
+	TokenMetadata map[string]string
+}
+
+func (p *TransparentProxy) observabilityEventContextMiddleware() Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if _, ok := r.Context().Value(ctxKeyObservabilityEventData).(*observabilityEventData); ok {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			eventData := &observabilityEventData{}
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKeyObservabilityEventData, eventData)))
+		})
+	}
+}
+
+func (p *TransparentProxy) enrichObservabilityEvent(existing func(*http.Request, *eventbus.Event)) func(*http.Request, *eventbus.Event) {
+	return func(r *http.Request, evt *eventbus.Event) {
+		if existing != nil {
+			existing(r, evt)
+		}
+
+		if eventData, ok := r.Context().Value(ctxKeyObservabilityEventData).(*observabilityEventData); ok && eventData != nil {
+			if eventData.ProjectID != "" {
+				evt.ProjectID = eventData.ProjectID
+			}
+			if eventData.TokenID != "" {
+				evt.TokenID = eventData.TokenID
+			}
+			if len(eventData.TokenMetadata) > 0 {
+				evt.TokenMetadata = token.CloneMetadata(eventData.TokenMetadata)
+			}
+		}
+
+		if projectID, ok := r.Context().Value(ctxKeyProjectID).(string); ok {
+			evt.ProjectID = projectID
+		}
+		if tokenRecordID, ok := r.Context().Value(ctxKeyTokenRecordID).(string); ok {
+			evt.TokenID = tokenRecordID
+		}
+		if tokenMetadata, ok := r.Context().Value(ctxKeyTokenMetadata).(map[string]string); ok {
+			evt.TokenMetadata = token.CloneMetadata(tokenMetadata)
+		}
+	}
 }
 
 type timingResponseWriter struct {

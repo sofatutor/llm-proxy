@@ -41,6 +41,7 @@ func TestTokenCRUD(t *testing.T) {
 	token1 := Token{
 		Token:        "test-token-1",
 		ProjectID:    project.ID,
+		Metadata:     stringPtr(`{"feature":"sofabuddy","user_id":"42"}`),
 		ExpiresAt:    &expiresAt,
 		IsActive:     true,
 		RequestCount: 0,
@@ -82,6 +83,9 @@ func TestTokenCRUD(t *testing.T) {
 	}
 	if retrievedToken1.ProjectID != token1.ProjectID {
 		t.Fatalf("Expected project ID %s, got %s", token1.ProjectID, retrievedToken1.ProjectID)
+	}
+	if retrievedToken1.Metadata == nil || *retrievedToken1.Metadata != *token1.Metadata {
+		t.Fatalf("Expected metadata %v, got %v", token1.Metadata, retrievedToken1.Metadata)
 	}
 	if retrievedToken1.ExpiresAt == nil {
 		t.Fatalf("Expected expiration time, got nil")
@@ -237,6 +241,10 @@ func TestTokenCRUD(t *testing.T) {
 	if err != ErrTokenNotFound {
 		t.Fatalf("Expected ErrTokenNotFound, got %v", err)
 	}
+}
+
+func stringPtr(value string) *string {
+	return &value
 }
 
 func TestIncrementTokenUsageBatch(t *testing.T) {

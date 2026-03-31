@@ -338,24 +338,17 @@ func TestRedisStreamsEventBus_Publish(t *testing.T) {
 	client := newMockRedisStreamsClient()
 	config := DefaultRedisStreamsConfig()
 	bus := NewRedisStreamsEventBus(client, config)
+	defer bus.Stop()
 
 	ctx := context.Background()
 	evt := Event{RequestID: "test-123", Method: "POST", Path: "/v1/chat/completions", Status: 200}
 
 	bus.Publish(ctx, evt)
 
-	// Verify message was added
+	waitForRedisStats(t, bus, 1, 0)
+
 	if len(client.stream) != 1 {
 		t.Fatalf("expected 1 message in stream, got %d", len(client.stream))
-	}
-
-	// Verify stats
-	pub, drop := bus.Stats()
-	if pub != 1 {
-		t.Errorf("expected 1 published, got %d", pub)
-	}
-	if drop != 0 {
-		t.Errorf("expected 0 dropped, got %d", drop)
 	}
 
 	// Verify message content
@@ -375,17 +368,12 @@ func TestRedisStreamsEventBus_Publish_Error(t *testing.T) {
 
 	config := DefaultRedisStreamsConfig()
 	bus := NewRedisStreamsEventBus(client, config)
+	defer bus.Stop()
 
 	ctx := context.Background()
 	bus.Publish(ctx, Event{RequestID: "test"})
 
-	pub, drop := bus.Stats()
-	if pub != 0 {
-		t.Errorf("expected 0 published on error, got %d", pub)
-	}
-	if drop != 1 {
-		t.Errorf("expected 1 dropped on error, got %d", drop)
-	}
+	waitForRedisStats(t, bus, 0, 1)
 }
 
 func TestRedisStreamsEventBus_Publish_MaxLen(t *testing.T) {
@@ -393,6 +381,7 @@ func TestRedisStreamsEventBus_Publish_MaxLen(t *testing.T) {
 	config := DefaultRedisStreamsConfig()
 	config.MaxLen = 3
 	bus := NewRedisStreamsEventBus(client, config)
+	defer bus.Stop()
 
 	ctx := context.Background()
 
@@ -402,8 +391,48 @@ func TestRedisStreamsEventBus_Publish_MaxLen(t *testing.T) {
 	}
 
 	// Stream should be trimmed to MaxLen
+	waitForRedisStreamLength(t, client, 3)
 	if len(client.stream) != 3 {
 		t.Errorf("expected stream length 3 after trim, got %d", len(client.stream))
+	}
+}
+
+func TestRedisStreamsEventBus_Publish_DropsWhenProducerQueueFull(t *testing.T) {
+	client := &blockingRedisStreamsClient{
+		RedisStreamsClient: newMockRedisStreamsClient(),
+		release:            make(chan struct{}),
+		started:            make(chan struct{}, 1),
+	}
+	config := DefaultRedisStreamsConfig()
+	config.PublishBufferSize = 1
+	bus := NewRedisStreamsEventBus(client, config)
+
+	bus.Publish(context.Background(), Event{RequestID: "first"})
+	<-client.started
+	bus.Publish(context.Background(), Event{RequestID: "second"})
+	bus.Publish(context.Background(), Event{RequestID: "third"})
+
+	waitForRedisStats(t, bus, 0, 1)
+
+	close(client.release)
+	waitForRedisStats(t, bus, 2, 1)
+	bus.Stop()
+}
+
+func TestRedisStreamsEventBus_Publish_ReturnsWithoutWaitingForRedis(t *testing.T) {
+	client := &blockingRedisStreamsClient{RedisStreamsClient: newMockRedisStreamsClient(), release: make(chan struct{})}
+	config := DefaultRedisStreamsConfig()
+	config.PublishBufferSize = 1
+	bus := NewRedisStreamsEventBus(client, config)
+	defer func() {
+		close(client.release)
+		bus.Stop()
+	}()
+
+	start := time.Now()
+	bus.Publish(context.Background(), Event{RequestID: "non-blocking"})
+	if elapsed := time.Since(start); elapsed > 50*time.Millisecond {
+		t.Fatalf("expected non-blocking publish, took %s", elapsed)
 	}
 }
 
@@ -615,6 +644,7 @@ func TestRedisStreamsEventBus_StreamLength(t *testing.T) {
 		bus.Publish(ctx, Event{RequestID: fmt.Sprintf("r%d", i)})
 	}
 
+	waitForBusStreamLength(t, bus, 5)
 	length, err = bus.StreamLength(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -769,6 +799,7 @@ func TestRedisStreamsEventBus_Integration_Miniredis(t *testing.T) {
 	}
 
 	// Verify stream length
+	waitForBusStreamLength(t, bus, 5)
 	length, err := bus.StreamLength(ctx)
 	if err != nil {
 		t.Fatalf("StreamLength error: %v", err)
@@ -799,13 +830,7 @@ func TestRedisStreamsEventBus_Integration_Miniredis(t *testing.T) {
 	}
 
 	// Verify stats
-	pub, drop := bus.Stats()
-	if pub != 5 {
-		t.Errorf("expected 5 published, got %d", pub)
-	}
-	if drop != 0 {
-		t.Errorf("expected 0 dropped, got %d", drop)
-	}
+	waitForRedisStats(t, bus, 5, 0)
 }
 
 // Test RedisStreamsClientAdapter methods
@@ -1047,10 +1072,73 @@ func TestRedisStreamsEventBus_Publish_JSONMarshalCoverage(t *testing.T) {
 	}
 	bus.Publish(ctx, evt)
 
-	pub, drop := bus.Stats()
-	if pub != 1 || drop != 0 {
-		t.Errorf("expected 1 published, 0 dropped, got pub=%d, drop=%d", pub, drop)
+	waitForRedisStats(t, bus, 1, 0)
+}
+
+type blockingRedisStreamsClient struct {
+	RedisStreamsClient
+	release chan struct{}
+	started chan struct{}
+}
+
+func (b *blockingRedisStreamsClient) XAdd(ctx context.Context, args *redis.XAddArgs) (string, error) {
+	if b.started != nil {
+		select {
+		case b.started <- struct{}{}:
+		default:
+		}
 	}
+	<-b.release
+	return b.RedisStreamsClient.XAdd(ctx, args)
+}
+
+func waitForRedisStats(t *testing.T, bus *RedisStreamsEventBus, wantPublished, wantDropped int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		published, dropped := bus.Stats()
+		if published == wantPublished && dropped == wantDropped {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	published, dropped := bus.Stats()
+	t.Fatalf("expected published=%d dropped=%d, got published=%d dropped=%d", wantPublished, wantDropped, published, dropped)
+}
+
+func waitForRedisStreamLength(t *testing.T, client *mockRedisStreamsClient, want int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		client.mu.Lock()
+		length := len(client.stream)
+		client.mu.Unlock()
+		if length == want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	client.mu.Lock()
+	length := len(client.stream)
+	client.mu.Unlock()
+	t.Fatalf("expected stream length %d, got %d", want, length)
+}
+
+func waitForBusStreamLength(t *testing.T, bus *RedisStreamsEventBus, want int64) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		length, err := bus.StreamLength(context.Background())
+		if err == nil && length == want {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	length, err := bus.StreamLength(context.Background())
+	if err != nil {
+		t.Fatalf("expected stream length %d, got error %v", want, err)
+	}
+	t.Fatalf("expected stream length %d, got %d", want, length)
 }
 
 // Test XClaim with no eligible messages

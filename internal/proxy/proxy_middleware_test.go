@@ -71,6 +71,7 @@ func TestProcessRequestHeaders(t *testing.T) {
 	req.Header.Set("X-Forwarded-For", "192.168.1.1")
 	req.Header.Set("X-Real-IP", "192.168.1.2")
 	req.Header.Set("CF-Connecting-IP", "192.168.1.3")
+	req.Header.Set(cacheNamespaceHeader, "search_v2_bucket_9_13")
 	req.RemoteAddr = "192.168.1.4:12345"
 
 	// Create a streaming request
@@ -86,6 +87,7 @@ func TestProcessRequestHeaders(t *testing.T) {
 		// Verify prohibited headers were removed
 		assert.Empty(t, req.Header.Get("X-Real-IP"))
 		assert.Empty(t, req.Header.Get("CF-Connecting-IP"))
+		assert.Empty(t, req.Header.Get(cacheNamespaceHeader))
 
 		// Verify X-Forwarded-For was set to client IP
 		assert.Equal(t, "192.168.1.4", req.Header.Get("X-Forwarded-For"))

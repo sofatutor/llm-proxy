@@ -87,26 +87,33 @@ func (a *RedisStreamsClientAdapter) XInfoGroups(ctx context.Context, stream stri
 
 // RedisStreamsConfig holds configuration for Redis Streams event bus.
 type RedisStreamsConfig struct {
-	StreamKey        string        // Redis stream key name
-	ConsumerGroup    string        // Consumer group name
-	ConsumerName     string        // Unique consumer name within the group
-	MaxLen           int64         // Max stream length (0 = unlimited, uses MAXLEN ~ approximation)
-	BlockTimeout     time.Duration // Block timeout for XREADGROUP (0 = non-blocking)
-	ClaimMinIdleTime time.Duration // Minimum idle time before claiming pending messages
-	BatchSize        int64         // Number of messages to read at once
+	StreamKey         string        // Redis stream key name
+	ConsumerGroup     string        // Consumer group name
+	ConsumerName      string        // Unique consumer name within the group
+	PublishBufferSize int           // Bounded async producer queue size
+	MaxLen            int64         // Max stream length (0 = unlimited, uses MAXLEN ~ approximation)
+	BlockTimeout      time.Duration // Block timeout for XREADGROUP (0 = non-blocking)
+	ClaimMinIdleTime  time.Duration // Minimum idle time before claiming pending messages
+	BatchSize         int64         // Number of messages to read at once
 }
 
 // DefaultRedisStreamsConfig returns default configuration.
 func DefaultRedisStreamsConfig() RedisStreamsConfig {
 	return RedisStreamsConfig{
-		StreamKey:        "llm-proxy-events",
-		ConsumerGroup:    "llm-proxy-dispatchers",
-		ConsumerName:     "dispatcher-1",
-		MaxLen:           10000,
-		BlockTimeout:     5 * time.Second,
-		ClaimMinIdleTime: 30 * time.Second,
-		BatchSize:        100,
+		StreamKey:         "llm-proxy-events",
+		ConsumerGroup:     "llm-proxy-dispatchers",
+		ConsumerName:      "dispatcher-1",
+		PublishBufferSize: 1000,
+		MaxLen:            10000,
+		BlockTimeout:      5 * time.Second,
+		ClaimMinIdleTime:  30 * time.Second,
+		BatchSize:         100,
 	}
+}
+
+type publishRequest struct {
+	ctx context.Context
+	evt Event
 }
 
 // RedisStreamsEventBus implements EventBus using Redis Streams.
@@ -115,6 +122,7 @@ func DefaultRedisStreamsConfig() RedisStreamsConfig {
 type RedisStreamsEventBus struct {
 	client       RedisStreamsClient
 	config       RedisStreamsConfig
+	publishCh    chan publishRequest
 	stats        busStats
 	stopCh       chan struct{}
 	stopOnce     sync.Once
@@ -126,11 +134,18 @@ type RedisStreamsEventBus struct {
 
 // NewRedisStreamsEventBus creates a new Redis Streams event bus.
 func NewRedisStreamsEventBus(client RedisStreamsClient, config RedisStreamsConfig) *RedisStreamsEventBus {
-	return &RedisStreamsEventBus{
-		client: client,
-		config: config,
-		stopCh: make(chan struct{}),
+	if config.PublishBufferSize <= 0 {
+		config.PublishBufferSize = DefaultRedisStreamsConfig().PublishBufferSize
 	}
+	b := &RedisStreamsEventBus{
+		client:    client,
+		config:    config,
+		publishCh: make(chan publishRequest, config.PublishBufferSize),
+		stopCh:    make(chan struct{}),
+	}
+	b.wg.Add(1)
+	go b.publishLoop()
+	return b
 }
 
 // EnsureConsumerGroup creates the consumer group if it doesn't exist.
@@ -165,6 +180,42 @@ func isGroupExistsError(err error) bool {
 
 // Publish adds an event to the Redis stream using XADD.
 func (b *RedisStreamsEventBus) Publish(ctx context.Context, evt Event) {
+	select {
+	case <-b.stopCh:
+		b.stats.dropped.Add(1)
+		return
+	default:
+	}
+
+	request := publishRequest{ctx: ctx, evt: evt}
+	select {
+	case b.publishCh <- request:
+	default:
+		b.stats.dropped.Add(1)
+	}
+}
+
+func (b *RedisStreamsEventBus) publishLoop() {
+	defer b.wg.Done()
+
+	for {
+		select {
+		case request := <-b.publishCh:
+			b.publishToStream(request.ctx, request.evt)
+		case <-b.stopCh:
+			for {
+				select {
+				case request := <-b.publishCh:
+					b.publishToStream(request.ctx, request.evt)
+				default:
+					return
+				}
+			}
+		}
+	}
+}
+
+func (b *RedisStreamsEventBus) publishToStream(ctx context.Context, evt Event) {
 	data, err := json.Marshal(evt)
 	if err != nil {
 		log.Printf("[eventbus] Failed to marshal event: %v", err)

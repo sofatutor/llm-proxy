@@ -169,11 +169,18 @@ func heliconePayloadFromEvent(event dispatcher.EventPayload) (map[string]interfa
 	// Inject usage if we computed it so Helicone can compute cost
 	if event.TokensUsage != nil {
 		if m, ok := providerResponse["json"].(map[string]interface{}); ok {
-			m["usage"] = map[string]int{
-				"prompt_tokens":     event.TokensUsage.Prompt,
-				"completion_tokens": event.TokensUsage.Completion,
-				"total_tokens":      event.TokensUsage.Prompt + event.TokensUsage.Completion,
+			usage := map[string]any{
+				"prompt_tokens":     event.TokensUsage.Input,
+				"completion_tokens": event.TokensUsage.Output,
+				"total_tokens":      event.TokensUsage.Total,
 			}
+			if len(event.TokensUsage.InputDetails) > 0 {
+				usage["prompt_tokens_details"] = event.TokensUsage.InputDetails
+			}
+			if len(event.TokensUsage.OutputDetails) > 0 {
+				usage["completion_tokens_details"] = event.TokensUsage.OutputDetails
+			}
+			m["usage"] = usage
 		}
 	}
 	// If OutputBase64 is set, include as base64

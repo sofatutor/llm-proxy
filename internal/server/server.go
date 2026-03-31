@@ -151,13 +151,14 @@ func NewWithDatabase(cfg *config.Config, tokenStore token.TokenStore, projectSto
 		}
 
 		streamsConfig := eventbus.RedisStreamsConfig{
-			StreamKey:        cfg.RedisStreamKey,
-			ConsumerGroup:    cfg.RedisConsumerGroup,
-			ConsumerName:     consumerName,
-			MaxLen:           cfg.RedisStreamMaxLen,
-			BlockTimeout:     cfg.RedisStreamBlockTime,
-			ClaimMinIdleTime: cfg.RedisStreamClaimTime,
-			BatchSize:        cfg.RedisStreamBatchSize,
+			StreamKey:         cfg.RedisStreamKey,
+			ConsumerGroup:     cfg.RedisConsumerGroup,
+			ConsumerName:      consumerName,
+			PublishBufferSize: cfg.ObservabilityBufferSize,
+			MaxLen:            cfg.RedisStreamMaxLen,
+			BlockTimeout:      cfg.RedisStreamBlockTime,
+			ClaimMinIdleTime:  cfg.RedisStreamClaimTime,
+			BatchSize:         cfg.RedisStreamBatchSize,
 		}
 		adapter := &eventbus.RedisStreamsClientAdapter{Client: client}
 		bus = eventbus.NewRedisStreamsEventBus(adapter, streamsConfig)
@@ -1218,9 +1219,10 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodPost:
 		var req struct {
-			ProjectID       string `json:"project_id"`
-			DurationMinutes int    `json:"duration_minutes"`
-			MaxRequests     *int   `json:"max_requests"`
+			ProjectID       string            `json:"project_id"`
+			DurationMinutes int               `json:"duration_minutes"`
+			MaxRequests     *int              `json:"max_requests"`
+			Metadata        map[string]string `json:"metadata"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			s.logger.Error("invalid token create request body", zap.Error(err), zap.String("request_id", requestID))
@@ -1337,6 +1339,7 @@ func (s *Server) handleTokens(w http.ResponseWriter, r *http.Request) {
 			ID:           tokenID,
 			Token:        tokenStr,
 			ProjectID:    req.ProjectID,
+			Metadata:     token.CloneMetadata(req.Metadata),
 			ExpiresAt:    expiresAt,
 			IsActive:     true,
 			RequestCount: 0,

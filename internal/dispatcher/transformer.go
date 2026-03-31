@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"mime/multipart"
 	"strconv"
 	"strings"
 	"time"
@@ -177,7 +178,7 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 	// Basic transformation
 	payload := &EventPayload{
 		Type:      "llm",
-		Event:     "start", // For now, all events are considered "start" events
+		Event:     eventNameForEvent(evt),
 		RunID:     runID,
 		Timestamp: time.Now(),
 		LogID:     evt.LogID,
@@ -185,9 +186,24 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 			"method":      evt.Method,
 			"path":        evt.Path,
 			"status":      evt.Status,
-			"duration_ms": evt.Duration.Milliseconds(),
+			"duration_ms": durationMilliseconds(evt.Duration),
 			"request_id":  evt.RequestID,
 		},
+	}
+	if model := modelFromRequestBody(evt.RequestBody); model != "" {
+		payload.Metadata["model"] = model
+	}
+	if evt.ProjectID != "" {
+		payload.Metadata["project_id"] = evt.ProjectID
+	}
+	if evt.TokenID != "" {
+		payload.Metadata["token_id"] = evt.TokenID
+	}
+	if len(evt.TokenMetadata) > 0 {
+		payload.Metadata["token_metadata"] = evt.TokenMetadata
+		if userID := firstNonEmpty(evt.TokenMetadata["user_id"], evt.TokenMetadata["app_user_id"]); userID != "" {
+			payload.UserID = &userID
+		}
 	}
 
 	// Add request body as input (JSON or base64)
@@ -199,30 +215,29 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 		}
 	}
 
-	// --- OpenAI-specific output transformation ---
-	isOpenAI := strings.HasPrefix(evt.Path, "/v1/completions") ||
-		strings.HasPrefix(evt.Path, "/v1/chat/completions") ||
-		strings.HasPrefix(evt.Path, "/v1/threads/")
+	decodedResponseBody := decodeResponseBodyForProcessing(evt.ResponseBody, evt.ResponseHeaders)
 
-	if isOpenAI && len(evt.ResponseBody) > 0 {
+	// --- OpenAI-specific output transformation ---
+	isOpenAI := usesOpenAIResponseTransformer(evt.Path)
+
+	if isOpenAI && len(decodedResponseBody) > 0 {
 		// Only use OpenAI transformer if response is valid JSON
-		if js := json.Valid(evt.ResponseBody); js {
+		if js := json.Valid(decodedResponseBody); js {
 			openaiTransformer := &eventtransformer.OpenAITransformer{}
 			parsed, err := openaiTransformer.TransformEvent(map[string]any{
-				"response_body": string(evt.ResponseBody),
-				"path":          evt.Path,
+				"Method":          evt.Method,
+				"Path":            evt.Path,
+				"RequestBody":     string(evt.RequestBody),
+				"ResponseBody":    string(decodedResponseBody),
+				"ResponseHeaders": headerToAnyMap(evt.ResponseHeaders),
 			})
 			if err == nil && parsed != nil {
 				if js, err := json.Marshal(parsed); err == nil {
 					payload.Output = js
-					// Optionally extract token usage if present
-					if usage, ok := parsed["usage"].(map[string]any); ok {
-						payload.TokensUsage = &TokensUsage{
-							Prompt:     int(usage["prompt_tokens"].(float64)),
-							Completion: int(usage["completion_tokens"].(float64)),
-						}
+					if model := firstNonEmpty(modelFromParsedOpenAIEvent(parsed), metadataStringValue(payload.Metadata, "model")); model != "" {
+						payload.Metadata["model"] = model
 					}
-					return payload, nil
+					payload.TokensUsage = firstTokensUsage(parsed["token_usage"], parsed["usage"])
 				}
 			}
 			// If parsing fails, fall through to generic logic
@@ -236,6 +251,10 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 		} else {
 			payload.OutputBase64 = b64
 		}
+	}
+
+	if payload.TokensUsage == nil {
+		payload.TokensUsage = fallbackTokensUsage(evt.RequestBody, decodedResponseBody, metadataStringValue(payload.Metadata, "model"))
 	}
 
 	// Add response headers to metadata only if Verbose is true
@@ -252,4 +271,525 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 	}
 
 	return payload, nil
+}
+
+func decodeResponseBodyForProcessing(responseBody []byte, headers map[string][]string) []byte {
+	if len(responseBody) == 0 {
+		return nil
+	}
+
+	js, _ := safeRawMessageOrBase64(responseBody, headers)
+	if js != nil {
+		if len(js) >= 2 && js[0] == '"' && js[len(js)-1] == '"' {
+			var decoded string
+			if err := json.Unmarshal(js, &decoded); err == nil {
+				return []byte(decoded)
+			}
+		}
+
+		return []byte(js)
+	}
+
+	return responseBody
+}
+
+func headerToAnyMap(header map[string][]string) map[string]any {
+	if len(header) == 0 {
+		return nil
+	}
+
+	converted := make(map[string]any, len(header))
+	for key, values := range header {
+		if len(values) == 1 {
+			converted[key] = values[0]
+			continue
+		}
+
+		items := make([]any, len(values))
+		for index, value := range values {
+			items[index] = value
+		}
+		converted[key] = items
+	}
+
+	return converted
+}
+
+func tokensUsageFromUsageMap(usage map[string]any) *TokensUsage {
+	input, okInput := firstUsageValue(usage, "input_tokens", "prompt_tokens")
+	output, okOutput := firstUsageValue(usage, "output_tokens", "completion_tokens")
+	total, okTotal := firstUsageValue(usage, "total_tokens")
+	if !okInput && !okOutput && !okTotal {
+		return nil
+	}
+	if !okTotal {
+		total = input + output
+	}
+
+	return &TokensUsage{
+		Input:         input,
+		InputDetails:  firstUsageDetailsMap(usage, "input_tokens_details", "prompt_tokens_details"),
+		Output:        output,
+		OutputDetails: firstUsageDetailsMap(usage, "output_tokens_details", "completion_tokens_details"),
+		Total:         total,
+	}
+}
+
+func firstTokensUsage(values ...any) *TokensUsage {
+	for _, value := range values {
+		if usage := tokensUsageFromValue(value); usage != nil {
+			return usage
+		}
+	}
+
+	return nil
+}
+
+func tokensUsageFromValue(value any) *TokensUsage {
+	switch typed := value.(type) {
+	case map[string]any:
+		return tokensUsageFromUsageMap(typed)
+	case map[string]int:
+		return &TokensUsage{
+			Input:  firstIntMapValue(typed, "input_tokens", "prompt_tokens"),
+			Output: firstIntMapValue(typed, "output_tokens", "completion_tokens"),
+			Total:  firstIntMapValue(typed, "total_tokens"),
+		}
+	case map[string]float64:
+		return &TokensUsage{
+			Input:  firstFloatMapValue(typed, "input_tokens", "prompt_tokens"),
+			Output: firstFloatMapValue(typed, "output_tokens", "completion_tokens"),
+			Total:  firstFloatMapValue(typed, "total_tokens"),
+		}
+	default:
+		return nil
+	}
+}
+
+func firstUsageDetailsMap(usage map[string]any, keys ...string) map[string]any {
+	for _, key := range keys {
+		value, ok := usage[key]
+		if !ok {
+			continue
+		}
+		if typed, ok := value.(map[string]any); ok && len(typed) > 0 {
+			return cloneStringAnyMap(typed)
+		}
+	}
+
+	return nil
+}
+
+func cloneStringAnyMap(source map[string]any) map[string]any {
+	if len(source) == 0 {
+		return nil
+	}
+	cloned := make(map[string]any, len(source))
+	for key, value := range source {
+		cloned[key] = cloneAnyValue(value)
+	}
+	return cloned
+}
+
+func cloneAnyValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		return cloneStringAnyMap(typed)
+	case []any:
+		cloned := make([]any, len(typed))
+		for index, item := range typed {
+			cloned[index] = cloneAnyValue(item)
+		}
+		return cloned
+	default:
+		return value
+	}
+}
+
+func modelFromParsedOpenAIEvent(parsed map[string]any) string {
+	if model, ok := parsed["model"].(string); ok && model != "" {
+		return model
+	}
+
+	responseBody, ok := parsed["response_body"].(string)
+	if !ok || responseBody == "" || !json.Valid([]byte(responseBody)) {
+		return ""
+	}
+
+	var responseObject map[string]any
+	if err := json.Unmarshal([]byte(responseBody), &responseObject); err != nil {
+		return ""
+	}
+
+	if model, ok := responseObject["model"].(string); ok {
+		return model
+	}
+
+	return ""
+}
+
+func modelFromRequestBody(requestBody []byte) string {
+	if len(requestBody) == 0 {
+		return ""
+	}
+
+	if json.Valid(requestBody) {
+		var requestObject map[string]any
+		if err := json.Unmarshal(requestBody, &requestObject); err != nil {
+			return ""
+		}
+
+		if model, ok := requestObject["model"].(string); ok {
+			return model
+		}
+	}
+
+	if model := multipartFieldValue(requestBody, "model"); model != "" {
+		return model
+	}
+
+	return ""
+}
+
+func multipartFieldValue(requestBody []byte, fieldName string) string {
+	boundary := multipartBoundaryFromBody(requestBody)
+	if boundary == "" {
+		return ""
+	}
+
+	reader := multipart.NewReader(bytes.NewReader(requestBody), boundary)
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			return ""
+		}
+		if err != nil {
+			return ""
+		}
+
+		if part.FormName() != fieldName {
+			_ = part.Close()
+			continue
+		}
+
+		value, err := io.ReadAll(io.LimitReader(part, 4096))
+		_ = part.Close()
+		if err != nil {
+			return ""
+		}
+
+		return strings.TrimSpace(string(value))
+	}
+}
+
+func multipartBoundaryFromBody(requestBody []byte) string {
+	line := requestBody
+	if newlineIndex := bytes.IndexByte(line, '\n'); newlineIndex >= 0 {
+		line = line[:newlineIndex]
+	}
+
+	line = bytes.TrimSpace(bytes.TrimSuffix(line, []byte("\r")))
+	if len(line) <= 2 || !bytes.HasPrefix(line, []byte("--")) {
+		return ""
+	}
+
+	return string(line[2:])
+}
+
+func floatToInt(value any) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		return typed, true
+	case int32:
+		return int(typed), true
+	case int64:
+		return int(typed), true
+	case float64:
+		return int(typed), true
+	case float32:
+		return int(typed), true
+	default:
+		return 0, false
+	}
+}
+
+func firstUsageValue(usage map[string]any, keys ...string) (int, bool) {
+	for _, key := range keys {
+		if value, ok := floatToInt(usage[key]); ok {
+			return value, true
+		}
+	}
+
+	return 0, false
+}
+
+func firstIntMapValue(values map[string]int, keys ...string) int {
+	for _, key := range keys {
+		if value, ok := values[key]; ok {
+			return value
+		}
+	}
+
+	return 0
+}
+
+func firstFloatMapValue(values map[string]float64, keys ...string) int {
+	for _, key := range keys {
+		if value, ok := values[key]; ok {
+			return int(value)
+		}
+	}
+
+	return 0
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+
+	return ""
+}
+
+func durationMilliseconds(duration time.Duration) int64 {
+	if duration <= 0 {
+		return 0
+	}
+
+	if milliseconds := duration.Milliseconds(); milliseconds > 0 {
+		return milliseconds
+	}
+
+	return 1
+}
+
+func metadataStringValue(metadata map[string]any, key string) string {
+	if metadata == nil {
+		return ""
+	}
+
+	value, _ := metadata[key].(string)
+	return value
+}
+
+func eventNameForEvent(evt eventbus.Event) string {
+	if evt.Status != 0 || evt.Duration > 0 || len(evt.ResponseBody) > 0 || len(evt.ResponseHeaders) > 0 {
+		return "finish"
+	}
+
+	return "start"
+}
+
+func usesOpenAIResponseTransformer(path string) bool {
+	return strings.HasPrefix(path, "/v1/completions") ||
+		strings.HasPrefix(path, "/v1/chat/completions") ||
+		strings.HasPrefix(path, "/v1/embeddings") ||
+		strings.HasPrefix(path, "/v1/responses") ||
+		strings.HasPrefix(path, "/v1/threads/") ||
+		strings.HasPrefix(path, "/v1/audio/transcriptions") ||
+		strings.HasPrefix(path, "/v1/audio/translations")
+}
+
+func fallbackTokensUsage(requestBody, responseBody []byte, model string) *TokensUsage {
+	promptTokens := promptTokensFromRequestBody(requestBody, model)
+	completionTokens := completionTokensFromResponseBody(responseBody, model)
+	if promptTokens == 0 && completionTokens == 0 {
+		return nil
+	}
+
+	return &TokensUsage{
+		Input:  promptTokens,
+		Output: completionTokens,
+		Total:  promptTokens + completionTokens,
+	}
+}
+
+func promptTokensFromRequestBody(requestBody []byte, model string) int {
+	promptSource := ""
+	if json.Valid(requestBody) {
+		var requestObject map[string]any
+		if err := json.Unmarshal(requestBody, &requestObject); err == nil {
+			if messages, ok := requestObject["messages"]; ok {
+				if encodedMessages, err := json.Marshal(messages); err == nil {
+					promptSource = string(encodedMessages)
+				}
+			}
+			if instructions, ok := requestObject["instructions"].(string); ok && instructions != "" {
+				promptSource += instructions
+			}
+			if inputSource := promptInputSource(requestObject["input"]); inputSource != "" {
+				promptSource += inputSource
+			}
+		}
+	}
+	if promptSource == "" {
+		promptSource = multipartFieldValue(requestBody, "prompt")
+	}
+	if promptSource == "" {
+		return 0
+	}
+
+	tokens, err := eventtransformer.CountOpenAITokensForModel(promptSource, model)
+	if err != nil {
+		return 0
+	}
+
+	return tokens
+}
+
+func promptInputSource(input any) string {
+	switch typed := input.(type) {
+	case string:
+		return typed
+	case nil:
+		return ""
+	default:
+		encodedInput, err := json.Marshal(typed)
+		if err != nil {
+			return ""
+		}
+		return string(encodedInput)
+	}
+}
+
+func completionTokensFromResponseBody(responseBody []byte, model string) int {
+	if len(responseBody) == 0 {
+		return 0
+	}
+
+	content, ok := assistantReplyContentFromResponseBody(responseBody)
+	if !ok || content == "" {
+		return 0
+	}
+
+	tokens, err := eventtransformer.CountOpenAITokensForModel(content, model)
+	if err != nil {
+		return 0
+	}
+
+	return tokens
+}
+
+func assistantReplyContentFromResponseBody(responseBody []byte) (string, bool) {
+	responseObject, ok := responseObjectFromBody(responseBody)
+	if !ok {
+		return "", false
+	}
+
+	if choices, ok := responseObject["choices"].([]any); ok && len(choices) > 0 {
+		if choice, ok := choices[0].(map[string]any); ok {
+			if message, ok := choice["message"].(map[string]any); ok {
+				if content, ok := message["content"].(string); ok {
+					return content, true
+				}
+			}
+		}
+	}
+
+	if choices, ok := responseObject["choices"].([]map[string]any); ok && len(choices) > 0 {
+		if message, ok := choices[0]["message"].(map[string]any); ok {
+			if content, ok := message["content"].(string); ok {
+				return content, true
+			}
+		}
+	}
+
+	if content, ok := responseOutputText(responseObject); ok {
+		return content, true
+	}
+
+	if text, ok := responseObject["text"].(string); ok && text != "" {
+		return text, true
+	}
+
+	return "", false
+}
+
+func responseOutputText(responseObject map[string]any) (string, bool) {
+	outputItems, ok := responseObject["output"].([]any)
+	if !ok {
+		return "", false
+	}
+
+	var content strings.Builder
+	for _, outputItem := range outputItems {
+		itemMap, ok := outputItem.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		segments, ok := itemMap["content"].([]any)
+		if !ok {
+			continue
+		}
+
+		for _, segment := range segments {
+			segmentMap, ok := segment.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			if text, ok := responseOutputSegmentText(segmentMap); ok {
+				content.WriteString(text)
+			}
+		}
+	}
+
+	if content.Len() == 0 {
+		return "", false
+	}
+
+	return content.String(), true
+}
+
+func responseOutputSegmentText(segment map[string]any) (string, bool) {
+	if text, ok := segment["text"].(string); ok && text != "" {
+		return text, true
+	}
+
+	if textMap, ok := segment["text"].(map[string]any); ok {
+		if value, ok := textMap["value"].(string); ok && value != "" {
+			return value, true
+		}
+	}
+
+	if text, ok := segment["output_text"].(string); ok && text != "" {
+		return text, true
+	}
+
+	return "", false
+}
+
+func responseObjectFromBody(responseBody []byte) (map[string]any, bool) {
+	if len(responseBody) == 0 {
+		return nil, false
+	}
+
+	if json.Valid(responseBody) {
+		var responseObject map[string]any
+		if err := json.Unmarshal(responseBody, &responseObject); err == nil {
+			return responseObject, true
+		}
+	}
+
+	if !utf8.Valid(responseBody) {
+		return nil, false
+	}
+
+	responseText := string(responseBody)
+	if strings.Contains(responseText, "event: ") && strings.Contains(responseText, "data: ") {
+		if merged, err := eventtransformer.MergeThreadStreamingChunks(responseText); err == nil {
+			return merged, true
+		}
+	}
+
+	if eventtransformer.IsOpenAIStreaming(responseText) {
+		if merged, err := eventtransformer.MergeOpenAIStreamingChunks(responseText); err == nil {
+			return merged, true
+		}
+	}
+
+	return nil, false
 }

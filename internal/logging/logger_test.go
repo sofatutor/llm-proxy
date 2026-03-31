@@ -2,8 +2,10 @@ package logging
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,6 +14,18 @@ import (
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 )
+
+type stubWriteSyncer struct {
+	syncErr error
+}
+
+func (s stubWriteSyncer) Write(p []byte) (int, error) {
+	return len(p), nil
+}
+
+func (s stubWriteSyncer) Sync() error {
+	return s.syncErr
+}
 
 func TestNewLogger_FileOutput(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -31,6 +45,34 @@ func TestNewLogger_StdoutOutput(t *testing.T) {
 	logger, err := NewLogger("info", "json", "")
 	require.NoError(t, err)
 	assert.NotNil(t, logger)
+}
+
+func TestSafeWriteSyncer_IgnoresStdoutLikeEINVAL(t *testing.T) {
+	syncer := safeWriteSyncer{
+		WriteSyncer:      stubWriteSyncer{syncErr: &os.PathError{Op: "sync", Path: "/dev/stdout", Err: syscall.EINVAL}},
+		ignoreSyncErrors: true,
+	}
+
+	require.NoError(t, syncer.Sync())
+}
+
+func TestSafeWriteSyncer_IgnoresIoctlDeviceErrorsWhenConfigured(t *testing.T) {
+	syncer := safeWriteSyncer{
+		WriteSyncer:      stubWriteSyncer{syncErr: errors.New("sync stdout: inappropriate ioctl for device")},
+		ignoreSyncErrors: true,
+	}
+
+	require.NoError(t, syncer.Sync())
+}
+
+func TestSafeWriteSyncer_PreservesRealSyncErrors(t *testing.T) {
+	wantErr := errors.New("disk full")
+	syncer := safeWriteSyncer{
+		WriteSyncer:      stubWriteSyncer{syncErr: wantErr},
+		ignoreSyncErrors: true,
+	}
+
+	require.ErrorIs(t, syncer.Sync(), wantErr)
 }
 
 func TestNewLogger_AllLevels(t *testing.T) {

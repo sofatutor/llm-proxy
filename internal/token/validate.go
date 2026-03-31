@@ -51,9 +51,10 @@ type TokenStore interface {
 
 // TokenData represents the data associated with a token
 type TokenData struct {
-	ID            string     // The token ID (UUID) - used for management operations
-	Token         string     // The token string (sk-...) - used for authentication
-	ProjectID     string     // The associated project ID
+	ID            string // The token ID (UUID) - used for management operations
+	Token         string // The token string (sk-...) - used for authentication
+	ProjectID     string // The associated project ID
+	Metadata      map[string]string
 	ExpiresAt     *time.Time // When the token expires (nil for no expiration)
 	IsActive      bool       // Whether the token is active
 	DeactivatedAt *time.Time // When the token was deactivated (nil if not deactivated)
@@ -144,50 +145,69 @@ func (v *StandardValidator) validateTokenData(ctx context.Context, tokenString s
 
 // ValidateToken validates a token without incrementing usage
 func (v *StandardValidator) ValidateToken(ctx context.Context, tokenString string) (string, error) {
-	tokenData, err := v.validateTokenData(ctx, tokenString)
+	tokenData, err := v.ValidateTokenData(ctx, tokenString)
 	if err != nil {
 		return "", err
+	}
+
+	return tokenData.ProjectID, nil
+}
+
+// ValidateTokenData validates a token without incrementing usage and returns the token data.
+func (v *StandardValidator) ValidateTokenData(ctx context.Context, tokenString string) (TokenData, error) {
+	tokenData, err := v.validateTokenData(ctx, tokenString)
+	if err != nil {
+		return TokenData{}, err
 	}
 
 	// Check if the token has reached its rate limit
 	if tokenData.IsRateLimited() {
-		return "", ErrTokenRateLimit
+		return TokenData{}, ErrTokenRateLimit
 	}
 
-	// Token is valid, return the project ID
-	return tokenData.ProjectID, nil
+	return tokenData, nil
 }
 
 // ValidateTokenWithTracking validates a token and increments its usage count
 func (v *StandardValidator) ValidateTokenWithTracking(ctx context.Context, tokenString string) (string, error) {
-	// Validate token and load token data once.
-	tokenData, err := v.validateTokenData(ctx, tokenString)
+	tokenData, err := v.ValidateTokenDataWithTracking(ctx, tokenString)
 	if err != nil {
 		return "", err
 	}
 
+	return tokenData.ProjectID, nil
+}
+
+// ValidateTokenDataWithTracking validates a token, increments usage, and returns the token data.
+func (v *StandardValidator) ValidateTokenDataWithTracking(ctx context.Context, tokenString string) (TokenData, error) {
+	// Validate token and load token data once.
+	tokenData, err := v.validateTokenData(ctx, tokenString)
+	if err != nil {
+		return TokenData{}, err
+	}
+
 	// Enforce rate limit before tracking.
 	if tokenData.IsRateLimited() {
-		return "", ErrTokenRateLimit
+		return TokenData{}, ErrTokenRateLimit
 	}
 
 	// For unlimited tokens, move request_count/last_used_at updates off the hot path.
 	if tokenData.MaxRequests == nil || *tokenData.MaxRequests <= 0 {
 		if agg := v.usageStatsAgg.Load(); agg != nil {
 			agg.RecordTokenUsage(tokenString)
-			return tokenData.ProjectID, nil
+			return tokenData, nil
 		}
 	}
 
 	// Limited tokens (or no async aggregator configured): do synchronous tracking.
 	if err := v.store.IncrementTokenUsage(ctx, tokenString); err != nil {
 		if errors.Is(err, ErrTokenRateLimit) {
-			return "", ErrTokenRateLimit
+			return TokenData{}, ErrTokenRateLimit
 		}
-		return "", fmt.Errorf("failed to track token usage: %w", err)
+		return TokenData{}, fmt.Errorf("failed to track token usage: %w", err)
 	}
 
-	return tokenData.ProjectID, nil
+	return tokenData, nil
 }
 
 // ValidateTokenFormat checks if a token string has the correct format

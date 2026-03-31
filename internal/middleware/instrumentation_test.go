@@ -13,6 +13,7 @@ import (
 
 	"github.com/sofatutor/llm-proxy/internal/eventbus"
 	"github.com/sofatutor/llm-proxy/internal/logging"
+	"github.com/sofatutor/llm-proxy/internal/token"
 	"github.com/stretchr/testify/require"
 )
 
@@ -365,6 +366,41 @@ func TestObservabilityMiddleware_RequestIDResolution(t *testing.T) {
 				t.Fatal("event not received")
 			}
 		})
+	}
+}
+
+func TestObservabilityMiddleware_EventEnricherAddsTokenMetadata(t *testing.T) {
+	bus := eventbus.NewInMemoryEventBus(10)
+	mw := NewObservabilityMiddleware(ObservabilityConfig{
+		Enabled:  true,
+		EventBus: bus,
+		EventEnricher: func(r *http.Request, evt *eventbus.Event) {
+			evt.ProjectID = "project-1"
+			evt.TokenID = "token-uuid-1"
+			evt.TokenMetadata = token.CloneMetadata(map[string]string{"feature": "sofabuddy", "user_id": "42"})
+		},
+	}, nil)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
+	wrapped := mw.Middleware()(handler)
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader([]byte(`{"input":"hello"}`)))
+	req.Header.Set("X-Request-ID", "req-meta")
+	rr := httptest.NewRecorder()
+	ch := bus.Subscribe()
+
+	wrapped.ServeHTTP(rr, req)
+
+	select {
+	case evt := <-ch:
+		require.Equal(t, "project-1", evt.ProjectID)
+		require.Equal(t, "token-uuid-1", evt.TokenID)
+		require.Equal(t, map[string]string{"feature": "sofabuddy", "user_id": "42"}, evt.TokenMetadata)
+	case <-time.After(time.Second):
+		t.Fatal("event not received")
 	}
 }
 
