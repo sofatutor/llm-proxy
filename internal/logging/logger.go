@@ -2,13 +2,75 @@ package logging
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
+	"syscall"
 
 	"github.com/sofatutor/llm-proxy/internal/obfuscate"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
+
+type safeWriteSyncer struct {
+	zapcore.WriteSyncer
+	ignoreSyncErrors bool
+}
+
+func (s safeWriteSyncer) Sync() error {
+	err := s.WriteSyncer.Sync()
+	if err == nil {
+		return nil
+	}
+	if s.ignoreSyncErrors && isIgnorableSyncError(err) {
+		return nil
+	}
+	return err
+}
+
+func isIgnorableSyncError(err error) bool {
+	if errors.Is(err, syscall.EINVAL) {
+		return true
+	}
+
+	return strings.Contains(strings.ToLower(err.Error()), "inappropriate ioctl for device")
+}
+
+func shouldIgnoreSyncErrors(file *os.File, filePath string) bool {
+	if file == nil {
+		return false
+	}
+
+	if filePath == "" || filePath == "/dev/stdout" || filePath == "/dev/stderr" {
+		return true
+	}
+
+	info, err := file.Stat()
+	if err != nil {
+		return false
+	}
+
+	return info.Mode()&os.ModeType != 0
+}
+
+func newWriteSyncer(filePath string) (zapcore.WriteSyncer, error) {
+	if filePath == "" {
+		return safeWriteSyncer{
+			WriteSyncer:      zapcore.AddSync(os.Stdout),
+			ignoreSyncErrors: true,
+		}, nil
+	}
+
+	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return nil, err
+	}
+
+	return safeWriteSyncer{
+		WriteSyncer:      f,
+		ignoreSyncErrors: shouldIgnoreSyncErrors(f, filePath),
+	}, nil
+}
 
 // NewLogger creates a zap.Logger with the specified level, format, and optional file output.
 // level can be debug, info, warn, or error. format can be json or console.
@@ -47,13 +109,9 @@ func NewLogger(level, format, filePath string) (*zap.Logger, error) {
 		encoder = zapcore.NewJSONEncoder(encCfg)
 	}
 
-	var ws = zapcore.AddSync(os.Stdout)
-	if filePath != "" {
-		f, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-		if err != nil {
-			return nil, err
-		}
-		ws = f
+	ws, err := newWriteSyncer(filePath)
+	if err != nil {
+		return nil, err
 	}
 
 	core := zapcore.NewCore(encoder, ws, lvl)
