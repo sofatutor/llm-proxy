@@ -232,6 +232,7 @@ type TokenOptions struct {
 	Metadata map[string]string
 }
 
+// CloneMetadata returns a shallow copy of metadata and nil for empty input.
 func CloneMetadata(metadata map[string]string) map[string]string {
 	if len(metadata) == 0 {
 		return nil
