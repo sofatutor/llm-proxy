@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"mime/multipart"
 	"strconv"
 	"strings"
 	"time"
@@ -217,11 +218,7 @@ func (t *DefaultEventTransformer) Transform(evt eventbus.Event) (*EventPayload, 
 	decodedResponseBody := decodeResponseBodyForProcessing(evt.ResponseBody, evt.ResponseHeaders)
 
 	// --- OpenAI-specific output transformation ---
-	isOpenAI := strings.HasPrefix(evt.Path, "/v1/completions") ||
-		strings.HasPrefix(evt.Path, "/v1/chat/completions") ||
-		strings.HasPrefix(evt.Path, "/v1/embeddings") ||
-		strings.HasPrefix(evt.Path, "/v1/responses") ||
-		strings.HasPrefix(evt.Path, "/v1/threads/")
+	isOpenAI := usesOpenAIResponseTransformer(evt.Path)
 
 	if isOpenAI && len(decodedResponseBody) > 0 {
 		// Only use OpenAI transformer if response is valid JSON
@@ -432,20 +429,71 @@ func modelFromParsedOpenAIEvent(parsed map[string]any) string {
 }
 
 func modelFromRequestBody(requestBody []byte) string {
-	if len(requestBody) == 0 || !json.Valid(requestBody) {
+	if len(requestBody) == 0 {
 		return ""
 	}
 
-	var requestObject map[string]any
-	if err := json.Unmarshal(requestBody, &requestObject); err != nil {
-		return ""
+	if json.Valid(requestBody) {
+		var requestObject map[string]any
+		if err := json.Unmarshal(requestBody, &requestObject); err != nil {
+			return ""
+		}
+
+		if model, ok := requestObject["model"].(string); ok {
+			return model
+		}
 	}
 
-	if model, ok := requestObject["model"].(string); ok {
+	if model := multipartFieldValue(requestBody, "model"); model != "" {
 		return model
 	}
 
 	return ""
+}
+
+func multipartFieldValue(requestBody []byte, fieldName string) string {
+	boundary := multipartBoundaryFromBody(requestBody)
+	if boundary == "" {
+		return ""
+	}
+
+	reader := multipart.NewReader(bytes.NewReader(requestBody), boundary)
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			return ""
+		}
+		if err != nil {
+			return ""
+		}
+
+		if part.FormName() != fieldName {
+			_ = part.Close()
+			continue
+		}
+
+		value, err := io.ReadAll(io.LimitReader(part, 4096))
+		_ = part.Close()
+		if err != nil {
+			return ""
+		}
+
+		return strings.TrimSpace(string(value))
+	}
+}
+
+func multipartBoundaryFromBody(requestBody []byte) string {
+	line := requestBody
+	if newlineIndex := bytes.IndexByte(line, '\n'); newlineIndex >= 0 {
+		line = line[:newlineIndex]
+	}
+
+	line = bytes.TrimSpace(bytes.TrimSuffix(line, []byte("\r")))
+	if len(line) <= 2 || !bytes.HasPrefix(line, []byte("--")) {
+		return ""
+	}
+
+	return string(line[2:])
 }
 
 func floatToInt(value any) (int, bool) {
@@ -534,6 +582,16 @@ func eventNameForEvent(evt eventbus.Event) string {
 	return "start"
 }
 
+func usesOpenAIResponseTransformer(path string) bool {
+	return strings.HasPrefix(path, "/v1/completions") ||
+		strings.HasPrefix(path, "/v1/chat/completions") ||
+		strings.HasPrefix(path, "/v1/embeddings") ||
+		strings.HasPrefix(path, "/v1/responses") ||
+		strings.HasPrefix(path, "/v1/threads/") ||
+		strings.HasPrefix(path, "/v1/audio/transcriptions") ||
+		strings.HasPrefix(path, "/v1/audio/translations")
+}
+
 func fallbackTokensUsage(requestBody, responseBody []byte, model string) *TokensUsage {
 	promptTokens := promptTokensFromRequestBody(requestBody, model)
 	completionTokens := completionTokensFromResponseBody(responseBody, model)
@@ -549,26 +607,25 @@ func fallbackTokensUsage(requestBody, responseBody []byte, model string) *Tokens
 }
 
 func promptTokensFromRequestBody(requestBody []byte, model string) int {
-	if len(requestBody) == 0 || !json.Valid(requestBody) {
-		return 0
-	}
-
-	var requestObject map[string]any
-	if err := json.Unmarshal(requestBody, &requestObject); err != nil {
-		return 0
-	}
-
 	promptSource := ""
-	if messages, ok := requestObject["messages"]; ok {
-		if encodedMessages, err := json.Marshal(messages); err == nil {
-			promptSource = string(encodedMessages)
+	if json.Valid(requestBody) {
+		var requestObject map[string]any
+		if err := json.Unmarshal(requestBody, &requestObject); err == nil {
+			if messages, ok := requestObject["messages"]; ok {
+				if encodedMessages, err := json.Marshal(messages); err == nil {
+					promptSource = string(encodedMessages)
+				}
+			}
+			if instructions, ok := requestObject["instructions"].(string); ok && instructions != "" {
+				promptSource += instructions
+			}
+			if inputSource := promptInputSource(requestObject["input"]); inputSource != "" {
+				promptSource += inputSource
+			}
 		}
 	}
-	if instructions, ok := requestObject["instructions"].(string); ok && instructions != "" {
-		promptSource += instructions
-	}
-	if inputSource := promptInputSource(requestObject["input"]); inputSource != "" {
-		promptSource += inputSource
+	if promptSource == "" {
+		promptSource = multipartFieldValue(requestBody, "prompt")
 	}
 	if promptSource == "" {
 		return 0
@@ -641,6 +698,10 @@ func assistantReplyContentFromResponseBody(responseBody []byte) (string, bool) {
 
 	if content, ok := responseOutputText(responseObject); ok {
 		return content, true
+	}
+
+	if text, ok := responseObject["text"].(string); ok && text != "" {
+		return text, true
 	}
 
 	return "", false

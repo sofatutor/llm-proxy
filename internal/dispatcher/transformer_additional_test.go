@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"reflect"
 	"testing"
@@ -525,6 +526,115 @@ func TestDefaultEventTransformer_Transform_ModelFallbackFromRequestBody(t *testi
 	}
 	if payload.Metadata["model"] != "gpt-4.1-mini" {
 		t.Fatalf("expected request model fallback, got %v", payload.Metadata["model"])
+	}
+}
+
+func TestDefaultEventTransformer_Transform_AudioTranscriptionExtractsMultipartModelAndUsage(t *testing.T) {
+	tr := NewDefaultEventTransformer(false)
+
+	var requestBody bytes.Buffer
+	writer := multipart.NewWriter(&requestBody)
+	if err := writer.WriteField("model", "gpt-4o-transcribe"); err != nil {
+		t.Fatalf("write model field: %v", err)
+	}
+	if err := writer.WriteField("language", "de"); err != nil {
+		t.Fatalf("write language field: %v", err)
+	}
+	filePart, err := writer.CreateFormFile("file", "recording.wav")
+	if err != nil {
+		t.Fatalf("create file part: %v", err)
+	}
+	if _, err := filePart.Write([]byte("fake-audio-payload")); err != nil {
+		t.Fatalf("write file part: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+
+	evt := eventbus.Event{
+		RequestID:    "req-audio-transcription-1",
+		Method:       "POST",
+		Path:         "/v1/audio/transcriptions",
+		Status:       200,
+		Duration:     25 * time.Millisecond,
+		RequestBody:  requestBody.Bytes(),
+		ResponseBody: []byte(`{"text":"Hallo Welt","usage":{"input_tokens":12,"output_tokens":3,"total_tokens":15}}`),
+		ResponseHeaders: http.Header{
+			"Content-Type": {"application/json"},
+		},
+	}
+
+	payload, err := tr.Transform(evt)
+	if err != nil {
+		t.Fatalf("Transform err: %v", err)
+	}
+	if payload == nil {
+		t.Fatalf("expected payload")
+	}
+	if payload.Metadata["model"] != "gpt-4o-transcribe" {
+		t.Fatalf("expected multipart model metadata, got %v", payload.Metadata["model"])
+	}
+	if payload.TokensUsage == nil {
+		t.Fatalf("expected transcription usage")
+	}
+	if payload.TokensUsage.Input != 12 || payload.TokensUsage.Output != 3 || payload.TokensUsage.Total != 15 {
+		t.Fatalf("unexpected transcription usage: %#v", payload.TokensUsage)
+	}
+}
+
+func TestDefaultEventTransformer_Transform_AudioTranscriptionFallsBackToTranscriptTextUsage(t *testing.T) {
+	tr := NewDefaultEventTransformer(false)
+
+	var requestBody bytes.Buffer
+	writer := multipart.NewWriter(&requestBody)
+	if err := writer.WriteField("model", "whisper-1"); err != nil {
+		t.Fatalf("write model field: %v", err)
+	}
+	filePart, err := writer.CreateFormFile("file", "recording.wav")
+	if err != nil {
+		t.Fatalf("create file part: %v", err)
+	}
+	if _, err := filePart.Write([]byte("fake-audio-payload")); err != nil {
+		t.Fatalf("write file part: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+
+	evt := eventbus.Event{
+		RequestID:    "req-audio-transcription-2",
+		Method:       "POST",
+		Path:         "/v1/audio/transcriptions",
+		Status:       200,
+		Duration:     25 * time.Millisecond,
+		RequestBody:  requestBody.Bytes(),
+		ResponseBody: []byte(`{"text":"Hallo Welt"}`),
+		ResponseHeaders: http.Header{
+			"Content-Type": {"application/json"},
+		},
+	}
+
+	payload, err := tr.Transform(evt)
+	if err != nil {
+		t.Fatalf("Transform err: %v", err)
+	}
+	if payload == nil {
+		t.Fatalf("expected payload")
+	}
+	if payload.Metadata["model"] != "whisper-1" {
+		t.Fatalf("expected multipart model metadata, got %v", payload.Metadata["model"])
+	}
+	if payload.TokensUsage == nil {
+		t.Fatalf("expected fallback token usage")
+	}
+	if payload.TokensUsage.Input != 0 {
+		t.Fatalf("expected zero input tokens for multipart transcription fallback, got %#v", payload.TokensUsage)
+	}
+	if payload.TokensUsage.Output <= 0 {
+		t.Fatalf("expected transcription text fallback tokens > 0, got %#v", payload.TokensUsage)
+	}
+	if payload.TokensUsage.Total != payload.TokensUsage.Output {
+		t.Fatalf("expected total tokens to match output-only fallback, got %#v", payload.TokensUsage)
 	}
 }
 
